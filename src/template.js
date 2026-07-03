@@ -5,6 +5,13 @@ export function escapeTemplateText(text) {
   return text.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$\{/g, '\\${');
 }
 
+// HTML 属性値として埋め込むためのエスケープ。escapeTemplateText の
+// テンプレートリテラル安全性(バックスラッシュ・バッククォート・${)に加え、
+// 二重引用符で囲むための "&" と "\"" もエンティティ化する。
+export function escapeAttrValue(value) {
+  return escapeTemplateText(value.replace(/&/g, '&amp;').replace(/"/g, '&quot;'));
+}
+
 // contentParts -> テンプレートリテラルの*内側*のソーステキスト(バッククォートなし)。
 export function innerTemplateSource(contentParts) {
   return contentParts
