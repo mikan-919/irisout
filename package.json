@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "vitest run"
+    "test": "vitest run",
+    "build": "bun scripts/build.mjs"
   },
   "dependencies": {
     "@babel/parser": "^8.0.0",

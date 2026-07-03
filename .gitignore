@@ -2,3 +2,4 @@ node_modules
 .claude
 package-lock.json
 bun.lock
+dist

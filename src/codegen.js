@@ -10,7 +10,7 @@ export function generateModule({ declStatements, markers, signalToMarkers, declO
   const listMarkers = markers.filter((m) => m.kind === 'list');
 
   const outLines = [];
-  outLines.push("import { signal, derived, mount, collectReactive, forgetReactive, insertAfter, htmlToNode } from '../src/runtime.js';", '');
+  outLines.push("import { signal, derived, mount, hydrate, collectReactive, forgetReactive, insertAfter, htmlToNode } from '../src/runtime.js';", '');
   outLines.push(...declStatements.map((s) => `export ${s}`), '');
   // ハンドラは「ユーザーの式を呼んでから、書き込んだ signal に対応する
   // update_* を呼ぶ」薄いラッパー。update_* は関数宣言なので巻き上げにより
@@ -29,16 +29,32 @@ export function generateModule({ declStatements, markers, signalToMarkers, declO
   }
   outLines.push('');
   outLines.push(`const __INITIAL_HTML__ = ${JSON.stringify(initialHtml)};`, '');
-  outLines.push(
-    `let __markers__, __anchors__${conditionalMarkers.map((m) => `, __cond_${m.id}`).join('')}${listMarkers.map((m) => `, __list_${m.id}`).join('')};`,
-    'export function mountComponent(container) {',
-    '  ({ markers: __markers__, anchors: __anchors__ } = mount(container, __INITIAL_HTML__));',
+  // mountComponent と hydrateComponent は「markers/anchors をどう得るか
+  // (innerHTML を書くか、既存 DOM をそのまま読むか)」だけが違い、その後の
+  // __cond_*/__list_* 初期化とハンドラ配線は同一。共有配列にして両方の
+  // 関数へ文字列レベルで複製する。
+  const setupLines = [
     ...conditionalMarkers.map((m) => `  __cond_${m.id} = ${m.conditionCode};`),
     ...listMarkers.flatMap((m) => [
       `  __list_${m.id} = new Map();`,
       `  { let __node = __anchors__.get(${JSON.stringify(m.id + '_start')}).nextSibling; for (const ${m.itemParamName} of ${m.listCode}) { __list_${m.id}.set(__itemKey_${m.id}(${m.itemParamName}), __node); __node = __node.nextSibling; } }`,
     ]),
     ...handlers.map((h) => `  __markers__.get(${JSON.stringify(h.markerId)}).addEventListener(${JSON.stringify(h.eventName)}, __handler_${h.markerId}_${h.eventName});`),
+  ];
+
+  outLines.push(
+    `let __markers__, __anchors__${conditionalMarkers.map((m) => `, __cond_${m.id}`).join('')}${listMarkers.map((m) => `, __list_${m.id}`).join('')};`,
+    'export function mountComponent(container) {',
+    '  ({ markers: __markers__, anchors: __anchors__ } = mount(container, __INITIAL_HTML__));',
+    ...setupLines,
+    '}',
+    '',
+    // ハイドレーション版:静的ビルド (scripts/build.mjs) が index.html に
+    // 焼き込んだ初期 HTML の上でマーカー/アンカーを発見するだけで、
+    // innerHTML への書き込みは一切行わない。
+    'export function hydrateComponent(container) {',
+    '  ({ markers: __markers__, anchors: __anchors__ } = hydrate(container));',
+    ...setupLines,
     '}',
     ''
   );

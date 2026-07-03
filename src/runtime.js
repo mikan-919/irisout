@@ -34,6 +34,16 @@ export function mount(container, html) {
   return { markers, anchors };
 }
 
+// 既にドキュメントに焼き込まれた初期 HTML の上でマーカー/アンカーを発見する
+// だけの mount:innerHTML を書かない。ビルド出力 (scripts/build.mjs) が
+// index.html に静的 HTML を埋め込み、ブラウザ側はこれで水和する。
+export function hydrate(container) {
+  const markers = new Map();
+  const anchors = new Map();
+  collectReactive(container, markers, anchors);
+  return { markers, anchors };
+}
+
 // 構造(条件分岐)ユニットは常に存在するコメントアンカー(`<!--m2-->`)で
 // マークされる:その後ろに実際に表示される要素は現れたり消えたりする。
 // 以下の2つのウォークで、マウント/挿入されたばかりのサブツリーのマーカーと
