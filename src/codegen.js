@@ -5,13 +5,21 @@
 
 import { innerTemplateSource, embedBranch } from './template.js';
 
-export function generateModule({ declStatements, markers, signalToMarkers, declOutputName, initialHtml }) {
+export function generateModule({ declStatements, markers, signalToMarkers, declOutputName, initialHtml, handlers = [] }) {
   const conditionalMarkers = markers.filter((m) => m.kind === 'conditional');
   const listMarkers = markers.filter((m) => m.kind === 'list');
 
   const outLines = [];
   outLines.push("import { signal, derived, mount, collectReactive, forgetReactive, insertAfter, htmlToNode } from '../src/runtime.js';", '');
   outLines.push(...declStatements.map((s) => `export ${s}`), '');
+  // ハンドラは「ユーザーの式を呼んでから、書き込んだ signal に対応する
+  // update_* を呼ぶ」薄いラッパー。update_* は関数宣言なので巻き上げにより
+  // ここでの前方参照は安全 - このラッパー自体は mount 後にしか呼ばれない。
+  for (const h of handlers) {
+    const updateCalls = h.updateNames.map((name) => `update_${name}();`).join(' ');
+    outLines.push(`const __handler_${h.markerId}_${h.eventName} = (...__args) => { (${h.rendered})(...__args); ${updateCalls} };`);
+  }
+  if (handlers.length > 0) outLines.push('');
   for (const m of listMarkers) {
     outLines.push(
       `const __itemInner_${m.id} = (${m.itemParamName}) => \`${m.innerSrc}\`;`,
@@ -30,6 +38,7 @@ export function generateModule({ declStatements, markers, signalToMarkers, declO
       `  __list_${m.id} = new Map();`,
       `  { let __node = __anchors__.get(${JSON.stringify(m.id + '_start')}).nextSibling; for (const ${m.itemParamName} of ${m.listCode}) { __list_${m.id}.set(__itemKey_${m.id}(${m.itemParamName}), __node); __node = __node.nextSibling; } }`,
     ]),
+    ...handlers.map((h) => `  __markers__.get(${JSON.stringify(h.markerId)}).addEventListener(${JSON.stringify(h.eventName)}, __handler_${h.markerId}_${h.eventName});`),
     '}',
     ''
   );

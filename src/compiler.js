@@ -87,6 +87,7 @@ export function compile(source) {
   const usedOutputNames = new Set();
   const markers = []; // { id, contentParts }
   const markerDeps = new Map(); // markerId -> Set<declId>(直接依存、推移閉包を取る前)
+  const handlers = []; // { markerId, eventName, rendered, writeDeclIds }(signalToMarkers 確定後に updateNames へ変換)
   let markerCounter = 0;
   let instanceCounter = 0;
 
@@ -147,6 +148,64 @@ export function compile(source) {
     }
     rendered += source.slice(cursor, path.node.end);
     return { deps, rendered };
+  }
+
+  // ハンドラ式(`onClick={...}`)専用の解析:読み取りは analyzeExpr と同じく
+  // hygienic な出力名にリネームしつつ、式中の「追跡済み signal への引数あり
+  // 呼び出し」を書き込みとして検出する。`count(count() + 1)` のように同じ
+  // signal への読み書きが同居しても、外側の呼び出し(引数あり = 書き込み)
+  // だけを拾うので二重登録にはならない。
+  function analyzeHandlerExpr(exprPath, instanceId) {
+    const { rendered } = analyzeExpr(exprPath, instanceId);
+    const writeDeclIds = new Set();
+    const visitCall = (callPath) => {
+      if (callPath.node.arguments.length < 1) return;
+      const callee = callPath.get('callee');
+      if (!callee.isIdentifier()) return;
+      const binding = callee.scope.getBinding(callee.node.name);
+      if (!binding || binding.path.node.type !== 'VariableDeclarator') return;
+      const declId = declIdByKey.get(declKey(instanceId, binding.path.node.start));
+      if (!declId) return;
+      if (declKind.get(declId) === 'derived') {
+        throw new Error(`compile: cannot write to derived "${callee.node.name}"`);
+      }
+      for (const sig of resolveToSignals(declId, new Set())) writeDeclIds.add(sig);
+    };
+    if (exprPath.isCallExpression()) visitCall(exprPath);
+    exprPath.traverse({ CallExpression: visitCall });
+    return { rendered, writeDeclIds };
+  }
+
+  // ホスト要素の openingElement から `on[A-Z]...` 属性を集めてハンドラ解析
+  // する。構造ユニット(条件分岐ブランチ)内にあるハンドラはブランチが
+  // innerHTML 的に丸ごと差し替わり listener が失われるため、スコープ制限
+  // として明示的にエラーにする - アップグレード経路は
+  // docs/adr/0002-event-handlers.md 参照。
+  function collectHandlerAttrs(openingElementPath, instanceId, inStructural) {
+    const result = [];
+    for (const attr of openingElementPath.get('attributes')) {
+      const name = attr.node.name.name;
+      if (!/^on[A-Z]/.test(name)) continue;
+      if (inStructural) {
+        throw new Error(`compile: event handler "${name}" inside a conditional branch is not supported yet (scope limit)`);
+      }
+      const valueNode = attr.node.value;
+      if (!valueNode || valueNode.type !== 'JSXExpressionContainer') {
+        throw new Error(`compile: handler "${name}" must be an expression (scope limit)`);
+      }
+      const eventName = name.slice(2).toLowerCase();
+      const { rendered, writeDeclIds } = analyzeHandlerExpr(attr.get('value.expression'), instanceId);
+      result.push({ eventName, rendered, writeDeclIds });
+    }
+    return result;
+  }
+
+  // handlerAttrs を `handlers` に確定登録する。markerId は呼び出し側が
+  // (既存のテキストマーカー流用 or 新規採番のどちらかで)決めて渡す。
+  function registerHandlers(markerId, handlerAttrs) {
+    for (const h of handlerAttrs) {
+      handlers.push({ markerId, eventName: h.eventName, rendered: h.rendered, writeDeclIds: h.writeDeclIds });
+    }
   }
 
   // `count()` のような裸の読み取り - 追跡済み signal/derived の引数なし
@@ -222,9 +281,11 @@ export function compile(source) {
   }
 
   // ブランチが描画するのは JSX 要素か、無(null リテラルまたは `false`)。
+  // ブランチの中身は常に構造ユニット配下(inStructural=true)として扱う -
+  // スワップのたびに丸ごと作り直されるため。
   function renderBranch(branchPath, componentsByName, instanceId, out) {
     if (!branchPath) return null;
-    if (branchPath.isJSXElement()) return renderElement(branchPath, componentsByName, instanceId, out);
+    if (branchPath.isJSXElement()) return renderElement(branchPath, componentsByName, instanceId, out, true);
     if (branchPath.isNullLiteral() || branchPath.isBooleanLiteral({ value: false })) return null;
     throw new Error('compile: conditional branches must be a JSX element, null, or false (scope limit)');
   }
@@ -245,6 +306,16 @@ export function compile(source) {
   function renderList(exprPath, instanceId) {
     const cls = classifyListExpr(exprPath);
     const { deps, rendered: listCode } = analyzeExpr(cls.listExprPath, instanceId);
+    // renderItemTemplate は key 以外の属性を黙って無視するので、ハンドラを
+    // 静かに握りつぶさないようここで明示的に弾く。リストアイテムは
+    // innerHTML で丸ごと作り直されるため listener を保持できない
+    // (アップグレード経路は docs/adr/0002-event-handlers.md 参照)。
+    for (const attr of cls.templatePath.get('openingElement.attributes')) {
+      const attrName = attr.node.name.name;
+      if (/^on[A-Z]/.test(attrName)) {
+        throw new Error(`compile: event handler "${attrName}" inside a list item template is not supported yet (scope limit)`);
+      }
+    }
     const { tagName, keyExprSrc, innerSrc } = renderItemTemplate(cls.templatePath, source);
     const markerId = `m${markerCounter++}`;
 
@@ -284,7 +355,7 @@ export function compile(source) {
   // 単純式の連なりは引き続きまとめて自前のテキストマーカーになるが、
   // 自分を包む要素を持たない裸の連なりには、クエリ可能な足場として
   // 合成の <span> を付ける。
-  function renderChildren(childrenPaths, componentsByName, instanceId, out) {
+  function renderChildren(childrenPaths, componentsByName, instanceId, out, inStructural) {
     let result = '';
     let run = [];
     const flushRun = () => {
@@ -310,7 +381,7 @@ export function compile(source) {
         run.push(child);
       } else if (child.isJSXElement()) {
         flushRun();
-        result += renderElement(child, componentsByName, instanceId, out);
+        result += renderElement(child, componentsByName, instanceId, out, inStructural);
       } else {
         throw new Error(`compile: unsupported JSX child <${child.node.type}> (scope limit)`);
       }
@@ -319,7 +390,7 @@ export function compile(source) {
     return result;
   }
 
-  function renderElement(elementPath, componentsByName, instanceId, out) {
+  function renderElement(elementPath, componentsByName, instanceId, out, inStructural) {
     const tagName = elementPath.node.openingElement.name.name;
 
     if (/^[A-Z]/.test(tagName)) {
@@ -327,14 +398,19 @@ export function compile(source) {
       if (!childPath) throw new Error(`compile: unknown component <${tagName}>`);
       const propBindings = buildPropBindings(elementPath.get('openingElement'), instanceId);
       const childInstanceId = instanceCounter++;
-      return compileComponent(childPath, propBindings, childInstanceId, componentsByName, out);
+      return compileComponent(childPath, propBindings, childInstanceId, componentsByName, out, inStructural);
     }
+
+    const handlerAttrs = collectHandlerAttrs(elementPath.get('openingElement'), instanceId, inStructural);
 
     const children = elementPath.get('children');
     const hasStructural = children.some((c) => c.isJSXExpressionContainer() && classifyStructuralExpr(c.get('expression')));
     if (hasStructural) {
-      const inner = renderChildren(children, componentsByName, instanceId, out);
-      return `<${tagName}>${inner}</${tagName}>`;
+      const inner = renderChildren(children, componentsByName, instanceId, out, inStructural);
+      if (handlerAttrs.length === 0) return `<${tagName}>${inner}</${tagName}>`;
+      const markerId = `m${markerCounter++}`;
+      registerHandlers(markerId, handlerAttrs);
+      return `<${tagName} data-iris-id="${markerId}">${inner}</${tagName}>`;
     }
 
     const hasDirectExpr = children.some((c) => c.isJSXExpressionContainer());
@@ -343,17 +419,21 @@ export function compile(source) {
       let inner = '';
       for (const child of children) {
         if (child.isJSXText()) inner += escapeTemplateText(child.node.value);
-        else if (child.isJSXElement()) inner += renderElement(child, componentsByName, instanceId, out);
+        else if (child.isJSXElement()) inner += renderElement(child, componentsByName, instanceId, out, inStructural);
         else throw new Error(`compile: unsupported JSX child <${child.node.type}> (scope limit)`);
       }
-      return `<${tagName}>${inner}</${tagName}>`;
+      if (handlerAttrs.length === 0) return `<${tagName}>${inner}</${tagName}>`;
+      const markerId = `m${markerCounter++}`;
+      registerHandlers(markerId, handlerAttrs);
+      return `<${tagName} data-iris-id="${markerId}">${inner}</${tagName}>`;
     }
 
     const { markerId, inner } = buildTextMarker(children, instanceId);
+    if (handlerAttrs.length > 0) registerHandlers(markerId, handlerAttrs);
     return `<${tagName} data-iris-id="${markerId}">${inner}</${tagName}>`;
   }
 
-  function compileComponent(componentPath, propBindings, instanceId, componentsByName, out) {
+  function compileComponent(componentPath, propBindings, instanceId, componentsByName, out, inStructural) {
     let returnArgPath = null;
     for (const stmt of componentPath.get('body.body')) {
       if (stmt.isReturnStatement()) {
@@ -365,7 +445,7 @@ export function compile(source) {
     if (!returnArgPath || !returnArgPath.isJSXElement()) {
       throw new Error('compile: component must return a single JSX element (scope limit)');
     }
-    return renderElement(returnArgPath, componentsByName, instanceId, out);
+    return renderElement(returnArgPath, componentsByName, instanceId, out, inStructural);
   }
 
   // --- トップレベルのコンポーネントをすべて列挙し、誰からも参照されない唯一のルートを特定する ---
@@ -395,7 +475,7 @@ export function compile(source) {
   const rootPath = componentsByName.get(rootNames[0]);
 
   const out = { declStatements: [], instrumentedDeclStatements: [] };
-  const rootHtmlSource = compileComponent(rootPath, new Map(), instanceCounter++, componentsByName, out);
+  const rootHtmlSource = compileComponent(rootPath, new Map(), instanceCounter++, componentsByName, out, false);
 
   // --- 推移閉包:derived の declId をルート signal まで展開する ---
   function resolveToSignals(declId, visited) {
@@ -431,8 +511,20 @@ export function compile(source) {
     }
   }
 
+  // --- ハンドラの書き込み先 declId を、マーカーを持つルート signal のみに
+  //     絞って出力名へ変換する(signalToMarkers はここまでで確定)。
+  //     マーカーの無い signal への update_* は codegen で生成されない
+  //     ので、そこへの呼び出しは省く。
+  for (const h of handlers) {
+    h.updateNames = [...h.writeDeclIds]
+      .filter((id) => signalToMarkers.has(id))
+      .map((id) => declOutputName.get(id))
+      .sort();
+    delete h.writeDeclIds;
+  }
+
   // --- codegen:ルート signal ごとの専用 update_<name>()、コンポーネント/インスタンス境界を跨ぐ ---
-  const code = generateModule({ declStatements: out.declStatements, markers, signalToMarkers, declOutputName, initialHtml });
+  const code = generateModule({ declStatements: out.declStatements, markers, signalToMarkers, declOutputName, initialHtml, handlers });
 
   return { code, initialHtml, markers, signalToMarkers, declName: declOutputName };
 }
