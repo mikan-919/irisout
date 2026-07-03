@@ -66,7 +66,7 @@
 import { parse } from '@babel/parser';
 import traverseImport from '@babel/traverse';
 import { signal, derived, registry } from './runtime.js';
-import { escapeTemplateText, innerTemplateSource, embedBranch } from './template.js';
+import { escapeTemplateText, escapeAttrValue, innerTemplateSource, embedBranch } from './template.js';
 import { classifyConditionalExpr, classifyListExpr, classifyStructuralExpr, renderItemTemplate } from './classify.js';
 import { generateModule } from './codegen.js';
 
@@ -198,6 +198,30 @@ export function compile(source) {
       result.push({ eventName, rendered, writeDeclIds });
     }
     return result;
+  }
+
+  // ホスト要素の openingElement からハンドラ以外の属性を集めて HTML
+  // 断片にする。値が JSXExpressionContainer な動的属性は新しい種類の
+  // マーカーが要る(plans/003 でスコープ外にした Attribute マーカー、
+  // CONCEPT.v2.md の Attribute#5 参照)ため、黙って握りつぶさずコンパイル
+  // エラーにする。
+  function collectStaticAttrs(openingElementPath) {
+    let attrsSrc = '';
+    for (const attr of openingElementPath.get('attributes')) {
+      const name = attr.node.name.name;
+      if (/^on[A-Z]/.test(name)) continue; // collectHandlerAttrs が別扱い
+      const valueNode = attr.node.value;
+      if (valueNode == null) {
+        attrsSrc += ` ${name}`;
+      } else if (valueNode.type === 'StringLiteral') {
+        attrsSrc += ` ${name}="${escapeAttrValue(valueNode.value)}"`;
+      } else if (valueNode.type === 'JSXExpressionContainer') {
+        throw new Error(`compile: dynamic attribute "${name}" on a host element is not supported yet (scope limit)`);
+      } else {
+        throw new Error(`compile: unsupported attribute value for "${name}" (scope limit)`);
+      }
+    }
+    return attrsSrc;
   }
 
   // handlerAttrs を `handlers` に確定登録する。markerId は呼び出し側が
@@ -402,15 +426,16 @@ export function compile(source) {
     }
 
     const handlerAttrs = collectHandlerAttrs(elementPath.get('openingElement'), instanceId, inStructural);
+    const attrsSrc = collectStaticAttrs(elementPath.get('openingElement'));
 
     const children = elementPath.get('children');
     const hasStructural = children.some((c) => c.isJSXExpressionContainer() && classifyStructuralExpr(c.get('expression')));
     if (hasStructural) {
       const inner = renderChildren(children, componentsByName, instanceId, out, inStructural);
-      if (handlerAttrs.length === 0) return `<${tagName}>${inner}</${tagName}>`;
+      if (handlerAttrs.length === 0) return `<${tagName}${attrsSrc}>${inner}</${tagName}>`;
       const markerId = `m${markerCounter++}`;
       registerHandlers(markerId, handlerAttrs);
-      return `<${tagName} data-iris-id="${markerId}">${inner}</${tagName}>`;
+      return `<${tagName}${attrsSrc} data-iris-id="${markerId}">${inner}</${tagName}>`;
     }
 
     const hasDirectExpr = children.some((c) => c.isJSXExpressionContainer());
@@ -422,15 +447,15 @@ export function compile(source) {
         else if (child.isJSXElement()) inner += renderElement(child, componentsByName, instanceId, out, inStructural);
         else throw new Error(`compile: unsupported JSX child <${child.node.type}> (scope limit)`);
       }
-      if (handlerAttrs.length === 0) return `<${tagName}>${inner}</${tagName}>`;
+      if (handlerAttrs.length === 0) return `<${tagName}${attrsSrc}>${inner}</${tagName}>`;
       const markerId = `m${markerCounter++}`;
       registerHandlers(markerId, handlerAttrs);
-      return `<${tagName} data-iris-id="${markerId}">${inner}</${tagName}>`;
+      return `<${tagName}${attrsSrc} data-iris-id="${markerId}">${inner}</${tagName}>`;
     }
 
     const { markerId, inner } = buildTextMarker(children, instanceId);
     if (handlerAttrs.length > 0) registerHandlers(markerId, handlerAttrs);
-    return `<${tagName} data-iris-id="${markerId}">${inner}</${tagName}>`;
+    return `<${tagName}${attrsSrc} data-iris-id="${markerId}">${inner}</${tagName}>`;
   }
 
   function compileComponent(componentPath, propBindings, instanceId, componentsByName, out, inStructural) {
