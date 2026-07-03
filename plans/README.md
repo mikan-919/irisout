@@ -12,7 +12,7 @@ starting, honor its STOP conditions, and update your row when done.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| 001  | Event handlers + write-triggered updates | P1 | M | — | TODO |
+| 001  | Event handlers + write-triggered updates | P1 | M | — | DONE |
 | 002  | Browser build target (baked HTML + app.js) | P2 | S–M | 001 | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale)
