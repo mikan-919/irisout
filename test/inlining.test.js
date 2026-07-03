@@ -2,12 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { compile } from '../src/compiler.js';
 import { createContainer, loadGenerated } from './helpers.js';
 
-// Second deferred item from docs/adr/0001-first-milestone.md: component
-// boundary inlining. The core bug this fixes: declId used to be derived from
-// source position alone (`decl_${declarator.start}`), so two instances of
-// the SAME component collided on the same declId. Instances now get a
-// hygienic output name (`n`, `n$1`, ...) and every reference to them - even
-// across a prop boundary - is rewritten to match.
+// docs/adr/0001-first-milestone.md の先送り項目その2:コンポーネント境界の
+// インライン化。これが直した核心のバグ:declId は以前ソース位置だけから
+// 導出されていた(`decl_${declarator.start}`)ため、*同じ*コンポーネントの
+// 2つのインスタンスが同じ declId で衝突していた。今はインスタンスごとに
+// hygienic な出力名(`n`、`n$1`、…)が振られ、それらへの参照は - prop 境界を
+// 跨いでいても - すべて一致するよう書き換えられる。
 const TWO_INDEPENDENT_INSTANCES = `
 function Row() {
   const n = prop('n');
@@ -19,8 +19,8 @@ function List() {
 }
 `;
 
-// Two instances that both alias the SAME parent signal must both be touched
-// by that signal's one dedicated update function.
+// *同じ*親 signal をエイリアスする2つのインスタンスは、その signal の
+// 唯一の専用 update 関数によって両方とも更新されなければならない。
 const SHARED_ALIAS_ACROSS_INSTANCES = `
 function Row() {
   const shared = prop('shared');
@@ -48,7 +48,7 @@ describe('component boundary inlining: multiple instances', () => {
     mod.n(10);
     mod.update_n();
     expect(container.querySelector('[data-iris-id="m0"]').textContent).toBe('20');
-    // the other instance is untouched - still showing its baked initial value
+    // もう一方のインスタンスは手つかず - 焼き込まれた初期値を表示したまま
     expect(container.querySelector('[data-iris-id="m1"]').textContent).toBe('4');
   });
 

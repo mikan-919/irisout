@@ -2,11 +2,11 @@ import { describe, it, expect } from 'vitest';
 import { compile } from '../src/compiler.js';
 import { createContainer, loadGenerated } from './helpers.js';
 
-// First deferred item from docs/adr/0001-first-milestone.md: props propagation
-// between components. `<Child count={count()} />` is a bare pass-through of an
-// already-tracked signal, so Child's `prop('count')` is aliased to the SAME
-// declId as Parent's `count` - no separate storage, so a write from either
-// side is visible from both (no reverse graph edges needed for write-back).
+// docs/adr/0001-first-milestone.md の先送り項目その1:コンポーネント間の
+// props 伝播。`<Child count={count()} />` は追跡済み signal の裸のパス
+// スルーなので、Child の `prop('count')` は Parent の `count` と*同じ*
+// declId へのエイリアスになる - 別のストレージが無いため、どちら側からの
+// 書き込みも両側から見える(write-back のための逆向きグラフ辺は不要)。
 const ALIASED_SOURCE = `
 function Child() {
   const count = prop('count');
@@ -19,8 +19,8 @@ function Parent() {
 }
 `;
 
-// A literal (or any computed, non-bare-read) prop value can't be written back
-// to in general, so it's promoted to an independent local signal instead.
+// リテラル(や計算を含む、裸の読み取りでない)prop 値は一般に write-back
+// できないので、独立したローカル signal に昇格する。
 const LITERAL_SOURCE = `
 function Child() {
   const label = prop('label');
@@ -46,14 +46,14 @@ describe('props propagation across component boundaries', () => {
     const container = createContainer();
     mod.mountComponent(container);
 
-    // parent -> child
+    // 親 -> 子
     mod.count(5);
     mod.update_count();
     expect(container.querySelector('[data-iris-id="m0"]').textContent).toBe('5');
 
-    // child -> parent (write-back): since it's a true alias there is only one
-    // signal, so writing through the same accessor from "the child's side" is
-    // indistinguishable from writing from the parent's - that's the point.
+    // 子 -> 親(write-back):真のエイリアスなので signal は1つしかなく、
+    // 「子の側」から同じアクセサ経由で書くことは親の側から書くことと
+    // 区別がつかない - それこそが狙い。
     mod.count(9);
     mod.update_count();
     expect(container.querySelector('[data-iris-id="m0"]').textContent).toBe('9');

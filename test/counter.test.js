@@ -2,10 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { compile } from '../src/compiler.js';
 import { createContainer, loadGenerated } from './helpers.js';
 
-// The one milestone-1 sample: single component, single signal, and a JSX
-// expression with multiple free-variable deps (count + doubled), where doubled
-// is itself derived from count. Exercises the whole pipeline end to end
-// (docs/adr/0001-first-milestone.md).
+// マイルストーン1の唯一のサンプル:単一コンポーネント、単一 signal、そして
+// 複数の自由変数依存(count + doubled)を持つ JSX 式。doubled 自体は count
+// から derive されている。パイプライン全体を end to end で通す
+// (docs/adr/0001-first-milestone.md)。
 const COUNTER_SOURCE = `
 export function Counter() {
   const count = signal(0);

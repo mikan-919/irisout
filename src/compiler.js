@@ -1,88 +1,76 @@
-// Milestone 1-5 compiler: expression dependency analysis, props propagation,
-// component boundary inlining, and structural updates - conditionals and
-// keyed lists (docs/adr/0001-first-milestone.md).
+// マイルストーン 1-5 のコンパイラ:式の依存解析、props 伝播、コンポーネント
+// 境界のインライン化、構造更新(条件分岐と keyed リスト)
+// (docs/adr/0001-first-milestone.md)。
 //
-// Pipeline:
-//   1. Parse source with @babel/parser (static AST).
-//   2. Find every top-level component function; the root is whichever one is
-//      never referenced as a JSX tag by another (scope: exactly one root).
-//   3. Walk the root's render tree depth-first. A `<Child prop={expr} />`
-//      reference is compiled recursively into the same flat declaration and
-//      marker lists - this *is* the inlining: by the time codegen runs there
-//      is no trace of the original component boundary left, only one shared
-//      scope. Each instantiation site gets its own instanceId, so the same
-//      component used twice (`<Row n={1}/><Row n={2}/>`) gets two completely
-//      independent signals instead of colliding on the same declaration's
-//      source position.
-//        - if a prop's value is a bare read of an already-tracked
-//          signal/derived (e.g. `count()`, no extra computation), the
-//          child's `prop('x')` is aliased to that SAME declId. There is no
-//          separate storage, so a write from either side is visible from
-//          both - "props propagation" (and write-back) falls out for free.
-//        - otherwise (a literal, or any computed expression) the child's
-//          `prop('x')` is promoted to its own independent `signal(expr)`.
-//   4. Because instances share one flattened output scope, identifiers can
-//      collide (two instances both declaring `n`). Every signal/derived/
-//      promoted-prop gets a hygienic output name (`n`, then `n$1`, ...), and
-//      every expression that reads it gets that reference rewritten to the
-//      output name wherever it's used - across component boundaries too.
-//   5. Execute the flattened, instrumented script on Node once to (a)
-//      confirm every tagged call site really is a signal/derived (ADR
-//      decision #3), and (b) obtain the real initial HTML for free.
-//   6. Build the dependency graph (marker -> signal, through derived, across
-//      instances) and generate one dedicated `update_<name>` function per
-//      root signal, touching every marker that depends on it.
+// パイプライン:
+//   1. @babel/parser でソースを parse(静的 AST)。
+//   2. トップレベルのコンポーネント関数をすべて列挙し、他から JSX タグとして
+//      一度も参照されないものをルートとする(スコープ:ルートはちょうど1つ)。
+//   3. ルートの render ツリーを深さ優先で辿る。`<Child prop={expr} />` の
+//      参照は再帰的にコンパイルされ、同じフラットな宣言・マーカーのリストに
+//      合流する - これこそがインライン化:codegen が走る時点では元の
+//      コンポーネント境界の痕跡はなく、共有スコープが1つあるだけ。
+//      インスタンス化サイトごとに固有の instanceId を振るので、同じ
+//      コンポーネントを2回使っても(`<Row n={1}/><Row n={2}/>`)、同じ宣言の
+//      ソース位置で衝突せず、完全に独立した signal が2組できる。
+//        - prop の値が追跡済み signal/derived の裸の読み取り(例 `count()`、
+//          追加の計算なし)なら、子の `prop('x')` はその同じ declId への
+//          エイリアスになる。別のストレージは無いので、どちら側からの
+//          書き込みも両側から見える - 「props 伝播」(と write-back)は
+//          自動的に成立する。
+//        - それ以外(リテラルや計算を含む式)は、子の `prop('x')` を独立した
+//          `signal(expr)` に昇格する。
+//   4. インスタンスは1つのフラット化された出力スコープを共有するため、
+//      識別子が衝突しうる(2つのインスタンスが両方 `n` を宣言するなど)。
+//      すべての signal/derived/昇格 prop に hygienic な出力名(`n`、次は
+//      `n$1`、…)を割り当て、それを読む式の参照は使用箇所すべてで出力名に
+//      書き換える - コンポーネント境界を跨いでも同様。
+//   5. フラット化・計装済みスクリプトを Node 上で1回実行し、(a) タグ付けした
+//      呼び出しサイトが本当に signal/derived であることを確認し(ADR 決定
+//      #3)、(b) 実際の初期 HTML をタダで得る。
+//   6. 依存グラフ(marker -> signal、derived 経由・インスタンス跨ぎ)を構築し、
+//      ルート signal ごとに専用の `update_<name>` 関数を生成する。その関数が
+//      その signal に依存するすべてのマーカーを更新する。
 //
-// Conditional rendering (`cond && <A/>` or `cond ? <A/> : <B/>`) is a
-// different KIND of marker: a "structural" unit. It can't be done with a
-// textContent swap since the branches are real markup, so it gets an
-// always-present comment anchor (`<!--m2-->`) instead of an attribute on an
-// element - a comment survives even when nothing is currently rendered.
-// Whichever branch renders nothing (null/false, or simply not the active
-// side) is baked as an empty `<!---->` placeholder, so there's always
-// exactly one sibling right after the anchor to tear down before mounting
-// the other branch. A branch's own reactive markers/anchors are discovered
-// generically at runtime (see runtime.js's collectReactive/forgetReactive)
-// rather than tracked at compile time, so arbitrarily nested reactive
-// content or further conditionals inside a branch fall out for free.
+// 条件レンダリング(`cond && <A/>` や `cond ? <A/> : <B/>`)は別*種*の
+// マーカー:「構造」ユニット。ブランチは実マークアップなので textContent の
+// 差し替えでは済まず、要素の属性ではなく常に存在するコメントアンカー
+// (`<!--m2-->`)を持つ - コメントなら何も描画されていない間も生き残る。
+// 何も描画しないブランチ(null/false、または単に非アクティブな側)は空の
+// `<!---->` プレースホルダとして焼き込まれるので、アンカーの直後には常に
+// ちょうど1つの兄弟ノードがあり、もう一方のブランチをマウントする前に
+// それを破棄すればよい。ブランチ自身のリアクティブなマーカー/アンカーは
+// コンパイル時に追跡せず、実行時に汎用的に発見する(runtime.js の
+// collectReactive/forgetReactive 参照)ので、ブランチ内に任意にネストした
+// リアクティブ内容やさらなる条件分岐も自動的に扱える。
 //
-// Keyed lists (`items().map(item => <li key={item.id}>{item.name}</li>)`)
-// are a third kind of marker, also anchored by comments - but a *range*
-// (`<!--m3_start-->`...`<!--m3_end-->`) since the number of items varies.
-// Reconciliation on update is deliberately naive: walk the new array in
-// order, reuse the existing element for a key that already has one
-// (refreshing its content since the item's own fields aren't tracked
-// signals - the whole item is just re-rendered), create one for a new key,
-// and `insertBefore(el, end)` every one of them in the new order - repeated
-// insertBefore calls double as the reordering step, since inserting a node
-// that already exists elsewhere in the document *moves* it. This is not
-// move-count-optimal (no LIS-based minimal-move diff); that's a deliberate
-// deferral, not an oversight - see docs/adr/0001-first-milestone.md.
+// keyed リスト(`items().map(item => <li key={item.id}>{item.name}</li>)`)は
+// 第3のマーカーで、同じくコメントでアンカーされるが、アイテム数が変わるので
+// *範囲*(`<!--m3_start-->`...`<!--m3_end-->`)になる。更新時の
+// リコンシリエーションは意図的に素朴:新しい配列を順に辿り、既に要素を持つ
+// key はその要素を再利用し(アイテム自身のフィールドは追跡 signal ではない
+// ので内容は丸ごと再描画)、新しい key には要素を作成し、すべてを新しい
+// 順序で `insertBefore(el, end)` する - 文書内に既に存在するノードの挿入は
+// *移動*になるため、insertBefore の繰り返しが並べ替えを兼ねる。これは
+// 移動回数最適ではない(LIS ベースの最小移動 diff なし)が、見落としでは
+// なく意図的な先送り - docs/adr/0001-first-milestone.md 参照。
 //
-// Scope limits (documented, not hidden): single file (no cross-module
-// imports of components), one static instance per non-list JSX reference,
-// list item templates are text/expr-only (no nested elements, conditionals,
-// or further lists, and no access to signals outside the item's own
-// fields), and hygienic renaming only covers signal/derived/prop
-// declarations - a plain non-reactive local (`const step = 2`) is kept
-// verbatim and can still collide across instances.
+// スコープ制限(隠さず明記):単一ファイル(コンポーネントのクロスモジュール
+// import なし)、非リストの JSX 参照は静的インスタンス1つずつ、リスト
+// アイテムのテンプレートはテキスト/式のみ(ネストした要素・条件分岐・
+// さらなるリストは不可、アイテム自身のフィールド外の signal へのアクセスも
+// 不可)、hygienic リネームは signal/derived/prop 宣言のみ対象 -
+// 非リアクティブなローカル(`const step = 2`)はそのまま残り、インスタンス間で
+// 衝突しうる。
 
 import { parse } from '@babel/parser';
 import traverseImport from '@babel/traverse';
 import { signal, derived, registry } from './runtime.js';
+import { escapeTemplateText, innerTemplateSource, embedBranch } from './template.js';
+import { classifyConditionalExpr, classifyListExpr, classifyStructuralExpr, renderItemTemplate } from './classify.js';
+import { generateModule } from './codegen.js';
 
 const traverse = traverseImport.default ?? traverseImport;
-
-function escapeTemplateText(text) {
-  return text.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$\{/g, '\\${');
-}
-
-// contentParts -> the *inner* source text of a template literal (no backticks).
-function innerTemplateSource(contentParts) {
-  return contentParts
-    .map((part) => (part.type === 'text' ? escapeTemplateText(part.value) : '${' + part.code + '}'))
-    .join('');
-}
 
 export function compile(source) {
   registry.clear();
@@ -90,15 +78,15 @@ export function compile(source) {
   const ast = parse(source, { sourceType: 'module', plugins: ['typescript', 'jsx'] });
   const sliceSrc = (path) => source.slice(path.node.start, path.node.end);
 
-  // key: `${instanceId}:${declaratorStart}` -> declId. Composite because the
-  // same declarator node is revisited once per instance of its component.
+  // key: `${instanceId}:${declaratorStart}` -> declId。同じ declarator ノードは
+  // コンポーネントのインスタンスごとに再訪されるので複合キーにしている。
   const declIdByKey = new Map();
   const declKind = new Map(); // declId -> 'signal' | 'derived'
-  const declOutputName = new Map(); // declId -> hygienic output identifier
+  const declOutputName = new Map(); // declId -> hygienic な出力識別子
   const derivedDeps = new Map(); // declId -> Set<declId>
   const usedOutputNames = new Set();
   const markers = []; // { id, contentParts }
-  const markerDeps = new Map(); // markerId -> Set<declId> (direct, pre-transitive-closure)
+  const markerDeps = new Map(); // markerId -> Set<declId>(直接依存、推移閉包を取る前)
   let markerCounter = 0;
   let instanceCounter = 0;
 
@@ -113,10 +101,23 @@ export function compile(source) {
     return candidate;
   }
 
-  // Walks an expression, resolving every referenced identifier back to a
-  // tracked declId (if any) via lexical scope, and returns both the set of
-  // deps and the source text with those references rewritten to their
-  // hygienic output names (a no-op if nothing needed renaming).
+  // declarator に declId を採番・登録し、plain / instrumented の
+  // `const <name> = <kind>(<arg>)` 出力ペアを emit する。
+  // signal/derived 宣言と prop 昇格の両方から使う。
+  function emitReactiveDecl(instanceId, declaratorStart, naturalName, kind, argSrc, out) {
+    const declId = `decl_${instanceId}_${declaratorStart}`;
+    declIdByKey.set(declKey(instanceId, declaratorStart), declId);
+    declKind.set(declId, kind);
+    const outputName = assignOutputName(naturalName, declId);
+    out.declStatements.push(`const ${outputName} = ${kind}(${argSrc});`);
+    out.instrumentedDeclStatements.push(`const ${outputName} = ${kind}(${argSrc}, ${JSON.stringify(declId)});`);
+    return declId;
+  }
+
+  // 式を走査し、参照されている各識別子をレキシカルスコープ経由で追跡中の
+  // declId(あれば)に解決して、依存の集合と、それらの参照を hygienic な
+  // 出力名に書き換えたソーステキストの両方を返す(リネーム不要なら実質
+  // no-op)。
   function analyzeExpr(path, instanceId) {
     const deps = new Set();
     const edits = [];
@@ -148,10 +149,10 @@ export function compile(source) {
     return { deps, rendered };
   }
 
-  // A bare read like `count()` - a zero-arg call of an already-tracked
-  // signal/derived, with no surrounding computation - can be safely aliased.
-  // Anything else (a literal, `count() + 1`, ...) can't be written back to
-  // in general, so it's promoted to an independent signal instead.
+  // `count()` のような裸の読み取り - 追跡済み signal/derived の引数なし
+  // 呼び出しで周囲に計算がないもの - は安全にエイリアスできる。それ以外
+  // (リテラル、`count() + 1` など)は一般に write-back できないので、
+  // 独立した signal に昇格する。
   function bareTrackedDeclId(exprPath, instanceId) {
     if (!exprPath.isCallExpression() || exprPath.node.arguments.length !== 0) return null;
     const callee = exprPath.get('callee');
@@ -191,15 +192,10 @@ export function compile(source) {
         const kind = init.callee.name;
 
         if (kind === 'signal' || kind === 'derived') {
-          const declId = `decl_${instanceId}_${declarator.start}`;
-          declIdByKey.set(declKey(instanceId, declarator.start), declId);
-          declKind.set(declId, kind);
-          const outputName = assignOutputName(declarator.id.name, declId);
           const argPath = stmt.get('declarations.0.init.arguments.0');
           const { deps, rendered } = analyzeExpr(argPath, instanceId);
+          const declId = emitReactiveDecl(instanceId, declarator.start, declarator.id.name, kind, rendered, out);
           if (kind === 'derived') derivedDeps.set(declId, deps);
-          out.declStatements.push(`const ${outputName} = ${kind}(${rendered});`);
-          out.instrumentedDeclStatements.push(`const ${outputName} = ${kind}(${rendered}, ${JSON.stringify(declId)});`);
           return;
         }
 
@@ -210,38 +206,22 @@ export function compile(source) {
 
           if (binding.mode === 'alias') {
             declIdByKey.set(declKey(instanceId, declarator.start), binding.declId);
-            // Same declId as an existing signal - no new storage, nothing to
-            // declare. Every reference below resolves straight to it.
+            // 既存 signal と同じ declId - 新しいストレージも宣言も不要。
+            // 以降の参照はすべてそこへ直接解決される。
           } else {
-            const declId = `decl_${instanceId}_${declarator.start}`;
-            declIdByKey.set(declKey(instanceId, declarator.start), declId);
-            declKind.set(declId, 'signal');
-            const outputName = assignOutputName(declarator.id.name, declId);
-            out.declStatements.push(`const ${outputName} = signal(${binding.rendered});`);
-            out.instrumentedDeclStatements.push(`const ${outputName} = signal(${binding.rendered}, ${JSON.stringify(declId)});`);
+            emitReactiveDecl(instanceId, declarator.start, declarator.id.name, 'signal', binding.rendered, out);
           }
           return;
         }
       }
     }
-    // Plain non-reactive local (e.g. `const step = 2;`) - kept verbatim, not
-    // hygienically renamed (see scope limits above).
+    // 非リアクティブなローカル(例 `const step = 2;`)- そのまま残し、
+    // hygienic リネームはしない(上記スコープ制限参照)。
     out.declStatements.push(sliceSrc(stmt));
     out.instrumentedDeclStatements.push(sliceSrc(stmt));
   }
 
-  // `cond && <A/>` (no falsy branch - renders nothing) or `cond ? <A/> : <B/>`.
-  function classifyConditionalExpr(exprPath) {
-    if (exprPath.isLogicalExpression({ operator: '&&' })) {
-      return { conditionPath: exprPath.get('left'), truthyPath: exprPath.get('right'), falsyPath: null };
-    }
-    if (exprPath.isConditionalExpression()) {
-      return { conditionPath: exprPath.get('test'), truthyPath: exprPath.get('consequent'), falsyPath: exprPath.get('alternate') };
-    }
-    return null;
-  }
-
-  // A branch renders either a JSX element, or nothing (null literal or `false`).
+  // ブランチが描画するのは JSX 要素か、無(null リテラルまたは `false`)。
   function renderBranch(branchPath, componentsByName, instanceId, out) {
     if (!branchPath) return null;
     if (branchPath.isJSXElement()) return renderElement(branchPath, componentsByName, instanceId, out);
@@ -259,53 +239,13 @@ export function compile(source) {
     markers.push({ id: markerId, kind: 'conditional', conditionCode, truthyHtml, falsyHtml });
     markerDeps.set(markerId, deps);
 
-    const truthyEmbed = truthyHtml !== null ? `\`${truthyHtml}\`` : '`<!---->`';
-    const falsyEmbed = falsyHtml !== null ? `\`${falsyHtml}\`` : '`<!---->`';
-    return `<!--${markerId}-->\${${conditionCode} ? ${truthyEmbed} : ${falsyEmbed}}`;
-  }
-
-  // `things().map(item => <li key={item.id}>...</li>)`, concise or block body.
-  function classifyListExpr(exprPath) {
-    if (!exprPath.isCallExpression() || exprPath.node.arguments.length !== 1) return null;
-    const callee = exprPath.get('callee');
-    if (!callee.isMemberExpression() || callee.node.computed || callee.node.property.name !== 'map') return null;
-    const callback = exprPath.get('arguments.0');
-    if (!callback.isArrowFunctionExpression() || callback.node.params.length !== 1 || callback.node.params[0].type !== 'Identifier') return null;
-    let templatePath = callback.get('body');
-    if (templatePath.isBlockStatement()) {
-      const ret = templatePath.get('body').find((s) => s.isReturnStatement());
-      if (!ret) return null;
-      templatePath = ret.get('argument');
-    }
-    if (!templatePath.isJSXElement()) return null;
-    return { listExprPath: callee.get('object'), itemParamName: callback.node.params[0].name, templatePath };
-  }
-
-  // A list item template is intentionally not run through renderElement: its
-  // fields come from a plain callback parameter, not a tracked declaration,
-  // so there is nothing to register as a persistent marker - the whole item
-  // is regenerated from scratch on every list update (see header comment).
-  function renderItemTemplate(templatePath) {
-    const tagName = templatePath.node.openingElement.name.name;
-    let keyExprSrc = null;
-    for (const attr of templatePath.get('openingElement.attributes')) {
-      if (attr.node.name.name === 'key') keyExprSrc = sliceSrc(attr.get('value.expression'));
-    }
-    if (!keyExprSrc) throw new Error('compile: list items must have a key={...} attribute (scope limit)');
-
-    let innerSrc = '';
-    for (const child of templatePath.get('children')) {
-      if (child.isJSXText()) innerSrc += escapeTemplateText(child.node.value);
-      else if (child.isJSXExpressionContainer()) innerSrc += '${' + sliceSrc(child.get('expression')) + '}';
-      else throw new Error(`compile: unsupported JSX child <${child.node.type}> in a list item template (scope limit)`);
-    }
-    return { tagName, keyExprSrc, innerSrc };
+    return `<!--${markerId}-->\${${conditionCode} ? ${embedBranch(truthyHtml)} : ${embedBranch(falsyHtml)}}`;
   }
 
   function renderList(exprPath, instanceId) {
     const cls = classifyListExpr(exprPath);
     const { deps, rendered: listCode } = analyzeExpr(cls.listExprPath, instanceId);
-    const { tagName, keyExprSrc, innerSrc } = renderItemTemplate(cls.templatePath);
+    const { tagName, keyExprSrc, innerSrc } = renderItemTemplate(cls.templatePath, source);
     const markerId = `m${markerCounter++}`;
 
     markers.push({ id: markerId, kind: 'list', listCode, itemParamName: cls.itemParamName, tagName, keyExprSrc, innerSrc });
@@ -315,16 +255,35 @@ export function compile(source) {
     return `<!--${markerId}_start-->\${${listCode}.map((${cls.itemParamName}) => \`${itemHtml}\`).join('')}<!--${markerId}_end-->`;
   }
 
-  function classifyStructuralExpr(exprPath) {
-    return classifyConditionalExpr(exprPath) ?? classifyListExpr(exprPath);
+  // JSXText/式の子の連なりを、1回の textContent 置換で更新するアトミックな
+  // ユニットとして扱う:マーカーを登録し、内側のテンプレートソースを返す。
+  // renderChildren の run と要素まるごとマーカーの両方から使う。
+  function buildTextMarker(runPaths, instanceId) {
+    const markerId = `m${markerCounter++}`;
+    const contentParts = [];
+    const deps = new Set();
+    for (const p of runPaths) {
+      if (p.isJSXText()) {
+        contentParts.push({ type: 'text', value: p.node.value });
+      } else if (p.isJSXExpressionContainer()) {
+        const { deps: exprDeps, rendered } = analyzeExpr(p.get('expression'), instanceId);
+        contentParts.push({ type: 'expr', code: rendered });
+        for (const d of exprDeps) deps.add(d);
+      } else {
+        throw new Error('compile: mixing elements into a reactive text unit is not supported yet (scope limit)');
+      }
+    }
+    markers.push({ id: markerId, kind: 'text', contentParts });
+    markerDeps.set(markerId, deps);
+    return { markerId, inner: innerTemplateSource(contentParts) };
   }
 
-  // Children of a host element that has at least one conditional/list among
-  // its direct children: unlike the plain text-marker case, the element
-  // itself can no longer be one atomic textContent-replace unit, since part
-  // of its content is now structural. Static text/plain-expr runs still get
-  // grouped into their own text marker; a bare run with no wrapping element
-  // of its own is tagged with a synthetic <span> so it has something queryable.
+  // 直接の子に条件分岐/リストを1つ以上含むホスト要素の子の処理:内容の
+  // 一部が構造ユニットになるため、単純なテキストマーカーの場合と違い、
+  // 要素自体を1回の textContent 置換ユニットにはできない。静的テキスト/
+  // 単純式の連なりは引き続きまとめて自前のテキストマーカーになるが、
+  // 自分を包む要素を持たない裸の連なりには、クエリ可能な足場として
+  // 合成の <span> を付ける。
   function renderChildren(childrenPaths, componentsByName, instanceId, out) {
     let result = '';
     let run = [];
@@ -334,22 +293,8 @@ export function compile(source) {
       if (!hasExpr) {
         for (const p of run) result += escapeTemplateText(p.node.value);
       } else {
-        const markerId = `m${markerCounter++}`;
-        const contentParts = [];
-        const deps = new Set();
-        for (const p of run) {
-          if (p.isJSXText()) {
-            contentParts.push({ type: 'text', value: p.node.value });
-          } else {
-            const exprPath = p.get('expression');
-            const { deps: exprDeps, rendered } = analyzeExpr(exprPath, instanceId);
-            contentParts.push({ type: 'expr', code: rendered });
-            for (const d of exprDeps) deps.add(d);
-          }
-        }
-        markers.push({ id: markerId, kind: 'text', contentParts });
-        markerDeps.set(markerId, deps);
-        result += `<span data-iris-id="${markerId}">${innerTemplateSource(contentParts)}</span>`;
+        const { markerId, inner } = buildTextMarker(run, instanceId);
+        result += `<span data-iris-id="${markerId}">${inner}</span>`;
       }
       run = [];
     };
@@ -404,24 +349,8 @@ export function compile(source) {
       return `<${tagName}>${inner}</${tagName}>`;
     }
 
-    const markerId = `m${markerCounter++}`;
-    const contentParts = [];
-    const deps = new Set();
-    for (const child of children) {
-      if (child.isJSXText()) {
-        contentParts.push({ type: 'text', value: child.node.value });
-      } else if (child.isJSXExpressionContainer()) {
-        const exprPath = child.get('expression');
-        const { deps: exprDeps, rendered } = analyzeExpr(exprPath, instanceId);
-        contentParts.push({ type: 'expr', code: rendered });
-        for (const d of exprDeps) deps.add(d);
-      } else {
-        throw new Error('compile: mixing elements into a reactive text unit is not supported yet (scope limit)');
-      }
-    }
-    markers.push({ id: markerId, kind: 'text', contentParts });
-    markerDeps.set(markerId, deps);
-    return `<${tagName} data-iris-id="${markerId}">${innerTemplateSource(contentParts)}</${tagName}>`;
+    const { markerId, inner } = buildTextMarker(children, instanceId);
+    return `<${tagName} data-iris-id="${markerId}">${inner}</${tagName}>`;
   }
 
   function compileComponent(componentPath, propBindings, instanceId, componentsByName, out) {
@@ -439,7 +368,7 @@ export function compile(source) {
     return renderElement(returnArgPath, componentsByName, instanceId, out);
   }
 
-  // --- find every top-level component, and the one root no one else references ---
+  // --- トップレベルのコンポーネントをすべて列挙し、誰からも参照されない唯一のルートを特定する ---
   const componentsByName = new Map();
   traverse(ast, {
     FunctionDeclaration(path) {
@@ -468,7 +397,7 @@ export function compile(source) {
   const out = { declStatements: [], instrumentedDeclStatements: [] };
   const rootHtmlSource = compileComponent(rootPath, new Map(), instanceCounter++, componentsByName, out);
 
-  // --- transitive closure: expand derived declIds up to their root signals ---
+  // --- 推移閉包:derived の declId をルート signal まで展開する ---
   function resolveToSignals(declId, visited) {
     if (visited.has(declId)) return new Set();
     visited.add(declId);
@@ -490,7 +419,7 @@ export function compile(source) {
     }
   }
 
-  // --- build-time execution: confirm discovery + obtain the real initial HTML ---
+  // --- ビルド時実行:discovery の確認 + 実際の初期 HTML の取得 ---
   const instrumentedBody = [...out.instrumentedDeclStatements, `return \`${rootHtmlSource}\`;`].join('\n');
   const runComponent = new Function('signal', 'derived', instrumentedBody);
   const initialHtml = runComponent(signal, derived);
@@ -502,85 +431,8 @@ export function compile(source) {
     }
   }
 
-  // --- codegen: dedicated update_<name>() per root signal, across component/instance boundaries ---
-  const conditionalMarkers = markers.filter((m) => m.kind === 'conditional');
-  const listMarkers = markers.filter((m) => m.kind === 'list');
+  // --- codegen:ルート signal ごとの専用 update_<name>()、コンポーネント/インスタンス境界を跨ぐ ---
+  const code = generateModule({ declStatements: out.declStatements, markers, signalToMarkers, declOutputName, initialHtml });
 
-  const outLines = [];
-  outLines.push("import { signal, derived, mount, collectReactive, forgetReactive, insertAfter, htmlToNode } from '../src/runtime.js';", '');
-  outLines.push(...out.declStatements.map((s) => `export ${s}`), '');
-  for (const m of listMarkers) {
-    outLines.push(
-      `const __itemInner_${m.id} = (${m.itemParamName}) => \`${m.innerSrc}\`;`,
-      `const __itemHtml_${m.id} = (${m.itemParamName}) => \`<${m.tagName}>\${__itemInner_${m.id}(${m.itemParamName})}</${m.tagName}>\`;`,
-      `const __itemKey_${m.id} = (${m.itemParamName}) => String(${m.keyExprSrc});`
-    );
-  }
-  outLines.push('');
-  outLines.push(`const __INITIAL_HTML__ = ${JSON.stringify(initialHtml)};`, '');
-  outLines.push(
-    `let __markers__, __anchors__${conditionalMarkers.map((m) => `, __cond_${m.id}`).join('')}${listMarkers.map((m) => `, __list_${m.id}`).join('')};`,
-    'export function mountComponent(container) {',
-    '  ({ markers: __markers__, anchors: __anchors__ } = mount(container, __INITIAL_HTML__));',
-    ...conditionalMarkers.map((m) => `  __cond_${m.id} = ${m.conditionCode};`),
-    ...listMarkers.flatMap((m) => [
-      `  __list_${m.id} = new Map();`,
-      `  { let __node = __anchors__.get(${JSON.stringify(m.id + '_start')}).nextSibling; for (const ${m.itemParamName} of ${m.listCode}) { __list_${m.id}.set(__itemKey_${m.id}(${m.itemParamName}), __node); __node = __node.nextSibling; } }`,
-    ]),
-    '}',
-    ''
-  );
-
-  for (const [signalId, markerIds] of signalToMarkers) {
-    const name = declOutputName.get(signalId);
-    outLines.push(`export function update_${name}() {`);
-    for (const mId of markerIds) {
-      const marker = markers.find((m) => m.id === mId);
-      if (marker.kind === 'conditional') {
-        const truthyEmbed = marker.truthyHtml !== null ? `\`${marker.truthyHtml}\`` : '`<!---->`';
-        const falsyEmbed = marker.falsyHtml !== null ? `\`${marker.falsyHtml}\`` : '`<!---->`';
-        outLines.push(
-          '  {',
-          `    const __next = ${marker.conditionCode};`,
-          `    if (__next !== __cond_${marker.id}) {`,
-          `      const __anchor = __anchors__.get(${JSON.stringify(marker.id)});`,
-          '      forgetReactive(__anchor.nextSibling, __markers__, __anchors__);',
-          '      __anchor.nextSibling.remove();',
-          `      insertAfter(__anchor, __next ? ${truthyEmbed} : ${falsyEmbed});`,
-          '      collectReactive(__anchor.nextSibling, __markers__, __anchors__);',
-          `      __cond_${marker.id} = __next;`,
-          '    }',
-          '  }'
-        );
-      } else if (marker.kind === 'list') {
-        outLines.push(
-          '  {',
-          `    const __start = __anchors__.get(${JSON.stringify(marker.id + '_start')});`,
-          `    const __end = __anchors__.get(${JSON.stringify(marker.id + '_end')});`,
-          `    const __old = __list_${marker.id};`,
-          '    const __next = new Map();',
-          `    for (const ${marker.itemParamName} of ${marker.listCode}) {`,
-          `      const __key = __itemKey_${marker.id}(${marker.itemParamName});`,
-          '      let __el = __old.get(__key);',
-          '      if (__el) {',
-          `        __el.innerHTML = __itemInner_${marker.id}(${marker.itemParamName});`,
-          '      } else {',
-          `        __el = htmlToNode(__itemHtml_${marker.id}(${marker.itemParamName}), __start.ownerDocument);`,
-          '      }',
-          '      __end.parentNode.insertBefore(__el, __end);',
-          '      __next.set(__key, __el);',
-          '      __old.delete(__key);',
-          '    }',
-          '    for (const __el of __old.values()) __el.remove();',
-          `    __list_${marker.id} = __next;`,
-          '  }'
-        );
-      } else {
-        outLines.push(`  { const __el = __markers__.get(${JSON.stringify(mId)}); if (__el) __el.textContent = \`${innerTemplateSource(marker.contentParts)}\`; }`);
-      }
-    }
-    outLines.push('}', '');
-  }
-
-  return { code: outLines.join('\n'), initialHtml, markers, signalToMarkers, declName: declOutputName };
+  return { code, initialHtml, markers, signalToMarkers, declName: declOutputName };
 }

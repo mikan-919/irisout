@@ -2,12 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { compile } from '../src/compiler.js';
 import { createContainer, loadGenerated } from './helpers.js';
 
-// Third deferred item from docs/adr/0001-first-milestone.md: structural
-// updates, scoped down to conditional rendering only (lists are still
-// deferred). `visible() && <span>{count()}</span>` mixes both forms this
-// milestone supports: an always-present comment anchor drives insert/remove
-// of the branch, and the branch's own nested reactive expression proves the
-// inserted subtree's markers get discovered and wired up dynamically.
+// docs/adr/0001-first-milestone.md の先送り項目その3:構造更新(スコープを
+// 条件レンダリングのみに絞ったもの。リストはまだ先送り)。
+// `visible() && <span>{count()}</span>` はこのマイルストーンが対応する
+// 両形式を混ぜている:常に存在するコメントアンカーがブランチの挿入/削除を
+// 駆動し、ブランチ自身のネストしたリアクティブ式が、挿入されたサブツリーの
+// マーカーが動的に発見・接続されることを証明する。
 const TOGGLE_WITH_NESTED_REACTIVITY = `
 function App() {
   const visible = signal(true);
@@ -68,7 +68,7 @@ describe('conditional rendering', () => {
     expect(container.querySelector('span')).toBeNull();
     expect(container.innerHTML).toBe('<div><!--m0--><!----></div>');
 
-    // the removed branch's own signal no longer has anything to update
+    // 削除されたブランチ自身の signal には、もう更新対象が何もない
     mod.count(99);
     expect(() => mod.update_count()).not.toThrow();
   });
@@ -81,11 +81,11 @@ describe('conditional rendering', () => {
 
     mod.visible(false);
     mod.update_visible();
-    mod.count(7); // changes while unmounted
+    mod.count(7); // アンマウント中に値が変わる
     mod.visible(true);
     mod.update_visible();
 
-    // freshly (re-)mounted content reflects the current signal value
+    // (再)マウントされたばかりの内容は現在の signal 値を反映する
     expect(container.querySelector('span').textContent).toBe('7');
 
     mod.count(8);

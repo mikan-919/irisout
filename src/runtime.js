@@ -1,7 +1,8 @@
-// Minimal build-time runtime: signal()/derived() calls are executed on Node
-// during compilation to discover reactive state (see docs/adr/0001-first-milestone.md).
-// `declId` is injected by the compiler for build-time discovery only; it is not
-// part of the public signal/derived API surface used by component authors.
+// 最小限のビルド時ランタイム:signal()/derived() 呼び出しはコンパイル中に
+// Node 上で実行され、リアクティブ状態の発見に使われる
+// (docs/adr/0001-first-milestone.md 参照)。`declId` はビルド時 discovery の
+// ためだけにコンパイラが注入するもので、コンポーネント作者が使う公開
+// signal/derived API の一部ではない。
 
 export const registry = new Map();
 
@@ -21,9 +22,10 @@ export function derived(compute, declId) {
   return compute;
 }
 
-// Generic DOM glue shared by every compiled component: paint the baked initial
-// HTML once, then cache every marker element and conditional anchor so
-// generated update_* functions never have to search the DOM again.
+// すべてのコンパイル済みコンポーネントが共有する汎用 DOM グルー:焼き込み
+// 済みの初期 HTML を1回描画し、マーカー要素と条件分岐アンカーをすべて
+// キャッシュして、生成された update_* 関数が二度と DOM を探索しなくて
+// 済むようにする。
 export function mount(container, html) {
   container.innerHTML = html;
   const markers = new Map();
@@ -32,11 +34,11 @@ export function mount(container, html) {
   return { markers, anchors };
 }
 
-// A structural (conditional) unit is marked by an always-present comment
-// anchor (`<!--m2-->`); the element(s) actually shown after it come and go.
-// These two walks are how a freshly mounted/inserted subtree's markers and
-// anchors get registered or forgotten - reused by both the initial mount()
-// and every generated conditional swap.
+// 構造(条件分岐)ユニットは常に存在するコメントアンカー(`<!--m2-->`)で
+// マークされる:その後ろに実際に表示される要素は現れたり消えたりする。
+// 以下の2つのウォークで、マウント/挿入されたばかりのサブツリーのマーカーと
+// アンカーを登録・忘却する - 初回の mount() と生成された条件分岐スワップの
+// 両方から再利用される。
 export function collectReactive(root, markers, anchors) {
   if (root.nodeType === 1 && root.hasAttribute('data-iris-id')) markers.set(root.getAttribute('data-iris-id'), root);
   else if (root.nodeType === 8 && root.data) anchors.set(root.data, root);
@@ -49,15 +51,15 @@ export function forgetReactive(root, markers, anchors) {
   for (const child of root.childNodes ?? []) forgetReactive(child, markers, anchors);
 }
 
-// Comment nodes don't support insertAdjacentHTML (Element-only), so a
-// contextual fragment + ChildNode#after (which Comment does implement) is
-// the vanilla-JS way to paint HTML right after an anchor.
+// コメントノードは insertAdjacentHTML(Element 専用)をサポートしないので、
+// contextual fragment + ChildNode#after(Comment も実装している)が
+// アンカー直後に HTML を描画する vanilla-JS のやり方。
 export function insertAfter(anchor, html) {
   anchor.after(anchor.ownerDocument.createRange().createContextualFragment(html));
 }
 
-// Same contextual-fragment trick, but detached - for building a single new
-// keyed list item element on demand instead of inserting it in place.
+// 同じ contextual-fragment トリックの detached 版 - その場に挿入する
+// のではなく、新しい keyed リストアイテム要素を1つオンデマンドで作るため。
 export function htmlToNode(html, ownerDocument) {
   return ownerDocument.createRange().createContextualFragment(html).firstChild;
 }

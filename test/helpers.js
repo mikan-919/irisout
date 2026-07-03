@@ -3,10 +3,10 @@ import { writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-// A real DOM (via jsdom) rather than a hand-rolled fake: once conditional
-// rendering needs comment-node anchors, insertAdjacentHTML-style insertion,
-// and nextSibling bookkeeping, faithfully reproducing that by hand would
-// mean reimplementing an HTML parser.
+// 手作りのフェイクではなく(jsdom による)実 DOM を使う:条件レンダリングが
+// コメントノードのアンカー、insertAdjacentHTML 的な挿入、nextSibling の
+// 帳簿付けを必要とする以上、それを手で忠実に再現するのは HTML パーサーの
+// 再実装になってしまう。
 export function createContainer() {
   const dom = new JSDOM('<!doctype html><div id="app"></div>');
   return dom.window.document.getElementById('app');
