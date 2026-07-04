@@ -41,7 +41,7 @@ export function generateModule({
   initialHtml,
 }: GenerateModuleInput): string {
   const outLines: string[] = []
-  outLines.push("import { mount } from '../src/runtime.js';", '')
+  outLines.push("import { mount, hydrate } from '../src/runtime.js';", '')
   outLines.push(...declStatements.map((s) => `export ${s}`), '')
   outLines.push(`const __INITIAL_HTML__ = ${JSON.stringify(initialHtml)};`, '')
 
@@ -57,17 +57,26 @@ export function generateModule({
   }
   if (handlers.length > 0) outLines.push('')
 
+  // mountComponent と hydrateComponent で共有する addEventListener 配線行
+  // (markers の取得手段だけが違う: innerHTML 書き込みありか、なしか)。
+  const setupLines = handlers.map(
+    (h) =>
+      `  __markers__.get(${JSON.stringify(h.markerId)})?.addEventListener(${JSON.stringify(h.eventName)}, __handler_${h.markerId}_${h.eventName});`,
+  )
+
   outLines.push(
     'let __markers__;',
     'export function mountComponent(container) {',
     '  ({ markers: __markers__ } = mount(container, __INITIAL_HTML__));',
+    ...setupLines,
+    '}',
+    '',
+    'export function hydrateComponent(container) {',
+    '  ({ markers: __markers__ } = hydrate(container));',
+    ...setupLines,
+    '}',
+    '',
   )
-  for (const h of handlers) {
-    outLines.push(
-      `  __markers__.get(${JSON.stringify(h.markerId)})?.addEventListener(${JSON.stringify(h.eventName)}, __handler_${h.markerId}_${h.eventName});`,
-    )
-  }
-  outLines.push('}', '')
 
   // signal declId -> それに直接依存する derived declId の一覧。M1 では
   // derived-of-derived を禁止しているので、これはフラットな逆引きで足りる。

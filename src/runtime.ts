@@ -34,6 +34,16 @@ export function derived<T>(compute: () => T, declId?: DeclId): () => T {
   return compute
 }
 
+// すでに DOM 上に存在する(静的ビルドで焼き込み済みの)HTML から
+// `data-iris-id` を持つ要素をすべて収集する。innerHTML の書き換えは
+// 一切行わない - dist/index.html のように初期 HTML がすでにブラウザへ
+// 届いているケース(ADR-0003 相当)向け。
+export function hydrate(container: Element): { markers: Map<string, Element> } {
+  const markers = new Map<string, Element>()
+  collectMarkers(container, markers)
+  return { markers }
+}
+
 // 焼き込み済みの初期 HTML を1回描画し、`data-iris-id` を持つ要素をすべて
 // キャッシュして、生成された update_* 関数が二度と DOM を探索しなくて
 // 済むようにする。
@@ -42,9 +52,7 @@ export function mount(
   html: string,
 ): { markers: Map<string, Element> } {
   container.innerHTML = html
-  const markers = new Map<string, Element>()
-  collectMarkers(container, markers)
-  return { markers }
+  return hydrate(container)
 }
 
 function collectMarkers(root: Element, markers: Map<string, Element>): void {
