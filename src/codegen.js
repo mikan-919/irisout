@@ -102,7 +102,16 @@ export function generateModule({ declStatements, markers, signalToMarkers, declO
           '  }'
         );
       } else {
-        outLines.push(`  { const __el = __markers__.get(${JSON.stringify(mId)}); if (__el) __el.textContent = \`${innerTemplateSource(marker.contentParts)}\`; }`);
+        // 'text' kind(contentParts あり)と 'attribute' kind(attrs のみ)の
+        // 両方、および両方を併せ持つ要素(text マーカー兼動的属性)をここで
+        // まとめて処理する。同じ __el に対して textContent 差し替えと
+        // setAttribute を両方行いうる。
+        const lines = [];
+        if (marker.contentParts) lines.push(`__el.textContent = \`${innerTemplateSource(marker.contentParts)}\`;`);
+        if (marker.attrs) {
+          for (const a of marker.attrs) lines.push(`__el.setAttribute(${JSON.stringify(a.name)}, ${declOutputName.get(a.declId)}());`);
+        }
+        outLines.push(`  { const __el = __markers__.get(${JSON.stringify(mId)}); if (__el) { ${lines.join(' ')} } }`);
       }
     }
     outLines.push('}', '');

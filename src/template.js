@@ -1,6 +1,29 @@
 // テンプレートリテラルのソース文字列を組み立てるヘルパー群。
 // コンパイラの render ウォークと最終 codegen (src/codegen.js) の両方から使う。
 
+// JSX の空白ルール(Babel の cleanJSXElementLiteralChild と同じ): 改行を
+// 挟む行はインデント/末尾空白を落として1スペースで詰め直す。単一行の
+// テキスト(式の間のインライン空白など)はそのまま保持する。
+export function cleanJSXText(value) {
+  if (!/\r\n|\n|\r/.test(value)) return value;
+  const lines = value.split(/\r\n|\n|\r/);
+  let lastNonEmptyLine = 0;
+  for (let i = 0; i < lines.length; i++) {
+    if (/[^ \t]/.test(lines[i])) lastNonEmptyLine = i;
+  }
+  let result = '';
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i].replace(/\t/g, ' ');
+    if (i !== 0) line = line.replace(/^ +/, '');
+    if (i !== lines.length - 1) line = line.replace(/ +$/, '');
+    if (line) {
+      if (i !== lastNonEmptyLine) line += ' ';
+      result += line;
+    }
+  }
+  return result;
+}
+
 export function escapeTemplateText(text) {
   return text.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$\{/g, '\\${');
 }

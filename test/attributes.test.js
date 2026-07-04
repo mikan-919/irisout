@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { compile } from '../src/compiler.js';
+import { createContainer, loadGenerated } from './helpers.js';
 
 describe('static host-element attributes compile into the baked HTML', () => {
   it('keeps a plain string attribute', () => {
@@ -44,14 +45,31 @@ export function App() {
     expect(initialHtml).toBe('<div title="`x` and ${y}">t</div>');
   });
 
-  it('throws a scope-limit error for a dynamic (expression) attribute on a host element', () => {
-    const source = `
+  it('renders the initial value of a dynamic attribute', () => {
+    const { initialHtml } = compile(`
 export function App() {
   const theme = signal('dark');
   return <div class={theme()}>t</div>;
 }
-`;
-    expect(() => compile(source)).toThrow(/scope limit/);
+`);
+    expect(initialHtml).toBe('<div class="dark" data-iris-id="m0">t</div>');
+  });
+
+  it('updates a dynamic attribute when its signal changes, with no direct text marker needed', async () => {
+    const { code } = compile(`
+export function App() {
+  const theme = signal('dark');
+  return <div class={theme()} onClick={() => theme('light')}>t</div>;
+}
+`);
+    const mod = await loadGenerated(code);
+    const container = createContainer();
+    mod.mountComponent(container);
+
+    const div = container.querySelector('div');
+    expect(div.getAttribute('class')).toBe('dark');
+    div.dispatchEvent(new container.ownerDocument.defaultView.Event('click'));
+    expect(div.getAttribute('class')).toBe('light');
   });
 
   it('static attributes coexist with a working click handler', async () => {

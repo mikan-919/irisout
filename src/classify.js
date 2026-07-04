@@ -2,7 +2,7 @@
 // 扱う JSX 式の形を認識する。コンパイラの状態には触れず、Babel のパス
 // (とアイテムテンプレート用の生ソース)だけを見る。
 
-import { escapeTemplateText } from './template.js';
+import { cleanJSXText, escapeTemplateText } from './template.js';
 
 // `cond && <A/>`(falsy 側なし=何も描画しない)または `cond ? <A/> : <B/>`。
 export function classifyConditionalExpr(exprPath) {
@@ -51,7 +51,7 @@ export function renderItemTemplate(templatePath, source) {
 
   let innerSrc = '';
   for (const child of templatePath.get('children')) {
-    if (child.isJSXText()) innerSrc += escapeTemplateText(child.node.value);
+    if (child.isJSXText()) innerSrc += escapeTemplateText(cleanJSXText(child.node.value));
     else if (child.isJSXExpressionContainer()) innerSrc += '${' + slice(child.get('expression')) + '}';
     else throw new Error(`compile: unsupported JSX child <${child.node.type}> in a list item template (scope limit)`);
   }
