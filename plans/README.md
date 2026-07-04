@@ -16,13 +16,26 @@ starting, honor its STOP conditions, and update your row when done.
 | 002  | Browser build target (baked HTML + app.js) | P2 | S–M | 001 | DONE (legacy JS, see below) |
 | 003  | Static host-element attributes | P2 | S | — | DONE (legacy JS, see below) |
 | 004  | TypeScript rewrite, Milestone 1 (scaffold + signal/derived + text markers) | P1 | M | — | DONE |
-| 005  | TypeScript rewrite, Milestone 2 (event handlers) | P1 | M | 004 | TODO |
+| 005  | TypeScript rewrite, Milestone 2 (event handlers) | P1 | M | 004 | DONE |
 | 006  | TypeScript rewrite, Milestone 3 (browser build target) | P2 | S–M | 005 | TODO |
 | 007  | TypeScript rewrite, Milestone 4 (static host attributes) | P2 | S | 004 | TODO |
 | 008  | TypeScript rewrite, Milestone 5 (list/conditional factory closures, implements ADR-0005) | P1 | L | 005 | TODO |
 | 009  | TypeScript rewrite, Milestone 6 (verify no-wrapper codegen holds across all milestones) | P3 | S | 004,005,007,008 | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale)
+
+**2026-07-05**: Plan 005 executed via `/improve execute` (dispatched executor,
+reviewed and approved). Landed on worktree branch
+`worktree-agent-a9d087537da0fa345` (commit `810bc83`, parent `fbde16d`) — not
+yet merged to `feat/first-concept`, merge is the user's call. `bun run
+check-all` (biome + typecheck + full test suite, 9/9 pass across
+`counter.test.ts` and the new `handlers.test.ts`) is clean. One in-scope
+judgment call beyond the plan's literal snippet: `renderElement` now rejects
+handlers with parameters (`(e) => ...`) with a loud scope-limit error, per
+the plan's own Maintenance notes and STOP conditions (the plan's Step 3 code
+sample didn't include this check explicitly). quix's build-time
+dependency-tracker approach (see "Direction findings" below) was not
+evaluated during this plan — still open, revisit at/before plan 008.
 
 **2026-07-05 rewrite**: the whole compiler was rewritten from scratch in
 TypeScript (`legacy/` holds the old JS implementation as reference only, not
