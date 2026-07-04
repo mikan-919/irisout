@@ -25,18 +25,38 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJE
 
 ## Direction findings surfaced but not planned this round
 
-- **Host-element attributes, dynamic half** — `class={expr}` and friends on
-  host elements still have no way to render (would need a new "Attribute"
-  marker kind, per `CONCEPT.v2.md`'s `Attribute#5` example). Static half: see
-  plan 003 (DONE); dynamic half fails loudly at compile time (scope-limit
-  error) instead of being silently dropped, but still isn't implemented.
-  Worth planning next round.
-- **List-item template generality** (nested elements/handlers in keyed list
-  items, scope limit at `src/compiler.js:60-62`). Intersects with handler
-  re-wiring; plan after 001/002 land.
+- **Host-element attributes, dynamic half** — DONE, outside the plan process.
+  Commit `0e757ac` ("Support dynamic host-element attributes...") implemented
+  this; the entry here was stale as of this index's previous update.
+- **List-item template generality / handlers in list items & conditional
+  branches** — design decided via a `/grill-with-docs` session on
+  2026-07-05; see ADR-0004 (governing principle) and ADR-0005
+  (factory-per-instantiable-unit closures, `<template>` + `cloneNode`,
+  keyed reuse, Web Components explicitly rejected). Not yet written up as an
+  implementation plan — do that next (would be plan 004).
 
 ## Findings considered and rejected
 
 - **Build-time execution sandboxing / multi-file components**: explicitly
   deferred in ADR-0001's 未決定事項; nothing planned above needs it. Not
   worth doing until cross-module imports become a real requirement.
+- **Web Components for list items/conditional branches**: considered and
+  rejected in ADR-0005. Customized built-ins (`is=`) aren't implemented in
+  Safari; autonomous custom elements + `display: contents` only make the
+  wrapper transparent for layout, not for the DOM tree, which breaks `ul >
+  li` child combinators and `:nth-child` styling. Don't re-propose without
+  addressing both.
+- **Hyperscript-style authoring API** (`div({}, [...])`, explicit dependency
+  arrays via `render([x, y], tree)`): considered and rejected — JSX already
+  provides the "explicit reactive expression" marker this was trying to
+  invent, and manual dependency arrays reintroduce the same footgun class as
+  React's `useEffect` deps. See ADR-0004. Also conflicts with CONCEPT.v2.md's
+  opening commitment to preserve JSX's declarative authoring experience.
+- **Removing `signal()`/`derived()` from the authoring surface entirely**
+  (Svelte-style: plain `let x = 10`, reactivity inferred from assignment
+  sites rather than an explicit runtime API): the long-term aspiration, not
+  rejected outright, but deliberately deferred — see ADR-0004's 未決定事項.
+  Requires exhaustively covering the full JS assignment grammar (compound
+  assignment, destructuring, array mutation methods) within a component
+  body, which is a much larger investment than the bounded single-expression
+  rewriting ADR-0004 already permits. Revisit only as its own scoped effort.

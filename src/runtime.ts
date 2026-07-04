@@ -1,0 +1,54 @@
+// signal()/derived() はビルド時専用(ADR-0006):コンパイル中に Node 上で
+// 実行され、リアクティブ状態の発見に使われるだけ。生成される出力コードは
+// プレーン変数を使うので、この2つの関数は生成モジュールから一切 import
+// されない。`declId` はビルド時 discovery のためだけにコンパイラが注入する
+// もので、コンポーネント作者が使う公開 signal/derived API の一部ではない
+// (docs/adr/0006-generated-output-drops-runtime-signal-wrapper.md 参照)。
+//
+// mount() は逆に生成モジュールから import される、実際にブラウザへ出荷
+// される DOM グルー。hydrate() へのマウント/ハイドレーション分割
+// (ADR-0003 相当、静的ビルドでの水和)は M3 で追加する。M1 は text マーカー
+// しか持たないので、コメントアンカーの発見はまだ不要 - data-iris-id 要素の
+// 収集だけで足りる。
+
+import type { DeclId, DeclKind } from './compiler/state.js'
+
+export const registry = new Map<DeclId, { kind: DeclKind }>()
+
+export function signal<T>(
+  initial: T,
+  declId?: DeclId,
+): (...args: [] | [T]) => T {
+  let value = initial
+  function accessor(...args: [] | [T]): T {
+    if (args.length === 0) return value
+    value = args[0] as T
+    return value
+  }
+  if (declId) registry.set(declId, { kind: 'signal' })
+  return accessor
+}
+
+export function derived<T>(compute: () => T, declId?: DeclId): () => T {
+  if (declId) registry.set(declId, { kind: 'derived' })
+  return compute
+}
+
+// 焼き込み済みの初期 HTML を1回描画し、`data-iris-id` を持つ要素をすべて
+// キャッシュして、生成された update_* 関数が二度と DOM を探索しなくて
+// 済むようにする。
+export function mount(
+  container: Element,
+  html: string,
+): { markers: Map<string, Element> } {
+  container.innerHTML = html
+  const markers = new Map<string, Element>()
+  collectMarkers(container, markers)
+  return { markers }
+}
+
+function collectMarkers(root: Element, markers: Map<string, Element>): void {
+  const id = root.getAttribute('data-iris-id')
+  if (id) markers.set(id, root)
+  for (const child of root.children) collectMarkers(child, markers)
+}
