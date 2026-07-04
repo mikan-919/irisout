@@ -14,6 +14,7 @@ starting, honor its STOP conditions, and update your row when done.
 |------|-------|----------|--------|------------|--------|
 | 001  | Event handlers + write-triggered updates | P1 | M | — | DONE |
 | 002  | Browser build target (baked HTML + app.js) | P2 | S–M | 001 | DONE |
+| 003  | Static host-element attributes | P2 | S | — | DONE |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale)
 
@@ -24,11 +25,12 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJE
 
 ## Direction findings surfaced but not planned this round
 
-- **Host-element attributes are dropped entirely** (including static ones:
-  `<div class="app">` compiles to `<div>`, `src/compiler.js:322-354`). The
-  static half is bug-adjacent and cheap (S); dynamic attributes are a new
-  marker kind (M) and fulfill the concept's `Attribute#5` example. Worth
-  planning next round.
+- **Host-element attributes, dynamic half** — `class={expr}` and friends on
+  host elements still have no way to render (would need a new "Attribute"
+  marker kind, per `CONCEPT.v2.md`'s `Attribute#5` example). Static half: see
+  plan 003 (DONE); dynamic half fails loudly at compile time (scope-limit
+  error) instead of being silently dropped, but still isn't implemented.
+  Worth planning next round.
 - **List-item template generality** (nested elements/handlers in keyed list
   items, scope limit at `src/compiler.js:60-62`). Intersects with handler
   re-wiring; plan after 001/002 land.
