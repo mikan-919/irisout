@@ -12,28 +12,59 @@ starting, honor its STOP conditions, and update your row when done.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| 001  | Event handlers + write-triggered updates | P1 | M | — | DONE |
-| 002  | Browser build target (baked HTML + app.js) | P2 | S–M | 001 | DONE |
-| 003  | Static host-element attributes | P2 | S | — | DONE |
+| 001  | Event handlers + write-triggered updates | P1 | M | — | DONE (legacy JS, see below) |
+| 002  | Browser build target (baked HTML + app.js) | P2 | S–M | 001 | DONE (legacy JS, see below) |
+| 003  | Static host-element attributes | P2 | S | — | DONE (legacy JS, see below) |
+| 004  | TypeScript rewrite, Milestone 1 (scaffold + signal/derived + text markers) | P1 | M | — | DONE |
+| 005  | TypeScript rewrite, Milestone 2 (event handlers) | P1 | M | 004 | TODO |
+| 006  | TypeScript rewrite, Milestone 3 (browser build target) | P2 | S–M | 005 | TODO |
+| 007  | TypeScript rewrite, Milestone 4 (static host attributes) | P2 | S | 004 | TODO |
+| 008  | TypeScript rewrite, Milestone 5 (list/conditional factory closures, implements ADR-0005) | P1 | L | 005 | TODO |
+| 009  | TypeScript rewrite, Milestone 6 (verify no-wrapper codegen holds across all milestones) | P3 | S | 004,005,007,008 | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale)
 
+**2026-07-05 rewrite**: the whole compiler was rewritten from scratch in
+TypeScript (`legacy/` holds the old JS implementation as reference only, not
+maintained further — plans 001–003 above describe work already done *there*,
+kept for history). See `session/000_ts-rewrite-kickoff-and-m1.md` for the
+design discussion (why now, Babel vs oxc/swc, comparison with
+`~/projects/quix`) and ADR-0006 for the governing decision this rewrite is
+built around (generated output never carries a `signal()`/`derived()`
+runtime wrapper, even at the top level). Plan 004 (this milestone-1 slice)
+was executed directly in that session rather than dispatched to an executor,
+so there is no separate `plans/004-*.md` executor file for it — the session
+log is the record. Plan 005 (Milestone 2) is written up in full below.
+
 ## Dependency notes
 
-- 002 requires 001 because the browser demo is inert without event handlers —
-  there is no way to trigger an `update_*` function from the page.
+- (legacy) 002 requires 001 because the browser demo is inert without event
+  handlers — there is no way to trigger an `update_*` function from the page.
+  Same dependency shape applies to 006 needing 005 in the rewrite.
+- 007 (static attributes) only depends on 004 (the base pipeline), not 005 —
+  attribute handling doesn't touch handler/write logic.
+- 008 (factory closures) depends on 005 because list items and conditional
+  branches need working handler codegen to be worth building (that's the
+  whole point of ADR-0005 — handlers inside them).
+- 009 is a cross-cutting verification pass, not new implementation; it can
+  only run once 004/005/007/008 are all in.
 
 ## Direction findings surfaced but not planned this round
 
 - **Host-element attributes, dynamic half** — DONE, outside the plan process.
   Commit `0e757ac` ("Support dynamic host-element attributes...") implemented
-  this; the entry here was stale as of this index's previous update.
-- **List-item template generality / handlers in list items & conditional
-  branches** — design decided via a `/grill-with-docs` session on
-  2026-07-05; see ADR-0004 (governing principle) and ADR-0005
-  (factory-per-instantiable-unit closures, `<template>` + `cloneNode`,
-  keyed reuse, Web Components explicitly rejected). Not yet written up as an
-  implementation plan — do that next (would be plan 004).
+  this in the legacy JS codebase; plan 007 re-implements it in TypeScript.
+- **quix's build-time dependency tracker as an alternative to static
+  scope-based analysis** — surfaced 2026-07-05 while comparing against
+  `~/projects/quix` (see session log). quix discovers `derived`/JSX-expression
+  dependencies by actually executing the wrapped expression once at build
+  time with a tracking scope active, rather than statically resolving
+  identifiers via Babel's `scope.getBinding()`. This could loosen the
+  rewrite's current "derived must be a single concise-arrow-function
+  expression" scope limit (see `src/compiler/render.ts`'s `emitDerived`)
+  without needing to statically cover arbitrary expression shapes. Not
+  decided whether to adopt — evaluate before or during plan 008, since list/
+  conditional dependency discovery is where this would matter most.
 
 ## Findings considered and rejected
 
