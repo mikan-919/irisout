@@ -35,6 +35,16 @@ export interface DeclOutput {
   instrumentedDeclStatements: string[]
 }
 
+// M2: onClick などのハンドラ1個分。writeDeclIds はこのハンドラが書き込む
+// (呼び出しを検出した) root signal の declId 集合 -- compiler.ts の後段で
+// マーカーを持つものだけに絞り込み updateNames へ変換する。
+export interface HandlerDecl {
+  markerId: MarkerId
+  eventName: string
+  rendered: string
+  writeDeclIds: Set<DeclId>
+}
+
 export interface CompilerState {
   source: string
 
@@ -52,6 +62,7 @@ export interface CompilerState {
 
   markers: Marker[]
   markerDeps: Map<MarkerId, Set<DeclId>> // markerId -> Set<declId>(直接依存、推移閉包を取る前)
+  handlers: HandlerDecl[]
 
   markerCounter: number
   instanceCounter: number
@@ -68,6 +79,7 @@ export function createCompilerState(source: string): CompilerState {
     usedOutputNames: new Set(),
     markers: [],
     markerDeps: new Map(),
+    handlers: [],
     markerCounter: 0,
     instanceCounter: 0,
   }

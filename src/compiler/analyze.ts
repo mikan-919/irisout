@@ -6,6 +6,7 @@
 
 import type { NodePath } from '@babel/traverse'
 import type * as t from '@babel/types'
+import { resolveToSignals } from './decl-graph.js'
 import type { CompilerState, DeclId } from './state.js'
 import { declKey } from './state.js'
 
@@ -110,6 +111,93 @@ export function analyzeExpr(
     deps,
     rendered: render(ctx.source, start, end, outputEdits),
     sourceRendered: render(ctx.source, start, end, sourceEdits),
+  }
+}
+
+export interface HandlerAnalysis {
+  /** 出力向け(書き込み呼び出しを代入文へ書き換え済み)。 */
+  rendered: string
+  /** このハンドラが書き込む root signal の declId 集合(推移解決済み)。 */
+  writeDeclIds: Set<DeclId>
+}
+
+// ハンドラ本体専用の解析。analyzeExpr と同じ識別子巡回を行うが、追跡済み
+// identifier への「引数1個の呼び出し」を書き込みとして特別扱いする
+// (M2: `count(count() + 1)` -> `count = count + 1`)。ADR-0006 により出力側
+// では count はプレーン変数なので、書き込みは呼び出しの再実行ではなく
+// 代入で表現する。呼び出し全体を1つの edit で置き換えるのではなく、
+// 「callee+開き括弧」と「閉じ括弧」の2つの edit に分けることで、引数式
+// 内部のネストした読み取り/書き込みは同じ traverse パスに任せて解決させる。
+export function analyzeHandlerExpr(
+  ctx: CompilerState,
+  exprPath: NodePath<t.Expression>,
+  instanceId: number,
+): HandlerAnalysis {
+  const writeDeclIds = new Set<DeclId>()
+  const edits: Edit[] = []
+
+  const visit = (idPath: NodePath<t.Identifier>) => {
+    const id = resolveDeclId(ctx, idPath, instanceId)
+    if (!id) return
+    const outputName = ctx.declOutputName.get(id)
+    if (!outputName) return
+
+    const parent = idPath.parentPath
+    if (parent?.isCallExpression() && parent.node.callee === idPath.node) {
+      if (parent.node.arguments.length === 0) {
+        edits.push({
+          start: parent.node.start!,
+          end: parent.node.end!,
+          text: outputName,
+        })
+        return
+      }
+      if (parent.node.arguments.length > 1) {
+        throw new Error(
+          `compile: signal writes take exactly one argument, got ${parent.node.arguments.length} for "${idPath.node.name}" (scope limit)`,
+        )
+      }
+      if (ctx.declKind.get(id) === 'derived') {
+        throw new Error(
+          `compile: cannot write to derived "${idPath.node.name}"`,
+        )
+      }
+      const arg = parent.node.arguments[0]!
+      edits.push({
+        start: parent.node.start!,
+        end: arg.start!,
+        text: `${outputName} = `,
+      })
+      edits.push({ start: arg.end!, end: parent.node.end!, text: '' })
+      for (const sig of resolveToSignals(ctx, id, new Set()))
+        writeDeclIds.add(sig)
+      return
+    }
+
+    if (outputName !== idPath.node.name) {
+      edits.push({
+        start: idPath.node.start!,
+        end: idPath.node.end!,
+        text: outputName,
+      })
+    }
+  }
+
+  if (exprPath.isIdentifier()) visit(exprPath)
+  exprPath.traverse({
+    Identifier(idPath) {
+      if (idPath.isReferencedIdentifier()) visit(idPath)
+    },
+  })
+
+  return {
+    rendered: render(
+      ctx.source,
+      exprPath.node.start!,
+      exprPath.node.end!,
+      edits,
+    ),
+    writeDeclIds,
   }
 }
 

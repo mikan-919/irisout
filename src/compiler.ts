@@ -111,6 +111,18 @@ export function compile(source: string): CompileResult {
     }
   }
 
+  // --- M2: ハンドラの writeDeclIds をマーカーを持つ signal だけに絞り込み、
+  // update_<name>() の呼び出しリストへ変換する(legacy/src/compiler.js:139-145)。
+  const handlerOutputs = ctx.handlers.map((h) => ({
+    markerId: h.markerId,
+    eventName: h.eventName,
+    rendered: h.rendered,
+    updateNames: [...h.writeDeclIds]
+      .filter((id) => signalToMarkers.has(id))
+      .map((id) => ctx.declOutputName.get(id)!)
+      .sort(),
+  }))
+
   // --- ビルド時実行:discovery の確認 + 実際の初期 HTML の取得 ---
   const instrumentedBody = [
     ...out.instrumentedDeclStatements,
@@ -138,6 +150,7 @@ export function compile(source: string): CompileResult {
     declOutputName: ctx.declOutputName,
     derivedDeps: ctx.derivedDeps,
     derivedRecompute: ctx.derivedRecompute,
+    handlers: handlerOutputs,
     initialHtml,
   })
 
