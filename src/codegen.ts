@@ -10,6 +10,15 @@
 import type { DeclId, Marker, MarkerId } from './compiler/state.js'
 import { innerTemplateSource } from './template.js'
 
+// M2: compiler.ts が writeDeclIds を(マーカーを持つ signal だけに絞って)
+// updateNames へ変換した後の、codegen 向けハンドラ表現。
+export interface HandlerOutput {
+  markerId: MarkerId
+  eventName: string
+  rendered: string
+  updateNames: string[]
+}
+
 export interface GenerateModuleInput {
   declStatements: string[]
   markers: Marker[]
@@ -17,6 +26,7 @@ export interface GenerateModuleInput {
   declOutputName: Map<DeclId, string>
   derivedDeps: Map<DeclId, Set<DeclId>>
   derivedRecompute: Map<DeclId, string>
+  handlers: HandlerOutput[]
   initialHtml: string
 }
 
@@ -27,19 +37,37 @@ export function generateModule({
   declOutputName,
   derivedDeps,
   derivedRecompute,
+  handlers,
   initialHtml,
 }: GenerateModuleInput): string {
   const outLines: string[] = []
   outLines.push("import { mount } from '../src/runtime.js';", '')
   outLines.push(...declStatements.map((s) => `export ${s}`), '')
   outLines.push(`const __INITIAL_HTML__ = ${JSON.stringify(initialHtml)};`, '')
+
+  // ハンドラのラッパー関数:元のハンドラ本体(書き込みは代入済み)を実行した
+  // 後、そのハンドラが書き込んだ signal ぶんの update_* をまとめて呼ぶ。
+  for (const h of handlers) {
+    const updateCalls = h.updateNames
+      .map((name) => `update_${name}();`)
+      .join(' ')
+    outLines.push(
+      `const __handler_${h.markerId}_${h.eventName} = (...__args) => { ${h.rendered}; ${updateCalls} };`,
+    )
+  }
+  if (handlers.length > 0) outLines.push('')
+
   outLines.push(
     'let __markers__;',
     'export function mountComponent(container) {',
     '  ({ markers: __markers__ } = mount(container, __INITIAL_HTML__));',
-    '}',
-    '',
   )
+  for (const h of handlers) {
+    outLines.push(
+      `  __markers__.get(${JSON.stringify(h.markerId)})?.addEventListener(${JSON.stringify(h.eventName)}, __handler_${h.markerId}_${h.eventName});`,
+    )
+  }
+  outLines.push('}', '')
 
   // signal declId -> それに直接依存する derived declId の一覧。M1 では
   // derived-of-derived を禁止しているので、これはフラットな逆引きで足りる。

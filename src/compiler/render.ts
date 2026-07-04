@@ -12,7 +12,7 @@ import {
   escapeTemplateText,
   innerTemplateSource,
 } from '../template.js'
-import { analyzeExpr } from './analyze.js'
+import { analyzeExpr, analyzeHandlerExpr } from './analyze.js'
 import type { CompilerState, ContentPart, DeclId, MarkerId } from './state.js'
 import { assignOutputName, declKey, nextMarkerId, toDeclId } from './state.js'
 
@@ -207,10 +207,57 @@ function renderElement(
       `compile: component references (<${tagName}/>) are not supported yet (scope limit)`,
     )
   }
-  if (elementPath.node.openingElement.attributes.length > 0) {
-    throw new Error(
-      'compile: host element attributes are not supported yet (scope limit)',
+  // on[A-Z]... 属性(onClick など)だけをハンドラとして収集する。それ以外の
+  // 属性(class/id 等の静的ホスト属性)はまだ未対応 -- plan 007 のスコープ。
+  const handlerAttrs: {
+    eventName: string
+    rendered: string
+    writeDeclIds: Set<DeclId>
+  }[] = []
+  for (const attr of elementPath.get('openingElement').get('attributes')) {
+    if (!attr.isJSXAttribute()) {
+      throw new Error(
+        'compile: host element attributes are not supported yet (scope limit)',
+      )
+    }
+    const attrName = attr.node.name
+    if (attrName.type !== 'JSXIdentifier' || !/^on[A-Z]/.test(attrName.name)) {
+      throw new Error(
+        'compile: host element attributes are not supported yet (scope limit)',
+      )
+    }
+    const valueNode = attr.node.value
+    if (valueNode?.type !== 'JSXExpressionContainer') {
+      throw new Error(
+        `compile: handler "${attrName.name}" must be an expression (scope limit)`,
+      )
+    }
+    const exprPath = attr.get('value.expression') as NodePath<t.Expression>
+    if (!exprPath.isArrowFunctionExpression()) {
+      throw new Error(
+        `compile: handler "${attrName.name}" must be an arrow function (scope limit)`,
+      )
+    }
+    if (exprPath.node.params.length > 0) {
+      // M2 スコープ: ハンドラ引数(event 等)の受け渡しはまだ未対応。
+      // 黙って引数を落とすとバグの温床になるので、ここで確実に落とす。
+      throw new Error(
+        `compile: handler "${attrName.name}" parameters are not supported yet (scope limit)`,
+      )
+    }
+    const bodyPath = exprPath.get('body')
+    if (bodyPath.isBlockStatement()) {
+      throw new Error(
+        `compile: handler "${attrName.name}" body must be a single expression, not a block (scope limit)`,
+      )
+    }
+    const eventName = attrName.name.slice(2).toLowerCase()
+    const { rendered, writeDeclIds } = analyzeHandlerExpr(
+      ctx,
+      bodyPath as NodePath<t.Expression>,
+      instanceId,
     )
+    handlerAttrs.push({ eventName, rendered, writeDeclIds })
   }
 
   const children = elementPath.get('children') as NodePath<JSXChild>[]
@@ -225,7 +272,16 @@ function renderElement(
         inner += renderElement(ctx, child, instanceId)
       else throw new Error('compile: unsupported JSX child (scope limit)')
     }
-    return `<${tagName}>${inner}</${tagName}>`
+    if (handlerAttrs.length === 0) {
+      return `<${tagName}>${inner}</${tagName}>`
+    }
+    // reactive text を持たない要素にハンドラだけが付く場合、mount() が
+    // 拾えるようこの要素専用のマーカーを新規に発行する。
+    const markerId = nextMarkerId(ctx)
+    for (const h of handlerAttrs) {
+      ctx.handlers.push({ markerId, ...h })
+    }
+    return `<${tagName} data-iris-id="${markerId}">${inner}</${tagName}>`
   }
 
   const runPaths: NodePath<t.JSXText | t.JSXExpressionContainer>[] = []
@@ -239,6 +295,11 @@ function renderElement(
   }
 
   const { markerId, sourceInner } = buildTextMarker(ctx, runPaths, instanceId)
+  // この要素が reactive text マーカーを既に持つ場合は、そのマーカーIDへ
+  // ハンドラを相乗りさせる(新規マーカーは発行しない)。
+  for (const h of handlerAttrs) {
+    ctx.handlers.push({ markerId, ...h })
+  }
   return `<${tagName} data-iris-id="${markerId}">${sourceInner}</${tagName}>`
 }
 
