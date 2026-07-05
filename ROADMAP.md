@@ -1,0 +1,85 @@
+# irisout ロードマップ
+
+TypeScript書き直し(`session/000_ts-rewrite-kickoff-and-m1.md`参照)で
+次に決めるべきこと・次のアクションをまとめたもの。個別の実装手順は
+`plans/`(実行可能なplanのみ)に、設計判断そのものは`docs/adr/`に置く。この
+ファイルは「次に何を、どういう順番でやるか」の地図。現在地・マイルストーン
+進捗・既知の制約などの実装ステータスは`STATUS.md`を参照。
+
+## 設計判断待ち(次のplanを書く前に決めること)
+
+quixのビルド時トラッカー採用可否・list itemのイベント配線方式・authoring API
+ゾーン化(inline arrow併存含む)とM4/M5の実装順序は決着済み(それぞれ
+ADR-0007、ADR-0005の追記、ADR-0008+下記「次のアクション」を参照)。
+
+### 1. minify
+
+`scripts/build.ts`はminify未対応(ADR-0003で明示的に先送り)。counter
+フィクスチャで手動計測: 995B→389B(約61%削減、`bun build --minify`)。
+本番ビルドの話が優先度に上がったら着手、今は不要。
+
+### 2. TodoMVC フィクスチャで発見した未規定API(plan 002, 2026-07-05)
+
+`examples/todomvc.jsx` / `examples/todomvc.handwritten.js` の
+`UNRESOLVED(nn)` コメントに対応。各項目は「何が未規定か / フィクスチャで
+仮定した暫定構文 / どの ADR・マイルストーンで決めるべきか」の3点で書く。
+
+- (01) ref の宣言・読み取りAPI / `const x = ref()` で宣言し `x()` で要素を
+  取得する signal 同型の呼び出し規約を暫定採用 / ADR-0008 が明記する
+  未決定事項そのもの、ref 設計の後続ADRで決めるべき。
+- (02) 完了トグルに応じた動的 class 付与(`class={cond ? 'a' : ''}`)の
+  生成先 / authored 側はJSXの三項式をそのまま書いた / M4(静的host属性)
+  の後続として新規に計画が要る、現時点でロードマップに項目がない
+  「未計画のパリティ穴」。
+- (03) checkbox の `checked` を DOM プロパティとして都度反映する仕組み /
+  authored 側は `checked={todo.completed}` をそのまま書いた / (02)と同様
+  M4後続の新規計画が要る。
+- (04) アイテムごとのローカル編集状態を authoring API でどう表現するか /
+  コンポーネント全体で1つの `editingId` signal を代用(TodoMVCが同時1件
+  編集の性質に依存した暫定策で、一般形には拡張できない) / ADR-0005は
+  生成コード側の表現までしか規定しておらず、authored JSX側の構文は
+  M5の設計時に別途決めるべき。
+- (05) フィルタで一時的にリストから外れるだけのアイテムを「削除」と
+  区別する設計 / handwritten側は「todos配列からの削除」でのみkeyed Map
+  から破棄し、フィルタでの非表示はDOM着脱のみで対応(状態保持を優先) /
+  ADR-0005のkeyed reuse決定に、フィルタ等「データは残るが表示対象からは
+  外れる」ケースの扱いを追記すべき。
+- (06) 空リスト時に `<ul>` 自体を出さない条件分岐(リストが条件分岐に
+  ネストする形) / handwritten側は要素の着脱ではなく `hidden` プロパティ
+  で妥協 / ADR-0005の「ネストした構造ユニットは対象外」スコープの
+  裏返しのケースとして、M5設計時に扱いを決めるべき。
+- (07) 編集モードでの `span`↔`input` 入れ替え(アイテム内にさらに
+  ネストした構造ユニットが要る) / handwritten側はtemplateの再クローンで
+  はなく都度DOM生成+display切り替えで妥協 / ADR-0005が明示的にスコープ外
+  とする「リストアイテム内のネストした構造ユニット」そのもの、M5の
+  スコープ拡張時に決めるべき。
+- (08) 編集中テキストの下書きの保持先 / handwritten側は専用stateを
+  持たず、編集開始時に一度だけ書き込んだinput要素自身のvalueを
+  source of truthとした / ADR-0005/0008とも未言及、M5設計時にitem内
+  ローカルUI状態の一般的な扱いとして決めるべき。
+
+## 次のアクション
+
+実装順序は **M4 → API変更(ADR-0008) → M5** で決定(2026-07-05 grilling)。
+M4は静的属性のcodegenでAPI形状に依存しないため先行でき、M5のfactory closure
+(ハンドラ配線の生成が核)は置き換え予定の旧API上で作ると二度手間になるため
+API変更後に回す。
+
+1. M4(静的host属性)— 依存なし、小規模。`/improve execute`でplanを書いて
+   実行できる状態。
+2. API変更(ADR-0008のゾーン構造)— 設計判断は出揃ったので、M4完了後に
+   planを書ける状態。
+3. M5 — API変更の後。refの設計はさらにその後(ADR-0008の未決定事項)。
+
+## 参考資料
+
+- `STATUS.md` — 現在地・マイルストーン進捗・既知の制約
+- `CONCEPT.v2.md` — プロダクトコンセプト
+- `docs/adr/0001`〜`0008` — 決定済みの設計判断
+- `session/000_ts-rewrite-kickoff-and-m1.md` — 書き直しキックオフの全経緯、
+  quixとの比較
+- `plans/001-browser-build-target.md` — 直近実行したplan(M3)
+- `bench/listener-strategy.ts` — M5のイベント配線方式の判断材料
+- `examples/counter.jsx` — `scripts/build.ts`の手動確認用サンプル
+- `examples/todomvc.jsx` / `examples/todomvc.handwritten.js` — ADR-0008/M5
+  の目標入力・目標出力フィクスチャ(plan 002)
