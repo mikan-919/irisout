@@ -20,7 +20,9 @@ export function TodoApp() {
   // UNRESOLVED(01): ref の宣言・読み取りAPIはADR-0008自身が「未決定事項」
   // として明記している(条件分岐配下の挙動に限らず、素朴なトップレベル
   // 利用の呼び出し規約すら未定)。ここではsignalと同じ「呼べば値が返る」
-  // 形(`newTodoInput()`で要素を取得)を暫定採用する。
+  // 形(`newTodoInput()`で要素を取得)を暫定採用する。用途はマウント時の
+  // フォーカスのみ(値の読み取り・クリアはイベント引数側 e.target 経由に
+  // 寄せる、下のhandleInputKeyDown参照)。
   const newTodoInput = ref()
 
   const visibleTodos = derived(() =>
@@ -98,12 +100,21 @@ export function TodoApp() {
 
   // ── 動きゾーン: function宣言とhooksのみ ──
 
+  onMount(() => {
+    newTodoInput().focus()
+  })
+
+  // UNRESOLVED(09): e.target.value が効くにはe.targetがHTMLInputElement
+  // だと分かっている必要がある。イベントオブジェクトの型付け(addEventListener
+  // ネイティブの生の`Event`型のままか、要素種別に応じて絞り込むか)は
+  // Plan 004(イベント引数)側の未規定点。ここではJSの動的型付けに乗って
+  // 素朴にe.target.valueへアクセスする。
   function handleInputKeyDown(e) {
     if (e.key !== 'Enter') return
-    const text = newTodoInput().value.trim()
+    const text = e.target.value.trim()
     if (text === '') return
     todos([...todos(), { id: Date.now(), text, completed: false }])
-    newTodoInput().value = ''
+    e.target.value = ''
   }
 
   function toggleTodo(id) {
