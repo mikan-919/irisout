@@ -30,11 +30,6 @@ export interface TextMarker {
 // M1 スコープ:text マーカーのみ。attribute/conditional/list は M4/M5 で追加。
 export type Marker = TextMarker
 
-export interface DeclOutput {
-  declStatements: string[]
-  instrumentedDeclStatements: string[]
-}
-
 // M2: onClick などのハンドラ1個分。writeDeclIds はこのハンドラが書き込む
 // (呼び出しを検出した) root signal の declId 集合 -- compiler.ts の後段で
 // マーカーを持つものだけに絞り込み updateNames へ変換する。
@@ -90,10 +85,6 @@ export const declKey = (instanceId: number, start: number): string =>
 
 export function nextMarkerId(ctx: CompilerState): MarkerId {
   return toMarkerId(`m${ctx.markerCounter++}`)
-}
-
-export function nextInstanceId(ctx: CompilerState): number {
-  return ctx.instanceCounter++
 }
 
 export function assignOutputName(

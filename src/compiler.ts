@@ -39,16 +39,11 @@ export interface CompileResult {
   declName: Map<DeclId, string>
 }
 
-export function compile(source: string): CompileResult {
-  registry.clear()
-
-  const ast = parse(source, {
-    sourceType: 'module',
-    plugins: ['typescript', 'jsx'],
-  })
-  const ctx = createCompilerState(source)
-
-  // --- トップレベルのコンポーネントをすべて列挙し、誰からも参照されない唯一のルートを特定する ---
+// トップレベルのコンポーネントをすべて列挙し、誰からも参照されない唯一の
+// ルートを特定する(パイプライン手順2)。
+function findRootComponent(
+  ast: ReturnType<typeof parse>,
+): NodePath<t.FunctionDeclaration> {
   const componentsByName = new Map<string, NodePath<t.FunctionDeclaration>>()
   traverse(ast, {
     FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
@@ -87,7 +82,35 @@ export function compile(source: string): CompileResult {
       `compile: expected exactly one root component, found [${rootNames.join(', ')}] (scope limit)`,
     )
   }
-  const rootPath = componentsByName.get(rootNames[0]!)!
+  return componentsByName.get(rootNames[0]!)!
+}
+
+// 推移閉包:derived の declId をルート signal まで展開し、
+// signal -> それに(間接)依存するマーカー集合の逆引きを作る(パイプライン手順5)。
+function buildSignalToMarkers(
+  ctx: ReturnType<typeof createCompilerState>,
+): Map<DeclId, Set<MarkerId>> {
+  const signalToMarkers = new Map<DeclId, Set<MarkerId>>()
+  for (const [markerId, deps] of ctx.markerDeps) {
+    for (const dep of deps) {
+      for (const sig of resolveToSignals(ctx, dep, new Set())) {
+        if (!signalToMarkers.has(sig)) signalToMarkers.set(sig, new Set())
+        signalToMarkers.get(sig)!.add(markerId)
+      }
+    }
+  }
+  return signalToMarkers
+}
+
+export function compile(source: string): CompileResult {
+  registry.clear()
+
+  const ast = parse(source, {
+    sourceType: 'module',
+    plugins: ['typescript', 'jsx'],
+  })
+  const ctx = createCompilerState(source)
+  const rootPath = findRootComponent(ast)
 
   const out = {
     declStatements: [] as string[],
@@ -100,16 +123,7 @@ export function compile(source: string): CompileResult {
     out,
   )
 
-  // --- 推移閉包:derived の declId をルート signal まで展開する ---
-  const signalToMarkers = new Map<DeclId, Set<MarkerId>>()
-  for (const [markerId, deps] of ctx.markerDeps) {
-    for (const dep of deps) {
-      for (const sig of resolveToSignals(ctx, dep, new Set())) {
-        if (!signalToMarkers.has(sig)) signalToMarkers.set(sig, new Set())
-        signalToMarkers.get(sig)!.add(markerId)
-      }
-    }
-  }
+  const signalToMarkers = buildSignalToMarkers(ctx)
 
   // --- M2: ハンドラの writeDeclIds をマーカーを持つ signal だけに絞り込み、
   // update_<name>() の呼び出しリストへ変換する(legacy/src/compiler.js:139-145)。

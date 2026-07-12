@@ -108,52 +108,40 @@ function processDeclarationStatement(
   instanceId: number,
   out: RenderOutput,
 ): void {
-  if (stmt.isVariableDeclaration() && stmt.node.declarations.length === 1) {
-    const declarator = stmt.node.declarations[0]!
-    const init = declarator.init
-    if (
-      init &&
-      init.type === 'CallExpression' &&
-      init.callee.type === 'Identifier'
-    ) {
-      const kind = init.callee.name
-      if (kind === 'signal' || kind === 'derived') {
-        const argPath = stmt.get(
-          'declarations.0.init.arguments.0',
-        ) as NodePath<t.Expression>
-        const naturalName = (declarator.id as t.Identifier).name
-        if (kind === 'signal') {
-          const { rendered, sourceRendered } = analyzeExpr(
-            ctx,
-            argPath,
-            instanceId,
-          )
-          emitSignal(
-            ctx,
-            instanceId,
-            declarator.start!,
-            naturalName,
-            rendered,
-            sourceRendered,
-            out,
-          )
-        } else {
-          emitDerived(
-            ctx,
-            instanceId,
-            declarator.start!,
-            naturalName,
-            argPath,
-            out,
-          )
-        }
-        return
-      }
-    }
-  }
-  throw new Error(
+  const scopeLimit = new Error(
     'compile: only top-level `signal()`/`derived()` declarations are supported in this milestone (scope limit)',
   )
+  if (!stmt.isVariableDeclaration() || stmt.node.declarations.length !== 1) {
+    throw scopeLimit
+  }
+  const declarator = stmt.node.declarations[0]!
+  const init = declarator.init
+  if (
+    init?.type !== 'CallExpression' ||
+    init.callee.type !== 'Identifier' ||
+    (init.callee.name !== 'signal' && init.callee.name !== 'derived')
+  ) {
+    throw scopeLimit
+  }
+
+  const argPath = stmt.get(
+    'declarations.0.init.arguments.0',
+  ) as NodePath<t.Expression>
+  const naturalName = (declarator.id as t.Identifier).name
+  if (init.callee.name === 'signal') {
+    const { rendered, sourceRendered } = analyzeExpr(ctx, argPath, instanceId)
+    emitSignal(
+      ctx,
+      instanceId,
+      declarator.start!,
+      naturalName,
+      rendered,
+      sourceRendered,
+      out,
+    )
+  } else {
+    emitDerived(ctx, instanceId, declarator.start!, naturalName, argPath, out)
+  }
 }
 
 // JSXText/式の子の連なりを、1回の textContent 置換で更新するアトミックな
@@ -191,29 +179,20 @@ function buildTextMarker(
   return { markerId: id, sourceInner: innerTemplateSource(sourceParts) }
 }
 
-function renderElement(
+interface HandlerAttr {
+  eventName: string
+  rendered: string
+  writeDeclIds: Set<DeclId>
+}
+
+// on[A-Z]... 属性(onClick など)だけをハンドラとして収集する。それ以外の
+// 属性(class/id 等の静的ホスト属性)はまだ未対応 -- plan 007 のスコープ。
+function collectHandlerAttrs(
   ctx: CompilerState,
   elementPath: NodePath<t.JSXElement>,
   instanceId: number,
-): string {
-  const openingName = elementPath.node.openingElement.name
-  if (openingName.type !== 'JSXIdentifier') {
-    throw new Error('compile: unsupported JSX tag form (scope limit)')
-  }
-  const tagName = openingName.name
-
-  if (/^[A-Z]/.test(tagName)) {
-    throw new Error(
-      `compile: component references (<${tagName}/>) are not supported yet (scope limit)`,
-    )
-  }
-  // on[A-Z]... 属性(onClick など)だけをハンドラとして収集する。それ以外の
-  // 属性(class/id 等の静的ホスト属性)はまだ未対応 -- plan 007 のスコープ。
-  const handlerAttrs: {
-    eventName: string
-    rendered: string
-    writeDeclIds: Set<DeclId>
-  }[] = []
+): HandlerAttr[] {
+  const handlerAttrs: HandlerAttr[] = []
   for (const attr of elementPath.get('openingElement').get('attributes')) {
     if (!attr.isJSXAttribute()) {
       throw new Error(
@@ -259,6 +238,26 @@ function renderElement(
     )
     handlerAttrs.push({ eventName, rendered, writeDeclIds })
   }
+  return handlerAttrs
+}
+
+function renderElement(
+  ctx: CompilerState,
+  elementPath: NodePath<t.JSXElement>,
+  instanceId: number,
+): string {
+  const openingName = elementPath.node.openingElement.name
+  if (openingName.type !== 'JSXIdentifier') {
+    throw new Error('compile: unsupported JSX tag form (scope limit)')
+  }
+  const tagName = openingName.name
+
+  if (/^[A-Z]/.test(tagName)) {
+    throw new Error(
+      `compile: component references (<${tagName}/>) are not supported yet (scope limit)`,
+    )
+  }
+  const handlerAttrs = collectHandlerAttrs(ctx, elementPath, instanceId)
 
   const children = elementPath.get('children') as NodePath<JSXChild>[]
   const hasDirectExpr = children.some((c) => c.isJSXExpressionContainer())

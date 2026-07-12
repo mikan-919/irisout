@@ -36,6 +36,21 @@ function resolveDeclId(
   return ctx.declIdByKey.get(declKey(instanceId, start)) ?? null
 }
 
+// 式のルート自身と、その中で参照されるすべての識別子に visit を適用する。
+// (path.traverse はルートノード自体には入らないので、ルートが識別子の場合を
+// 別扱いする必要がある。)
+function forEachReferencedIdentifier(
+  path: NodePath<t.Expression>,
+  visit: (idPath: NodePath<t.Identifier>) => void,
+): void {
+  if (path.isIdentifier()) visit(path)
+  path.traverse({
+    Identifier(idPath) {
+      if (idPath.isReferencedIdentifier()) visit(idPath)
+    },
+  })
+}
+
 function render(
   source: string,
   start: number,
@@ -98,12 +113,7 @@ export function analyzeExpr(
     }
   }
 
-  if (path.isIdentifier()) visit(path)
-  path.traverse({
-    Identifier(idPath) {
-      if (idPath.isReferencedIdentifier()) visit(idPath)
-    },
-  })
+  forEachReferencedIdentifier(path, visit)
 
   const start = path.node.start!
   const end = path.node.end!
@@ -183,12 +193,7 @@ export function analyzeHandlerExpr(
     }
   }
 
-  if (exprPath.isIdentifier()) visit(exprPath)
-  exprPath.traverse({
-    Identifier(idPath) {
-      if (idPath.isReferencedIdentifier()) visit(idPath)
-    },
-  })
+  forEachReferencedIdentifier(exprPath, visit)
 
   return {
     rendered: render(
