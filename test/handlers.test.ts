@@ -10,7 +10,7 @@ const COUNTER_SOURCE = `
 export function Counter() {
   const count = signal(0);
   const doubled = derived(() => count() * 2);
-  return (
+  render(
     <div>
       <span>{count() + doubled()}</span>
       <button onClick={() => count(count() + 1)}>+</button>
@@ -58,7 +58,7 @@ describe('milestone 2: handlers -> write-triggered updates', () => {
 export function App() {
   const count = signal(0);
   const doubled = derived(() => count() * 2);
-  return <div><span>{doubled()}</span><button onClick={() => doubled(5)}>+</button></div>;
+  render(<div><span>{doubled()}</span><button onClick={() => doubled(5)}>+</button></div>);
 }
 `
     expect(() => compile(source)).toThrow(/cannot write to derived/)
@@ -68,9 +68,123 @@ export function App() {
     const source = `
 export function App() {
   const count = signal(0);
-  return <div><span>{count()}</span><button onClick={() => count(1, 2)}>+</button></div>;
+  render(<div><span>{count()}</span><button onClick={() => count(1, 2)}>+</button></div>);
 }
 `
     expect(() => compile(source)).toThrow(/scope limit/)
+  })
+})
+
+// ADR-0008: ゾーン構造(変数→UI(render())→動き(function宣言))。ハンドラの
+// 識別子参照は render 後方の function宣言に解決し、配置違反は compile error。
+describe('ADR-0008: zone authoring API', () => {
+  // 変数→render()→function宣言。onClick は後方 function 宣言への識別子参照。
+  const IDENT_HANDLER_SOURCE = `
+export function Counter() {
+  const count = signal(0);
+  render(
+    <div>
+      <span>{count()}</span>
+      <button onClick={inc}>+</button>
+    </div>
+  );
+  function inc() { count(count() + 1); }
+}
+`
+
+  it('wires an identifier-reference handler to a hoisted function declaration', async () => {
+    const { code } = compile(IDENT_HANDLER_SOURCE)
+    expect(code).toContain('count = count + 1')
+    expect(code).toContain('update_count();')
+    expect(code).toContain('addEventListener("click"')
+
+    const mod = await loadGenerated(code)
+    const container = createContainer()
+    ;(mod.mountComponent as (c: Element) => void)(container)
+    const span = container.querySelector('span')
+    expect(span?.textContent).toBe('0')
+    dispatchClick(container, container.querySelector('button'))
+    expect(span?.textContent).toBe('1')
+  })
+
+  it('rejects a handler reference to a variable-zone arrow (movement before UI)', () => {
+    const source = `
+export function App() {
+  const count = signal(0);
+  const inc = () => count(count() + 1);
+  render(<div><span>{count()}</span><button onClick={inc}>+</button></div>);
+}
+`
+    // 変数ゾーンの const 宣言(signal/derived 以外)は processDeclarationStatement が拒否する。
+    expect(() => compile(source)).toThrow(/scope limit/)
+  })
+
+  it('rejects a handler reference that resolves to no function after render()', () => {
+    const source = `
+export function App() {
+  const count = signal(0);
+  render(<div><span>{count()}</span><button onClick={inc}>+</button></div>);
+}
+`
+    expect(() => compile(source)).toThrow(
+      /must reference a function declared after render/,
+    )
+  })
+
+  it('rejects a handler function declaration with a multi-statement body (ADR-0009 scope)', () => {
+    const source = `
+export function App() {
+  const count = signal(0);
+  render(<div><span>{count()}</span><button onClick={inc}>+</button></div>);
+  function inc() { const n = count(); count(n + 1); }
+}
+`
+    expect(() => compile(source)).toThrow(
+      /function body must be a single expression statement/,
+    )
+  })
+
+  it('rejects a function declaration placed before render() (variable zone)', () => {
+    const source = `
+export function App() {
+  const count = signal(0);
+  function inc() { count(count() + 1); }
+  render(<div><span>{count()}</span><button onClick={inc}>+</button></div>);
+}
+`
+    expect(() => compile(source)).toThrow(/scope limit/)
+  })
+
+  it('rejects a const declaration placed after render() (movement zone)', () => {
+    const source = `
+export function App() {
+  const count = signal(0);
+  render(<div><span>{count()}</span></div>);
+  const doubled = count() * 2;
+}
+`
+    expect(() => compile(source)).toThrow(
+      /only function declarations are allowed after render/,
+    )
+  })
+
+  it('rejects a component with no render() call', () => {
+    const source = `
+export function App() {
+  const count = signal(0);
+}
+`
+    expect(() => compile(source)).toThrow(/must contain a render/)
+  })
+
+  it('rejects a component with two render() calls', () => {
+    const source = `
+export function App() {
+  const count = signal(0);
+  render(<div><span>{count()}</span></div>);
+  render(<p>{count()}</p>);
+}
+`
+    expect(() => compile(source)).toThrow(/exactly one render/)
   })
 })

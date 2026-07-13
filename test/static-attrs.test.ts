@@ -6,8 +6,8 @@ import { createContainer, loadGenerated } from './helpers.js'
 // 初期 HTML テンプレートへそのまま反映する。動的(式コンテナ)値・spread は
 // 明示的な compile error で拒否する。specs/static-host-attributes/spec.md の
 // 各 Scenario に対応。
-function wrap(returnJsx: string): string {
-  return `export function App() { return ${returnJsx}; }`
+function wrap(uiJsx: string): string {
+  return `export function App() { render(${uiJsx}); }`
 }
 
 describe('milestone 4: static host attributes', () => {
@@ -36,7 +36,7 @@ describe('milestone 4: static host attributes', () => {
   it('rejects an expression-container value that depends on a signal', () => {
     const source = `export function App() {
       const active = signal(false);
-      return <div class={active() ? 'a' : 'b'}></div>;
+      render(<div class={active() ? 'a' : 'b'}></div>);
     }`
     expect(() => compile(source)).toThrow(/scope limit/)
   })
@@ -54,7 +54,7 @@ describe('milestone 4: static host attributes', () => {
   it('coexists with a handler on the same element, keeping the static attr and wiring the listener', async () => {
     const source = `export function App() {
       const count = signal(0);
-      return (
+      render(
         <div>
           <span>{count()}</span>
           <button type="button" onClick={() => count(count() + 1)}>+</button>

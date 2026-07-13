@@ -11,7 +11,7 @@ const COUNTER_SOURCE = `
 export function Counter() {
   const count = signal(0);
   const doubled = derived(() => count() * 2);
-  return <div>{count() + doubled()}</div>;
+  render(<div>{count() + doubled()}</div>);
 }
 `
 
@@ -64,7 +64,9 @@ describe('milestone 1: expression dependency analysis -> update_* codegen', () =
     )
   })
 
-  it('throws if the component does not return a single JSX element (milestone 1 scope)', () => {
-    expect(() => compile('export function Bad() { return null; }')).toThrow()
+  it('throws if the component declares UI with return instead of render() (ADR-0008)', () => {
+    expect(() => compile('export function Bad() { return null; }')).toThrow(
+      /render\(<JSX>\), not return/,
+    )
   })
 })

@@ -13,7 +13,7 @@ const COUNTER_SOURCE = `
 export function Counter() {
   const count = signal(0);
   const doubled = derived(() => count() * 2);
-  return (
+  render(
     <div>
       <span>{count() + doubled()}</span>
       <button onClick={() => count(count() + 1)}>+</button>

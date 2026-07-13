@@ -4,6 +4,11 @@
 // M1 スコープ: 単一コンポーネント(子コンポーネント参照は scope-limit error)、
 // signal()/derived() 宣言、テキストマーカーのみ。属性・ハンドラ・条件分岐・
 // リストは M2/M4/M5 で追加する。
+//
+// ADR-0008: コンポーネントは「変数ゾーン(const)→ UIゾーン(render())→
+// 動きゾーン(function宣言)」の3構造で書く。UI宣言は return ではなく
+// render(<JSX>) マーカー、ハンドラは render 後方の function宣言への識別子参照
+// (または UIゾーン内の inline arrow)で書く。配置違反は compile error。
 
 import type { NodePath } from '@babel/traverse'
 import type * as t from '@babel/types'
@@ -29,6 +34,11 @@ type JSXChild =
   | t.JSXElement
   | t.JSXFragment
   | t.JSXSpreadChild
+
+// 動きゾーン(render後)の function宣言テーブル。ハンドラの識別子参照を
+// この表で解決する(ADR-0008)。render の1パス中だけ有効な一時状態なので
+// ctx には積まず、renderElement/collectAttrs へ引数で渡す。
+type HandlerFns = Map<string, NodePath<t.FunctionDeclaration>>
 
 function emitSignal(
   ctx: CompilerState,
@@ -190,10 +200,62 @@ interface HandlerAttr {
 // ホスト要素の属性を「ハンドラ / 静的 / 拒否」の3分岐で収集する
 // (design.md 決定1)。on[A-Z]... はハンドラ、文字列リテラル値・値なし属性は
 // 静的属性、式コンテナ値・namespaced 名・spread は scope limit で拒否する。
+// ハンドラ属性値から、配線対象となる単一式の本体 path を取り出す。
+// inline arrow(UIゾーン内は許容)と、render 後方の function宣言への識別子参照
+// (ADR-0008)の2形をサポートする。どちらも本体は単一式に限る ― 複数文本体・
+// イベント引数(e)の受け渡しは ADR-0009 に分離しており、ここでは拒否する。
+function resolveHandlerBody(
+  exprPath: NodePath<t.Expression>,
+  attrName: string,
+  handlerFns: HandlerFns,
+): NodePath<t.Expression> {
+  if (exprPath.isArrowFunctionExpression()) {
+    if (exprPath.node.params.length > 0) {
+      throw new Error(
+        `compile: handler "${attrName}" parameters are not supported yet (scope limit)`,
+      )
+    }
+    const bodyPath = exprPath.get('body')
+    if (bodyPath.isBlockStatement()) {
+      throw new Error(
+        `compile: handler "${attrName}" body must be a single expression, not a block (scope limit)`,
+      )
+    }
+    return bodyPath as NodePath<t.Expression>
+  }
+  if (exprPath.isIdentifier()) {
+    // ADR-0008: 識別子参照の解決先は render() より後ろの function宣言に限る。
+    // 変数ゾーンの arrow(const handler = ...)は handlerFns に入らないので
+    // ここで弾かれる(=「UIより前の動き」の拒否)。未定義参照も同じ経路。
+    const fn = handlerFns.get(exprPath.node.name)
+    if (!fn) {
+      throw new Error(
+        `compile: handler "${attrName}" must reference a function declared after render() (scope limit)`,
+      )
+    }
+    if (fn.node.params.length > 0) {
+      throw new Error(
+        `compile: handler "${attrName}" parameters are not supported yet (scope limit)`,
+      )
+    }
+    const body = fn.get('body.body') as NodePath<t.Statement>[]
+    if (body.length !== 1 || !body[0]!.isExpressionStatement()) {
+      throw new Error(
+        `compile: handler "${attrName}" function body must be a single expression statement (scope limit)`,
+      )
+    }
+    return body[0]!.get('expression') as NodePath<t.Expression>
+  }
+  throw new Error(
+    `compile: handler "${attrName}" must be an arrow function or a reference to one (scope limit)`,
+  )
+}
+
 function collectAttrs(
   ctx: CompilerState,
   elementPath: NodePath<t.JSXElement>,
   instanceId: number,
+  handlerFns: HandlerFns,
 ): { handlerAttrs: HandlerAttr[]; staticAttrs: StaticAttr[] } {
   const handlerAttrs: HandlerAttr[] = []
   const staticAttrs: StaticAttr[] = []
@@ -231,28 +293,11 @@ function collectAttrs(
       )
     }
     const exprPath = attr.get('value.expression') as NodePath<t.Expression>
-    if (!exprPath.isArrowFunctionExpression()) {
-      throw new Error(
-        `compile: handler "${attrName.name}" must be an arrow function (scope limit)`,
-      )
-    }
-    if (exprPath.node.params.length > 0) {
-      // M2 スコープ: ハンドラ引数(event 等)の受け渡しはまだ未対応。
-      // 黙って引数を落とすとバグの温床になるので、ここで確実に落とす。
-      throw new Error(
-        `compile: handler "${attrName.name}" parameters are not supported yet (scope limit)`,
-      )
-    }
-    const bodyPath = exprPath.get('body')
-    if (bodyPath.isBlockStatement()) {
-      throw new Error(
-        `compile: handler "${attrName.name}" body must be a single expression, not a block (scope limit)`,
-      )
-    }
+    const bodyPath = resolveHandlerBody(exprPath, attrName.name, handlerFns)
     const eventName = attrName.name.slice(2).toLowerCase()
     const { rendered, writeDeclIds } = analyzeHandlerExpr(
       ctx,
-      bodyPath as NodePath<t.Expression>,
+      bodyPath,
       instanceId,
     )
     handlerAttrs.push({ eventName, rendered, writeDeclIds })
@@ -264,6 +309,7 @@ function renderElement(
   ctx: CompilerState,
   elementPath: NodePath<t.JSXElement>,
   instanceId: number,
+  handlerFns: HandlerFns,
 ): string {
   const openingName = elementPath.node.openingElement.name
   if (openingName.type !== 'JSXIdentifier') {
@@ -280,6 +326,7 @@ function renderElement(
     ctx,
     elementPath,
     instanceId,
+    handlerFns,
   )
   const attrs = renderStaticAttrs(staticAttrs)
 
@@ -292,7 +339,7 @@ function renderElement(
       if (child.isJSXText())
         inner += escapeTemplateText(cleanJSXText(child.node.value))
       else if (child.isJSXElement())
-        inner += renderElement(ctx, child, instanceId)
+        inner += renderElement(ctx, child, instanceId, handlerFns)
       else throw new Error('compile: unsupported JSX child (scope limit)')
     }
     if (handlerAttrs.length === 0) {
@@ -326,26 +373,81 @@ function renderElement(
   return `<${tagName}${attrs} data-iris-id="${markerId}">${sourceInner}</${tagName}>`
 }
 
+// 文が render(<JSX>) マーカー呼び出しなら、その JSX 引数 path を返す。
+// render() 以外の呼び出し・非 ExpressionStatement は null(判定のみ)。
+function renderCallJsx(
+  stmt: NodePath<t.Statement>,
+): NodePath<t.JSXElement> | null {
+  if (!stmt.isExpressionStatement()) return null
+  const expr = stmt.get('expression')
+  if (!expr.isCallExpression()) return null
+  const callee = expr.node.callee
+  if (callee.type !== 'Identifier' || callee.name !== 'render') return null
+  const args = expr.get('arguments')
+  if (args.length !== 1 || !args[0]!.isJSXElement()) {
+    throw new Error(
+      'compile: render() takes exactly one JSX element (scope limit)',
+    )
+  }
+  return args[0] as NodePath<t.JSXElement>
+}
+
+// ADR-0008: コンポーネント本体を「変数ゾーン → render() → 動きゾーン」の3構造で
+// 走査する。UI は return ではなく render(<JSX>) マーカーで宣言する。配置違反
+// (return / render 欠如・複数 / 変数ゾーンの function 宣言 / 動きゾーンの
+// const 宣言)は compile error で拒否する。
 export function compileComponent(
   ctx: CompilerState,
   componentPath: NodePath<t.FunctionDeclaration>,
   instanceId: number,
   out: RenderOutput,
 ): string {
-  let returnArgPath: NodePath<t.Expression | null> | null = null
-  for (const stmt of componentPath.get(
-    'body.body',
-  ) as NodePath<t.Statement>[]) {
+  const stmts = componentPath.get('body.body') as NodePath<t.Statement>[]
+
+  // UIゾーン(render() 文)の位置を特定する。ちょうど1つでなければならない。
+  let renderIndex = -1
+  let renderJsxPath: NodePath<t.JSXElement> | null = null
+  for (let i = 0; i < stmts.length; i++) {
+    const stmt = stmts[i]!
     if (stmt.isReturnStatement()) {
-      returnArgPath = stmt.get('argument') as NodePath<t.Expression | null>
-      continue
+      throw new Error(
+        'compile: components declare UI with render(<JSX>), not return (scope limit)',
+      )
     }
-    processDeclarationStatement(ctx, stmt, instanceId, out)
+    const jsx = renderCallJsx(stmt)
+    if (jsx) {
+      if (renderIndex !== -1) {
+        throw new Error(
+          'compile: a component must contain exactly one render() call (scope limit)',
+        )
+      }
+      renderIndex = i
+      renderJsxPath = jsx
+    }
   }
-  if (!returnArgPath?.isJSXElement()) {
+  if (renderIndex === -1 || !renderJsxPath) {
     throw new Error(
-      'compile: component must return a single JSX element (scope limit)',
+      'compile: a component must contain a render(<JSX>) call (scope limit)',
     )
   }
-  return renderElement(ctx, returnArgPath, instanceId)
+
+  // 変数ゾーン(render前): signal()/derived() の const 宣言のみ。function宣言
+  // など他の文は processDeclarationStatement の scope limit が拒否する。
+  for (let i = 0; i < renderIndex; i++) {
+    processDeclarationStatement(ctx, stmts[i]!, instanceId, out)
+  }
+
+  // 動きゾーン(render後): function宣言のみ。ハンドラ識別子参照の解決表に積む。
+  const handlerFns: HandlerFns = new Map()
+  for (let i = renderIndex + 1; i < stmts.length; i++) {
+    const stmt = stmts[i]!
+    if (!stmt.isFunctionDeclaration() || !stmt.node.id) {
+      throw new Error(
+        'compile: only function declarations are allowed after render() (scope limit)',
+      )
+    }
+    handlerFns.set(stmt.node.id.name, stmt as NodePath<t.FunctionDeclaration>)
+  }
+
+  return renderElement(ctx, renderJsxPath, instanceId, handlerFns)
 }

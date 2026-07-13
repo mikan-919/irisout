@@ -68,14 +68,13 @@ ADR-0007、ADR-0005の追記、ADR-0008+下記「次のアクション」を参�
 ## 次のアクション
 
 実装順序は **M4 → API変更(ADR-0008) → M5** で決定(2026-07-05 grilling)。
-M4(静的host属性)は **完了**。次はAPI変更(ADR-0008)。M5のfactory closure
-(ハンドラ配線の生成が核)は置き換え予定の旧API上で作ると二度手間になるため
-API変更後に回す。
+M4(静的host属性)・API変更(ADR-0008ゾーン構造)ともに **完了**。次は M5。
 
 1. ~~M4(静的host属性)~~ — **完了**(change `m4-static-host-attributes`)。
-2. **次はここ:** API変更(ADR-0008のゾーン構造)— 設計判断は出揃っており、
-   planを書ける状態。
-3. M5 — API変更の後。refの設計はさらにその後(ADR-0008の未決定事項)。
+2. ~~API変更(ADR-0008のゾーン構造)~~ — **完了**(change `authoring-api-zones`)。
+   render()マーカー・識別子参照ハンドラ・ゾーン配置強制を実装。
+3. **次はここ:** M5(list/conditional の factory closure、ADR-0005)。refの
+   設計はさらにその後(ADR-0008の未決定事項)。
 
 ## 参考資料
 

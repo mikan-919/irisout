@@ -16,7 +16,7 @@ TypeScript書き直しは Milestone 3 まで完了・`feat/first-concept`にマ�
 | M2 | イベントハンドラ、書き込みトリガー更新 | **DONE** | `810bc83`→`645a820`、plan 005 |
 | M3 | ブラウザビルドターゲット(hydrate/mount分割 + `scripts/build.ts`) | **DONE** | `a2905c8`、plan 001 |
 | M4 | 静的host要素属性 | **DONE** | `9829f88`、change `m4-static-host-attributes` |
-| M4.5 | authoring APIゾーン化(ADR-0008) | TODO | M4の後・M5の前(順序はROADMAP参照) |
+| M4.5 | authoring APIゾーン化(ADR-0008) | **DONE** | change `authoring-api-zones`。render()マーカー・識別子参照ハンドラ・ゾーン配置強制 |
 | M5 | list/conditional factory closures(ADR-0005の新実装) | TODO | M4.5(API変更)の後に着手 |
 | M6 | 全マイルストーン横断のno-wrapper検証 | TODO | M4・M5完了後 |
 
@@ -49,3 +49,6 @@ TypeScript書き直しは Milestone 3 まで完了・`feat/first-concept`にマ�
 - 条件分岐・リストはまだ未実装(M5)。静的host属性はM4で実装済み。
   動的(式コンテナ)host属性値はM4スコープ外で、引き続きcompile error
   (`scope limit`)で拒否する ― post-M6のパリティ穴。
+- ハンドラ(inline arrow / 識別子参照の function宣言 どちらも)の本体は
+  **単一の式**のみ対応(M4.5/ADR-0008)。複数文の本体・イベント引数(`e`)の
+  受け渡しは引き続き `scope limit` で拒否する ― ADR-0009 で扱う。
