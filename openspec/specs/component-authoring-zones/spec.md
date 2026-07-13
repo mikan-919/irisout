@@ -36,7 +36,9 @@ function宣言への識別子参照(または UIゾーン内の inline arrow)で
 コンパイラは、ハンドラ属性の値が識別子参照(`onClick={handleCountUp}`)である
 場合、その参照を `render()` 文より後ろに置かれた同名のfunction宣言へ解決し、
 その本体をハンドラ本体として配線しなければならない(SHALL)。参照先
-function宣言の本体は単一の式文(`ExpressionStatement`)に限る。
+function宣言の本体は、単一の式文、または対応文種のみからなるブロック本体
+(`handler-statement-bodies` が規定する4文種)を受理する。対応文種の外は
+`handler-statement-bodies` の拒否要件に従い compile error とする。
 
 #### Scenario: 後方 function 宣言を参照するハンドラ
 - **WHEN** authored コンポーネントが `render()` 内で
@@ -53,11 +55,11 @@ function宣言の本体は単一の式文(`ExpressionStatement`)に限る。
 - **THEN** コンパイラは `compile:` で始まり `(scope limit)` を末尾に含む
   エラーを投げる(識別子参照の解決先は render より後ろの function 宣言に限る)
 
-#### Scenario: 参照先 function 宣言の本体が複数文の場合の拒否
-- **WHEN** 参照先の function 宣言の本体が2つ以上の文を含む、または式文以外の
-  文を含む
-- **THEN** コンパイラは `compile:` で始まり `(scope limit)` を末尾に含む
-  エラーを投げる(複数文ハンドラは ADR-0009 に分離)
+#### Scenario: 参照先 function 宣言の複数文本体の受理
+- **WHEN** 参照先の function 宣言の本体が対応文種(式文 / `const`・`let` /
+  `if` / 裸の `return`)のみからなる複数の文を含む
+- **THEN** コンパイラは compile error を出さずに完了し、生成コードはその
+  文列に対応するイベントリスナー配線を含む
 
 ### Requirement: inline arrow ハンドラの継続許可
 コンパイラは、UIゾーン内のハンドラ属性に書かれた inline arrow
