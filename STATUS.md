@@ -49,6 +49,10 @@ TypeScript書き直しは Milestone 3 まで完了・`feat/first-concept`にマ�
 - 条件分岐・リストはまだ未実装(M5)。静的host属性はM4で実装済み。
   動的(式コンテナ)host属性値はM4スコープ外で、引き続きcompile error
   (`scope limit`)で拒否する ― post-M6のパリティ穴。
-- ハンドラ(inline arrow / 識別子参照の function宣言 どちらも)の本体は
-  **単一の式**のみ対応(M4.5/ADR-0008)。複数文の本体・イベント引数(`e`)の
-  受け渡しは引き続き `scope limit` で拒否する ― ADR-0009 で扱う。
+- ハンドラ(inline arrow / 識別子参照の function宣言 どちらも)のブロック
+  本体は4文種(式文 / `const`・`let` / `if` / 裸の `return`)に限る
+  (ADR-0009)。第1仮引数(イベントオブジェクト)は authored 名のまま受け渡す
+  が、分割代入・第2引数以降は `scope limit` で拒否する。ループ・
+  `try`/`switch`・関数/クラス宣言・`var`・値を返す `return`、および
+  ソース順で追跡書き込みより後ろの `return` も同様に `scope limit` で拒否
+  する(D3: 末尾 `update_*()` の取りこぼしを防ぐため)。

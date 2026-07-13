@@ -38,6 +38,8 @@ export interface HandlerDecl {
   eventName: string
   rendered: string
   writeDeclIds: Set<DeclId>
+  /** ADR-0009: 第1仮引数(イベントオブジェクト)の authored 名。なければ null。 */
+  param: string | null
 }
 
 export interface CompilerState {

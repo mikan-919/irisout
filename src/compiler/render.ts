@@ -19,7 +19,11 @@ import {
   renderStaticAttrs,
   type StaticAttr,
 } from '../template.js'
-import { analyzeExpr, analyzeHandlerExpr } from './analyze.js'
+import {
+  analyzeExpr,
+  analyzeHandlerBody,
+  analyzeHandlerExpr,
+} from './analyze.js'
 import type { CompilerState, ContentPart, DeclId, MarkerId } from './state.js'
 import { assignOutputName, declKey, nextMarkerId, toDeclId } from './state.js'
 
@@ -195,33 +199,55 @@ interface HandlerAttr {
   eventName: string
   rendered: string
   writeDeclIds: Set<DeclId>
+  param: string | null
+}
+
+interface HandlerBody {
+  /** 第1仮引数(イベントオブジェクト)の authored 名。なければ null。 */
+  param: string | null
+  /** 単一式(inline arrow の式本体)、またはブロック本体の文配列(design D1)。 */
+  body: NodePath<t.Expression> | NodePath<t.Statement>[]
+}
+
+// ADR-0009 質問1: 第1仮引数(単純な識別子)のみ受理し、authored 名を返す。
+// 分割代入・第2引数以降は初回スコープ外として scope limit で拒否する。
+function resolveHandlerParam(
+  params: NodePath<t.Node>[],
+  attrName: string,
+): string | null {
+  if (params.length === 0) return null
+  if (params.length > 1) {
+    throw new Error(
+      `compile: handler "${attrName}" only supports a single parameter (scope limit)`,
+    )
+  }
+  const first = params[0]!
+  if (!first.isIdentifier()) {
+    throw new Error(
+      `compile: handler "${attrName}" destructured parameters are not supported yet (scope limit)`,
+    )
+  }
+  return first.node.name
 }
 
 // ホスト要素の属性を「ハンドラ / 静的 / 拒否」の3分岐で収集する
 // (design.md 決定1)。on[A-Z]... はハンドラ、文字列リテラル値・値なし属性は
 // 静的属性、式コンテナ値・namespaced 名・spread は scope limit で拒否する。
-// ハンドラ属性値から、配線対象となる単一式の本体 path を取り出す。
-// inline arrow(UIゾーン内は許容)と、render 後方の function宣言への識別子参照
-// (ADR-0008)の2形をサポートする。どちらも本体は単一式に限る ― 複数文本体・
-// イベント引数(e)の受け渡しは ADR-0009 に分離しており、ここでは拒否する。
+// ハンドラ属性値から、配線対象の本体(単一式 or 文配列)+第1引数名を取り出す
+// (ADR-0009 D1)。inline arrow(UIゾーン内は許容)と、render 後方の
+// function宣言への識別子参照(ADR-0008)の2形をサポートする。
 function resolveHandlerBody(
   exprPath: NodePath<t.Expression>,
   attrName: string,
   handlerFns: HandlerFns,
-): NodePath<t.Expression> {
+): HandlerBody {
   if (exprPath.isArrowFunctionExpression()) {
-    if (exprPath.node.params.length > 0) {
-      throw new Error(
-        `compile: handler "${attrName}" parameters are not supported yet (scope limit)`,
-      )
-    }
+    const param = resolveHandlerParam(exprPath.get('params'), attrName)
     const bodyPath = exprPath.get('body')
     if (bodyPath.isBlockStatement()) {
-      throw new Error(
-        `compile: handler "${attrName}" body must be a single expression, not a block (scope limit)`,
-      )
+      return { param, body: bodyPath.get('body') as NodePath<t.Statement>[] }
     }
-    return bodyPath as NodePath<t.Expression>
+    return { param, body: bodyPath as NodePath<t.Expression> }
   }
   if (exprPath.isIdentifier()) {
     // ADR-0008: 識別子参照の解決先は render() より後ろの function宣言に限る。
@@ -233,18 +259,8 @@ function resolveHandlerBody(
         `compile: handler "${attrName}" must reference a function declared after render() (scope limit)`,
       )
     }
-    if (fn.node.params.length > 0) {
-      throw new Error(
-        `compile: handler "${attrName}" parameters are not supported yet (scope limit)`,
-      )
-    }
-    const body = fn.get('body.body') as NodePath<t.Statement>[]
-    if (body.length !== 1 || !body[0]!.isExpressionStatement()) {
-      throw new Error(
-        `compile: handler "${attrName}" function body must be a single expression statement (scope limit)`,
-      )
-    }
-    return body[0]!.get('expression') as NodePath<t.Expression>
+    const param = resolveHandlerParam(fn.get('params'), attrName)
+    return { param, body: fn.get('body.body') as NodePath<t.Statement>[] }
   }
   throw new Error(
     `compile: handler "${attrName}" must be an arrow function or a reference to one (scope limit)`,
@@ -293,14 +309,16 @@ function collectAttrs(
       )
     }
     const exprPath = attr.get('value.expression') as NodePath<t.Expression>
-    const bodyPath = resolveHandlerBody(exprPath, attrName.name, handlerFns)
-    const eventName = attrName.name.slice(2).toLowerCase()
-    const { rendered, writeDeclIds } = analyzeHandlerExpr(
-      ctx,
-      bodyPath,
-      instanceId,
+    const { param, body } = resolveHandlerBody(
+      exprPath,
+      attrName.name,
+      handlerFns,
     )
-    handlerAttrs.push({ eventName, rendered, writeDeclIds })
+    const eventName = attrName.name.slice(2).toLowerCase()
+    const { rendered, writeDeclIds } = Array.isArray(body)
+      ? analyzeHandlerBody(ctx, body, instanceId)
+      : analyzeHandlerExpr(ctx, body, instanceId)
+    handlerAttrs.push({ eventName, rendered, writeDeclIds, param })
   }
   return { handlerAttrs, staticAttrs }
 }

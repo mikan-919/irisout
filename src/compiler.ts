@@ -131,6 +131,7 @@ export function compile(source: string): CompileResult {
     markerId: h.markerId,
     eventName: h.eventName,
     rendered: h.rendered,
+    param: h.param,
     updateNames: [...h.writeDeclIds]
       .filter((id) => signalToMarkers.has(id))
       .map((id) => ctx.declOutputName.get(id)!)

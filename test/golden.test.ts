@@ -39,6 +39,24 @@ export function Counter() {
 }
 `
 
+// ADR-0009: ブロック本体ハンドラ(第1引数あり・4文種を含む)の code を固定する。
+const ADR0009_SOURCE = `
+export function Counter() {
+  const count = signal(0);
+  render(
+    <div>
+      <span>{count()}</span>
+      <button onClick={inc}>+</button>
+    </div>
+  );
+  function inc(e) {
+    if (e.detail > 1) return;
+    const n = count() + 1;
+    count(n);
+  }
+}
+`
+
 describe('golden: 生成コードの構造スナップショット', () => {
   it('M1 フィクスチャの code と initialHtml を固定する', () => {
     const { code, initialHtml } = compile(M1_SOURCE)
@@ -48,6 +66,11 @@ describe('golden: 生成コードの構造スナップショット', () => {
 
   it('M2 フィクスチャの code を固定する', () => {
     const { code } = compile(M2_SOURCE)
+    expect(code).toMatchSnapshot()
+  })
+
+  it('ADR-0009 ブロック本体ハンドラの code を固定する', () => {
+    const { code } = compile(ADR0009_SOURCE)
     expect(code).toMatchSnapshot()
   })
 })

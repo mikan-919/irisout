@@ -2,8 +2,10 @@
 
 ## ステータス
 
-**ドラフト(レビュー待ち)** — 未決定。ADR-0008 の実装計画(M4.5)を書く
-前にレビューして決着させる。決定済み ADR(0001〜0008)とは区別すること。
+**承認済み** — 推奨案(質問1〜5)をそのまま採用し、change
+`adr-0009-handler-statements` で実装した。設計レベルの追加決定
+(`IfStatement` 枝の再帰検証、書き込み後 `return` の拒否)は
+`openspec/changes/adr-0009-handler-statements/design.md` の D2/D3 を参照。
 
 ## コンテキスト
 

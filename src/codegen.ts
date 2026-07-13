@@ -17,6 +17,8 @@ export interface HandlerOutput {
   eventName: string
   rendered: string
   updateNames: string[]
+  /** ADR-0009: 第1仮引数(イベントオブジェクト)の authored 名。なければ null。 */
+  param: string | null
 }
 
 export interface GenerateModuleInput {
@@ -51,8 +53,11 @@ export function generateModule({
     const updateCalls = h.updateNames
       .map((name) => `update_${name}();`)
       .join(' ')
+    // ADR-0009 D4: 第1引数があるハンドラのみ authored 名を束縛する
+    // (引数なしハンドラの出力は不変 = golden 差分ゼロ)。
+    const params = h.param ? `${h.param}, ...__args` : '...__args'
     outLines.push(
-      `const __handler_${h.markerId}_${h.eventName} = (...__args) => { ${h.rendered}; ${updateCalls} };`,
+      `const __handler_${h.markerId}_${h.eventName} = (${params}) => { ${h.rendered}; ${updateCalls} };`,
     )
   }
   if (handlers.length > 0) outLines.push('')

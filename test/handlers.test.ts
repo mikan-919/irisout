@@ -131,17 +131,23 @@ export function App() {
     )
   })
 
-  it('rejects a handler function declaration with a multi-statement body (ADR-0009 scope)', () => {
+  it('accepts a handler function declaration with a multi-statement body (ADR-0009)', async () => {
     const source = `
 export function App() {
   const count = signal(0);
   render(<div><span>{count()}</span><button onClick={inc}>+</button></div>);
-  function inc() { const n = count(); count(n + 1); }
+  function inc() { const n = count() + 1; count(n); }
 }
 `
-    expect(() => compile(source)).toThrow(
-      /function body must be a single expression statement/,
-    )
+    const { code } = compile(source)
+    expect(code).toContain('count = n')
+    const mod = await loadGenerated(code)
+    const container = createContainer()
+    ;(mod.mountComponent as (c: Element) => void)(container)
+    const span = container.querySelector('span')
+    expect(span?.textContent).toBe('0')
+    dispatchClick(container, container.querySelector('button'))
+    expect(span?.textContent).toBe('1')
   })
 
   it('rejects a function declaration placed before render() (variable zone)', () => {
@@ -186,5 +192,219 @@ export function App() {
 }
 `
     expect(() => compile(source)).toThrow(/exactly one render/)
+  })
+})
+
+// ADR-0009: ハンドラのブロック本体(4文種)・第1引数(イベントオブジェクト)の
+// 受け渡し・文中の signal 書き込み検出を M4.5(単一式のみ)から広げる。
+describe('ADR-0009: handler statement bodies', () => {
+  function windowOf(container: Element) {
+    return (
+      container.ownerDocument as unknown as { defaultView: typeof window }
+    ).defaultView
+  }
+
+  it('compiles the ADR-0008 decision example (block body, no args)', async () => {
+    const source = `
+export function App() {
+  const state = signal(0);
+  render(<div><span>{state()}</span><button onClick={handleCountUp}>+</button></div>);
+  function handleCountUp() { state(state() + 1) }
+}
+`
+    const { code } = compile(source)
+    const mod = await loadGenerated(code)
+    const container = createContainer()
+    ;(mod.mountComponent as (c: Element) => void)(container)
+    const span = container.querySelector('span')
+    expect(span?.textContent).toBe('0')
+    dispatchClick(container, container.querySelector('button'))
+    expect(span?.textContent).toBe('1')
+  })
+
+  it('compiles a body containing all 4 statement kinds (handleInputKeyDown shape)', async () => {
+    const source = `
+export function App() {
+  const todos = signal([]);
+  render(
+    <div>
+      <span>{todos().length}</span>
+      <input onKeyDown={handleInputKeyDown} />
+    </div>
+  );
+  function handleInputKeyDown(e) {
+    if (e.key !== 'Enter') return;
+    const text = e.target.value;
+    if (text === '') return;
+    todos([...todos(), text]);
+  }
+}
+`
+    const { code } = compile(source)
+    const mod = await loadGenerated(code)
+    const container = createContainer()
+    ;(mod.mountComponent as (c: Element) => void)(container)
+    const input = container.querySelector('input') as HTMLInputElement
+    const span = container.querySelector('span')
+    const KeyboardEvent = windowOf(container).KeyboardEvent
+    expect(span?.textContent).toBe('0')
+
+    input.value = ''
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+    expect(span?.textContent).toBe('0') // 空テキスト -> ガードで抜ける
+
+    input.value = 'buy milk'
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+    expect(span?.textContent).toBe('1')
+
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' }))
+    expect(span?.textContent).toBe('1') // Enter以外 -> ガードで抜ける
+  })
+
+  it('compiles an inline arrow with a block body', async () => {
+    const source = `
+export function App() {
+  const count = signal(0);
+  render(<div><span>{count()}</span><button onClick={() => { const n = count() + 1; count(n); }}>+</button></div>);
+}
+`
+    const { code } = compile(source)
+    const mod = await loadGenerated(code)
+    const container = createContainer()
+    ;(mod.mountComponent as (c: Element) => void)(container)
+    const span = container.querySelector('span')
+    dispatchClick(container, container.querySelector('button'))
+    expect(span?.textContent).toBe('1')
+  })
+
+  it('passes the real event object through as the authored first parameter', async () => {
+    const source = `
+export function App() {
+  const lastKey = signal('');
+  render(<div><span>{lastKey()}</span><input onKeyDown={handleKeyDown} /></div>);
+  function handleKeyDown(e) { lastKey(e.key); }
+}
+`
+    const { code } = compile(source)
+    const mod = await loadGenerated(code)
+    const container = createContainer()
+    ;(mod.mountComponent as (c: Element) => void)(container)
+    const input = container.querySelector('input') as HTMLInputElement
+    const span = container.querySelector('span')
+    const KeyboardEvent = windowOf(container).KeyboardEvent
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'x' }))
+    expect(span?.textContent).toBe('x')
+  })
+
+  it('lets the handler parameter shadow a same-named tracked signal', () => {
+    const source = `
+export function App() {
+  const value = signal(0);
+  render(<div><span>{value()}</span><button onClick={handle}>go</button></div>);
+  function handle(value) { const x = value; }
+}
+`
+    const { code } = compile(source)
+    // 引数の value はローカルとして扱われ、signal への書き込みとして
+    // 解決されない(update_value() の呼び出しがハンドラ内に生成されない)。
+    expect(code).not.toContain('update_value();')
+  })
+
+  it('does not treat a local const with a signal-shadowing name as a signal', () => {
+    const source = `
+export function App() {
+  const count = signal(0);
+  render(<div><span>{count()}</span><button onClick={inc}>+</button></div>);
+  function inc() { const count = 99; count; }
+}
+`
+    const { code } = compile(source)
+    expect(code).not.toContain('update_count();')
+  })
+
+  it('converts a write inside a spread expression to a plain assignment (no call form left)', () => {
+    const source = `
+export function App() {
+  const todos = signal([]);
+  render(<div><span>{todos().length}</span><button onClick={add}>+</button></div>);
+  function add() { todos([...todos(), 'x']); }
+}
+`
+    const { code } = compile(source)
+    expect(code).toContain("todos = [...todos, 'x']")
+    expect(code).not.toContain('todos([')
+  })
+
+  it('generates a tail update_* for a write inside an if branch (static over-approximation)', async () => {
+    const source = `
+export function App() {
+  const count = signal(0);
+  render(<div><span>{count()}</span><button onClick={inc}>+</button></div>);
+  function inc() { if (true) { count(1); } }
+}
+`
+    const { code } = compile(source)
+    expect(code).toContain('update_count();')
+    const mod = await loadGenerated(code)
+    const container = createContainer()
+    ;(mod.mountComponent as (c: Element) => void)(container)
+    const span = container.querySelector('span')
+    dispatchClick(container, container.querySelector('button'))
+    expect(span?.textContent).toBe('1')
+  })
+
+  it('rejects a loop inside a handler body', () => {
+    const source = `
+export function App() {
+  const count = signal(0);
+  render(<div><span>{count()}</span><button onClick={inc}>+</button></div>);
+  function inc() { for (let i = 0; i < 1; i++) { count(1); } }
+}
+`
+    expect(() => compile(source)).toThrow(/scope limit/)
+  })
+
+  it('rejects a var declaration inside a handler body', () => {
+    const source = `
+export function App() {
+  const count = signal(0);
+  render(<div><span>{count()}</span><button onClick={inc}>+</button></div>);
+  function inc() { var x = 1; count(x); }
+}
+`
+    expect(() => compile(source)).toThrow(/scope limit/)
+  })
+
+  it('rejects a return that returns a value', () => {
+    const source = `
+export function App() {
+  const count = signal(0);
+  render(<div><span>{count()}</span><button onClick={inc}>+</button></div>);
+  function inc() { count(1); return false; }
+}
+`
+    expect(() => compile(source)).toThrow(/scope limit/)
+  })
+
+  it('rejects a return after a tracked write (D3: the write would be lost)', () => {
+    const source = `
+export function App() {
+  const count = signal(0);
+  render(<div><span>{count()}</span><button onClick={inc}>+</button></div>);
+  function inc() { count(1); if (true) { return; } }
+}
+`
+    expect(() => compile(source)).toThrow(/scope limit/)
+  })
+
+  it('rejects a destructured handler parameter', () => {
+    const source = `
+export function App() {
+  const count = signal(0);
+  render(<div><span>{count()}</span><button onClick={handle}>+</button></div>);
+  function handle({ target }) { count(1); }
+}
+`
+    expect(() => compile(source)).toThrow(/scope limit/)
   })
 })

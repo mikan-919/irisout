@@ -53,3 +53,31 @@ export function update_count() {
 }
 "
 `;
+
+exports[`golden: 生成コードの構造スナップショット ADR-0009 ブロック本体ハンドラの code を固定する 1`] = `
+"import { mount, hydrate } from '../src/runtime.js';
+
+export let count = 0;
+
+const __INITIAL_HTML__ = "<div><span data-iris-id=\\"m0\\">0</span><button data-iris-id=\\"m1\\">+</button></div>";
+
+const __handler_m1_click = (e, ...__args) => { if (e.detail > 1) return;
+    const n = count + 1;
+    count = n;; update_count(); };
+
+let __markers__;
+export function mountComponent(container) {
+  ({ markers: __markers__ } = mount(container, __INITIAL_HTML__));
+  __markers__.get("m1")?.addEventListener("click", __handler_m1_click);
+}
+
+export function hydrateComponent(container) {
+  ({ markers: __markers__ } = hydrate(container));
+  __markers__.get("m1")?.addEventListener("click", __handler_m1_click);
+}
+
+export function update_count() {
+  { const __el = __markers__.get("m0"); if (__el) { __el.textContent = \`\${count}\`; } }
+}
+"
+`;

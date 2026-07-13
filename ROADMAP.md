@@ -59,11 +59,12 @@ ADR-0007、ADR-0005の追記、ADR-0008+下記「次のアクション」を参�
   ローカルUI状態の一般的な扱いとして決めるべき。
 - (09) イベントオブジェクト(`e`)の型付け / `e.target.value` にJSの
   動的型付けのまま素朴にアクセスした(targetがHTMLInputElementである
-  保証はコード上ない) / **ADR-0009 ドラフトあり・レビュー待ち**
-  (`docs/adr/0009-handler-statements-and-event-object.md`)。ハンドラの
-  イベント引数受け渡し・ブロック本体の文レベル解析はドラフトで扱う。ただし
-  `e` の**静的型付け**(target要素種別に応じた絞り込み)はドラフトでも
-  未決定事項として切り出しており、承認後に別途決める。
+  保証はコード上ない) / **受け渡しは解決済み**(ADR-0009 承認済み・change
+  `adr-0009-handler-statements` で実装、
+  `docs/adr/0009-handler-statements-and-event-object.md`)。ハンドラの
+  イベント引数受け渡し・ブロック本体(4文種)の文レベル解析は実装済み。
+  `e` の**静的型付け**(target要素種別に応じた絞り込み)は ADR-0009 でも
+  未決定事項として切り出したままで、引き続き未決定。
 
 ### 3. エスケープハッチ(手書きJSとの共存)
 
@@ -76,17 +77,16 @@ M5 単体ではなく **M5+エスケープハッチ** と置く。設計は未�
 
 ## 次のアクション
 
-実装順序は **M4 → API変更(ADR-0008) → M5** で決定(2026-07-05 grilling)。
-M4・API変更とも完了。M5の前に ADR-0009 実装と性能ベンチを挟む
-(2026-07-14 相談で決定)。
+実装順序は **M4 → API変更(ADR-0008) → ADR-0009 → 性能ベンチ → M5** で決定
+(2026-07-05 grilling、2026-07-14 相談)。
 
 1. ~~M4(静的host属性)~~ — **完了**(change `m4-static-host-attributes`)。
 2. ~~API変更(ADR-0008のゾーン構造)~~ — **完了**(change `authoring-api-zones`)。
    render()マーカー・識別子参照ハンドラ・ゾーン配置強制を実装。
-3. **次はここ:** ADR-0009 実装(change `adr-0009-handler-statements`、
-   tasks 作成済み・未コミット)。ハンドラ複数文+イベント引数 `e`。
-4. 性能ベンチ: `examples/todomvc.handwritten.js` vs React 版 TodoMVC。
-   手書き版は irisout の生成出力の上限値なので、コンパイラ完成前に
+3. ~~ADR-0009 実装~~ — **完了**(change `adr-0009-handler-statements`)。
+   ハンドラのブロック本体(4文種)・イベント引数 `e` の受け渡しを実装。
+4. **次はここ:** 性能ベンチ: `examples/todomvc.handwritten.js` vs React 版
+   TodoMVC。手書き版は irisout の生成出力の上限値なので、コンパイラ完成前に
    「React に性能で勝てるか」を実測で決着させる。M5 設計の判断材料
    (keyed reuse の Map は React も Fiber として持つ帳簿と同じ、という
    見立ての検証)。
