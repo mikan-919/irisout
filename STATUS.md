@@ -15,7 +15,7 @@ TypeScript書き直しは Milestone 3 まで完了・`feat/first-concept`にマ�
 | M1 | スキャフォールド、signal/derived、テキストマーカー | **DONE** | `0155e85` |
 | M2 | イベントハンドラ、書き込みトリガー更新 | **DONE** | `810bc83`→`645a820`、plan 005 |
 | M3 | ブラウザビルドターゲット(hydrate/mount分割 + `scripts/build.ts`) | **DONE** | `a2905c8`、plan 001 |
-| M4 | 静的host要素属性 | **DONE** | `497b767`、change `m4-static-host-attributes` |
+| M4 | 静的host要素属性 | **DONE** | `9829f88`、change `m4-static-host-attributes` |
 | M4.5 | authoring APIゾーン化(ADR-0008) | TODO | M4の後・M5の前(順序はROADMAP参照) |
 | M5 | list/conditional factory closures(ADR-0005の新実装) | TODO | M4.5(API変更)の後に着手 |
 | M6 | 全マイルストーン横断のno-wrapper検証 | TODO | M4・M5完了後 |
