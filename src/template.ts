@@ -42,6 +42,24 @@ export function escapeAttrValue(value: string): string {
   )
 }
 
+// 静的ホスト属性。文字列値を持つものと、値なし真偽属性(disabled 等)を
+// 型で区別する(design.md 決定4: valueless を ="true" と誤出力しない)。
+export type StaticAttr =
+  | { name: string; value: string }
+  | { name: string; valueless: true }
+
+// 静的属性を開始タグへ差し込む文字列に変換する。文字列値は
+// ` name="escaped"`、値なし属性は ` name` を返し、全て連結する。
+export function renderStaticAttrs(attrs: StaticAttr[]): string {
+  return attrs
+    .map((attr) =>
+      'valueless' in attr
+        ? ` ${attr.name}`
+        : ` ${attr.name}="${escapeAttrValue(attr.value)}"`,
+    )
+    .join('')
+}
+
 // contentParts -> テンプレートリテラルの*内側*のソーステキスト(バッククォートなし)。
 export function innerTemplateSource(contentParts: ContentPart[]): string {
   return contentParts

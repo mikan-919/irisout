@@ -11,6 +11,8 @@ import {
   cleanJSXText,
   escapeTemplateText,
   innerTemplateSource,
+  renderStaticAttrs,
+  type StaticAttr,
 } from '../template.js'
 import { analyzeExpr, analyzeHandlerExpr } from './analyze.js'
 import type { CompilerState, ContentPart, DeclId, MarkerId } from './state.js'
@@ -185,27 +187,44 @@ interface HandlerAttr {
   writeDeclIds: Set<DeclId>
 }
 
-// on[A-Z]... 属性(onClick など)だけをハンドラとして収集する。それ以外の
-// 属性(class/id 等の静的ホスト属性)はまだ未対応 -- plan 007 のスコープ。
-function collectHandlerAttrs(
+// ホスト要素の属性を「ハンドラ / 静的 / 拒否」の3分岐で収集する
+// (design.md 決定1)。on[A-Z]... はハンドラ、文字列リテラル値・値なし属性は
+// 静的属性、式コンテナ値・namespaced 名・spread は scope limit で拒否する。
+function collectAttrs(
   ctx: CompilerState,
   elementPath: NodePath<t.JSXElement>,
   instanceId: number,
-): HandlerAttr[] {
+): { handlerAttrs: HandlerAttr[]; staticAttrs: StaticAttr[] } {
   const handlerAttrs: HandlerAttr[] = []
+  const staticAttrs: StaticAttr[] = []
   for (const attr of elementPath.get('openingElement').get('attributes')) {
     if (!attr.isJSXAttribute()) {
+      // JSXSpreadAttribute({...props})は引き続き拒否する。
       throw new Error(
         'compile: host element attributes are not supported yet (scope limit)',
       )
     }
     const attrName = attr.node.name
+    const valueNode = attr.node.value
     if (attrName.type !== 'JSXIdentifier' || !/^on[A-Z]/.test(attrName.name)) {
+      // ハンドラ以外: 属性名が JSXIdentifier で、値が文字列リテラルまたは
+      // 値なしなら静的属性。式コンテナ値・JSXNamespacedName は拒否する
+      // (design.md 決定4: 式の中身は評価せず構文だけで判定する)。
+      if (attrName.type === 'JSXIdentifier' && valueNode == null) {
+        staticAttrs.push({ name: attrName.name, valueless: true })
+        continue
+      }
+      if (
+        attrName.type === 'JSXIdentifier' &&
+        valueNode?.type === 'StringLiteral'
+      ) {
+        staticAttrs.push({ name: attrName.name, value: valueNode.value })
+        continue
+      }
       throw new Error(
         'compile: host element attributes are not supported yet (scope limit)',
       )
     }
-    const valueNode = attr.node.value
     if (valueNode?.type !== 'JSXExpressionContainer') {
       throw new Error(
         `compile: handler "${attrName.name}" must be an expression (scope limit)`,
@@ -238,7 +257,7 @@ function collectHandlerAttrs(
     )
     handlerAttrs.push({ eventName, rendered, writeDeclIds })
   }
-  return handlerAttrs
+  return { handlerAttrs, staticAttrs }
 }
 
 function renderElement(
@@ -257,7 +276,12 @@ function renderElement(
       `compile: component references (<${tagName}/>) are not supported yet (scope limit)`,
     )
   }
-  const handlerAttrs = collectHandlerAttrs(ctx, elementPath, instanceId)
+  const { handlerAttrs, staticAttrs } = collectAttrs(
+    ctx,
+    elementPath,
+    instanceId,
+  )
+  const attrs = renderStaticAttrs(staticAttrs)
 
   const children = elementPath.get('children') as NodePath<JSXChild>[]
   const hasDirectExpr = children.some((c) => c.isJSXExpressionContainer())
@@ -272,7 +296,7 @@ function renderElement(
       else throw new Error('compile: unsupported JSX child (scope limit)')
     }
     if (handlerAttrs.length === 0) {
-      return `<${tagName}>${inner}</${tagName}>`
+      return `<${tagName}${attrs}>${inner}</${tagName}>`
     }
     // reactive text を持たない要素にハンドラだけが付く場合、mount() が
     // 拾えるようこの要素専用のマーカーを新規に発行する。
@@ -280,7 +304,7 @@ function renderElement(
     for (const h of handlerAttrs) {
       ctx.handlers.push({ markerId, ...h })
     }
-    return `<${tagName} data-iris-id="${markerId}">${inner}</${tagName}>`
+    return `<${tagName}${attrs} data-iris-id="${markerId}">${inner}</${tagName}>`
   }
 
   const runPaths: NodePath<t.JSXText | t.JSXExpressionContainer>[] = []
@@ -299,7 +323,7 @@ function renderElement(
   for (const h of handlerAttrs) {
     ctx.handlers.push({ markerId, ...h })
   }
-  return `<${tagName} data-iris-id="${markerId}">${sourceInner}</${tagName}>`
+  return `<${tagName}${attrs} data-iris-id="${markerId}">${sourceInner}</${tagName}>`
 }
 
 export function compileComponent(

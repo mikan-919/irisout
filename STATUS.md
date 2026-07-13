@@ -15,7 +15,7 @@ TypeScript書き直しは Milestone 3 まで完了・`feat/first-concept`にマ�
 | M1 | スキャフォールド、signal/derived、テキストマーカー | **DONE** | `0155e85` |
 | M2 | イベントハンドラ、書き込みトリガー更新 | **DONE** | `810bc83`→`645a820`、plan 005 |
 | M3 | ブラウザビルドターゲット(hydrate/mount分割 + `scripts/build.ts`) | **DONE** | `a2905c8`、plan 001 |
-| M4 | 静的host要素属性 | TODO | 小規模・M3非依存。次に着手するならこれ |
+| M4 | 静的host要素属性 | **DONE** | `497b767`、change `m4-static-host-attributes` |
 | M4.5 | authoring APIゾーン化(ADR-0008) | TODO | M4の後・M5の前(順序はROADMAP参照) |
 | M5 | list/conditional factory closures(ADR-0005の新実装) | TODO | M4.5(API変更)の後に着手 |
 | M6 | 全マイルストーン横断のno-wrapper検証 | TODO | M4・M5完了後 |
@@ -46,4 +46,6 @@ TypeScript書き直しは Milestone 3 まで完了・`feat/first-concept`にマ�
     ADR-0005のfactory closureパターンをトップレベルにも広げれば構造的に
     解消できるが、それはAPIの大きな変更を伴う。実需が出るまでは着手しない
     (2026-07-05 grillingで確認済み)。
-- 静的host属性・条件分岐・リストはまだ未実装(M4/M5)。
+- 条件分岐・リストはまだ未実装(M5)。静的host属性はM4で実装済み。
+  動的(式コンテナ)host属性値はM4スコープ外で、引き続きcompile error
+  (`scope limit`)で拒否する ― post-M6のパリティ穴。
