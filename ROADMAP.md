@@ -25,10 +25,10 @@ ADR-0007、ADR-0005の追記、ADR-0008+下記「次のアクション」を参�
 仮定した暫定構文 / どの ADR・マイルストーンで決めるべきか」の3点で書く。
 
 - (01) ref の宣言・読み取りAPI / `const x = ref()` で宣言し `x()` で要素を
-  取得する signal 同型の呼び出し規約を暫定採用 / **設計ドラフトあり**
-  (change `action-use-attribute`): Svelte Action風の `use={fn}` を採用し、
-  ref primitiveは作らない(要素アクセスは use / `e`+プラットフォーム
-  走査 / 返り値クロージャの3チャネル)。ADR-0011 として起票予定。
+  取得する signal 同型の呼び出し規約を暫定採用 / **決定済み(ADR-0011、
+  change `action-use-attribute`)、実装は別change**: Svelte Action風の
+  `use={fn}` を採用し、ref primitiveは作らない(要素アクセスは use /
+  `e`+プラットフォーム走査 / 返り値クロージャの3チャネル)。
 - (02) 完了トグルに応じた動的 class 付与(`class={cond ? 'a' : ''}`)の
   生成先 / authored 側はJSXの三項式をそのまま書いた / M4(静的host属性)
   の後続として新規に計画が要る、現時点でロードマップに項目がない
@@ -75,8 +75,10 @@ ADR-0007、ADR-0005の追記、ADR-0008+下記「次のアクション」を参�
 
 **決定済み(ADR-0010、change `escape-hatch-design`)、実装は別change。**
 共存の単位はJSX要素1つ、記法は`<Escape mount={identifier} />`(ADR-0008の
-識別子参照ルールを転用)。mount関数本体は追跡宣言(signal/derived)への
-参照をcompile errorで拒否し、teardownは作らない。「使ってもらえる閾値」は
+識別子参照ルールを転用)。mount関数本体はコンポーネント内の他の宣言への
+参照をcompile errorで拒否し(参照可は引数・ローカル・import・グローバル
+のみ)、teardownは作らない(グローバル副作用のリークは受け入れたリスク、
+ADR-0010決定3)。「使ってもらえる閾値」は
 M5 単体ではなく **M5+エスケープハッチ** と置く(2026-07-14 相談)。
 
 ## 次のアクション
@@ -108,12 +110,25 @@ M5 単体ではなく **M5+エスケープハッチ** と置く(2026-07-14 相�
    受理条件を決定。`src/`の変更は対象外(設計のみ)。
 6a. **次はここ候補:** エスケープハッチ実装(ADR-0010に基づくfollow-up
    change)。`src/compiler/render.ts`の`<Escape>`要素解析(組み込み
-   マーカー認識・子要素禁止の検証・`mount`識別子参照解決・追跡宣言
-   スキャン)と`src/codegen.ts`のコンテナ生成・mount呼び出しコード生成が
+   マーカー認識・子要素禁止の検証・`mount`識別子参照解決・本体の識別子
+   スキャンによるコンポーネント内宣言参照の拒否)と
+   `src/codegen.ts`のコンテナ生成・mount呼び出しコード生成が
    スコープ(上記「3. エスケープハッチ」・ADR-0010「実装への引き継ぎ
    メモ」参照)。06/07が解決してもTodoMVCの完全なパリティには他の
    UNRESOLVED項目(ref・動的属性)が残るため、M5.5と並行/どちらを先に
    するかは未決定。
+6b. ~~ref設計~~ — **完了**(change `action-use-attribute`、ADR-0011)。
+   authoring API統治原則(穴のない宣言・プレースホルダーの向き・位置的
+   リアクティビティ)を明文化し、`use={fn}`属性を要素へのaction接続手段
+   として採用、ref primitiveは作らないことを決定した(UNRESOLVED(01)
+   解消)。`src/`の変更は対象外。
+6c. **次はここ候補:** `use=`属性実装(ADR-0011に基づくfollow-up
+   change)。`src/compiler/render.ts`の`use`属性解析・識別子解決、
+   `src/compiler/analyze.ts`のネストした関数への再帰書き換え・返り値
+   クロージャの依存解析、`src/codegen.ts`のmount時呼び出し・
+   update_*配線、JSX型定義への`use`属性追加がスコープ(ADR-0011
+   「実装への引き継ぎメモ」参照)。エスケープハッチ実装(6a)・M5.5(5)
+   とは独立した論点で、実装順序は未決定。
 7. ~~性能ベンチ: `examples/todomvc.handwritten.js` vs React 版TodoMVC~~ —
    **完了**(change `perf-bench-todomvc-vs-react`、詳細は
    `bench/todomvc-vs-react.results.md`)。当初のjsdom計測ではhandwritten版
@@ -126,7 +141,7 @@ M5 単体ではなく **M5+エスケープハッチ** と置く(2026-07-14 相�
    ADR-0005の見立て(keyed reuseのMapの帳簿コストはReact Fiberと同種)は
    実ブラウザでは**支持され**、アイテムごとの直接リスナーを委譲方式へ
    変える性能上の動機は消えた(メモリ面の比較のみ未計測のまま残る)。
-8. その後: ref 設計(UNRESOLVED 01)、動的属性バインディング(02/03)。
+8. その後: 動的属性バインディング(UNRESOLVED 02/03)。
 
 ## 参考資料
 

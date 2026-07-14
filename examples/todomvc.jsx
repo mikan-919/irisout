@@ -6,8 +6,9 @@
 // M5(change `m5-list-conditional-factory-closures`)で1階層のリスト・
 // 条件分岐は実装済みだが、このフィクスチャ全体は今もコンパイルできない。
 // 現行コンパイラの制約として意図的に踏み越えているもの(既知のスコープ外
-// なので個別の注記は付けない): ref() 宣言・読み取りAPI(UNRESOLVED-01、
-// 未実装)、ハンドラ以外の動的(式コンテナ)属性値(UNRESOLVED-02/03)。
+// なので個別の注記は付けない): `use=`属性(UNRESOLVED-01、設計は
+// ADR-0011で決定済みだが未実装)、ハンドラ以外の動的(式コンテナ)属性値
+// (UNRESOLVED-02/03)。
 //
 // UNRESOLVED(06)/(07): M5本体では対応せず、follow-up change(M5.5相当、
 // design.mdのDecision 1参照)で扱う。下記の
@@ -25,14 +26,6 @@ export function TodoApp() {
   ])
 
   const filter = signal('all') // 'all' | 'active' | 'completed'
-
-  // UNRESOLVED(01): ref の宣言・読み取りAPIはADR-0008自身が「未決定事項」
-  // として明記している(条件分岐配下の挙動に限らず、素朴なトップレベル
-  // 利用の呼び出し規約すら未定)。ここではsignalと同じ「呼べば値が返る」
-  // 形(`newTodoInput()`で要素を取得)を暫定採用する。用途はマウント時の
-  // フォーカスのみ(値の読み取り・クリアはイベント引数側 e.target 経由に
-  // 寄せる、下のhandleInputKeyDown参照)。
-  const newTodoInput = ref()
 
   const visibleTodos = derived(() =>
     filter() === 'active'
@@ -59,7 +52,7 @@ export function TodoApp() {
   render(
     <div class='todoapp'>
       <input
-        ref={newTodoInput}
+        use={setupNewTodoInput}
         onKeyDown={handleInputKeyDown}
         placeholder='What needs to be done?'
       />
@@ -109,9 +102,13 @@ export function TodoApp() {
 
   // ── 動きゾーン: function宣言とhooksのみ ──
 
-  onMount(() => {
-    newTodoInput().focus()
-  })
+  // UNRESOLVED(01): `use=`属性の設計はADR-0011で決定済み(ref primitiveは
+  // 作らず、要素はaction関数の引数としてのみ到着する)。用途はマウント時の
+  // フォーカスのみ(値の読み取り・クリアはイベント引数側 e.target 経由に
+  // 寄せる、下のhandleInputKeyDown参照)。コンパイラ実装は別change。
+  function setupNewTodoInput(input) {
+    input.focus()
+  }
 
   // UNRESOLVED(09): e.target.value が効くにはe.targetがHTMLInputElement
   // だと分かっている必要がある。イベントオブジェクトの型付け(addEventListener
