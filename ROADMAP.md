@@ -44,21 +44,24 @@ ADR-0007、ADR-0005の追記、ADR-0008+下記「次のアクション」を参�
 - (05) フィルタで一時的にリストから外れるだけのアイテムを「削除」と
   区別する設計 / handwritten側は「todos配列からの削除」でのみkeyed Map
   から破棄し、フィルタでの非表示はDOM着脱のみで対応(状態保持を優先) /
-  ADR-0005のkeyed reuse決定に、フィルタ等「データは残るが表示対象からは
-  外れる」ケースの扱いを追記すべき。
+  **区別自体は解決済み**(M5、spec.md「配列脱落とフィルタ除外の区別」):
+  `update_<list>()`は`.map()`の対象配列そのものに対してkeyed diffを行う
+  ため、keyが配列に残る限りMapエントリ・DOM要素・リスナーは保持される。
+  ただし「フィルタで除外されたアイテムを表示からだけ外す」実際の手段
+  (06と結合)はM5.5に残る。
 - (06) 空リスト時に `<ul>` 自体を出さない条件分岐(リストが条件分岐に
   ネストする形) / handwritten側は要素の着脱ではなく `hidden` プロパティ
-  で妥協 / ADR-0005の「ネストした構造ユニットは対象外」スコープの
-  裏返しのケースとして、M5設計時に扱いを決めるべき。
+  で妥協 / **M5では明示的にスコープ外と確定**(design.md Decision 1、
+  compile error `(scope limit)`)。M5.5で扱いを決める。
 - (07) 編集モードでの `span`↔`input` 入れ替え(アイテム内にさらに
   ネストした構造ユニットが要る) / handwritten側はtemplateの再クローンで
-  はなく都度DOM生成+display切り替えで妥協 / ADR-0005が明示的にスコープ外
-  とする「リストアイテム内のネストした構造ユニット」そのもの、M5の
+  はなく都度DOM生成+display切り替えで妥協 / **M5では明示的にスコープ外と
+  確定**(design.md Decision 1、compile error `(scope limit)`)。M5.5の
   スコープ拡張時に決めるべき。
 - (08) 編集中テキストの下書きの保持先 / handwritten側は専用stateを
   持たず、編集開始時に一度だけ書き込んだinput要素自身のvalueを
-  source of truthとした / ADR-0005/0008とも未言及、M5設計時にitem内
-  ローカルUI状態の一般的な扱いとして決めるべき。
+  source of truthとした / ADR-0005/0008とも未言及、07と同じくM5.5で
+  item内ローカルUI状態の一般的な扱いとして決めるべき。
 - (09) イベントオブジェクト(`e`)の型付け / `e.target.value` にJSの
   動的型付けのまま素朴にアクセスした(targetがHTMLInputElementである
   保証はコード上ない) / **受け渡しは解決済み**(ADR-0009 承認済み・change
@@ -79,24 +82,34 @@ M5 単体ではなく **M5+エスケープハッチ** と置く。設計は未�
 
 ## 次のアクション
 
-実装順序は **M4 → API変更(ADR-0008) → ADR-0009 → 性能ベンチ → M5** で決定
-(2026-07-05 grilling、2026-07-14 相談)。
+実装順序は当初 **M4 → API変更(ADR-0008) → ADR-0009 → 性能ベンチ → M5** で
+決定していた(2026-07-05 grilling、2026-07-14 相談)。実際にはM5を性能
+ベンチより先に着手・完了した(下記4参照) ― 以後はこの実績の順序で読む。
 
 1. ~~M4(静的host属性)~~ — **完了**(change `m4-static-host-attributes`)。
 2. ~~API変更(ADR-0008のゾーン構造)~~ — **完了**(change `authoring-api-zones`)。
    render()マーカー・識別子参照ハンドラ・ゾーン配置強制を実装。
 3. ~~ADR-0009 実装~~ — **完了**(change `adr-0009-handler-statements`)。
    ハンドラのブロック本体(4文種)・イベント引数 `e` の受け渡しを実装。
-4. **次はここ:** 性能ベンチ: `examples/todomvc.handwritten.js` vs React 版
-   TodoMVC。手書き版は irisout の生成出力の上限値なので、コンパイラ完成前に
-   「React に性能で勝てるか」を実測で決着させる。M5 設計の判断材料
-   (keyed reuse の Map は React も Fiber として持つ帳簿と同じ、という
-   見立ての検証)。
-5. M5(list/conditional の factory closure、ADR-0005)。設計時に
-   UNRESOLVED(04)〜(08)、特にネストした構造ユニット(06/07)をスコープに
-   含めるかを決める — TodoMVC 完走には両方必要(条件分岐の中のリスト、
-   リストアイテムの中の条件分岐)。
-6. その後: ref 設計(UNRESOLVED 01)、動的属性バインディング(02/03)。
+4. ~~M5(list/conditional の factory closure、ADR-0005)~~ — **完了**
+   (change `m5-list-conditional-factory-closures`)。design.mdでUNRESOLVED
+   (06)/(07)(ネストした構造ユニット)を明示的にスコープ外と確定し、1階層
+   のみ実装。当初の実装順序(性能ベンチ→M5)より先にM5を着手・完了した
+   (2026-07-14 相談: change選択の結果)。性能ベンチ(`perf-bench-todomvc-vs-react`)
+   はまだ未完了で、下記7で改めて扱う。
+5. **次はここ候補:** M5.5 — ネストした構造ユニット(06/07)。設計未着手。
+   06(条件分岐の中のリスト)は「hidden プロパティで妥協するか、実際に
+   DOM着脱するか」、07(リストアイテム内の条件分岐)は「親子間の状態保持
+   ポリシー」がそれぞれ新規の設計論点(design.md Decision 1参照)。
+   TodoMVC完走にはどちらも必要。
+6. **次はここ候補:** エスケープハッチ(上記「3. エスケープハッチ」参照)。
+   06/07が解決してもTodoMVCの完全なパリティには他のUNRESOLVED項目
+   (ref・動的属性)が残るため、M5.5と並行/どちらを先にするかは未決定。
+7. 性能ベンチ: `examples/todomvc.handwritten.js` vs React 版TodoMVC。
+   手書き版はirisoutの生成出力の上限値なので、コンパイラ完成前に
+   「Reactに性能で勝てるか」を実測で決着させる(change
+   `perf-bench-todomvc-vs-react`、未完了)。
+8. その後: ref 設計(UNRESOLVED 01)、動的属性バインディング(02/03)。
 
 ## 参考資料
 

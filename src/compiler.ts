@@ -20,10 +20,20 @@ import { parse } from '@babel/parser'
 import type { NodePath } from '@babel/traverse'
 import traverseImport from '@babel/traverse'
 import type * as t from '@babel/types'
+import type {
+  HandlerOutput,
+  MarkerOutput,
+  StructuralUnitBodyOutput,
+} from './codegen.js'
 import { generateModule } from './codegen.js'
 import { resolveToSignals } from './compiler/decl-graph.js'
 import { compileComponent } from './compiler/render.js'
-import type { DeclId, MarkerId } from './compiler/state.js'
+import type {
+  DeclId,
+  HandlerDecl,
+  MarkerId,
+  StructuralUnitBody,
+} from './compiler/state.js'
 import { createCompilerState } from './compiler/state.js'
 import { derived, registry, signal } from './runtime.js'
 
@@ -127,7 +137,10 @@ export function compile(source: string): CompileResult {
 
   // --- M2: ハンドラの writeDeclIds をマーカーを持つ signal だけに絞り込み、
   // update_<name>() の呼び出しリストへ変換する(legacy/src/compiler.js:139-145)。
-  const handlerOutputs = ctx.handlers.map((h) => ({
+  // M5: リスト/条件分岐のローカルハンドラ(StructuralUnitBody.localHandlers)
+  // も同じ変換が要るので、ctx.handlers 直下・構造ユニット内の両方に使う
+  // 共通ヘルパーにする。
+  const convertHandler = (h: HandlerDecl): HandlerOutput => ({
     markerId: h.markerId,
     eventName: h.eventName,
     rendered: h.rendered,
@@ -136,7 +149,24 @@ export function compile(source: string): CompileResult {
       .filter((id) => signalToMarkers.has(id))
       .map((id) => ctx.declOutputName.get(id)!)
       .sort(),
-  }))
+  })
+  const handlerOutputs = ctx.handlers.map(convertHandler)
+
+  const convertBody = (body: StructuralUnitBody): StructuralUnitBodyOutput => ({
+    template: body.template,
+    localMarkers: body.localMarkers,
+    localHandlers: body.localHandlers.map(convertHandler),
+  })
+  const markerOutputs: MarkerOutput[] = ctx.markers.map((m) => {
+    if (m.kind === 'text') return m
+    if (m.kind === 'list') return { ...m, body: convertBody(m.body) }
+    return {
+      ...m,
+      branches: m.branches.map((b) => ({
+        body: b.body ? convertBody(b.body) : null,
+      })),
+    }
+  })
 
   // --- ビルド時実行:discovery の確認 + 実際の初期 HTML の取得 ---
   const instrumentedBody = [
@@ -160,7 +190,7 @@ export function compile(source: string): CompileResult {
 
   const code = generateModule({
     declStatements: out.declStatements,
-    markers: ctx.markers,
+    markers: markerOutputs,
     signalToMarkers,
     declOutputName: ctx.declOutputName,
     derivedDeps: ctx.derivedDeps,

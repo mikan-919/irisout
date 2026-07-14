@@ -24,7 +24,14 @@ import {
   analyzeHandlerBody,
   analyzeHandlerExpr,
 } from './analyze.js'
-import type { CompilerState, ContentPart, DeclId, MarkerId } from './state.js'
+import type {
+  CompilerState,
+  ContentPart,
+  DeclId,
+  MarkerId,
+  StructuralUnitBody,
+  TextMarker,
+} from './state.js'
 import { assignOutputName, declKey, nextMarkerId, toDeclId } from './state.js'
 
 export interface RenderOutput {
@@ -272,6 +279,7 @@ function collectAttrs(
   elementPath: NodePath<t.JSXElement>,
   instanceId: number,
   handlerFns: HandlerFns,
+  skipAttrName?: string,
 ): { handlerAttrs: HandlerAttr[]; staticAttrs: StaticAttr[] } {
   const handlerAttrs: HandlerAttr[] = []
   const staticAttrs: StaticAttr[] = []
@@ -283,6 +291,15 @@ function collectAttrs(
       )
     }
     const attrName = attr.node.name
+    // M5: リストアイテムの `key={...}` はkeyed reuseの索引専用で、host
+    // 属性としては出力しない(design.md Decision 5)。
+    if (
+      skipAttrName &&
+      attrName.type === 'JSXIdentifier' &&
+      attrName.name === skipAttrName
+    ) {
+      continue
+    }
     const valueNode = attr.node.value
     if (attrName.type !== 'JSXIdentifier' || !/^on[A-Z]/.test(attrName.name)) {
       // ハンドラ以外: 属性名が JSXIdentifier で、値が文字列リテラルまたは
@@ -323,11 +340,20 @@ function collectAttrs(
   return { handlerAttrs, staticAttrs }
 }
 
+interface RenderElementOpts {
+  /** M5: この要素直下の `key` 属性を host 属性として出力しない(リストアイテムの root)。 */
+  skipAttrName?: string
+  /** M5: 既にリスト/条件分岐の中(factory 本体)を歩いているか。ネストした
+   * 構造ユニットの検出に使う(design.md Decision 1: 1階層のみ)。 */
+  insideUnit?: boolean
+}
+
 function renderElement(
   ctx: CompilerState,
   elementPath: NodePath<t.JSXElement>,
   instanceId: number,
   handlerFns: HandlerFns,
+  opts: RenderElementOpts = {},
 ): string {
   const openingName = elementPath.node.openingElement.name
   if (openingName.type !== 'JSXIdentifier') {
@@ -345,10 +371,68 @@ function renderElement(
     elementPath,
     instanceId,
     handlerFns,
+    opts.skipAttrName,
   )
   const attrs = renderStaticAttrs(staticAttrs)
 
   const children = elementPath.get('children') as NodePath<JSXChild>[]
+
+  // M5: リスト(`.map()`)・条件分岐(三項/`&&`)の構造ユニット検出。
+  // ADR-0005「1階層のみ」に合わせ、対象の式コンテナが親の非空白な唯一の
+  // 子である場合に限って受理する(design.md: sole-child 制約)。
+  const nonWhitespace = children.filter(
+    (c) => !(c.isJSXText() && cleanJSXText(c.node.value) === ''),
+  )
+  const soleExprChild =
+    nonWhitespace.length === 1 && nonWhitespace[0]!.isJSXExpressionContainer()
+      ? nonWhitespace[0]
+      : null
+  const soleKind = soleExprChild
+    ? classifyStructuralExpr(
+        soleExprChild.get('expression') as NodePath<
+          t.Expression | t.JSXEmptyExpression
+        >,
+      )
+    : null
+
+  if (soleKind) {
+    // insideUnit の間は「1階層のみ」の外側なので、sole child であっても
+    // ネストしたリスト/条件分岐は scope limit で拒否する(design.md Decision 1)。
+    if (opts.insideUnit) {
+      throw new Error(
+        'compile: nested list/conditional rendering inside a list item or conditional branch is not supported yet (scope limit)',
+      )
+    }
+    const exprPath = soleExprChild!.get('expression') as NodePath<t.Expression>
+    const markerId =
+      soleKind === 'list'
+        ? renderListUnit(
+            ctx,
+            exprPath as NodePath<t.CallExpression>,
+            instanceId,
+            handlerFns,
+          )
+        : renderConditionalUnit(ctx, exprPath, instanceId, handlerFns)
+    return `<${tagName}${attrs} data-iris-id="${markerId}"></${tagName}>`
+  }
+
+  // sole child ではない位置にリスト/条件分岐の式コンテナが混ざっている場合
+  // (兄弟要素との共存): 本changeではコメントアンカー機構を持たないため
+  // scope limit で拒否する(design.md: 1階層のみのシンプルな実装として、
+  // 専用のラッパー要素の唯一の子にすることを要求する)。
+  const hasStructuralAmongMultiple = children.some(
+    (c) =>
+      c.isJSXExpressionContainer() &&
+      classifyStructuralExpr(
+        c.get('expression') as NodePath<t.Expression | t.JSXEmptyExpression>,
+      ) !== null,
+  )
+  if (hasStructuralAmongMultiple) {
+    throw new Error(
+      'compile: list/conditional rendering must be the sole child of its parent element (scope limit)',
+    )
+  }
+
   const hasDirectExpr = children.some((c) => c.isJSXExpressionContainer())
 
   if (!hasDirectExpr) {
@@ -357,7 +441,9 @@ function renderElement(
       if (child.isJSXText())
         inner += escapeTemplateText(cleanJSXText(child.node.value))
       else if (child.isJSXElement())
-        inner += renderElement(ctx, child, instanceId, handlerFns)
+        inner += renderElement(ctx, child, instanceId, handlerFns, {
+          insideUnit: opts.insideUnit,
+        })
       else throw new Error('compile: unsupported JSX child (scope limit)')
     }
     if (handlerAttrs.length === 0) {
@@ -389,6 +475,218 @@ function renderElement(
     ctx.handlers.push({ markerId, ...h })
   }
   return `<${tagName}${attrs} data-iris-id="${markerId}">${sourceInner}</${tagName}>`
+}
+
+// M5(ADR-0005): 式コンテナの中身が「リスト(`.map()`)」「条件分岐(三項/`&&`)」
+// のどちらかの構造ユニットの形をしているかを判定する。どちらでもなければ
+// null(既存の text マーカー等、通常の子として扱われる)。
+function classifyStructuralExpr(
+  exprPath: NodePath<t.Expression | t.JSXEmptyExpression>,
+): 'list' | 'conditional' | null {
+  if (exprPath.isCallExpression()) {
+    const callee = exprPath.get('callee')
+    if (
+      callee.isMemberExpression() &&
+      !callee.node.computed &&
+      callee.get('property').isIdentifier({ name: 'map' }) &&
+      exprPath.node.arguments.length === 1
+    ) {
+      const arg = exprPath.get('arguments')[0]
+      const params = arg?.isArrowFunctionExpression() ? arg.get('params') : null
+      if (
+        arg?.isArrowFunctionExpression() &&
+        params?.length === 1 &&
+        params[0]!.isIdentifier() &&
+        arg.get('body').isJSXElement()
+      ) {
+        return 'list'
+      }
+    }
+    return null
+  }
+  if (exprPath.isLogicalExpression() && exprPath.node.operator === '&&') {
+    return exprPath.get('right').isJSXElement() ? 'conditional' : null
+  }
+  if (exprPath.isConditionalExpression()) {
+    const consequent = exprPath.get('consequent')
+    const alternate = exprPath.get('alternate')
+    const isBranchable = (p: NodePath<t.Node>) =>
+      p.isJSXElement() || p.isNullLiteral()
+    if (
+      isBranchable(consequent) &&
+      isBranchable(alternate) &&
+      (consequent.isJSXElement() || alternate.isJSXElement())
+    ) {
+      return 'conditional'
+    }
+    return null
+  }
+  return null
+}
+
+// リストアイテム/条件分岐ブランチの中身を renderElement で再帰的に走査し、
+// その過程で ctx.markers/ctx.handlers に積まれた分だけを splice で取り出して
+// ローカルスコープの StructuralUnitBody に変換する。「クロージャ境界の外に
+// 出さない」という ADR-0005 決定2の実現方法: グローバルな ctx への書き込みは
+// renderElement の既存ロジックをそのまま再利用しつつ、事後にこのユニット
+// 専有分だけを引き剥がす。
+function renderStructuralUnitBody(
+  ctx: CompilerState,
+  elementPath: NodePath<t.JSXElement>,
+  instanceId: number,
+  handlerFns: HandlerFns,
+  skipAttrName?: string,
+): StructuralUnitBody {
+  const markersBefore = ctx.markers.length
+  const handlersBefore = ctx.handlers.length
+  const template = renderElement(ctx, elementPath, instanceId, handlerFns, {
+    skipAttrName,
+    insideUnit: true,
+  })
+  const localMarkers = ctx.markers.splice(markersBefore) as TextMarker[]
+  const localHandlers = ctx.handlers.splice(handlersBefore)
+  for (const m of localMarkers) {
+    const deps = ctx.markerDeps.get(m.id)
+    ctx.markerDeps.delete(m.id)
+    if (deps && deps.size > 0) {
+      throw new Error(
+        'compile: referencing a tracked signal inside a list item or conditional branch is not supported yet (scope limit)',
+      )
+    }
+  }
+  return { template, localMarkers, localHandlers }
+}
+
+// `{expr.map((item) => <li key={...}>...)}` を1つの ListMarker にする。
+// item 仮引数は追跡対象ではない(素の closure 変数)ので、本体の解析は
+// 既存の analyzeExpr/analyzeHandlerExpr にそのまま任せてよい -- item への
+// 参照は declId が引けず無編集で通過する。
+function renderListUnit(
+  ctx: CompilerState,
+  exprPath: NodePath<t.CallExpression>,
+  instanceId: number,
+  handlerFns: HandlerFns,
+): MarkerId {
+  const callee = exprPath.get('callee') as NodePath<t.MemberExpression>
+  const arrayObjPath = callee.get('object') as NodePath<t.Expression>
+  const { deps, rendered: arrayRendered } = analyzeExpr(
+    ctx,
+    arrayObjPath,
+    instanceId,
+  )
+
+  const arrowPath = exprPath.get(
+    'arguments.0',
+  ) as NodePath<t.ArrowFunctionExpression>
+  const itemParam = (arrowPath.get('params.0') as NodePath<t.Identifier>).node
+    .name
+  const itemPath = arrowPath.get('body') as NodePath<t.JSXElement>
+
+  const keyAttrPath = itemPath
+    .get('openingElement')
+    .get('attributes')
+    .find(
+      (a) =>
+        a.isJSXAttribute() &&
+        a.node.name.type === 'JSXIdentifier' &&
+        a.node.name.name === 'key',
+    ) as NodePath<t.JSXAttribute> | undefined
+  if (!keyAttrPath) {
+    throw new Error(
+      'compile: list items require a `key` attribute (scope limit)',
+    )
+  }
+  const keyValueNode = keyAttrPath.node.value
+  if (keyValueNode?.type !== 'JSXExpressionContainer') {
+    throw new Error(
+      'compile: list item `key` must be an expression (scope limit)',
+    )
+  }
+  const keyExprPath = keyAttrPath.get(
+    'value.expression',
+  ) as NodePath<t.Expression>
+  const { deps: keyDeps, rendered: keyRendered } = analyzeExpr(
+    ctx,
+    keyExprPath,
+    instanceId,
+  )
+  if (keyDeps.size > 0) {
+    throw new Error(
+      'compile: list item `key` referencing a tracked signal is not supported yet (scope limit)',
+    )
+  }
+
+  const body = renderStructuralUnitBody(
+    ctx,
+    itemPath,
+    instanceId,
+    handlerFns,
+    'key',
+  )
+
+  const markerId = nextMarkerId(ctx)
+  ctx.markers.push({
+    id: markerId,
+    kind: 'list',
+    itemParam,
+    arrayRendered,
+    keyRendered,
+    body,
+  })
+  ctx.markerDeps.set(markerId, deps)
+  return markerId
+}
+
+// `{cond && <Elem/>}` / `{cond ? <A/> : <B/>}` を1つの ConditionalMarker に
+// する。`&&` は真ブランチ1つのみ(偽 = 何も描画しない)、三項は
+// consequent/alternate それぞれ(`null` は「何も描画しない」ブランチ)。
+function renderConditionalUnit(
+  ctx: CompilerState,
+  exprPath: NodePath<t.Expression>,
+  instanceId: number,
+  handlerFns: HandlerFns,
+): MarkerId {
+  let testPath: NodePath<t.Expression>
+  let branchPaths: (NodePath<t.Node> | null)[]
+  let isLogical: boolean
+
+  if (exprPath.isLogicalExpression()) {
+    testPath = exprPath.get('left') as NodePath<t.Expression>
+    branchPaths = [exprPath.get('right')]
+    isLogical = true
+  } else if (exprPath.isConditionalExpression()) {
+    testPath = exprPath.get('test') as NodePath<t.Expression>
+    branchPaths = [exprPath.get('consequent'), exprPath.get('alternate')]
+    isLogical = false
+  } else {
+    throw new Error(
+      'compile: unsupported conditional expression form (scope limit)',
+    )
+  }
+
+  const { deps, rendered: condRendered } = analyzeExpr(
+    ctx,
+    testPath,
+    instanceId,
+  )
+
+  const branches = branchPaths.map((branchPath) => {
+    if (!branchPath?.isJSXElement()) return { body: null }
+    return {
+      body: renderStructuralUnitBody(ctx, branchPath, instanceId, handlerFns),
+    }
+  })
+
+  const markerId = nextMarkerId(ctx)
+  ctx.markers.push({
+    id: markerId,
+    kind: 'conditional',
+    condRendered,
+    isLogical,
+    branches,
+  })
+  ctx.markerDeps.set(markerId, deps)
+  return markerId
 }
 
 // 文が render(<JSX>) マーカー呼び出しなら、その JSX 引数 path を返す。

@@ -27,9 +27,6 @@ export interface TextMarker {
   contentParts: ContentPart[]
 }
 
-// M1 スコープ:text マーカーのみ。attribute/conditional/list は M4/M5 で追加。
-export type Marker = TextMarker
-
 // M2: onClick などのハンドラ1個分。writeDeclIds はこのハンドラが書き込む
 // (呼び出しを検出した) root signal の declId 集合 -- compiler.ts の後段で
 // マーカーを持つものだけに絞り込み updateNames へ変換する。
@@ -41,6 +38,48 @@ export interface HandlerDecl {
   /** ADR-0009: 第1仮引数(イベントオブジェクト)の authored 名。なければ null。 */
   param: string | null
 }
+
+// M5(ADR-0005): リストアイテム/条件分岐ブランチの中身。テンプレート HTML
+// (data-iris-id 付き、ローカルスコープの marker/handler を含む)と、
+// factory 関数生成に要る材料をまとめて持つ。ローカル marker はグローバルな
+// ctx.markers には積まれない(factory 内のクローンをそのつど querySelector
+// する専用スコープなので、update_<signal>() から辿る対象ではない)。
+export interface StructuralUnitBody {
+  template: string
+  localMarkers: TextMarker[]
+  localHandlers: HandlerDecl[]
+}
+
+// リストアイテムの key(item から導出、素の式なのでラップしない)は、
+// 生成された Map<key, handle> の索引にそのまま使う。
+export interface ListMarker {
+  id: MarkerId
+  kind: 'list'
+  /** `.map((item) => ...)` の item 仮引数の authored 名。 */
+  itemParam: string
+  /** `.map()` を呼ぶ対象配列の出力向けレンダー結果(裸の識別子または式)。 */
+  arrayRendered: string
+  /** `key={...}` の出力向けレンダー結果(item 仮引数を参照する式)。 */
+  keyRendered: string
+  body: StructuralUnitBody
+}
+
+export interface ConditionalBranch {
+  /** `&&`: 真のときのみ描画。三項: consequent/alternate それぞれに対応。 */
+  body: StructuralUnitBody | null
+}
+
+export interface ConditionalMarker {
+  id: MarkerId
+  kind: 'conditional'
+  /** 条件式の出力向けレンダー結果。 */
+  condRendered: string
+  /** true: branches[0]=真, false=なし(`&&`)。false: branches[0]=consequent, branches[1]=alternate(三項)。 */
+  isLogical: boolean
+  branches: ConditionalBranch[]
+}
+
+export type Marker = TextMarker | ListMarker | ConditionalMarker
 
 export interface CompilerState {
   source: string

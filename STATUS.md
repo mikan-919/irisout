@@ -3,10 +3,11 @@
 実装の「今」の状態(現在地・マイルストーン進捗・既知の制約)をまとめたもの。
 設計判断待ちの論点・次のアクションの計画は `ROADMAP.md` を参照。
 
-## 現在地(2026-07-05, commit `a2905c8`)
+## 現在地(2026-07-14)
 
-TypeScript書き直しは Milestone 3 まで完了・`feat/first-concept`にマージ済み。
-`legacy/`(元のJS実装)は参照専用で以後メンテナンスしない。
+TypeScript書き直しは M5(1階層のリスト/条件分岐)まで完了・
+`feat/first-concept`にマージ済み。`legacy/`(元のJS実装)は参照専用で
+以後メンテナンスしない。
 
 ## マイルストーン表
 
@@ -17,7 +18,8 @@ TypeScript書き直しは Milestone 3 まで完了・`feat/first-concept`にマ�
 | M3 | ブラウザビルドターゲット(hydrate/mount分割 + `scripts/build.ts`) | **DONE** | `a2905c8`、plan 001 |
 | M4 | 静的host要素属性 | **DONE** | `9829f88`、change `m4-static-host-attributes` |
 | M4.5 | authoring APIゾーン化(ADR-0008) | **DONE** | change `authoring-api-zones`。render()マーカー・識別子参照ハンドラ・ゾーン配置強制 |
-| M5 | list/conditional factory closures(ADR-0005の新実装) | TODO | M4.5(API変更)の後に着手 |
+| M5 | list/conditional factory closures、1階層のみ(ADR-0005の新実装) | **DONE** | change `m5-list-conditional-factory-closures`。ネストした構造ユニット(06/07)は据え置き |
+| M5.5 | ネストした構造ユニット(条件分岐の中のリスト/リストアイテムの中の条件分岐、UNRESOLVED-06/07) | TODO | M5のfollow-up。design.md Decision 1参照、未計画 |
 | M6 | 全マイルストーン横断のno-wrapper検証 | TODO | M4・M5完了後 |
 
 ## 既知の制約(現時点のcodegenの限界)
@@ -28,7 +30,7 @@ TypeScript書き直しは Milestone 3 まで完了・`feat/first-concept`にマ�
 - **複数インスタンス不可**、ただし2つの別物が混ざっているので分けて書く:
   - (a) *リスト内でのN件ベンチマーク*(例: 1コンポーネント内で1万件の
     リストアイテムを持つ場合の性能・状態保持)は、ADR-0005のfactory
-    closureがそのまま解決する。M5が入れば再現・検証できるようになる。
+    closureで解決済み(M5)。
   - (b) *トップレベルコンポーネント自体の複数mount*(同じコンポーネントを
     2つ以上のコンテナへ`mountComponent`/`hydrateComponent`する)は別問題。
     `__markers__`・`update_*`がモジュール直下スコープで生成される設計
@@ -46,9 +48,23 @@ TypeScript書き直しは Milestone 3 まで完了・`feat/first-concept`にマ�
     ADR-0005のfactory closureパターンをトップレベルにも広げれば構造的に
     解消できるが、それはAPIの大きな変更を伴う。実需が出るまでは着手しない
     (2026-07-05 grillingで確認済み)。
-- 条件分岐・リストはまだ未実装(M5)。静的host属性はM4で実装済み。
-  動的(式コンテナ)host属性値はM4スコープ外で、引き続きcompile error
-  (`scope limit`)で拒否する ― post-M6のパリティ穴。
+- 静的host属性はM4で実装済み。動的(式コンテナ)host属性値はM4スコープ外で、
+  引き続きcompile error(`scope limit`)で拒否する ― post-M6のパリティ穴。
+- **リスト(`.map()`)・条件分岐(三項/`&&`)はM5で1階層のみ実装済み**
+  (change `m5-list-conditional-factory-closures`)。以下は明示的な
+  scope limitで拒否する:
+  - リストアイテム内・条件分岐ブランチ内にさらにネストしたリスト/条件分岐
+    (UNRESOLVED-06/07、design.md Decision 1。follow-up = M5.5)。
+  - リスト/条件分岐の式コンテナが親要素の唯一の子でない場合(兄弟要素との
+    混在)。コメントアンカー機構を持たないための単純化。
+  - リストアイテム本体・条件分岐ブランチ本体の中で追跡対象のsignal/derived
+    を直接参照すること(item要素のフィールド参照は対象外 ― trackされない
+    ので素通りする)。ハンドラ内での signal 読み書きはこの制限の対象外
+    (通常のハンドラと同じ仕組みで動く)。
+  - リストアイテムに `key` 属性がない場合、または `key` が追跡対象の
+    signalを参照する場合。
+  - `.map()` のコールバックがブロック本体(`=> { ... }`)の場合(concise
+    bodyのみ対応)。
 - ハンドラ(inline arrow / 識別子参照の function宣言 どちらも)のブロック
   本体は4文種(式文 / `const`・`let` / `if` / 裸の `return`)に限る
   (ADR-0009)。第1仮引数(イベントオブジェクト)は authored 名のまま受け渡す

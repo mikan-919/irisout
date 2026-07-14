@@ -3,10 +3,19 @@
 // closure)実装の目標入力である。手書きの目標出力は
 // examples/todomvc.handwritten.js を参照。
 //
+// M5(change `m5-list-conditional-factory-closures`)で1階層のリスト・
+// 条件分岐は実装済みだが、このフィクスチャ全体は今もコンパイルできない。
 // 現行コンパイラの制約として意図的に踏み越えているもの(既知のスコープ外
-// なので個別の注記は付けない): ハンドラ引数
-// (src/compiler/render.ts:241)、ハンドラのブロック本体(render.ts:249)、
-// ハンドラ以外の属性(render.ts:224)、条件分岐・リスト(M5未実装)。
+// なので個別の注記は付けない): ref() 宣言・読み取りAPI(UNRESOLVED-01、
+// 未実装)、ハンドラ以外の動的(式コンテナ)属性値(UNRESOLVED-02/03)。
+//
+// UNRESOLVED(06)/(07): M5本体では対応せず、follow-up change(M5.5相当、
+// design.mdのDecision 1参照)で扱う。下記の
+// `{visibleTodos().length > 0 && (<ul>...)}` は条件分岐ブランチの中に
+// リスト(`.map()`)がネストする06のケースそのもので、compile error
+// (scope limit)になる。07(編集モードのspan/input入れ替え)は
+// UNRESOLVED-04と合わせて、対応する編集UI自体をこのフィクスチャに
+// まだ書いていない。
 
 export function TodoApp() {
   // ── 変数ゾーン: const のみ(signal/derived) ──
