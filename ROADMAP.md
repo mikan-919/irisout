@@ -101,25 +101,24 @@ M5 単体ではなく **M5+エスケープハッチ** と置く。設計は未�
    06(条件分岐の中のリスト)は「hidden プロパティで妥協するか、実際に
    DOM着脱するか」、07(リストアイテム内の条件分岐)は「親子間の状態保持
    ポリシー」がそれぞれ新規の設計論点(design.md Decision 1参照)。
-   TodoMVC完走にはどちらも必要。下記7の性能ベンチ結果を踏まえ、着手前に
-   アイテムごとの直接リスナー方式を見直すかどうかも合わせて検討する
-   価値がある。
+   TodoMVC完走にはどちらも必要。(当初jsdomベンチ結果から直接リスナー
+   方式の見直しを着手前の検討事項としていたが、実ブラウザ再計測で性能上の
+   動機は消えた — 下記7参照。)
 6. **次はここ候補:** エスケープハッチ(上記「3. エスケープハッチ」参照)。
    06/07が解決してもTodoMVCの完全なパリティには他のUNRESOLVED項目
    (ref・動的属性)が残るため、M5.5と並行/どちらを先にするかは未決定。
 7. ~~性能ベンチ: `examples/todomvc.handwritten.js` vs React 版TodoMVC~~ —
    **完了**(change `perf-bench-todomvc-vs-react`、詳細は
-   `bench/todomvc-vs-react.results.md`)。ADR-0005の見立て(keyed reuse
-   のMapの帳簿コストはReact Fiberと同種)は**実測では裏付けられず**、
-   むしろ逆(mount・filterSwitch・removeOne・toggleAllの4シナリオで
-   一貫してhandwritten版がReact版より1.3〜2.5倍遅い。addOneのみ互角)。
-   原因はMapの帳簿コストそのものよりアイテムごとの直接
-   `addEventListener`×3・専用クロージャ×5生成のコストが疑わしい
-   (`bench/listener-strategy.ts`の直接方式不利という結果と整合)。速度差
-   が数十倍ではなく1.3〜2.5倍程度のため、M5+エスケープハッチの優先度
-   (上記「3. エスケープハッチ」)を覆すほどの緊急性はないと判断。ただし
-   上記5(M5.5)着手前に、アイテムごとの直接リスナーを委譲方式へ変える
-   価値の再検討は未着手のまま残る。
+   `bench/todomvc-vs-react.results.md`)。当初のjsdom計測ではhandwritten版
+   が一貫して1.3〜2.5倍遅く「ADR-0005の見立てが反証された」ように見えたが、
+   実Chromiumでの再計測(`bench/todomvc-vs-react.playwright.ts`)で
+   **全シナリオ・全Nでhandwritten版がReact版より1.1〜4倍速い**と判明し
+   結論は逆転した。jsdomはDOM APIを全部JSで実装しており「DOMを触るほど損」
+   という実ブラウザと逆のコストモデルを持つため、直接DOM操作の多い
+   handwritten版を系統的に不利にする環境アーティファクトだった。
+   ADR-0005の見立て(keyed reuseのMapの帳簿コストはReact Fiberと同種)は
+   実ブラウザでは**支持され**、アイテムごとの直接リスナーを委譲方式へ
+   変える性能上の動機は消えた(メモリ面の比較のみ未計測のまま残る)。
 8. その後: ref 設計(UNRESOLVED 01)、動的属性バインディング(02/03)。
 
 ## 参考資料

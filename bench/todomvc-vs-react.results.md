@@ -4,7 +4,13 @@ change: `perf-bench-todomvc-vs-react`。実行: `bun run bench/todomvc-vs-react.
 (要 `NODE_ENV=production` — react-dom を production ビルドで動かすため。
 未指定でも動くがReact側のdev checkのぶん遅くなる)。
 
-## 方法
+> **注意(2026-07-14 追記): 以下のjsdom計測の結論は、実ブラウザでの
+> 再計測(下記「実ブラウザ(Chromium)での再計測」)で覆った。** jsdomは
+> DOM APIをすべてJSで実装しており「DOMを触るほど損」という実ブラウザと
+> 逆のコストモデルを持つため、直接DOM操作の多いhandwritten版を系統的に
+> 不利にする。jsdomの数値と当時の結論は経緯の記録として残す。
+
+## 方法(jsdom)
 
 - `examples/todomvc.handwritten.js`(ADR-0005 keyed reuse の手書き目標出力、
   M5 codegenの上限値)と `examples/todomvc.react.tsx`(標準的なkey付きReact
@@ -90,7 +96,7 @@ N=100→1,000(10倍)でhandwrittenは93.3倍、reactは69.9倍に増加してお
 reactの増分(約428MB)より大きい点は気になるが、GCタイミングに強く
 左右されるため断定はできない(`bun --expose-gc`での再計測が今後の課題)。
 
-## 結論: ADR-0005の見立てへの評価
+## 結論(jsdom時点・撤回済み): ADR-0005の見立てへの評価
 
 ADR-0005は「keyed reuseのMapの帳簿コストはReact Fiberの帳簿コストと
 同種」という見立てだった。**この見立ては実測では裏付けられず、
@@ -110,7 +116,7 @@ Mapの帳簿コスト自体よりも、`createTodoItem()`がアイテムごと�
 示していた「直接addEventListenerは委譲よりアタッチコストで不利」
 という結果と整合する。
 
-## M5設計への示唆
+## M5設計への示唆(jsdom時点・撤回済み)
 
 - 「irisoutの生成コードがReactに性能で勝てる」という前提は、
   少なくとも現在のADR-0005パターン(アイテムごとの直接リスナー+
@@ -125,3 +131,89 @@ Mapの帳簿コスト自体よりも、`createTodoItem()`がアイテムごと�
   ものでReact/irisoutどちらの問題でもない。バッチ更新API(複数件を
   1回の`update_<list>()`呼び出しにまとめる)が要るなら、それは
   ADR-0005の対象範囲外の新規の設計論点になる。
+
+## 実ブラウザ(Chromium)での再計測(2026-07-14)
+
+実行: `bun bench/todomvc-vs-react.playwright.ts`
+(要 `bunx playwright install chromium`)。
+
+### jsdom計測の方法論的問題
+
+上記jsdom計測には、いずれもReact側に系統的に有利に働く問題が3つあった:
+
+1. **環境がコストモデルを反転させる(本質)。** この比較は「DOMを直接
+   たくさん触る戦略」vs「自前のJSでdiffしてDOMを最小限しか触らない戦略」
+   の対決なのに、jsdomではDOM APIの呼び出しそのものが遅いJS(parse5の
+   HTMLパーサ、JS実装のイベント伝播・cloneNode・リスナー簿記)である
+   ため、DOMを避けるReactの戦略が構造的に有利になる。実ブラウザでは
+   DOM呼び出しは安いネイティブコールで、この関係は逆転する。
+2. **1回計測・ウォームアップなし。** N=100→1,000(件数10倍)でmountが
+   2倍強にしか増えない = N=100の数値の大半がコールドスタート固定費
+   だった。絶対値でも、jsdomのmount N=100は61ms、実Chromiumでは0.6ms
+   (約100倍差)で、jsdom計測はjsdom自身のオーバーヘッドを測っていた。
+3. **実行順固定(handwritten→react)。** 常にhandwrittenがコールド状態、
+   Reactが直前の実行で温まった状態で走る。
+
+### 方法
+
+- シナリオ・fixture・`flushSync`・`.click()`の扱いはjsdom版と同一。
+  シナリオ本体(`bench/browser-driver.ts`)とfixture・Reactを`Bun.build`で
+  1本のESMバンドルにしてページへ注入し(`NODE_ENV=production`はdefineで
+  焼き込み)、計測はすべて**ページ内**の`performance.now()`で行う
+  (Node側で計るとCDP往復(1操作あたり数ms)を測ることになるため)。
+- 各セルはウォームアップ1回(捨てる)+ 5回計測の**中央値**。
+- heap計測はしない(Nodeプロセスのheapはブラウザと無関係)。
+- N=100の各セルはタイマー分解能(0.1ms)に近い粗い参考値。
+- addOneのReact側はcontrolled inputの`input`イベント再レンダー1回分を
+  含む(素朴な標準React実装が同じユーザー操作に対して払う実コスト。
+  jsdom版と同条件)。
+
+### 結果: mount / filterSwitch / addOne / removeOne(N=100〜100,000)
+
+| N | scenario | handwritten (ms) | react (ms) | react/handwritten |
+|---|---|---|---|---|
+| 100 | mount | 0.60 | 1.30 | 2.17x |
+| 100 | filterSwitch | 0.30 | 0.50 | 1.67x |
+| 100 | addOne | 0.20 | 0.80 | 4.00x |
+| 100 | removeOne | 0.20 | 0.30 | 1.50x |
+| 1,000 | mount | 4.60 | 7.90 | 1.72x |
+| 1,000 | filterSwitch | 3.30 | 3.60 | 1.09x |
+| 1,000 | addOne | 1.70 | 5.00 | 2.94x |
+| 1,000 | removeOne | 1.70 | 1.90 | 1.12x |
+| 10,000 | mount | 39.50 | 68.70 | 1.74x |
+| 10,000 | filterSwitch | 30.30 | 45.20 | 1.49x |
+| 10,000 | addOne | 19.80 | 50.80 | 2.57x |
+| 10,000 | removeOne | 18.40 | 24.20 | 1.32x |
+| 100,000 | mount | 420.80 | 741.50 | 1.76x |
+| 100,000 | filterSwitch | 305.00 | 469.00 | 1.54x |
+| 100,000 | addOne | 279.20 | 562.80 | 2.02x |
+| 100,000 | removeOne | 191.70 | 273.70 | 1.43x |
+
+(ratio = react ÷ handwritten。**1.0超はhandwrittenの方が速い。**
+jsdom計測の同じ列は0.32〜0.71xだった — 全面逆転。)
+
+`addOnePreservedExisting`は全N・全実行でtrue(jsdom版と同じ検証)。
+
+### 結果: toggleAll(N=100, 1,000のみ)
+
+| N | handwritten (ms) | react (ms) | react/handwritten |
+|---|---|---|---|
+| 100 | 15.60 | 20.40 | 1.31x |
+| 1,000 | 1,071.70 | 1,544.10 | 1.44x |
+
+### 結論(改訂): jsdomの「反証」は環境アーティファクトだった
+
+実Chromiumでは**全シナリオ・全Nでhandwritten版がReact版より速い**
+(1.1〜4倍、中心は1.4〜1.8倍)。この方向と倍率はjs-framework-benchmark
+(実Chrome)でvanilla系keyed実装がReactに対して示す差(React側が
+1.4〜1.6倍遅い)とも整合する。
+
+- ADR-0005の見立て「keyed reuseのMapの帳簿コストはReact Fiberと同種」は
+  **支持された**。実ブラウザでは同種どころか一貫して安い。
+- jsdom計測が疑わせた「アイテムごとの直接`addEventListener`×3・
+  クロージャ×5生成が効いている」は、実ブラウザでは支配的でなかった。
+  **委譲方式への変更に性能上の動機はない**(メモリ面の比較は未計測の
+  まま残る)。
+- 本ベンチが測るのは同期JS時間(スタイル・レイアウト・ペイントは両実装
+  とも計測区間外)。両実装が最終的に作るDOMはほぼ同一なので、この比較
+  には影響しない。
