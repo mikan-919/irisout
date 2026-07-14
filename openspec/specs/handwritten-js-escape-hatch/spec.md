@@ -69,11 +69,15 @@
 - **THEN** 生成されたコードは`mount`に対応するteardown処理を一切呼び出さず、
   コンテナ要素ごとDOM部分木を削除するのみ行う
 
-### Requirement: mount関数本体の追跡宣言参照の拒否
+### Requirement: mount関数本体のコンポーネント内宣言参照の拒否
 コンパイラは、`mount`属性が参照するfunction宣言の本体に識別子スキャンを
-行い、追跡宣言(signal/derived)への参照を見つけた場合、`compile:`で
-始まり`(scope limit)`を末尾に含むエラーを投げなければならない(SHALL)。
-本体のそれ以外の内容は解析しない(SHALL NOT)。
+行い、参照可能な識別子をmount自身の引数・ローカル宣言・モジュール
+import・グローバルに限定しなければならない(SHALL)。コンポーネント内の
+他の宣言(signal/derivedの追跡宣言・プレーンconst・他のfunction宣言)への
+参照を見つけた場合、`compile:`で始まり`(scope limit)`を末尾に含むエラーを
+投げなければならない(SHALL)。スキャンはスコープ解析を伴わない保守的な
+ものでよく、mountのローカル宣言がコンポーネント内宣言と同名の場合の
+誤検知は許容する(MAY)。本体のそれ以外の内容は解析しない(SHALL NOT)。
 
 #### Scenario: signalを参照するmount関数の拒否
 - **WHEN** `<Escape mount={setupWidget} />`の`setupWidget`本体が
@@ -81,7 +85,14 @@
 - **THEN** コンパイラはcompile errorを投げ、実行時のTypeErrorとして
   静かに壊れることを許さない
 
-#### Scenario: 追跡宣言に触れないmount関数の受理
-- **WHEN** `setupWidget`本体がDOM操作・独自のローカル変数・外部
-  ライブラリ呼び出しのみで構成される
+#### Scenario: コンポーネント内の他のfunction宣言を呼ぶmount関数の拒否
+- **WHEN** `setupWidget`本体が、同じコンポーネントの動きゾーンにある
+  別のfunction宣言`helper`への参照を含む(`helper`本体がsignalを読むか
+  どうかは問わない)
+- **THEN** コンパイラはcompile errorを投げる(mount→helper→signalの
+  推移的参照が実行時エラーとして静かに壊れる経路を塞ぐ)
+
+#### Scenario: コンポーネント内宣言に触れないmount関数の受理
+- **WHEN** `setupWidget`本体がDOM操作・独自のローカル変数・モジュール
+  importや外部ライブラリ呼び出しのみで構成される
 - **THEN** コンパイラは本体の内容を解析せず受理する
