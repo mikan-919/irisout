@@ -96,19 +96,30 @@ M5 単体ではなく **M5+エスケープハッチ** と置く。設計は未�
    (06)/(07)(ネストした構造ユニット)を明示的にスコープ外と確定し、1階層
    のみ実装。当初の実装順序(性能ベンチ→M5)より先にM5を着手・完了した
    (2026-07-14 相談: change選択の結果)。性能ベンチ(`perf-bench-todomvc-vs-react`)
-   はまだ未完了で、下記7で改めて扱う。
+   は下記7で完了。
 5. **次はここ候補:** M5.5 — ネストした構造ユニット(06/07)。設計未着手。
    06(条件分岐の中のリスト)は「hidden プロパティで妥協するか、実際に
    DOM着脱するか」、07(リストアイテム内の条件分岐)は「親子間の状態保持
    ポリシー」がそれぞれ新規の設計論点(design.md Decision 1参照)。
-   TodoMVC完走にはどちらも必要。
+   TodoMVC完走にはどちらも必要。下記7の性能ベンチ結果を踏まえ、着手前に
+   アイテムごとの直接リスナー方式を見直すかどうかも合わせて検討する
+   価値がある。
 6. **次はここ候補:** エスケープハッチ(上記「3. エスケープハッチ」参照)。
    06/07が解決してもTodoMVCの完全なパリティには他のUNRESOLVED項目
    (ref・動的属性)が残るため、M5.5と並行/どちらを先にするかは未決定。
-7. 性能ベンチ: `examples/todomvc.handwritten.js` vs React 版TodoMVC。
-   手書き版はirisoutの生成出力の上限値なので、コンパイラ完成前に
-   「Reactに性能で勝てるか」を実測で決着させる(change
-   `perf-bench-todomvc-vs-react`、未完了)。
+7. ~~性能ベンチ: `examples/todomvc.handwritten.js` vs React 版TodoMVC~~ —
+   **完了**(change `perf-bench-todomvc-vs-react`、詳細は
+   `bench/todomvc-vs-react.results.md`)。ADR-0005の見立て(keyed reuse
+   のMapの帳簿コストはReact Fiberと同種)は**実測では裏付けられず**、
+   むしろ逆(mount・filterSwitch・removeOne・toggleAllの4シナリオで
+   一貫してhandwritten版がReact版より1.3〜2.5倍遅い。addOneのみ互角)。
+   原因はMapの帳簿コストそのものよりアイテムごとの直接
+   `addEventListener`×3・専用クロージャ×5生成のコストが疑わしい
+   (`bench/listener-strategy.ts`の直接方式不利という結果と整合)。速度差
+   が数十倍ではなく1.3〜2.5倍程度のため、M5+エスケープハッチの優先度
+   (上記「3. エスケープハッチ」)を覆すほどの緊急性はないと判断。ただし
+   上記5(M5.5)着手前に、アイテムごとの直接リスナーを委譲方式へ変える
+   価値の再検討は未着手のまま残る。
 8. その後: ref 設計(UNRESOLVED 01)、動的属性バインディング(02/03)。
 
 ## 参考資料
@@ -120,6 +131,7 @@ M5 単体ではなく **M5+エスケープハッチ** と置く。設計は未�
   quixとの比較
 - `plans/001-browser-build-target.md` — 直近実行したplan(M3)
 - `bench/listener-strategy.ts` — M5のイベント配線方式の判断材料
+- `bench/todomvc-vs-react.results.md` — 性能ベンチ結果(ADR-0005見立ての検証)
 - `examples/counter.jsx` — `scripts/build.ts`の手動確認用サンプル
 - `examples/todomvc.jsx` / `examples/todomvc.handwritten.js` — ADR-0008/M5
   の目標入力・目標出力フィクスチャ(plan 002)

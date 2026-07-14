@@ -21,12 +21,17 @@ let itemTemplate
 // 外れているだけのアイテムもここには残り続ける(下のupdate_todos内の注記参照)。
 let itemHandles
 
-export function mountComponent(container) {
+// initialTodosは省略可(省略時は既存の固定2件)。bench/todomvc-vs-react.ts
+// がN件の初期マウントを計測するために追加した唯一の変更点で、keyed reuse
+// の仕組み自体(update_todos/createTodoItem)には手を入れていない。
+const defaultTodos = [
+  { id: 1, text: 'irisout を書く', completed: false },
+  { id: 2, text: '牛乳を買う', completed: true },
+]
+
+export function mountComponent(container, initialTodos = defaultTodos) {
   doc = container.ownerDocument
-  todos = [
-    { id: 1, text: 'irisout を書く', completed: false },
-    { id: 2, text: '牛乳を買う', completed: true },
-  ]
+  todos = initialTodos
   filter = 'all'
   itemHandles = new Map()
 
@@ -98,7 +103,13 @@ function update_todos() {
   // 瞬間にhandleがMapから落ちてローカル状態(editingなど)が失われる。
   // ここでは「todos配列からの削除」でのみhandleを破棄し、フィルタでの
   // 非表示はDOMからの着脱のみで対応する(状態保持を優先する回避策)。
+  //
+  // 除去判定は src/codegen.ts の generateListUpdate() と同じ __seen__ Set
+  // パターンを使う(以前は`todos.some()`でO(N)走査 x Mapエントリ数でO(N^2)
+  // になっていたが、実際のcodegen出力とずれていたfixtureのバグだった)。
+  const seen = new Set()
   for (const todo of todos) {
+    seen.add(todo.id)
     let handle = itemHandles.get(todo.id)
     if (!handle) {
       handle = createTodoItem(todo)
@@ -107,7 +118,7 @@ function update_todos() {
     handle.update(todo)
   }
   for (const [id, handle] of itemHandles) {
-    if (!todos.some((t) => t.id === id)) {
+    if (!seen.has(id)) {
       handle.el.remove()
       itemHandles.delete(id)
     }
