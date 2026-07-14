@@ -21,6 +21,7 @@ import type { NodePath } from '@babel/traverse'
 import traverseImport from '@babel/traverse'
 import type * as t from '@babel/types'
 import type {
+  ActionOutput,
   HandlerOutput,
   MarkerOutput,
   StructuralUnitBodyOutput,
@@ -158,7 +159,7 @@ export function compile(source: string): CompileResult {
     localHandlers: body.localHandlers.map(convertHandler),
   })
   const markerOutputs: MarkerOutput[] = ctx.markers.map((m) => {
-    if (m.kind === 'text') return m
+    if (m.kind === 'text' || m.kind === 'action') return m
     if (m.kind === 'list') return { ...m, body: convertBody(m.body) }
     return {
       ...m,
@@ -167,6 +168,26 @@ export function compile(source: string): CompileResult {
       })),
     }
   })
+
+  // ADR-0011: writeDeclIds は analyze.ts 側で既に root signal へ推移解決済み
+  // (analyzeActionIdentifier)なので、ここではマーカーを持つものだけへ絞り込み
+  // 出力名へ変換するだけでよい(convertHandler の updateNames 変換と同型)。
+  const resolveUpdateNames = (ids: Set<DeclId>): string[] =>
+    [...ids]
+      .filter((id) => signalToMarkers.has(id))
+      .map((id) => ctx.declOutputName.get(id)!)
+      .sort()
+
+  // action本体・返り値クロージャの最終テキストは signalToMarkers 確定後にしか
+  // 組み立てられない(design D4-1: ネストしたスコープごとの update_* 呼び出し)。
+  const actionOutputs: ActionOutput[] = ctx.actions.map((a) => ({
+    markerId: a.markerId,
+    elParam: a.elParam,
+    bodyRendered: a.finalizeBody(resolveUpdateNames),
+    closureRendered: a.finalizeClosure
+      ? a.finalizeClosure(resolveUpdateNames)
+      : null,
+  }))
 
   // --- ビルド時実行:discovery の確認 + 実際の初期 HTML の取得 ---
   const instrumentedBody = [
@@ -196,6 +217,7 @@ export function compile(source: string): CompileResult {
     derivedDeps: ctx.derivedDeps,
     derivedRecompute: ctx.derivedRecompute,
     handlers: handlerOutputs,
+    actions: actionOutputs,
     initialHtml,
   })
 

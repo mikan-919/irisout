@@ -79,7 +79,32 @@ export interface ConditionalMarker {
   branches: ConditionalBranch[]
 }
 
-export type Marker = TextMarker | ListMarker | ConditionalMarker
+// ADR-0011/M6: `use={fn}`のトップレベル要素マーカー。返り値クロージャを
+// 持つ場合のみ push される(design.md 決定5: 返り値が無いactionは配線を
+// 生成しない)。中身(本体・クロージャのレンダー済みテキスト)は
+// signalToMarkers 確定後にしか確定しない(ActionDecl.finalizeBody/
+// finalizeClosure)ため、Marker 自体はワイヤリングの目印(id のみ)に留める。
+export interface ActionMarker {
+  id: MarkerId
+  kind: 'action'
+}
+
+export type Marker = TextMarker | ListMarker | ConditionalMarker | ActionMarker
+
+// ADR-0011: 要素の`use=`1つぶんの解析結果。読み取り書き換え・書き込みの
+// assignment化・ネストした関数本体への再帰(design D4-1)は分析時に確定するが、
+// 挿入される`update_*()`呼び出し名はsignalToMarkers確定後にしか分からない
+// ため、本体・クロージャの最終テキストは finalize 関数として遅延する。
+export interface ActionDecl {
+  markerId: MarkerId
+  /** action本体の第1仮引数(要素自身)の authored 名。0引数なら null。 */
+  elParam: string | null
+  finalizeBody: (resolveUpdateNames: (ids: Set<DeclId>) => string[]) => string
+  /** 返り値クロージャ(design D4-2)。無ければ null。 */
+  finalizeClosure:
+    | ((resolveUpdateNames: (ids: Set<DeclId>) => string[]) => string)
+    | null
+}
 
 export interface CompilerState {
   source: string
@@ -99,6 +124,7 @@ export interface CompilerState {
   markers: Marker[]
   markerDeps: Map<MarkerId, Set<DeclId>> // markerId -> Set<declId>(直接依存、推移閉包を取る前)
   handlers: HandlerDecl[]
+  actions: ActionDecl[]
 
   markerCounter: number
   instanceCounter: number
@@ -116,6 +142,7 @@ export function createCompilerState(source: string): CompilerState {
     markers: [],
     markerDeps: new Map(),
     handlers: [],
+    actions: [],
     markerCounter: 0,
     instanceCounter: 0,
   }

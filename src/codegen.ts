@@ -13,7 +13,12 @@
 // 一度 update_<name>() を呼んで populate する)、item/branch 内のローカル
 // marker は __markers__ に登録せず、factory のクロージャに閉じ込める。
 
-import type { DeclId, MarkerId, TextMarker } from './compiler/state.js'
+import type {
+  ActionMarker,
+  DeclId,
+  MarkerId,
+  TextMarker,
+} from './compiler/state.js'
 import { innerTemplateSource } from './template.js'
 
 // M2: compiler.ts が writeDeclIds を(マーカーを持つ signal だけに絞って)
@@ -60,6 +65,19 @@ export type MarkerOutput =
   | TextMarker
   | ListMarkerOutput
   | ConditionalMarkerOutput
+  | ActionMarker
+
+// ADR-0011: signalToMarkers/ctx.markerDeps 確定後に compiler.ts が組み立てる
+// action1個ぶんの最終テキスト。bodyRendered/closureRendered は既に
+// update_* 呼び出し込み(design D4-1/D5) -- codegen はこれを文字列として
+// 組み立てるだけで、ctx や AST には一切触れない。
+export interface ActionOutput {
+  markerId: MarkerId
+  elParam: string | null
+  bodyRendered: string
+  /** 返り値クロージャの完全な関数式テキスト。無ければ null(design Decision 5)。 */
+  closureRendered: string | null
+}
 
 export interface GenerateModuleInput {
   declStatements: string[]
@@ -69,6 +87,7 @@ export interface GenerateModuleInput {
   derivedDeps: Map<DeclId, Set<DeclId>>
   derivedRecompute: Map<DeclId, string>
   handlers: HandlerOutput[]
+  actions: ActionOutput[]
   initialHtml: string
 }
 
@@ -278,6 +297,16 @@ function generateConditionalUpdate(marker: ConditionalMarkerOutput): string[] {
   ]
 }
 
+// ADR-0011 design Decision 2/5: mount/hydrate 末尾でaction本体を実行し、
+// 返り値クロージャがあれば `__use_<id>__` へ代入して直後に1回初期実行する。
+// クロージャが無いactionは呼び出しのみ(配線コードを一切出さない)。
+function renderActionCall(a: ActionOutput): string {
+  const fn = `function(${a.elParam ?? ''}) {${a.bodyRendered}${a.closureRendered ? ` return ${a.closureRendered};` : ''}}`
+  const call = `(${fn})(__markers__.get(${JSON.stringify(a.markerId)}))`
+  if (!a.closureRendered) return `${call};`
+  return `__use_${a.markerId}__ = ${call}; if (__use_${a.markerId}__) __use_${a.markerId}__();`
+}
+
 export function generateModule({
   declStatements,
   markers,
@@ -286,6 +315,7 @@ export function generateModule({
   derivedDeps,
   derivedRecompute,
   handlers,
+  actions,
   initialHtml,
 }: GenerateModuleInput): string {
   const outLines: string[] = []
@@ -296,6 +326,13 @@ export function generateModule({
   const { declLines, templateSetupLines, signalsNeedingInitialCall } =
     generateStructuralUnits(markers, signalToMarkers)
   if (declLines.length > 0) outLines.push(...declLines, '')
+
+  // 返り値クロージャを持つactionだけ、それを保持するモジュールスコープ変数を
+  // 宣言する(design Decision 5: クロージャが無ければ機構自体を出力しない)。
+  const actionDeclLines = actions
+    .filter((a) => a.closureRendered)
+    .map((a) => `let __use_${a.markerId}__;`)
+  if (actionDeclLines.length > 0) outLines.push(...actionDeclLines, '')
 
   // ハンドラのラッパー関数:元のハンドラ本体(書き込みは代入済み)を実行した
   // 後、そのハンドラが書き込んだ signal ぶんの update_* をまとめて呼ぶ。
@@ -323,6 +360,10 @@ export function generateModule({
       ? ['  __doc__ = container.ownerDocument;', ...templateSetupLines]
       : []
 
+  // design Decision 2: 呼び出し順は マーカー収集 → ハンドラ配線 →
+  // 初期update_*(populate) → action呼び出し+返り値クロージャ初期実行。
+  const actionCallLines = actions.map((a) => `  ${renderActionCall(a)}`)
+
   outLines.push(
     'let __markers__;',
     'export function mountComponent(container) {',
@@ -330,6 +371,7 @@ export function generateModule({
     ...docSetupLines,
     ...setupLines,
     ...initialUpdateCalls,
+    ...actionCallLines,
     '}',
     '',
     'export function hydrateComponent(container) {',
@@ -337,6 +379,7 @@ export function generateModule({
     ...docSetupLines,
     ...setupLines,
     ...initialUpdateCalls,
+    ...actionCallLines,
     '}',
     '',
   )
@@ -369,6 +412,10 @@ export function generateModule({
         )
       } else if (marker.kind === 'list') {
         outLines.push(...generateListUpdate(marker))
+      } else if (marker.kind === 'action') {
+        // design Decision 5: ガード付き呼び出し(action呼び出し前のpopulate中は
+        // __use_<id>__ が未初期化のため)。
+        outLines.push(`  if (__use_${mId}__) __use_${mId}__();`)
       } else {
         outLines.push(...generateConditionalUpdate(marker))
       }

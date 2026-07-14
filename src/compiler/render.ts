@@ -20,6 +20,7 @@ import {
   type StaticAttr,
 } from '../template.js'
 import {
+  analyzeActionBody,
   analyzeExpr,
   analyzeHandlerBody,
   analyzeHandlerExpr,
@@ -280,9 +281,14 @@ function collectAttrs(
   instanceId: number,
   handlerFns: HandlerFns,
   skipAttrName?: string,
-): { handlerAttrs: HandlerAttr[]; staticAttrs: StaticAttr[] } {
+): {
+  handlerAttrs: HandlerAttr[]
+  staticAttrs: StaticAttr[]
+  actionAttr: HandlerBody | null
+} {
   const handlerAttrs: HandlerAttr[] = []
   const staticAttrs: StaticAttr[] = []
+  let actionAttr: HandlerBody | null = null
   for (const attr of elementPath.get('openingElement').get('attributes')) {
     if (!attr.isJSXAttribute()) {
       // JSXSpreadAttribute({...props})は引き続き拒否する。
@@ -301,6 +307,22 @@ function collectAttrs(
       continue
     }
     const valueNode = attr.node.value
+    // ADR-0011: `use={fn}` は第3分類(ハンドラ/静的のどちらでもない)。
+    // 識別子参照・inline arrow の配線ルールはハンドラと同一(resolveHandlerBody
+    // を流用)なので、resolveHandlerBody で本体を取り出すだけでよい。
+    if (attrName.type === 'JSXIdentifier' && attrName.name === 'use') {
+      if (actionAttr) {
+        throw new Error(
+          'compile: an element can only have one `use` attribute (scope limit)',
+        )
+      }
+      if (valueNode?.type !== 'JSXExpressionContainer') {
+        throw new Error('compile: `use` must be an expression (scope limit)')
+      }
+      const exprPath = attr.get('value.expression') as NodePath<t.Expression>
+      actionAttr = resolveHandlerBody(exprPath, 'use', handlerFns)
+      continue
+    }
     if (attrName.type !== 'JSXIdentifier' || !/^on[A-Z]/.test(attrName.name)) {
       // ハンドラ以外: 属性名が JSXIdentifier で、値が文字列リテラルまたは
       // 値なしなら静的属性。式コンテナ値・JSXNamespacedName は拒否する
@@ -337,7 +359,36 @@ function collectAttrs(
       : analyzeHandlerExpr(ctx, body, instanceId)
     handlerAttrs.push({ eventName, rendered, writeDeclIds, param })
   }
-  return { handlerAttrs, staticAttrs }
+  return { handlerAttrs, staticAttrs, actionAttr }
+}
+
+// design.md Decision 4/5: action本体の解析(ADR-0009の機械+ネストした関数への
+// 再帰+返り値クロージャの分離)を実行し、markerId に対して ctx.actions へ登録
+// する。返り値クロージャがある場合のみ、その依存を signal/derived の依存解決
+// (ctx.markerDeps/ctx.markers)に相乗りさせる -- クロージャの update_* 配線は
+// テキストマーカー等と同じ「マーカーの依存」機構をそのまま再利用できる
+// (design Decision 5: 返り値の無いactionは配線コード自体を生成しない)。
+function registerAction(
+  ctx: CompilerState,
+  markerId: MarkerId,
+  action: HandlerBody,
+  instanceId: number,
+): void {
+  const { finalizeBody, closure } = analyzeActionBody(
+    ctx,
+    action.body,
+    instanceId,
+  )
+  if (closure) {
+    ctx.markers.push({ id: markerId, kind: 'action' })
+    ctx.markerDeps.set(markerId, closure.deps)
+  }
+  ctx.actions.push({
+    markerId,
+    elParam: action.param,
+    finalizeBody,
+    finalizeClosure: closure?.finalize ?? null,
+  })
 }
 
 interface RenderElementOpts {
@@ -366,13 +417,20 @@ function renderElement(
       `compile: component references (<${tagName}/>) are not supported yet (scope limit)`,
     )
   }
-  const { handlerAttrs, staticAttrs } = collectAttrs(
+  const { handlerAttrs, staticAttrs, actionAttr } = collectAttrs(
     ctx,
     elementPath,
     instanceId,
     handlerFns,
     opts.skipAttrName,
   )
+  // design.md Decision 3: 返り値クロージャの動的レジストリが要るため、
+  // リストアイテム/条件分岐ブランチの中の `use=` は本changeでは対象外。
+  if (actionAttr && opts.insideUnit) {
+    throw new Error(
+      'compile: use= inside list/conditional units is not supported yet (scope limit)',
+    )
+  }
   const attrs = renderStaticAttrs(staticAttrs)
 
   const children = elementPath.get('children') as NodePath<JSXChild>[]
@@ -413,6 +471,7 @@ function renderElement(
             handlerFns,
           )
         : renderConditionalUnit(ctx, exprPath, instanceId, handlerFns)
+    if (actionAttr) registerAction(ctx, markerId, actionAttr, instanceId)
     return `<${tagName}${attrs} data-iris-id="${markerId}"></${tagName}>`
   }
 
@@ -446,15 +505,16 @@ function renderElement(
         })
       else throw new Error('compile: unsupported JSX child (scope limit)')
     }
-    if (handlerAttrs.length === 0) {
+    if (handlerAttrs.length === 0 && !actionAttr) {
       return `<${tagName}${attrs}>${inner}</${tagName}>`
     }
-    // reactive text を持たない要素にハンドラだけが付く場合、mount() が
+    // reactive text を持たない要素にハンドラ/actionだけが付く場合、mount() が
     // 拾えるようこの要素専用のマーカーを新規に発行する。
     const markerId = nextMarkerId(ctx)
     for (const h of handlerAttrs) {
       ctx.handlers.push({ markerId, ...h })
     }
+    if (actionAttr) registerAction(ctx, markerId, actionAttr, instanceId)
     return `<${tagName}${attrs} data-iris-id="${markerId}">${inner}</${tagName}>`
   }
 
@@ -470,10 +530,11 @@ function renderElement(
 
   const { markerId, sourceInner } = buildTextMarker(ctx, runPaths, instanceId)
   // この要素が reactive text マーカーを既に持つ場合は、そのマーカーIDへ
-  // ハンドラを相乗りさせる(新規マーカーは発行しない)。
+  // ハンドラ/actionを相乗りさせる(新規マーカーは発行しない)。
   for (const h of handlerAttrs) {
     ctx.handlers.push({ markerId, ...h })
   }
+  if (actionAttr) registerAction(ctx, markerId, actionAttr, instanceId)
   return `<${tagName}${attrs} data-iris-id="${markerId}">${sourceInner}</${tagName}>`
 }
 

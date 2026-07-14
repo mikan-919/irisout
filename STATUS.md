@@ -3,10 +3,11 @@
 実装の「今」の状態(現在地・マイルストーン進捗・既知の制約)をまとめたもの。
 設計判断待ちの論点・次のアクションの計画は `ROADMAP.md` を参照。
 
-## 現在地(2026-07-14)
+## 現在地(2026-07-15)
 
-TypeScript書き直しは M5(1階層のリスト/条件分岐)まで完了・
-`feat/first-concept`にマージ済み。`legacy/`(元のJS実装)は参照専用で
+TypeScript書き直しは M5(1階層のリスト/条件分岐)+`use=`アクション
+(ADR-0011)まで完了・`feat/first-concept`にマージ済み。「使ってもらえる
+閾値」(M5+`use=`)に到達(proposal参照)。`legacy/`(元のJS実装)は参照専用で
 以後メンテナンスしない。
 
 ## マイルストーン表
@@ -20,6 +21,7 @@ TypeScript書き直しは M5(1階層のリスト/条件分岐)まで完了・
 | M4.5 | authoring APIゾーン化(ADR-0008) | **DONE** | change `authoring-api-zones`。render()マーカー・識別子参照ハンドラ・ゾーン配置強制 |
 | M5 | list/conditional factory closures、1階層のみ(ADR-0005の新実装) | **DONE** | change `m5-list-conditional-factory-closures`。ネストした構造ユニット(06/07)は据え置き |
 | M5.5 | ネストした構造ユニット(条件分岐の中のリスト/リストアイテムの中の条件分岐、UNRESOLVED-06/07) | TODO | M5のfollow-up。design.md Decision 1参照、未計画 |
+| `use=` | top-level要素へのaction接続(ADR-0011) | **DONE** | change `use-action-impl`。ユニット内`use=`・JSX型宣言は未実装のまま(下記制約参照) |
 | M6 | 全マイルストーン横断のno-wrapper検証 | TODO | M4・M5完了後 |
 
 ## 既知の制約(現時点のcodegenの限界)
@@ -72,3 +74,17 @@ TypeScript書き直しは M5(1階層のリスト/条件分岐)まで完了・
   `try`/`switch`・関数/クラス宣言・`var`・値を返す `return`、および
   ソース順で追跡書き込みより後ろの `return` も同様に `scope limit` で拒否
   する(D3: 末尾 `update_*()` の取りこぼしを防ぐため)。
+- **`use={fn}`アクション(ADR-0011、change `use-action-impl`)はtop-level
+  要素のみ実装済み**。以下は明示的な scope limit・別changeへの先送り:
+  - リストアイテム/条件分岐ブランチ内の`use=`は返り値クロージャの動的
+    レジストリが未実装のため`scope limit`で拒否(design.md Decision 3)。
+    実需(アイテム内canvas等)が出た時点で別change。
+  - JSX型定義(`JSX.IntrinsicElements`の`use`宣言)は未実装(design.md
+    Decision 6)。authored `.jsx`の型検査基盤自体が未整備なため、それを
+    一括整備する別changeで扱う。
+  - reactive params・複数action・cleanupはADR-0011の未決定事項のまま
+    (実需が出るまで作らない)。
+  - action本体のconcise arrow(単一式)にネストしたリスナー等がある場合、
+    その内部の書き込みに対する`update_*`挿入位置は本体全体の実行時点に
+    まとまる(リスナー発火時ではない)。ブロック本体は正しく分離される
+    (`src/compiler/analyze.ts`の`analyzeActionExprScope`コメント参照)。

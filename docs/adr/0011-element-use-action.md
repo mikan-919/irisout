@@ -2,9 +2,9 @@
 
 ## ステータス
 
-決定済み・**未実装**(change `action-use-attribute`。設計決定と
-spec.mdの作成のみをスコープとし、`src/`の変更は対象外。実装は
-決定内容に基づく別changeで行う)。
+**決定済み・実装済み**(change `use-action-impl`)。属性名`use`の確定・
+返り値クロージャの初期実行タイミングの裁定は、下記「未決定事項」ではなく
+実装change `use-action-impl` の design.md Decision 1/2 を参照。
 
 ## コンテキスト
 
@@ -217,24 +217,21 @@ UNRESOLVED(06)/(07)は正当なUXだが書けない=コンパイラの穴)。両
   現れるまで先送り(決定6のトリガー条件参照)。
 - **第4チャネル(牙抜きref)**: 決定6の「(c)カウンタイディオムが頻出する
   実例」がトリガー条件。
-- **属性名`use`の最終確認**: `action=`等の代替との比較は実装着手時に
-  再検討する。
-- **返り値クロージャの初期実行タイミングの詳細**(mount内でリスナー
-  装着の前か後か)は実装changeで決める。
 - **CONCEPT.v2.mdへの3原則・仮説(「書きづらいものは設計が間違っている」
   の極限定理)の昇格の要否**: ユーザー判断待ち。
 
 ## 実装への引き継ぎメモ
 
-本ADRおよびchange `action-use-attribute`は設計決定のみを対象とし、
-`src/`は変更しない。実装は本ADRに基づく別changeで行う。影響範囲は
-以下の4箇所:
+本ADRの設計決定は change `use-action-impl` で実装済み(下記3箇所)。
+JSX型定義(`JSX.IntrinsicElements`の`use`宣言)は同changeのdesign.md
+Decision 6で明示的にスコープ外とし、別changeへ先送りした
+(authored `.jsx`の型検査基盤自体が未整備のため)。
 
 - `src/compiler/render.ts`: `use`属性の解析・識別子参照ルールの解決
-  (ADR-0008のハンドラ配線ルールの転用)。
+  (ADR-0008のハンドラ配線ルールの転用)。トップレベル要素のみ受理し、
+  リストアイテム/条件分岐ブランチ内は scope limit で拒否(design.md
+  Decision 3)。
 - `src/compiler/analyze.ts`: action本体のネストした関数への再帰書き換え、
   返り値クロージャの依存(signal/derived読み)解析。
 - `src/codegen.ts`: mount時の`use`関数呼び出し・返り値クロージャの初期
   実行・該当する`update_*`への配線コード生成。
-- JSX型定義: `JSX.IntrinsicElements`の各要素へ、要素ごとの正確な型を
-  持つ`use?: (el: <要素型>) => void | (() => void)`宣言を追加。
