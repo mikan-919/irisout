@@ -22,7 +22,9 @@ import traverseImport from '@babel/traverse'
 import type * as t from '@babel/types'
 import type {
   ActionOutput,
+  ConditionalMarkerOutput,
   HandlerOutput,
+  ListMarkerOutput,
   MarkerOutput,
   StructuralUnitBodyOutput,
 } from './codegen.js'
@@ -30,8 +32,10 @@ import { generateModule } from './codegen.js'
 import { resolveToSignals } from './compiler/decl-graph.js'
 import { compileComponent } from './compiler/render.js'
 import type {
+  ConditionalMarker,
   DeclId,
   HandlerDecl,
+  ListMarker,
   MarkerId,
   StructuralUnitBody,
 } from './compiler/state.js'
@@ -153,20 +157,29 @@ export function compile(source: string): CompileResult {
   })
   const handlerOutputs = ctx.handlers.map(convertHandler)
 
+  // M5.5: ネストした構造ユニット(body.localMarkers 内の list/conditional)の
+  // ローカルハンドラにも同じ変換が要るため、body と marker で相互再帰する。
+  const convertUnitMarker = (
+    m: ListMarker | ConditionalMarker,
+  ): ListMarkerOutput | ConditionalMarkerOutput =>
+    m.kind === 'list'
+      ? { ...m, body: convertBody(m.body) }
+      : {
+          ...m,
+          branches: m.branches.map((b) => ({
+            body: b.body ? convertBody(b.body) : null,
+          })),
+        }
   const convertBody = (body: StructuralUnitBody): StructuralUnitBodyOutput => ({
     template: body.template,
-    localMarkers: body.localMarkers,
+    localMarkers: body.localMarkers.map((m) =>
+      m.kind === 'text' ? m : convertUnitMarker(m),
+    ),
     localHandlers: body.localHandlers.map(convertHandler),
   })
   const markerOutputs: MarkerOutput[] = ctx.markers.map((m) => {
     if (m.kind === 'text' || m.kind === 'action') return m
-    if (m.kind === 'list') return { ...m, body: convertBody(m.body) }
-    return {
-      ...m,
-      branches: m.branches.map((b) => ({
-        body: b.body ? convertBody(b.body) : null,
-      })),
-    }
+    return convertUnitMarker(m)
   })
 
   // ADR-0011: writeDeclIds は analyze.ts 側で既に root signal へ推移解決済み

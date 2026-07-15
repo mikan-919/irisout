@@ -1,22 +1,17 @@
 // このファイルは現行コンパイラではコンパイルできない仕様フィクスチャであり、
-// ADR-0008(ゾーン構造のauthoring API)/ M5(list・conditionalのfactory
-// closure)実装の目標入力である。手書きの目標出力は
-// examples/todomvc.handwritten.js を参照。
+// ADR-0008(ゾーン構造のauthoring API)以降の実装マイルストーンの目標入力
+// である。手書きの目標出力は examples/todomvc.handwritten.js を参照。
 //
-// M5(change `m5-list-conditional-factory-closures`)で1階層のリスト・
-// 条件分岐は実装済みだが、このフィクスチャ全体は今もコンパイルできない。
-// 現行コンパイラの制約として意図的に踏み越えているもの(既知のスコープ外
-// なので個別の注記は付けない): `use=`属性(UNRESOLVED-01、設計は
-// ADR-0011で決定済みだが未実装)、ハンドラ以外の動的(式コンテナ)属性値
-// (UNRESOLVED-02/03)。
+// 実装済み: 1階層のリスト・条件分岐(M5)、ネストした構造ユニット =
+// UNRESOLVED-06/07(M5.5、change `m5-5-nested-structural-units`)、
+// `use=`属性 = UNRESOLVED-01(ADR-0011、change `use-action-impl`)。
+// 下記の `{visibleTodos().length > 0 && (<ul>...)}`(06: 条件分岐の中の
+// リスト)と、編集モードのspan/input切り替え(07: リストアイテムの中の
+// 条件分岐)は実際にコンパイルできる形になっている。
 //
-// UNRESOLVED(06)/(07): M5本体では対応せず、follow-up change(M5.5相当、
-// design.mdのDecision 1参照)で扱う。下記の
-// `{visibleTodos().length > 0 && (<ul>...)}` は条件分岐ブランチの中に
-// リスト(`.map()`)がネストする06のケースそのもので、compile error
-// (scope limit)になる。07(編集モードのspan/input入れ替え)は
-// UNRESOLVED-04と合わせて、対応する編集UI自体をこのフィクスチャに
-// まだ書いていない。
+// フィクスチャ全体のコンパイルを今も妨げているのは、ハンドラ以外の動的
+// (式コンテナ)属性値(UNRESOLVED-02/03)。既知のスコープ外なので
+// 個別の注記は付けない。
 
 export function TodoApp() {
   // ── 変数ゾーン: const のみ(signal/derived) ──
@@ -46,6 +41,9 @@ export function TodoApp() {
   // UIなので偶然動くが、複数アイテムが独立に状態を持つ一般形には
   // 拡張できない暫定策である。ゾーン配置規則(constは変数ゾーン)は
   // ADR-0008の決定なので、暫定扱いにせずここに置く。
+  // (M5.5の判断) 07のネスト条件分岐で編集UI自体は書けるようになったが、
+  // この04(アイテムごとの状態を書く構文)は解消しない ― 引き続き
+  // スコープ外。editingIdの暫定代用もそのまま。
   const editingId = signal(null)
 
   // ── UIゾーン: render() 文(returnではない) ──
@@ -74,8 +72,29 @@ export function TodoApp() {
                   一度書き込むだけでは以後の変更が反映されない(DOM
                   プロパティとして都度反映する必要がある)。属性値の
                   attribute/property使い分けの方針が未計画。 */}
-              {/* biome-ignore lint/a11y/noStaticElementInteractions: フィクスチャなのでa11y対応はスコープ外 */}
-              <span onDblClick={() => startEditing(todo.id)}>{todo.text}</span>
+              {/* M5.5(UNRESOLVED-07解消): 編集モードのspan/input切り替えは、
+                  リストアイテム内にネストした条件分岐ユニット(1階層ネスト)
+                  として書ける。構造ユニットは親要素の唯一の子でなければ
+                  ならない(M5のsole-child制約)ため、専用のdivで包む。 */}
+              {/* UNRESOLVED(08): 編集中テキストの下書き保持先は未規定のまま
+                  (07では解消しない)。ここではinput要素自身のvalueをsource
+                  of truthとし、確定はEnterでe.target.value経由に寄せる。
+                  編集開始時のtodo.textのプリフィル(value={todo.text})は
+                  動的属性 = UNRESOLVED(02/03)に該当するため書けない。 */}
+              <div>
+                {editingId() === todo.id ? (
+                  <input
+                    onKeyDown={(e) =>
+                      e.key === 'Enter' && commitEdit(todo.id, e.target.value)
+                    }
+                  />
+                ) : (
+                  /* biome-ignore lint/a11y/noStaticElementInteractions: フィクスチャなのでa11y対応はスコープ外 */
+                  <span onDblClick={() => startEditing(todo.id)}>
+                    {todo.text}
+                  </span>
+                )}
+              </div>
               <button type='button' onClick={() => removeTodo(todo.id)}>
                 x
               </button>
@@ -139,5 +158,13 @@ export function TodoApp() {
 
   function startEditing(id) {
     editingId(id)
+  }
+
+  function commitEdit(id, text) {
+    const t = text.trim()
+    if (t !== '') {
+      todos(todos().map((x) => (x.id === id ? { ...x, text: t } : x)))
+    }
+    editingId(null)
   }
 }

@@ -5,10 +5,9 @@
 
 ## 現在地(2026-07-15)
 
-TypeScript書き直しは M5(1階層のリスト/条件分岐)+`use=`アクション
-(ADR-0011)まで完了・`feat/first-concept`にマージ済み。「使ってもらえる
-閾値」(M5+`use=`)に到達(proposal参照)。`legacy/`(元のJS実装)は参照専用で
-以後メンテナンスしない。
+TypeScript書き直しは M5.5(ネストした構造ユニット)+`use=`アクション
+(ADR-0011)まで完了。「使ってもらえる閾値」(M5+`use=`)に到達済み
+(proposal参照)。`legacy/`(元のJS実装)は参照専用で以後メンテナンスしない。
 
 ## マイルストーン表
 
@@ -20,7 +19,7 @@ TypeScript書き直しは M5(1階層のリスト/条件分岐)+`use=`アクシ�
 | M4 | 静的host要素属性 | **DONE** | `9829f88`、change `m4-static-host-attributes` |
 | M4.5 | authoring APIゾーン化(ADR-0008) | **DONE** | change `authoring-api-zones`。render()マーカー・識別子参照ハンドラ・ゾーン配置強制 |
 | M5 | list/conditional factory closures、1階層のみ(ADR-0005の新実装) | **DONE** | change `m5-list-conditional-factory-closures`。ネストした構造ユニット(06/07)は据え置き |
-| M5.5 | ネストした構造ユニット(条件分岐の中のリスト/リストアイテムの中の条件分岐、UNRESOLVED-06/07) | TODO | M5のfollow-up。design.md Decision 1参照、未計画 |
+| M5.5 | ネストした構造ユニット(条件分岐の中のリスト/リストアイテムの中の条件分岐、UNRESOLVED-06/07) | **DONE** | change `m5-5-nested-structural-units`。1階層ネストのみ、2階層以上は引き続きscope limit |
 | `use=` | top-level要素へのaction接続(ADR-0011) | **DONE** | change `use-action-impl`。ユニット内`use=`・JSX型宣言は未実装のまま(下記制約参照) |
 | M6 | 全マイルストーン横断のno-wrapper検証 | TODO | M4・M5完了後 |
 
@@ -52,21 +51,32 @@ TypeScript書き直しは M5(1階層のリスト/条件分岐)+`use=`アクシ�
     (2026-07-05 grillingで確認済み)。
 - 静的host属性はM4で実装済み。動的(式コンテナ)host属性値はM4スコープ外で、
   引き続きcompile error(`scope limit`)で拒否する ― post-M6のパリティ穴。
-- **リスト(`.map()`)・条件分岐(三項/`&&`)はM5で1階層のみ実装済み**
-  (change `m5-list-conditional-factory-closures`)。以下は明示的な
-  scope limitで拒否する:
-  - リストアイテム内・条件分岐ブランチ内にさらにネストしたリスト/条件分岐
-    (UNRESOLVED-06/07、design.md Decision 1。follow-up = M5.5)。
+- **リスト(`.map()`)・条件分岐(三項/`&&`)はM5+M5.5で実装済み**
+  (change `m5-list-conditional-factory-closures` /
+  `m5-5-nested-structural-units`)。ネストは1階層まで(リストアイテム内の
+  条件分岐/条件分岐ブランチ内のリスト)。以下は明示的な scope limitで
+  拒否する:
+  - 2階層以上のネスト(ネストした構造ユニットの内側に、さらに別の構造
+    ユニットがある場合)。
   - リスト/条件分岐の式コンテナが親要素の唯一の子でない場合(兄弟要素との
-    混在)。コメントアンカー機構を持たないための単純化。
-  - リストアイテム本体・条件分岐ブランチ本体の中で追跡対象のsignal/derived
-    を直接参照すること(item要素のフィールド参照は対象外 ― trackされない
-    ので素通りする)。ハンドラ内での signal 読み書きはこの制限の対象外
-    (通常のハンドラと同じ仕組みで動く)。
+    混在)。コメントアンカー機構を持たないための単純化。ネストした構造
+    ユニットにも同様に適用される。
+  - リストアイテム本体・条件分岐ブランチ本体の中のテキストで追跡対象の
+    signal/derivedを直接参照すること(item要素のフィールド参照は対象外 ―
+    trackされないので素通りする)。ネストした構造ユニットの条件式・配列式
+    はこの制限の対象外(依存は外側マーカーへバブルアップし、正しく更新が
+    届く)。ハンドラ内での signal 読み書きも対象外(通常のハンドラと同じ
+    仕組みで動く)。
   - リストアイテムに `key` 属性がない場合、または `key` が追跡対象の
     signalを参照する場合。
   - `.map()` のコールバックがブロック本体(`=> { ... }`)の場合(concise
     bodyのみ対応)。
+- **フィルタ全件除外時の状態破棄**(M5.5、design.md Decision 2): 条件分岐
+  ブランチにネストしたリストは、外側の条件分岐が選択を切り替えてリスト
+  全体を非マウントにした瞬間、keyed Map・ローカル状態が(フィルタで
+  非可視だっただけのアイテムも含めて)全件破棄される。「フィルタ除外時の
+  状態保持」保証は、そのリスト自身がDOM上にマウントされ続けている間に
+  限られる(spec「配列脱落とフィルタ除外の区別」の境界条件)。
 - ハンドラ(inline arrow / 識別子参照の function宣言 どちらも)のブロック
   本体は4文種(式文 / `const`・`let` / `if` / 裸の `return`)に限る
   (ADR-0009)。第1仮引数(イベントオブジェクト)は authored 名のまま受け渡す

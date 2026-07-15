@@ -27,8 +27,10 @@ import {
 } from './analyze.js'
 import type {
   CompilerState,
+  ConditionalMarker,
   ContentPart,
   DeclId,
+  ListMarker,
   MarkerId,
   StructuralUnitBody,
   TextMarker,
@@ -394,9 +396,10 @@ function registerAction(
 interface RenderElementOpts {
   /** M5: この要素直下の `key` 属性を host 属性として出力しない(リストアイテムの root)。 */
   skipAttrName?: string
-  /** M5: 既にリスト/条件分岐の中(factory 本体)を歩いているか。ネストした
-   * 構造ユニットの検出に使う(design.md Decision 1: 1階層のみ)。 */
-  insideUnit?: boolean
+  /** M5.5: いま歩いている位置を囲む構造ユニット本体の数(トップレベル=0)。
+   * 深さ2(1階層ネスト)までの構造ユニットを受理し、深さ3以降は scope limit
+   * で拒否する(design.md Decision 3: カウンタ1つで無制限再帰を防ぐ)。 */
+  unitDepth?: number
 }
 
 function renderElement(
@@ -424,9 +427,9 @@ function renderElement(
     handlerFns,
     opts.skipAttrName,
   )
-  // design.md Decision 3: 返り値クロージャの動的レジストリが要るため、
-  // リストアイテム/条件分岐ブランチの中の `use=` は本changeでは対象外。
-  if (actionAttr && opts.insideUnit) {
+  // ADR-0011 design.md Decision 3: 返り値クロージャの動的レジストリが要るため、
+  // リストアイテム/条件分岐ブランチの中の `use=` は対象外のまま。
+  if (actionAttr && (opts.unitDepth ?? 0) > 0) {
     throw new Error(
       'compile: use= inside list/conditional units is not supported yet (scope limit)',
     )
@@ -454,11 +457,12 @@ function renderElement(
     : null
 
   if (soleKind) {
-    // insideUnit の間は「1階層のみ」の外側なので、sole child であっても
-    // ネストしたリスト/条件分岐は scope limit で拒否する(design.md Decision 1)。
-    if (opts.insideUnit) {
+    // M5.5: 1階層のネスト(深さ2)までは既存のfactory生成を再帰適用する
+    // (design.md Decision 3)。深さ3以降のみ scope limit で拒否する。
+    const unitDepth = opts.unitDepth ?? 0
+    if (unitDepth >= 2) {
       throw new Error(
-        'compile: nested list/conditional rendering inside a list item or conditional branch is not supported yet (scope limit)',
+        'compile: nested structural unit exceeds 1 level of nesting is not supported yet (scope limit)',
       )
     }
     const exprPath = soleExprChild!.get('expression') as NodePath<t.Expression>
@@ -469,8 +473,15 @@ function renderElement(
             exprPath as NodePath<t.CallExpression>,
             instanceId,
             handlerFns,
+            unitDepth + 1,
           )
-        : renderConditionalUnit(ctx, exprPath, instanceId, handlerFns)
+        : renderConditionalUnit(
+            ctx,
+            exprPath,
+            instanceId,
+            handlerFns,
+            unitDepth + 1,
+          )
     if (actionAttr) registerAction(ctx, markerId, actionAttr, instanceId)
     return `<${tagName}${attrs} data-iris-id="${markerId}"></${tagName}>`
   }
@@ -501,7 +512,7 @@ function renderElement(
         inner += escapeTemplateText(cleanJSXText(child.node.value))
       else if (child.isJSXElement())
         inner += renderElement(ctx, child, instanceId, handlerFns, {
-          insideUnit: opts.insideUnit,
+          unitDepth: opts.unitDepth,
         })
       else throw new Error('compile: unsupported JSX child (scope limit)')
     }
@@ -591,31 +602,49 @@ function classifyStructuralExpr(
 // 出さない」という ADR-0005 決定2の実現方法: グローバルな ctx への書き込みは
 // renderElement の既存ロジックをそのまま再利用しつつ、事後にこのユニット
 // 専有分だけを引き剥がす。
+//
+// M5.5: 本体にネストした構造ユニット(list/conditional)がある場合、その
+// マーカーも localMarkers へ取り込み、依存(条件式・配列式のdeps)だけを
+// nestedDeps として返す。呼び出し元が外側マーカーの依存へ合流させることで、
+// 依存 signal の update_* が外側ユニットの update を(そして外側の update が
+// 内側の update を)駆動する。テキストマーカーの追跡 signal 参照は引き続き
+// scope limit。
 function renderStructuralUnitBody(
   ctx: CompilerState,
   elementPath: NodePath<t.JSXElement>,
   instanceId: number,
   handlerFns: HandlerFns,
+  unitDepth: number,
   skipAttrName?: string,
-): StructuralUnitBody {
+): { body: StructuralUnitBody; nestedDeps: Set<DeclId> } {
   const markersBefore = ctx.markers.length
   const handlersBefore = ctx.handlers.length
   const template = renderElement(ctx, elementPath, instanceId, handlerFns, {
     skipAttrName,
-    insideUnit: true,
+    unitDepth,
   })
-  const localMarkers = ctx.markers.splice(markersBefore) as TextMarker[]
+  const localMarkers = ctx.markers.splice(markersBefore) as (
+    | TextMarker
+    | ListMarker
+    | ConditionalMarker
+  )[]
   const localHandlers = ctx.handlers.splice(handlersBefore)
+  const nestedDeps = new Set<DeclId>()
   for (const m of localMarkers) {
     const deps = ctx.markerDeps.get(m.id)
     ctx.markerDeps.delete(m.id)
-    if (deps && deps.size > 0) {
-      throw new Error(
-        'compile: referencing a tracked signal inside a list item or conditional branch is not supported yet (scope limit)',
-      )
+    if (m.kind === 'text') {
+      if (deps && deps.size > 0) {
+        throw new Error(
+          'compile: referencing a tracked signal inside a list item or conditional branch is not supported yet (scope limit)',
+        )
+      }
+    } else {
+      // ネストした構造ユニット自身の依存(さらに内側からバブル済みの分を含む)。
+      for (const d of deps ?? []) nestedDeps.add(d)
     }
   }
-  return { template, localMarkers, localHandlers }
+  return { body: { template, localMarkers, localHandlers }, nestedDeps }
 }
 
 // `{expr.map((item) => <li key={...}>...)}` を1つの ListMarker にする。
@@ -627,6 +656,7 @@ function renderListUnit(
   exprPath: NodePath<t.CallExpression>,
   instanceId: number,
   handlerFns: HandlerFns,
+  unitDepth: number,
 ): MarkerId {
   const callee = exprPath.get('callee') as NodePath<t.MemberExpression>
   const arrayObjPath = callee.get('object') as NodePath<t.Expression>
@@ -677,13 +707,18 @@ function renderListUnit(
     )
   }
 
-  const body = renderStructuralUnitBody(
+  const { body, nestedDeps } = renderStructuralUnitBody(
     ctx,
     itemPath,
     instanceId,
     handlerFns,
+    unitDepth,
     'key',
   )
+  // M5.5: ネストしたユニットの依存はこのリストマーカーの依存に合流させる。
+  // 該当 signal の update_* がリストの keyed diff を再実行し、既存アイテムの
+  // handle.update() 経由で内側ユニットまで更新が届く。
+  for (const d of nestedDeps) deps.add(d)
 
   const markerId = nextMarkerId(ctx)
   ctx.markers.push({
@@ -706,6 +741,7 @@ function renderConditionalUnit(
   exprPath: NodePath<t.Expression>,
   instanceId: number,
   handlerFns: HandlerFns,
+  unitDepth: number,
 ): MarkerId {
   let testPath: NodePath<t.Expression>
   let branchPaths: (NodePath<t.Node> | null)[]
@@ -733,9 +769,17 @@ function renderConditionalUnit(
 
   const branches = branchPaths.map((branchPath) => {
     if (!branchPath?.isJSXElement()) return { body: null }
-    return {
-      body: renderStructuralUnitBody(ctx, branchPath, instanceId, handlerFns),
-    }
+    const { body, nestedDeps } = renderStructuralUnitBody(
+      ctx,
+      branchPath,
+      instanceId,
+      handlerFns,
+      unitDepth,
+    )
+    // M5.5: ネストしたユニットの依存を条件分岐マーカーの依存へ合流させる
+    // (選択が変わらなくても handle.update() で内側を更新するため)。
+    for (const d of nestedDeps) deps.add(d)
+    return { body }
   })
 
   const markerId = nextMarkerId(ctx)

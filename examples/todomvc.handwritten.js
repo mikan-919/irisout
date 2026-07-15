@@ -88,11 +88,12 @@ function visibleTodos() {
   return todos
 }
 
-// UNRESOLVED(06): 空リスト時に<ul>自体を出さない条件分岐は、リスト構造
-// ユニットが条件分岐構造ユニットにネストする形になり、ADR-0005が明示的に
-// スコープ外とする「リストアイテム内にさらにネストした構造ユニット」の
-// 逆パターン(条件分岐の中にリスト)にあたる。ここでは<ul>要素そのものの
-// 着脱(template+コメントアンカー)は行わず、hiddenプロパティで妥協する。
+// (06解消済み・M5.5) 空リスト時に<ul>自体を出さない条件分岐(条件分岐の
+// 中にリストがネストする形)は、change `m5-5-nested-structural-units` で
+// 生成器側が実DOM着脱(<template>+factory closureの再帰適用)として解決
+// した。この手書き版は「手で書くには着脱の配線が手間すぎる」ための
+// hiddenプロパティ妥協を意図的な人力実装の参考としてそのまま残す ―
+// 生成コードの目標出力とはこの点で一致しない。
 function update_todos() {
   const visible = visibleTodos()
   listEl.hidden = visible.length === 0
@@ -153,11 +154,12 @@ function createTodoItem(todo) {
     editInput.focus()
   })
 
-  // UNRESOLVED(07): 編集モード(span<->inputの入れ替え)はアイテム内に
-  // さらにネストした構造ユニットが要り、ADR-0005が明示的にスコープ外と
-  // する「リストアイテム内にさらにネストした構造ユニット」に該当する。
-  // ここではtemplateを1回クローンし直すのではなく、都度input要素を
-  // 生成してdisplay切り替えで済ませる妥協実装にする。
+  // (07解消済み・M5.5) 編集モード(span<->inputの入れ替え)は、change
+  // `m5-5-nested-structural-units` で生成器側がアイテム内のネストした
+  // 条件分岐ユニット(factory closureの再帰適用、実DOM着脱)として解決
+  // した。この手書き版はinput要素を都度生成してdisplay切り替えで済ませる
+  // 妥協を意図的な人力実装の参考としてそのまま残す ― 生成コードの目標
+  // 出力とはこの点で一致しない。
   function renderEditState() {
     if (editing) {
       if (!editInput) {

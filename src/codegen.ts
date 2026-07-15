@@ -12,6 +12,11 @@
 // (renderElement 側では初期 HTML に埋め込まない ― mount/hydrate 直後に
 // 一度 update_<name>() を呼んで populate する)、item/branch 内のローカル
 // marker は __markers__ に登録せず、factory のクロージャに閉じ込める。
+//
+// M5.5: 1階層ネストした構造ユニットは、同じ factory 生成規則を外側 factory の
+// クロージャ内へ再帰適用する(<template> だけは静的なので module スコープで
+// 共有)。ネストしたユニットの依存は render.ts が外側マーカーへ合流済みなので、
+// update_<signal>() → 外側 update → handle.update() の順で内側へ更新が届く。
 
 import type {
   ActionMarker,
@@ -34,9 +39,10 @@ export interface HandlerOutput {
 
 // M5: StructuralUnitBody(state.ts)のハンドラを HandlerDecl から
 // HandlerOutput へ変換したもの。それ以外のフィールドは同じ形。
+// M5.5: 1階層ネストした構造ユニットも localMarkers に含まれる。
 export interface StructuralUnitBodyOutput {
   template: string
-  localMarkers: TextMarker[]
+  localMarkers: (TextMarker | ListMarkerOutput | ConditionalMarkerOutput)[]
   localHandlers: HandlerOutput[]
 }
 
@@ -103,17 +109,60 @@ function renderHandlerCall(h: HandlerOutput): string {
   return `(${params}) => { ${h.rendered}; ${updateCalls} }`
 }
 
+// M5.5: ボディ内のテキストマーカー / ネストした構造ユニットマーカーの選別。
+const bodyTexts = (body: StructuralUnitBodyOutput): TextMarker[] =>
+  body.localMarkers.filter((m): m is TextMarker => m.kind === 'text')
+const bodyUnits = (
+  body: StructuralUnitBodyOutput,
+): (ListMarkerOutput | ConditionalMarkerOutput)[] =>
+  body.localMarkers.filter(
+    (m): m is ListMarkerOutput | ConditionalMarkerOutput => m.kind !== 'text',
+  )
+
+// ブランチ factory が update() を返すか。ネストしたユニットを含む場合と、
+// 外側に item 仮引数があってテキストの再描画が要る場合のみ true ―
+// それ以外のブランチは M5 と同じ set-once + { el } のまま(ADR-0004:
+// 出力が膨らむ方向の変換は避ける)。
+function branchHasUpdate(
+  body: StructuralUnitBodyOutput,
+  inItemScope: boolean,
+): boolean {
+  return (
+    bodyUnits(body).length > 0 || (inItemScope && bodyTexts(body).length > 0)
+  )
+}
+
+function condDispatchesUpdate(
+  marker: ConditionalMarkerOutput,
+  inItemScope: boolean,
+): boolean {
+  return marker.branches.some(
+    (b) => b.body != null && branchHasUpdate(b.body, inItemScope),
+  )
+}
+
 // factory 関数本体:テンプレートのクローン取得・ローカル marker の解決・
 // ハンドラ登録・(item がある場合のみ)update() クロージャをまとめて1関数に
 // する(ADR-0005 決定2)。item がない(条件分岐ブランチ)場合、ローカル
 // marker の内容は一度だけ設定する ― 分岐内で追跡 signal を参照することは
 // render.ts 側の scope limit で既に禁止しているので、以後の再計算は要らない。
+//
+// M5.5: ネストした構造ユニットがある場合、その keyed Map・状態変数・factory
+// 関数をこの factory のクロージャ内に入れ子で生成する(specs「ネストした
+// 構造ユニットのfactory生成」)。update() はネストしたユニットの keyed diff /
+// 条件分岐 update も再実行する。inItemScope は「外側のどこかに item 仮引数が
+// あるか」― その場合のみブランチのテキストも update() で再描画する
+// (外側 item の値差し替えを閉包経由で反映するため)。
 function generateFactory(
   factoryName: string,
   templateVar: string,
   itemParam: string | null,
   body: StructuralUnitBodyOutput,
+  inItemScope: boolean,
 ): string[] {
+  const texts = bodyTexts(body)
+  const units = bodyUnits(body)
+  const childScope = inItemScope || itemParam != null
   const lines: string[] = []
   lines.push(`function ${factoryName}(${itemParam ?? ''}) {`)
   lines.push(`  const __node__ = ${templateVar}.content.cloneNode(true);`)
@@ -123,28 +172,83 @@ function generateFactory(
       `  const __${m.id}__ = __find__(__el__, ${JSON.stringify(m.id)});`,
     )
   }
+  // ネストしたユニットの状態・factory はこのクロージャ専有(specs
+  // 「ネストした構造ユニットのライフサイクル」: 外側の DOM remove() とともに
+  // 参照ごと失われる。明示的な teardown は生成しない ― ADR-0005 決定4)。
+  for (const u of units) {
+    if (u.kind === 'list') {
+      lines.push(`  const __list_${u.id}__ = new Map();`)
+      lines.push(
+        ...generateFactory(
+          `__create_${u.id}__`,
+          `__tpl_${u.id}__`,
+          u.itemParam,
+          u.body,
+          childScope,
+        ).map((l) => `  ${l}`),
+      )
+    } else {
+      lines.push(
+        `  let __cond_${u.id}__ = -1;`,
+        `  let __cond_${u.id}_handle__ = null;`,
+      )
+      u.branches.forEach((branch, i) => {
+        if (!branch.body) return
+        lines.push(
+          ...generateFactory(
+            `__create_${u.id}_b${i}__`,
+            `__tpl_${u.id}_b${i}__`,
+            null,
+            branch.body,
+            childScope,
+          ).map((l) => `  ${l}`),
+        )
+      })
+    }
+  }
   for (const h of body.localHandlers) {
     lines.push(
       `  __find__(__el__, ${JSON.stringify(h.markerId)}).addEventListener(${JSON.stringify(h.eventName)}, ${renderHandlerCall(h)});`,
     )
   }
-  if (itemParam) {
-    lines.push('  function update(__next__) {')
-    lines.push(`    ${itemParam} = __next__;`)
-    for (const m of body.localMarkers) {
-      lines.push(
-        `    __${m.id}__.textContent = \`${innerTemplateSource(m.contentParts)}\`;`,
-      )
-    }
-    lines.push('  }')
-    lines.push(`  update(${itemParam});`)
-    lines.push('  return { el: __el__, update };')
-  } else {
-    for (const m of body.localMarkers) {
+  // テキストの再描画が要るのは item 仮引数(自身または外側)を参照しうる
+  // 場合のみ。それ以外は静的なので一度だけ設定する。
+  const refreshTexts = (itemParam != null || inItemScope) && texts.length > 0
+  const needsUpdate = itemParam != null || refreshTexts || units.length > 0
+  if (!refreshTexts) {
+    for (const m of texts) {
       lines.push(
         `  __${m.id}__.textContent = \`${innerTemplateSource(m.contentParts)}\`;`,
       )
     }
+  }
+  if (needsUpdate) {
+    lines.push(`  function update(${itemParam ? '__next__' : ''}) {`)
+    if (itemParam) lines.push(`    ${itemParam} = __next__;`)
+    if (refreshTexts) {
+      for (const m of texts) {
+        lines.push(
+          `    __${m.id}__.textContent = \`${innerTemplateSource(m.contentParts)}\`;`,
+        )
+      }
+    }
+    for (const u of units) {
+      if (u.kind === 'list') {
+        lines.push(...generateListUpdate(u, `__${u.id}__`).map((l) => `  ${l}`))
+      } else {
+        lines.push(
+          ...generateConditionalUpdate(
+            u,
+            `__${u.id}__`,
+            condDispatchesUpdate(u, childScope),
+          ).map((l) => `  ${l}`),
+        )
+      }
+    }
+    lines.push('  }')
+    lines.push(`  update(${itemParam ?? ''});`)
+    lines.push('  return { el: __el__, update };')
+  } else {
     lines.push('  return { el: __el__ };')
   }
   lines.push('}')
@@ -177,6 +281,30 @@ function generateStructuralUnits(
     declLines.push('let __doc__;', FIND_HELPER, '')
   }
 
+  // M5.5: ネストしたユニットの <template> は静的な文字列なので、module
+  // スコープに1つ置けば全 factory インスタンスで共有できる(keyed Map・
+  // 状態変数・factory 関数は外側 factory のクロージャ内 ― generateFactory 参照)。
+  const emitNestedUnitTemplates = (body: StructuralUnitBodyOutput): void => {
+    for (const u of bodyUnits(body)) {
+      if (u.kind === 'list') {
+        declLines.push(`let __tpl_${u.id}__;`)
+        templateSetupLines.push(
+          `  __tpl_${u.id}__ = __doc__.createElement('template'); __tpl_${u.id}__.innerHTML = ${JSON.stringify(u.body.template)};`,
+        )
+        emitNestedUnitTemplates(u.body)
+      } else {
+        u.branches.forEach((branch, i) => {
+          if (!branch.body) return
+          declLines.push(`let __tpl_${u.id}_b${i}__;`)
+          templateSetupLines.push(
+            `  __tpl_${u.id}_b${i}__ = __doc__.createElement('template'); __tpl_${u.id}_b${i}__.innerHTML = ${JSON.stringify(branch.body.template)};`,
+          )
+          emitNestedUnitTemplates(branch.body)
+        })
+      }
+    }
+  }
+
   for (const marker of markers) {
     if (marker.kind === 'list') {
       const tplVar = `__tpl_${marker.id}__`
@@ -186,12 +314,19 @@ function generateStructuralUnits(
         `const __list_${marker.id}__ = new Map();`,
       )
       declLines.push(
-        ...generateFactory(factoryName, tplVar, marker.itemParam, marker.body),
+        ...generateFactory(
+          factoryName,
+          tplVar,
+          marker.itemParam,
+          marker.body,
+          false,
+        ),
         '',
       )
       templateSetupLines.push(
         `  ${tplVar} = __doc__.createElement('template'); ${tplVar}.innerHTML = ${JSON.stringify(marker.body.template)};`,
       )
+      emitNestedUnitTemplates(marker.body)
     } else if (marker.kind === 'conditional') {
       declLines.push(
         `let __cond_${marker.id}__ = -1;`,
@@ -203,12 +338,13 @@ function generateStructuralUnits(
         const factoryName = `__create_${marker.id}_b${i}__`
         declLines.push(`let ${tplVar};`)
         declLines.push(
-          ...generateFactory(factoryName, tplVar, null, branch.body),
+          ...generateFactory(factoryName, tplVar, null, branch.body, false),
           '',
         )
         templateSetupLines.push(
           `  ${tplVar} = __doc__.createElement('template'); ${tplVar}.innerHTML = ${JSON.stringify(branch.body.template)};`,
         )
+        emitNestedUnitTemplates(branch.body)
       })
     }
   }
@@ -234,13 +370,18 @@ function generateStructuralUnits(
 // handle.update() で値だけ差し替え、新規 key は factory を新規呼び出しする。
 // 配列(.map() の対象そのもの)から消えた key のみ Map から破棄し remove()
 // する(spec.md「配列脱落とフィルタ除外の区別」)。
-function generateListUpdate(marker: ListMarkerOutput): string[] {
+// M5.5: elExpr はリストのマーカー要素の取得式 ― トップレベルは
+// __markers__.get()、ネスト時は外側 factory クロージャの __<id>__ 変数。
+function generateListUpdate(
+  marker: ListMarkerOutput,
+  elExpr: string,
+): string[] {
   const listVar = `__list_${marker.id}__`
   const factoryName = `__create_${marker.id}__`
   return [
     '  {',
     `    const __arr__ = ${marker.arrayRendered};`,
-    `    const __listEl__ = __markers__.get(${JSON.stringify(marker.id)});`,
+    `    const __listEl__ = ${elExpr};`,
     '    const __seen__ = new Set();',
     `    for (const ${marker.itemParam} of __arr__) {`,
     `      const __key__ = ${marker.keyRendered};`,
@@ -265,7 +406,14 @@ function generateListUpdate(marker: ListMarkerOutput): string[] {
 // ときだけ古い要素を remove() して新しい要素を factory から作る(選択が
 // 変わらない限り DOM もローカル状態もそのまま維持する ― ADR-0005 決定4、
 // teardown 不要)。
-function generateConditionalUpdate(marker: ConditionalMarkerOutput): string[] {
+// M5.5: dispatchUpdate が true のとき(ブランチ factory が update() を返す
+// 場合のみ)、選択が変わらない間の更新を handle.update() へ委譲する ―
+// ブランチ内にネストしたユニットの再 diff・テキスト再描画はここから届く。
+function generateConditionalUpdate(
+  marker: ConditionalMarkerOutput,
+  elExpr: string,
+  dispatchUpdate: boolean,
+): string[] {
   const hasConsequent = marker.branches[0]?.body != null
   const hasAlternate = !marker.isLogical && marker.branches[1]?.body != null
   const targetExpr = marker.isLogical
@@ -284,17 +432,26 @@ function generateConditionalUpdate(marker: ConditionalMarkerOutput): string[] {
         : null,
     )
     .filter((l): l is string => l !== null)
-  return [
+  const lines = [
     '  {',
     `    const __target__ = ${targetExpr};`,
     `    if (__target__ !== ${stateVar}) {`,
     `      if (${handleVar}) { ${handleVar}.el.remove(); ${handleVar} = null; }`,
     `      ${stateVar} = __target__;`,
     ...branchCreateLines,
-    `      if (${handleVar}) { const __el__ = __markers__.get(${JSON.stringify(marker.id)}); if (__el__) __el__.appendChild(${handleVar}.el); }`,
-    '    }',
-    '  }',
+    `      if (${handleVar}) { const __el__ = ${elExpr}; if (__el__) __el__.appendChild(${handleVar}.el); }`,
   ]
+  if (dispatchUpdate) {
+    lines.push(
+      `    } else if (${handleVar} && ${handleVar}.update) {`,
+      `      ${handleVar}.update();`,
+      '    }',
+    )
+  } else {
+    lines.push('    }')
+  }
+  lines.push('  }')
+  return lines
 }
 
 // ADR-0011 design Decision 2/5: mount/hydrate 末尾でaction本体を実行し、
@@ -411,13 +568,24 @@ export function generateModule({
           `  { const __el = __markers__.get(${JSON.stringify(mId)}); if (__el) { __el.textContent = \`${innerTemplateSource(marker.contentParts)}\`; } }`,
         )
       } else if (marker.kind === 'list') {
-        outLines.push(...generateListUpdate(marker))
+        outLines.push(
+          ...generateListUpdate(
+            marker,
+            `__markers__.get(${JSON.stringify(marker.id)})`,
+          ),
+        )
       } else if (marker.kind === 'action') {
         // design Decision 5: ガード付き呼び出し(action呼び出し前のpopulate中は
         // __use_<id>__ が未初期化のため)。
         outLines.push(`  if (__use_${mId}__) __use_${mId}__();`)
       } else {
-        outLines.push(...generateConditionalUpdate(marker))
+        outLines.push(
+          ...generateConditionalUpdate(
+            marker,
+            `__markers__.get(${JSON.stringify(marker.id)})`,
+            condDispatchesUpdate(marker, false),
+          ),
+        )
       }
     }
     outLines.push('}', '')

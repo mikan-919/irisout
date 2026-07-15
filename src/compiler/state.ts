@@ -44,9 +44,11 @@ export interface HandlerDecl {
 // factory 関数生成に要る材料をまとめて持つ。ローカル marker はグローバルな
 // ctx.markers には積まれない(factory 内のクローンをそのつど querySelector
 // する専用スコープなので、update_<signal>() から辿る対象ではない)。
+// M5.5: 1階層までネストした構造ユニット(list/conditional)も localMarkers に
+// 取り込まれる ― その factory/状態は外側 factory のクロージャ内に生成される。
 export interface StructuralUnitBody {
   template: string
-  localMarkers: TextMarker[]
+  localMarkers: (TextMarker | ListMarker | ConditionalMarker)[]
   localHandlers: HandlerDecl[]
 }
 
