@@ -3,11 +3,10 @@
 実装の「今」の状態(現在地・マイルストーン進捗・既知の制約)をまとめたもの。
 設計判断待ちの論点・次のアクションの計画は `ROADMAP.md` を参照。
 
-## 現在地(2026-07-18)
+## 現在地(2026-07-19)
 
-TypeScript書き直しは M5.5(ネストした構造ユニット)+`use=`アクション
-(ADR-0011)まで完了。「使ってもらえる閾値」(M5+`use=`)に到達済み
-(proposal参照)。`legacy/`(元のJS実装)は参照専用で以後メンテナンスしない。
+TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証)まで完了。
+「使ってもらえる閾値」(M5+`use=`)に到達済み(proposal参照)。`legacy/`(元のJS実装)は参照専用で以後メンテナンスしない。
 
 2026-07-18: テキスト式値が初期 HTML へ**未エスケープで焼き込まれる注入穴**を
 発見・修正(計画外バグ、change `escape-initial-html`)。
@@ -34,7 +33,7 @@ TypeScript書き直しは M5.5(ネストした構造ユニット)+`use=`アク�
 | M5 | list/conditional factory closures、1階層のみ(ADR-0005の新実装) | **DONE** | change `m5-list-conditional-factory-closures`。ネストした構造ユニット(06/07)は据え置き |
 | M5.5 | ネストした構造ユニット(条件分岐の中のリスト/リストアイテムの中の条件分岐、UNRESOLVED-06/07) | **DONE** | change `m5-5-nested-structural-units`。1階層ネストのみ、2階層以上は引き続きscope limit |
 | `use=` | top-level要素へのaction接続(ADR-0011) | **DONE** | change `use-action-impl`。ユニット内`use=`・JSX型宣言は未実装のまま(下記制約参照) |
-| M6 | 全マイルストーン横断のno-wrapper検証 | TODO | M4・M5完了後 |
+| M6 | 全マイルストーン横断のno-wrapper検証 | **DONE** | change `m6-no-wrapper-verification`。全機能同居フィクスチャで no-wrapper・import面・実DOM動作を固定(`test/no-wrapper.test.ts`)。サイズ予算係数は 4x のまま据え置き(counter が固定費支配の最悪ケースのため。締め直しは minify 着手時に再検討 ― ROADMAP「minify」) |
 
 ## 既知の制約(現時点のcodegenの限界)
 
