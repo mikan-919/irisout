@@ -59,19 +59,16 @@ export function TodoApp() {
         <ul class='todo-list'>
           {visibleTodos().map((todo) => (
             <li key={todo.id} class={todo.completed ? 'completed' : ''}>
-              {/* UNRESOLVED(02): 完了時のclass付与は、値によって文字列が
-                  変わる動的属性。M4は静的host属性のみが対象で、この
-                  ケースは未計画のパリティ穴(ロードマップ「次のアクション」
-                  にも記載がない)。M4後続で新規に計画が要る。 */}
+              {/* UNRESOLVED(02) 解消済み(ADR-0012、change
+                  dynamic-attribute-bindings): 動的class は setAttribute
+                  反映の動的属性バインディングとして書ける。 */}
               <input
                 type='checkbox'
                 checked={todo.completed}
                 onChange={() => toggleTodo(todo.id)}
               />
-              {/* UNRESOLVED(03): checkbox のchecked状態はattributeとして
-                  一度書き込むだけでは以後の変更が反映されない(DOM
-                  プロパティとして都度反映する必要がある)。属性値の
-                  attribute/property使い分けの方針が未計画。 */}
+              {/* UNRESOLVED(03) 解消済み(ADR-0012): checked は固定表により
+                  DOMプロパティとして都度反映される(初期HTMLはpresence)。 */}
               {/* M5.5(UNRESOLVED-07解消): 編集モードのspan/input切り替えは、
                   リストアイテム内にネストした条件分岐ユニット(1階層ネスト)
                   として書ける。構造ユニットは親要素の唯一の子でなければ
@@ -80,7 +77,8 @@ export function TodoApp() {
                   (07では解消しない)。ここではinput要素自身のvalueをsource
                   of truthとし、確定はEnterでe.target.value経由に寄せる。
                   編集開始時のtodo.textのプリフィル(value={todo.text})は
-                  動的属性 = UNRESOLVED(02/03)に該当するため書けない。 */}
+                  ADR-0012 の value プロパティバインディングで書けるように
+                  なった(下書きの保持先そのものは未規定のまま)。 */}
               <div>
                 {editingId() === todo.id ? (
                   <input

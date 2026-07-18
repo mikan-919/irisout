@@ -60,6 +60,18 @@ export function renderStaticAttrs(attrs: StaticAttr[]): string {
     .join('')
 }
 
+// ADR-0012 決定2: 動的属性バインディングの attribute/property 使い分けの
+// 固定表。実需(TodoMVC パリティ)の最小限のみ — 広げるときは ADR-0012 に
+// 追記する。render.ts(焼き込み)と codegen.ts(更新行)の両方から使う。
+// ponytail: checked/value の2エントリのみ、disabled等は実需が出たら追加。
+export type AttrBindingKind = 'boolProp' | 'prop' | 'attr'
+
+export function attrBindingKind(name: string): AttrBindingKind {
+  if (name === 'checked') return 'boolProp'
+  if (name === 'value') return 'prop'
+  return 'attr'
+}
+
 // contentParts -> テンプレートリテラルの*内側*のソーステキスト(バッククォートなし)。
 export function innerTemplateSource(contentParts: ContentPart[]): string {
   return contentParts

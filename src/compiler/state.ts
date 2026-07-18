@@ -39,6 +39,17 @@ export interface HandlerDecl {
   param: string | null
 }
 
+// ADR-0012: 動的属性バインディング1個ぶん。要素のマーカー id に相乗りする
+// (text/handler と同じ前例)。deps はトップレベルでは markerDeps へ合流済み
+// だが、ユニット内 splice 時の scope limit 判定にも使うため自身でも持つ。
+export interface AttrBinding {
+  markerId: MarkerId
+  name: string
+  /** 出力向け(update 用、read call を裸の識別子へ書き換え済み)。 */
+  rendered: string
+  deps: Set<DeclId>
+}
+
 // M5(ADR-0005): リストアイテム/条件分岐ブランチの中身。テンプレート HTML
 // (data-iris-id 付き、ローカルスコープの marker/handler を含む)と、
 // factory 関数生成に要る材料をまとめて持つ。ローカル marker はグローバルな
@@ -50,6 +61,8 @@ export interface StructuralUnitBody {
   template: string
   localMarkers: (TextMarker | ListMarker | ConditionalMarker)[]
   localHandlers: HandlerDecl[]
+  /** ADR-0012: このユニット専有の動的属性バインディング。 */
+  localAttrBindings: AttrBinding[]
 }
 
 // リストアイテムの key(item から導出、素の式なのでラップしない)は、
@@ -127,6 +140,7 @@ export interface CompilerState {
   markerDeps: Map<MarkerId, Set<DeclId>> // markerId -> Set<declId>(直接依存、推移閉包を取る前)
   handlers: HandlerDecl[]
   actions: ActionDecl[]
+  attrBindings: AttrBinding[] // ADR-0012: 動的属性(トップレベル+splice前のユニット内)
 
   markerCounter: number
   instanceCounter: number
@@ -145,6 +159,7 @@ export function createCompilerState(source: string): CompilerState {
     markerDeps: new Map(),
     handlers: [],
     actions: [],
+    attrBindings: [],
     markerCounter: 0,
     instanceCounter: 0,
   }

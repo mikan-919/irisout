@@ -194,6 +194,7 @@ export function compile(source: string): CompileResult {
       m.kind === 'text' ? m : convertUnitMarker(m),
     ),
     localHandlers: body.localHandlers.map(convertHandler),
+    localAttrBindings: body.localAttrBindings,
   })
   const markerOutputs: MarkerOutput[] = ctx.markers.map((m) => {
     if (m.kind === 'text' || m.kind === 'action') return m
@@ -226,26 +227,36 @@ export function compile(source: string): CompileResult {
     `return \`${rootHtmlSource}\`;`,
   ].join('\n')
   // __esc__: テキストマーカー式値のテキストノード文脈エスケープ
-  // (escape-initial-html design D2)。テキストノードなので `&` と `<` で十分
-  // (属性文脈には使わない ― 属性は template.ts の escapeAttrValue 側)。
+  // (escape-initial-html design D2)。テキストノードなので `&` と `<` で十分。
+  // __escAttr__: 動的属性の初期値焼き込み用の属性文脈エスケープ(ADR-0012
+  // 決定3 — 二重引用符で囲むため `&` と `"`)。
   const runComponent = new Function(
     'signal',
     'derived',
     '__esc__',
+    '__escAttr__',
     instrumentedBody,
   ) as (
     signalFn: typeof signal,
     derivedFn: typeof derived,
     escFn: (v: unknown) => string,
+    escAttrFn: (v: unknown) => string,
   ) => string
   const escapeTextValue = (v: unknown): string =>
     String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+  const escapeAttrTextValue = (v: unknown): string =>
+    String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;')
   // 構文検査(assertTopLevelShape / render.ts の scope limit 群)をすり抜けた
   // 未知の経路が残っても、生の実行時エラーではなく「コンパイルの失敗」として
   // 報告する安全網(scope-limit-coverage design D3)。元エラーは cause に保持。
   let initialHtml: string
   try {
-    initialHtml = runComponent(signal, derived, escapeTextValue)
+    initialHtml = runComponent(
+      signal,
+      derived,
+      escapeTextValue,
+      escapeAttrTextValue,
+    )
   } catch (e) {
     throw new Error(
       `compile: build-time execution failed: ${e instanceof Error ? e.message : String(e)}`,
@@ -271,6 +282,7 @@ export function compile(source: string): CompileResult {
     derivedRecompute: ctx.derivedRecompute,
     handlers: handlerOutputs,
     actions: actionOutputs,
+    attrBindings: ctx.attrBindings,
     initialHtml,
   })
 

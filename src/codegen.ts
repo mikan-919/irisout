@@ -20,11 +20,12 @@
 
 import type {
   ActionMarker,
+  AttrBinding,
   DeclId,
   MarkerId,
   TextMarker,
 } from './compiler/state.js'
-import { innerTemplateSource } from './template.js'
+import { attrBindingKind, innerTemplateSource } from './template.js'
 
 // M2: compiler.ts が writeDeclIds を(マーカーを持つ signal だけに絞って)
 // updateNames へ変換した後の、codegen 向けハンドラ表現。
@@ -44,6 +45,8 @@ export interface StructuralUnitBodyOutput {
   template: string
   localMarkers: (TextMarker | ListMarkerOutput | ConditionalMarkerOutput)[]
   localHandlers: HandlerOutput[]
+  /** ADR-0012: このユニット専有の動的属性バインディング。 */
+  localAttrBindings: AttrBinding[]
 }
 
 export interface ListMarkerOutput {
@@ -94,6 +97,7 @@ export interface GenerateModuleInput {
   derivedRecompute: Map<DeclId, string>
   handlers: HandlerOutput[]
   actions: ActionOutput[]
+  attrBindings: AttrBinding[] // ADR-0012: トップレベルの動的属性
   initialHtml: string
 }
 
@@ -107,6 +111,14 @@ function renderHandlerCall(h: HandlerOutput): string {
   // ADR-0009 D4: 第1引数があるハンドラのみ authored 名を束縛する。
   const params = h.param ? `${h.param}, ...__args` : '...__args'
   return `(${params}) => { ${h.rendered}; ${updateCalls} }`
+}
+
+// ADR-0012 決定2: 動的属性1個ぶんの設定文。boolProp/prop はプロパティ代入、
+// それ以外は setAttribute(update_* と factory の両方で使う)。
+function renderAttrSet(elExpr: string, b: AttrBinding): string {
+  return attrBindingKind(b.name) === 'attr'
+    ? `${elExpr}.setAttribute(${JSON.stringify(b.name)}, ${b.rendered});`
+    : `${elExpr}.${b.name} = ${b.rendered};`
 }
 
 // M5.5: ボディ内のテキストマーカー / ネストした構造ユニットマーカーの選別。
@@ -128,7 +140,9 @@ function branchHasUpdate(
   inItemScope: boolean,
 ): boolean {
   return (
-    bodyUnits(body).length > 0 || (inItemScope && bodyTexts(body).length > 0)
+    bodyUnits(body).length > 0 ||
+    (inItemScope &&
+      (bodyTexts(body).length > 0 || body.localAttrBindings.length > 0))
   )
 }
 
@@ -172,6 +186,15 @@ function generateFactory(
       `  const __${m.id}__ = __find__(__el__, ${JSON.stringify(m.id)});`,
     )
   }
+  // ADR-0012: 属性のみの要素のマーカーは localMarkers に居ないので、find 定数を
+  // 別途確保する(text マーカーと同居する場合は重複させない)。
+  const attrs = body.localAttrBindings
+  const foundIds = new Set(body.localMarkers.map((m) => m.id))
+  for (const id of new Set(attrs.map((b) => b.markerId))) {
+    if (!foundIds.has(id)) {
+      lines.push(`  const __${id}__ = __find__(__el__, ${JSON.stringify(id)});`)
+    }
+  }
   // ネストしたユニットの状態・factory はこのクロージャ専有(specs
   // 「ネストした構造ユニットのライフサイクル」: 外側の DOM remove() とともに
   // 参照ごと失われる。明示的な teardown は生成しない ― ADR-0005 決定4)。
@@ -211,15 +234,24 @@ function generateFactory(
       `  __find__(__el__, ${JSON.stringify(h.markerId)}).addEventListener(${JSON.stringify(h.eventName)}, ${renderHandlerCall(h)});`,
     )
   }
-  // テキストの再描画が要るのは item 仮引数(自身または外側)を参照しうる
-  // 場合のみ。それ以外は静的なので一度だけ設定する。
+  // テキスト/属性の再設定が要るのは item 仮引数(自身または外側)を参照
+  // しうる場合のみ。それ以外は静的なので一度だけ設定する(属性の初期値は
+  // テンプレートに焼き込まれないため、この設定行が初期値を兼ねる —
+  // ADR-0012 決定3)。
   const refreshTexts = (itemParam != null || inItemScope) && texts.length > 0
-  const needsUpdate = itemParam != null || refreshTexts || units.length > 0
+  const refreshAttrs = (itemParam != null || inItemScope) && attrs.length > 0
+  const needsUpdate =
+    itemParam != null || refreshTexts || refreshAttrs || units.length > 0
   if (!refreshTexts) {
     for (const m of texts) {
       lines.push(
         `  __${m.id}__.textContent = \`${innerTemplateSource(m.contentParts)}\`;`,
       )
+    }
+  }
+  if (!refreshAttrs) {
+    for (const b of attrs) {
+      lines.push(`  ${renderAttrSet(`__${b.markerId}__`, b)}`)
     }
   }
   if (needsUpdate) {
@@ -230,6 +262,11 @@ function generateFactory(
         lines.push(
           `    __${m.id}__.textContent = \`${innerTemplateSource(m.contentParts)}\`;`,
         )
+      }
+    }
+    if (refreshAttrs) {
+      for (const b of attrs) {
+        lines.push(`    ${renderAttrSet(`__${b.markerId}__`, b)}`)
       }
     }
     for (const u of units) {
@@ -473,6 +510,7 @@ export function generateModule({
   derivedRecompute,
   handlers,
   actions,
+  attrBindings,
   initialHtml,
 }: GenerateModuleInput): string {
   const outLines: string[] = []
@@ -488,6 +526,7 @@ export function generateModule({
     ...new Set<string>([
       ...markers.map((m) => m.id),
       ...handlers.map((h) => h.markerId),
+      ...attrBindings.map((b) => b.markerId),
     ]),
   ]
   outLines.push(`const __MARKER_IDS__ = ${JSON.stringify(markerIds)};`, '')
@@ -564,6 +603,14 @@ export function generateModule({
     }
   }
 
+  // ADR-0012: marker id -> トップレベル動的属性の逆引き(update_* 生成用)。
+  const attrsByMarker = new Map<MarkerId, AttrBinding[]>()
+  for (const b of attrBindings) {
+    const list = attrsByMarker.get(b.markerId) ?? []
+    list.push(b)
+    attrsByMarker.set(b.markerId, list)
+  }
+
   for (const [signalId, markerIds] of signalToMarkers) {
     const name = declOutputName.get(signalId)
     outLines.push(`export function update_${name}() {`)
@@ -573,6 +620,14 @@ export function generateModule({
       )
     }
     for (const mId of markerIds) {
+      // 動的属性の再設定(属性のみの marker id は markers に実体を持たない
+      // ため、marker 解決より先に処理する)。
+      const bindings = attrsByMarker.get(mId)
+      if (bindings) {
+        outLines.push(
+          `  { const __el = __markers__.get(${JSON.stringify(mId)}); if (__el) { ${bindings.map((b) => renderAttrSet('__el', b)).join(' ')} } }`,
+        )
+      }
       const marker = markers.find((m) => m.id === mId)
       if (!marker) continue
       if (marker.kind === 'text') {

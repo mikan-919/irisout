@@ -31,12 +31,13 @@ ADR-0007、ADR-0005の追記、ADR-0008+下記「次のアクション」を参�
   フォーム走査 / 返り値クロージャの3チャネル)。top-level要素のみで、
   ユニット内`use=`とJSX型定義は別change待ち(STATUS.md参照)。
 - (02) 完了トグルに応じた動的 class 付与(`class={cond ? 'a' : ''}`)の
-  生成先 / authored 側はJSXの三項式をそのまま書いた / M4(静的host属性)
-  の後続として新規に計画が要る、現時点でロードマップに項目がない
-  「未計画のパリティ穴」。
+  生成先 / authored 側はJSXの三項式をそのまま書いた / **解消済み
+  (ADR-0012、change `dynamic-attribute-bindings`)**: setAttribute 反映の
+  動的属性バインディングとして実装。
 - (03) checkbox の `checked` を DOM プロパティとして都度反映する仕組み /
-  authored 側は `checked={todo.completed}` をそのまま書いた / (02)と同様
-  M4後続の新規計画が要る。
+  authored 側は `checked={todo.completed}` をそのまま書いた / **解消済み
+  (ADR-0012)**: attribute/property の固定表(`checked`/`value` は
+  プロパティ反映)で実装。
 - (04) アイテムごとのローカル編集状態を authoring API でどう表現するか /
   コンポーネント全体で1つの `editingId` signal を代用(TodoMVCが同時1件
   編集の性質に依存した暫定策で、一般形には拡張できない) / ADR-0005は
@@ -134,7 +135,9 @@ M5 単体ではなく **M5+`use=`** と置き直す(2026-07-14 相談)。
    ADR-0005の見立て(keyed reuseのMapの帳簿コストはReact Fiberと同種)は
    実ブラウザでは**支持され**、アイテムごとの直接リスナーを委譲方式へ
    変える性能上の動機は消えた(メモリ面の比較のみ未計測のまま残る)。
-8. その後: 動的属性バインディング(UNRESOLVED 02/03)。
+8. ~~動的属性バインディング(UNRESOLVED 02/03)~~ — **完了**(ADR-0012、
+   change `dynamic-attribute-bindings`)。あわせてユニットホスト要素の
+   ハンドラが黙って捨てられるバグを修正。
 9. **未計画:** authored `.jsx` の型検査基盤(`types/jsx.d.ts` + examplesの
    tsconfig組み込み)。`use=`のJSX型定義(ADR-0011 design.md Decision 6)は
    これに依存して先送りされている ― `signal`/`render`/ハンドラ属性を含め

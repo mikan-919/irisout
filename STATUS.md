@@ -21,6 +21,13 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
 `dist/app.js` に乗るため、サイズ予算係数を 3x → **4x** へ明示的に変更
 (生成コード側の肥大化ではない。係数を締め直すのは M6 のスコープ)。
 
+2026-07-19: 動的属性バインディングを実装(ADR-0012、change
+`dynamic-attribute-bindings`、UNRESOLVED 02/03 解消)。式コンテナ値の host
+属性を受理し、`checked`/`value` はプロパティ反映・他は setAttribute。
+ユニット内の属性式はテキストと同じ scope limit(追跡 signal 参照は拒否)。
+あわせて、構造ユニットを唯一の子に持つ要素のハンドラが黙って捨てられる
+計画外バグを発見・修正(ユニットのマーカー id へ配線)。
+
 ## マイルストーン表
 
 | M | 内容 | 状態 | 備考 |
@@ -67,8 +74,11 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
     ADR-0005のfactory closureパターンをトップレベルにも広げれば構造的に
     解消できるが、それはAPIの大きな変更を伴う。実需が出るまでは着手しない
     (2026-07-05 grillingで確認済み)。
-- 静的host属性はM4で実装済み。動的(式コンテナ)host属性値はM4スコープ外で、
-  引き続きcompile error(`scope limit`)で拒否する ― post-M6のパリティ穴。
+- 静的host属性はM4、動的(式コンテナ)host属性値はADR-0012(change
+  `dynamic-attribute-bindings`)で実装済み。attribute/property の使い分けは
+  固定表(`checked` = booleanプロパティ、`value` = 文字列プロパティ、他は
+  `setAttribute`)。ユニット内の属性式が追跡 signal を参照するのは
+  テキストと同じく `scope limit`(UNRESOLVED-04 とセットで将来緩める)。
 - **リスト(`.map()`)・条件分岐(三項/`&&`)はM5+M5.5で実装済み**
   (change `m5-list-conditional-factory-closures` /
   `m5-5-nested-structural-units`)。ネストは1階層まで(リストアイテム内の

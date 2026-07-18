@@ -13,6 +13,7 @@
 import type { NodePath } from '@babel/traverse'
 import type * as t from '@babel/types'
 import {
+  attrBindingKind,
   cleanJSXText,
   escapeTemplateText,
   innerTemplateSource,
@@ -298,9 +299,12 @@ function collectAttrs(
   handlerAttrs: HandlerAttr[]
   staticAttrs: StaticAttr[]
   actionAttr: HandlerBody | null
+  dynamicAttrPaths: { name: string; exprPath: NodePath<t.Expression> }[]
 } {
   const handlerAttrs: HandlerAttr[] = []
   const staticAttrs: StaticAttr[] = []
+  const dynamicAttrPaths: { name: string; exprPath: NodePath<t.Expression> }[] =
+    []
   let actionAttr: HandlerBody | null = null
   for (const attr of elementPath.get('openingElement').get('attributes')) {
     if (!attr.isJSXAttribute()) {
@@ -338,8 +342,8 @@ function collectAttrs(
     }
     if (attrName.type !== 'JSXIdentifier' || !/^on[A-Z]/.test(attrName.name)) {
       // ハンドラ以外: 属性名が JSXIdentifier で、値が文字列リテラルまたは
-      // 値なしなら静的属性。式コンテナ値・JSXNamespacedName は拒否する
-      // (design.md 決定4: 式の中身は評価せず構文だけで判定する)。
+      // 値なしなら静的属性、式コンテナなら動的属性バインディング(ADR-0012)。
+      // JSXNamespacedName は引き続き拒否する。
       if (attrName.type === 'JSXIdentifier' && valueNode == null) {
         staticAttrs.push({ name: attrName.name, valueless: true })
         continue
@@ -349,6 +353,17 @@ function collectAttrs(
         valueNode?.type === 'StringLiteral'
       ) {
         staticAttrs.push({ name: attrName.name, value: valueNode.value })
+        continue
+      }
+      if (
+        attrName.type === 'JSXIdentifier' &&
+        valueNode?.type === 'JSXExpressionContainer' &&
+        valueNode.expression.type !== 'JSXEmptyExpression'
+      ) {
+        dynamicAttrPaths.push({
+          name: attrName.name,
+          exprPath: attr.get('value.expression') as NodePath<t.Expression>,
+        })
         continue
       }
       throw new Error(
@@ -372,7 +387,7 @@ function collectAttrs(
       : analyzeHandlerExpr(ctx, body, instanceId)
     handlerAttrs.push({ eventName, rendered, writeDeclIds, param })
   }
-  return { handlerAttrs, staticAttrs, actionAttr }
+  return { handlerAttrs, staticAttrs, actionAttr, dynamicAttrPaths }
 }
 
 // design.md Decision 4/5: action本体の解析(ADR-0009の機械+ネストした関数への
@@ -431,21 +446,54 @@ function renderElement(
       `compile: component references (<${tagName}/>) are not supported yet (scope limit)`,
     )
   }
-  const { handlerAttrs, staticAttrs, actionAttr } = collectAttrs(
-    ctx,
-    elementPath,
-    instanceId,
-    handlerFns,
-    opts.skipAttrName,
-  )
+  const { handlerAttrs, staticAttrs, actionAttr, dynamicAttrPaths } =
+    collectAttrs(ctx, elementPath, instanceId, handlerFns, opts.skipAttrName)
+  const elementUnitDepth = opts.unitDepth ?? 0
   // ADR-0011 design.md Decision 3: 返り値クロージャの動的レジストリが要るため、
   // リストアイテム/条件分岐ブランチの中の `use=` は対象外のまま。
-  if (actionAttr && (opts.unitDepth ?? 0) > 0) {
+  if (actionAttr && elementUnitDepth > 0) {
     throw new Error(
       'compile: use= inside list/conditional units is not supported yet (scope limit)',
     )
   }
   const attrs = renderStaticAttrs(staticAttrs)
+
+  // ADR-0012: 動的属性バインディング。トップレベルのみビルド時実行で初期値を
+  // 焼き込む(design D3 — ユニット内のテンプレートは innerHTML に生で渡る
+  // ため `${...}` を属性位置に置けない。factory 側の設定行が初期値を兼ねる)。
+  const dynAttrs = dynamicAttrPaths.map((d) => ({
+    name: d.name,
+    ...analyzeExpr(ctx, d.exprPath, instanceId),
+  }))
+  const dynBake =
+    elementUnitDepth === 0
+      ? dynAttrs
+          .map((a) =>
+            attrBindingKind(a.name) === 'boolProp'
+              ? `\${(${a.sourceRendered}) ? " ${a.name}" : ""}`
+              : ` ${a.name}="\${__escAttr__(${a.sourceRendered})}"`,
+          )
+          .join('')
+      : ''
+  // 要素のマーカー id に相乗りさせて登録する(text/handler と同じ前例)。
+  // トップレベルでは deps を markerDeps へ合流させ update_<name>() の対象に
+  // する。ユニット内は renderStructuralUnitBody の splice が回収し、deps は
+  // scope limit 判定に使う(ADR-0012 決定5)。
+  const attachAttrBindings = (markerId: MarkerId): void => {
+    for (const a of dynAttrs) {
+      ctx.attrBindings.push({
+        markerId,
+        name: a.name,
+        rendered: a.rendered,
+        deps: a.deps,
+      })
+      if (elementUnitDepth === 0) {
+        const set = ctx.markerDeps.get(markerId) ?? new Set<DeclId>()
+        for (const d of a.deps) set.add(d)
+        ctx.markerDeps.set(markerId, set)
+      }
+    }
+  }
 
   const children = elementPath.get('children') as NodePath<JSXChild>[]
 
@@ -494,7 +542,14 @@ function renderElement(
             unitDepth + 1,
           )
     if (actionAttr) registerAction(ctx, markerId, actionAttr, instanceId)
-    return `<${tagName}${attrs} data-iris-id="${markerId}"></${tagName}>`
+    // ユニットホスト要素のハンドラ/動的属性はユニットのマーカー id へ相乗り
+    // する(従来ハンドラは黙って捨てられていた — silent drop 修正、
+    // change dynamic-attribute-bindings design D5)。
+    for (const h of handlerAttrs) {
+      ctx.handlers.push({ markerId, ...h })
+    }
+    attachAttrBindings(markerId)
+    return `<${tagName}${attrs}${dynBake} data-iris-id="${markerId}"></${tagName}>`
   }
 
   // sole child ではない位置にリスト/条件分岐の式コンテナが混ざっている場合
@@ -527,17 +582,18 @@ function renderElement(
         })
       else throw new Error('compile: unsupported JSX child (scope limit)')
     }
-    if (handlerAttrs.length === 0 && !actionAttr) {
+    if (handlerAttrs.length === 0 && !actionAttr && dynAttrs.length === 0) {
       return `<${tagName}${attrs}>${inner}</${tagName}>`
     }
-    // reactive text を持たない要素にハンドラ/actionだけが付く場合、mount() が
-    // 拾えるようこの要素専用のマーカーを新規に発行する。
+    // reactive text を持たない要素にハンドラ/action/動的属性だけが付く場合、
+    // mount() が拾えるようこの要素専用のマーカーを新規に発行する。
     const markerId = nextMarkerId(ctx)
     for (const h of handlerAttrs) {
       ctx.handlers.push({ markerId, ...h })
     }
     if (actionAttr) registerAction(ctx, markerId, actionAttr, instanceId)
-    return `<${tagName}${attrs} data-iris-id="${markerId}">${inner}</${tagName}>`
+    attachAttrBindings(markerId)
+    return `<${tagName}${attrs}${dynBake} data-iris-id="${markerId}">${inner}</${tagName}>`
   }
 
   const runPaths: NodePath<t.JSXText | t.JSXExpressionContainer>[] = []
@@ -557,7 +613,8 @@ function renderElement(
     ctx.handlers.push({ markerId, ...h })
   }
   if (actionAttr) registerAction(ctx, markerId, actionAttr, instanceId)
-  return `<${tagName}${attrs} data-iris-id="${markerId}">${sourceInner}</${tagName}>`
+  attachAttrBindings(markerId)
+  return `<${tagName}${attrs}${dynBake} data-iris-id="${markerId}">${sourceInner}</${tagName}>`
 }
 
 // M5(ADR-0005): 式コンテナの中身が「リスト(`.map()`)」「条件分岐(三項/`&&`)」
@@ -630,6 +687,7 @@ function renderStructuralUnitBody(
 ): { body: StructuralUnitBody; nestedDeps: Set<DeclId> } {
   const markersBefore = ctx.markers.length
   const handlersBefore = ctx.handlers.length
+  const attrsBefore = ctx.attrBindings.length
   const template = renderElement(ctx, elementPath, instanceId, handlerFns, {
     skipAttrName,
     unitDepth,
@@ -640,6 +698,16 @@ function renderStructuralUnitBody(
     | ConditionalMarker
   )[]
   const localHandlers = ctx.handlers.splice(handlersBefore)
+  // ADR-0012 決定5: ユニット内の属性式が追跡 signal を参照するのはテキストと
+  // 同じ scope limit(item フィールド参照のみ許す)。
+  const localAttrBindings = ctx.attrBindings.splice(attrsBefore)
+  for (const b of localAttrBindings) {
+    if (b.deps.size > 0) {
+      throw new Error(
+        'compile: attribute binding referencing a tracked signal inside a list item or conditional branch is not supported yet (scope limit)',
+      )
+    }
+  }
   const nestedDeps = new Set<DeclId>()
   for (const m of localMarkers) {
     const deps = ctx.markerDeps.get(m.id)
@@ -655,7 +723,10 @@ function renderStructuralUnitBody(
       for (const d of deps ?? []) nestedDeps.add(d)
     }
   }
-  return { body: { template, localMarkers, localHandlers }, nestedDeps }
+  return {
+    body: { template, localMarkers, localHandlers, localAttrBindings },
+    nestedDeps,
+  }
 }
 
 // `{expr.map((item) => <li key={...}>...)}` を1つの ListMarker にする。

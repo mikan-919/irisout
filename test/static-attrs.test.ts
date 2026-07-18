@@ -3,9 +3,10 @@ import { compile } from '../src/compiler.js'
 import { createContainer, loadGenerated } from './helpers.js'
 
 // マイルストーン4: host 要素の静的属性(文字列リテラル・値なし真偽属性)を
-// 初期 HTML テンプレートへそのまま反映する。動的(式コンテナ)値・spread は
-// 明示的な compile error で拒否する。specs/static-host-attributes/spec.md の
-// 各 Scenario に対応。
+// 初期 HTML テンプレートへそのまま反映する。spread は明示的な compile error
+// で拒否する。specs/static-host-attributes/spec.md の各 Scenario に対応。
+// 式コンテナ値は ADR-0012 で動的属性バインディングとして受理するようになった
+// (test/dynamic-attrs.test.ts)— 旧「拒否」テストは受理の確認に置き換え。
 function wrap(uiJsx: string): string {
   return `export function App() { render(${uiJsx}); }`
 }
@@ -33,18 +34,18 @@ describe('milestone 4: static host attributes', () => {
     expect(initialHtml).toBe('<input disabled></input>')
   })
 
-  it('rejects an expression-container value that depends on a signal', () => {
+  it('accepts an expression-container value as a dynamic binding (ADR-0012)', () => {
     const source = `export function App() {
       const active = signal(false);
       render(<div class={active() ? 'a' : 'b'}></div>);
     }`
-    expect(() => compile(source)).toThrow(/scope limit/)
+    const { initialHtml } = compile(source)
+    expect(initialHtml).toContain('class="b"')
   })
 
-  it('rejects an expression-container value that is a constant expression', () => {
-    expect(() => compile(wrap(`<div tabIndex={0}></div>`))).toThrow(
-      /scope limit/,
-    )
+  it('accepts a constant expression-container value (ADR-0012)', () => {
+    const { initialHtml } = compile(wrap(`<div tabIndex={0}></div>`))
+    expect(initialHtml).toContain('tabIndex="0"')
   })
 
   it('rejects a spread attribute', () => {
