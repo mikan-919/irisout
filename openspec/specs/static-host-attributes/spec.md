@@ -3,11 +3,11 @@
 ## Purpose
 
 JSX ホスト要素に書かれた静的な文字列属性・値なし真偽属性をコンパイルし、
-生成される初期 HTML テンプレートへ反映する。動的(式コンテナ)属性値・
-spread 属性は明示的な compile error で拒否する。
+生成される初期 HTML テンプレートへ反映する。spread 属性は明示的な
+compile error で拒否する。動的(式コンテナ)属性値は ADR-0012 以降
+`dynamic-attribute-bindings` capability が扱う。
 
 ## Requirements
-
 ### Requirement: 静的文字列属性のテンプレート反映
 コンパイラは、host 要素の JSX 属性値が文字列リテラル(`StringLiteral`)である
 場合、その属性をマーカーやハンドラ配線を発行せず、生成される初期 HTML
@@ -42,25 +42,6 @@ spread 属性は明示的な compile error で拒否する。
 - **THEN** コンパイラは compile error を出さずに完了し、生成される初期 HTML
   テンプレートの該当要素に値なしの `disabled` 属性を含む
 
-### Requirement: 式コンテナ属性値の拒否
-コンパイラは、host 属性の値が `JSXExpressionContainer` である場合、その
-中身が定数式であるか signal/derived に依存する式であるかを問わず、
-compile error を発生させなければならない(SHALL)。エラーメッセージは
-`compile:` で始まり、意図的な未実装であることを示す `(scope limit)` を
-末尾に含む。
-
-#### Scenario: signal に依存する動的属性値
-- **WHEN** authored JSX が `<div class={active() ? 'a' : 'b'}>` のように
-  signal 呼び出しを含む式コンテナを host 属性の値に持つ
-- **THEN** コンパイラは `compile:` で始まり `(scope limit)` を末尾に含む
-  エラーを投げ、生成を継続しない
-
-#### Scenario: 定数式のみを含む属性値
-- **WHEN** authored JSX が `<div tabIndex={0}>` のように signal に依存
-  しない定数式のみを含む式コンテナを host 属性の値に持つ
-- **THEN** コンパイラは(値が定数であっても)`compile:` で始まり
-  `(scope limit)` を末尾に含むエラーを投げ、生成を継続しない
-
 ### Requirement: spread 属性の拒否の維持
 コンパイラは、host 要素の `JSXSpreadAttribute`(`{...props}`)を、この変更の
 前後を通じて compile error で拒否し続けなければならない(SHALL)。
@@ -81,3 +62,4 @@ compile error を発生させなければならない(SHALL)。エラーメッ�
 - **THEN** コンパイラは compile error を出さずに完了し、生成される初期 HTML
   テンプレートは `type="button"` を含み、かつ生成コードは `onClick` に
   対応するイベントリスナー配線を含む
+

@@ -10,9 +10,7 @@ factory-per-unitクロージャで生成する(M5、change
 リストアイテム内・条件分岐ブランチ内にさらにリスト/条件分岐がネストする
 形(UNRESOLVED-06/07)は1階層まで受理する(M5.5、change
 `m5-5-nested-structural-units`)。2階層以上のネストはスコープ制限で拒否する。
-
 ## Requirements
-
 ### Requirement: templateスタンプ機構によるインスタンス生成
 コンパイラは、リストアイテム・条件分岐ブランチの中身を`<template>`要素として
 1回だけ生成し、インスタンスごとに`content.cloneNode(true)`で複製しなければ
@@ -173,3 +171,16 @@ update関数を、外側の構造ユニットのfactory関数のローカルス�
 - **THEN** 生成されたコードは、明示的なteardown関数を呼び出さず、
   アイテムのDOM要素の`remove()`のみを行う(内側条件分岐の状態は
   参照ごと失われる)
+
+### Requirement: ユニットホスト要素のハンドラ配線
+構造ユニット(リスト/条件分岐)を唯一の子に持つ要素に `on[A-Z]...`
+ハンドラ属性がある場合、コンパイラはそのハンドラをユニットのマーカー id
+へ配線しなければならない(SHALL)。黙って捨ててはならない(従来は
+silent drop になっていた)。
+
+#### Scenario: リストホスト要素の onClick
+- **WHEN** `<ul onClick={handler}>{items().map(...)}</ul>` を含むソースを
+  `compile()` して mount する
+- **THEN** 生成コードは `ul` 要素へのイベントリスナー配線を含み、click
+  発火でハンドラが実行される
+
