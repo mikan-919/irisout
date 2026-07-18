@@ -38,21 +38,38 @@ export function derived<T>(compute: () => T, declId?: DeclId): () => T {
 // `data-iris-id` を持つ要素をすべて収集する。innerHTML の書き換えは
 // 一切行わない - dist/index.html のように初期 HTML がすでにブラウザへ
 // 届いているケース(ADR-0003 相当)向け。
-export function hydrate(container: Element): { markers: Map<string, Element> } {
+//
+// expectedIds(生成コードがコンパイル時に確定したマーカー ID 集合)が
+// 渡された場合、収集結果に無い ID があれば即 throw する。不一致は続行しても
+// 正しく動かない(更新が届かない DOM を放置する)ので、黙って no-op に
+// させない。省略時は検証スキップ(後方互換)。
+export function hydrate(
+  container: Element,
+  expectedIds?: readonly string[],
+): { markers: Map<string, Element> } {
   const markers = new Map<string, Element>()
   collectMarkers(container, markers)
+  if (expectedIds) {
+    const missing = expectedIds.filter((id) => !markers.has(id))
+    if (missing.length > 0) {
+      throw new Error(
+        `hydrate: missing marker(s): ${missing.join(', ')} — initial HTML does not match compiled output`,
+      )
+    }
+  }
   return { markers }
 }
 
 // 焼き込み済みの初期 HTML を1回描画し、`data-iris-id` を持つ要素をすべて
 // キャッシュして、生成された update_* 関数が二度と DOM を探索しなくて
-// 済むようにする。
+// 済むようにする。expectedIds の検証は hydrate() に委譲する。
 export function mount(
   container: Element,
   html: string,
+  expectedIds?: readonly string[],
 ): { markers: Map<string, Element> } {
   container.innerHTML = html
-  return hydrate(container)
+  return hydrate(container, expectedIds)
 }
 
 function collectMarkers(root: Element, markers: Map<string, Element>): void {

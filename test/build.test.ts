@@ -44,6 +44,27 @@ describe('hydrate over statically baked HTML (no mount(), no innerHTML write)', 
     // count: 0 -> 1, doubled: 0 -> 2, span shows count()+doubled() = 3
     expect(container.querySelector('span')?.textContent).toBe('3')
   })
+
+  // hydration-marker-verification: DOM と生成コードの不一致は黙って no-op に
+  // せず、mount/hydrate の時点で欠落 ID を列挙して throw する。
+  it('hydrateComponent throws with missing marker ids when initial HTML was tampered', async () => {
+    const { code, initialHtml } = compile(COUNTER_SOURCE)
+
+    const dom = new JSDOM(`<!doctype html><div id="app">${initialHtml}</div>`)
+    const container = dom.window.document.getElementById('app')
+    if (!container) throw new Error('container not found')
+
+    // マーカー要素を1つ削除して「改変済み初期 HTML」を再現する。
+    const tampered = container.querySelector('[data-iris-id]')
+    if (!tampered) throw new Error('marker element not found')
+    const missingId = tampered.getAttribute('data-iris-id')
+    tampered.remove()
+
+    const mod = await loadGenerated(code)
+    expect(() =>
+      (mod.hydrateComponent as (c: Element) => void)(container),
+    ).toThrow(new RegExp(`missing marker\\(s\\).*${missingId}`))
+  })
 })
 
 describe('scripts/build.ts end to end', () => {

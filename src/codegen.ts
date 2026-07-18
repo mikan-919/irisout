@@ -480,6 +480,18 @@ export function generateModule({
   outLines.push(...declStatements.map((s) => `export ${s}`), '')
   outLines.push(`const __INITIAL_HTML__ = ${JSON.stringify(initialHtml)};`, '')
 
+  // 検証用の期待マーカー ID(トップレベルマーカー全部+ハンドラのみの
+  // マーカー)。factory 内部のローカルマーカーは <template> 由来で欠落
+  // し得ないため対象外。検証ループはランタイム側(ADR-0004: 出力の膨張を
+  // 最小化)。
+  const markerIds = [
+    ...new Set<string>([
+      ...markers.map((m) => m.id),
+      ...handlers.map((h) => h.markerId),
+    ]),
+  ]
+  outLines.push(`const __MARKER_IDS__ = ${JSON.stringify(markerIds)};`, '')
+
   const { declLines, templateSetupLines, signalsNeedingInitialCall } =
     generateStructuralUnits(markers, signalToMarkers)
   if (declLines.length > 0) outLines.push(...declLines, '')
@@ -524,7 +536,7 @@ export function generateModule({
   outLines.push(
     'let __markers__;',
     'export function mountComponent(container) {',
-    '  ({ markers: __markers__ } = mount(container, __INITIAL_HTML__));',
+    '  ({ markers: __markers__ } = mount(container, __INITIAL_HTML__, __MARKER_IDS__));',
     ...docSetupLines,
     ...setupLines,
     ...initialUpdateCalls,
@@ -532,7 +544,7 @@ export function generateModule({
     '}',
     '',
     'export function hydrateComponent(container) {',
-    '  ({ markers: __markers__ } = hydrate(container));',
+    '  ({ markers: __markers__ } = hydrate(container, __MARKER_IDS__));',
     ...docSetupLines,
     ...setupLines,
     ...initialUpdateCalls,

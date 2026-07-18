@@ -95,7 +95,7 @@ describe('golden: signal/derived ラッパー非混入(ADR-0006 回帰チェッ�
 })
 
 describe('golden: 手書き基準に対するサイズ予算', () => {
-  it('dist/app.js は手書き基準(examples/counter.handwritten.js)の3倍以内', () => {
+  it('dist/app.js は手書き基準(examples/counter.handwritten.js)の4倍以内', () => {
     const result = spawnSync('bun', [
       'scripts/build.ts',
       'examples/counter.jsx',
@@ -118,10 +118,13 @@ describe('golden: 手書き基準に対するサイズ予算', () => {
     const appBytes = statSync('dist/app.js').size
     const ratio = appBytes / baselineBytes
     // 退行の兆候を早期に可視化するため実測比を出力する(係数を締めるのは M6)。
+    // 2026-07-18: hydration-marker-verification のランタイム検証(固定費)で
+    // 3x を超えたため 4x へ引き上げ(loud-hydration-mismatch の spec delta 参照。
+    // 生成コード側の肥大化ではない)。
     console.log(
-      `[size budget] dist/app.js=${appBytes}B / handwritten=${baselineBytes}B = ${ratio.toFixed(2)}x (budget 3x)`,
+      `[size budget] dist/app.js=${appBytes}B / handwritten=${baselineBytes}B = ${ratio.toFixed(2)}x (budget 4x)`,
     )
 
-    expect(appBytes).toBeLessThanOrEqual(baselineBytes * 3)
+    expect(appBytes).toBeLessThanOrEqual(baselineBytes * 4)
   })
 })

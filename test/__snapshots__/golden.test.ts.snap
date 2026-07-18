@@ -8,13 +8,15 @@ export let doubled = count * 2;
 
 const __INITIAL_HTML__ = "<div data-iris-id=\\"m0\\">0</div>";
 
+const __MARKER_IDS__ = ["m0"];
+
 let __markers__;
 export function mountComponent(container) {
-  ({ markers: __markers__ } = mount(container, __INITIAL_HTML__));
+  ({ markers: __markers__ } = mount(container, __INITIAL_HTML__, __MARKER_IDS__));
 }
 
 export function hydrateComponent(container) {
-  ({ markers: __markers__ } = hydrate(container));
+  ({ markers: __markers__ } = hydrate(container, __MARKER_IDS__));
 }
 
 export function update_count() {
@@ -34,16 +36,18 @@ export let doubled = count * 2;
 
 const __INITIAL_HTML__ = "<div><span data-iris-id=\\"m0\\">0</span><button data-iris-id=\\"m1\\">+</button></div>";
 
+const __MARKER_IDS__ = ["m0","m1"];
+
 const __handler_m1_click = (...__args) => { count = count + 1; update_count(); };
 
 let __markers__;
 export function mountComponent(container) {
-  ({ markers: __markers__ } = mount(container, __INITIAL_HTML__));
+  ({ markers: __markers__ } = mount(container, __INITIAL_HTML__, __MARKER_IDS__));
   __markers__.get("m1")?.addEventListener("click", __handler_m1_click);
 }
 
 export function hydrateComponent(container) {
-  ({ markers: __markers__ } = hydrate(container));
+  ({ markers: __markers__ } = hydrate(container, __MARKER_IDS__));
   __markers__.get("m1")?.addEventListener("click", __handler_m1_click);
 }
 
@@ -61,18 +65,20 @@ export let count = 0;
 
 const __INITIAL_HTML__ = "<div><span data-iris-id=\\"m0\\">0</span><button data-iris-id=\\"m1\\">+</button></div>";
 
+const __MARKER_IDS__ = ["m0","m1"];
+
 const __handler_m1_click = (e, ...__args) => { if (e.detail > 1) return;
     const n = count + 1;
     count = n;; update_count(); };
 
 let __markers__;
 export function mountComponent(container) {
-  ({ markers: __markers__ } = mount(container, __INITIAL_HTML__));
+  ({ markers: __markers__ } = mount(container, __INITIAL_HTML__, __MARKER_IDS__));
   __markers__.get("m1")?.addEventListener("click", __handler_m1_click);
 }
 
 export function hydrateComponent(container) {
-  ({ markers: __markers__ } = hydrate(container));
+  ({ markers: __markers__ } = hydrate(container, __MARKER_IDS__));
   __markers__.get("m1")?.addEventListener("click", __handler_m1_click);
 }
 
