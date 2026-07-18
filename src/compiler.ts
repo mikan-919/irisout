@@ -54,6 +54,23 @@ export interface CompileResult {
   declName: Map<DeclId, string>
 }
 
+// Program 直下は関数宣言(export 付き含む)のみ受理する。import 文・
+// トップレベル const・副作用式は現状の実装では出力に反映されない(黙って
+// 捨てられ、参照時に生 ReferenceError になる)ため、一律拒否が正直な挙動。
+// 将来トップレベル定数等を受理するときは、ここを明示的な設計判断として
+// 緩める(scope-limit-coverage design D2)。
+function assertTopLevelShape(program: t.Program): void {
+  for (const stmt of program.body) {
+    const inner =
+      stmt.type === 'ExportNamedDeclaration' ? stmt.declaration : stmt
+    if (inner?.type !== 'FunctionDeclaration') {
+      throw new Error(
+        'compile: only top-level function declarations are supported (scope limit)',
+      )
+    }
+  }
+}
+
 // トップレベルのコンポーネントをすべて列挙し、誰からも参照されない唯一の
 // ルートを特定する(パイプライン手順2)。
 function findRootComponent(
@@ -124,6 +141,7 @@ export function compile(source: string): CompileResult {
     sourceType: 'module',
     plugins: ['typescript', 'jsx'],
   })
+  assertTopLevelShape(ast.program)
   const ctx = createCompilerState(source)
   const rootPath = findRootComponent(ast)
 
@@ -211,7 +229,18 @@ export function compile(source: string): CompileResult {
     signalFn: typeof signal,
     derivedFn: typeof derived,
   ) => string
-  const initialHtml = runComponent(signal, derived)
+  // 構文検査(assertTopLevelShape / render.ts の scope limit 群)をすり抜けた
+  // 未知の経路が残っても、生の実行時エラーではなく「コンパイルの失敗」として
+  // 報告する安全網(scope-limit-coverage design D3)。元エラーは cause に保持。
+  let initialHtml: string
+  try {
+    initialHtml = runComponent(signal, derived)
+  } catch (e) {
+    throw new Error(
+      `compile: build-time execution failed: ${e instanceof Error ? e.message : String(e)}`,
+      { cause: e },
+    )
+  }
 
   for (const [id, kind] of ctx.declKind) {
     const entry = registry.get(id)

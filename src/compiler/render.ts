@@ -150,10 +150,18 @@ function processDeclarationStatement(
     throw scopeLimit
   }
 
+  // 分割代入宣言子(`const [a] = signal(0)` 等)は無検証キャストで素通り
+  // するとビルド時実行の生 ReferenceError になる。ここで明示拒否する。
+  if (declarator.id.type !== 'Identifier') {
+    throw new Error(
+      'compile: destructuring signal()/derived() declarations are not supported (scope limit)',
+    )
+  }
+
   const argPath = stmt.get(
     'declarations.0.init.arguments.0',
   ) as NodePath<t.Expression>
-  const naturalName = (declarator.id as t.Identifier).name
+  const naturalName = declarator.id.name
   if (init.callee.name === 'signal') {
     const { rendered, sourceRendered } = analyzeExpr(ctx, argPath, instanceId)
     emitSignal(

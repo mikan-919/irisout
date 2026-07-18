@@ -34,6 +34,12 @@ TypeScript書き直しは M5.5(ネストした構造ユニット)+`use=`アク�
 - **ルートコンポーネントは1つだけ**: `compile()`は「他から一度も参照
   されないトップレベル関数」がちょうど1つであることを要求し、そうで
   なければcompile error(`src/compiler.ts`のscope limit)。
+- **トップレベルは関数宣言のみ**(2026-07-18、change `scope-limit-coverage`):
+  Program 直下は関数宣言(`export` 付き含む)以外(import・トップレベル
+  `const`・副作用式等)を `scope limit` で一律拒否する。現状の実装では
+  出力に反映されず黙って捨てられるため、拒否が正直な挙動。分割代入宣言子
+  (`const [a] = signal(0)` 等)も同様に拒否。ビルド時実行の例外は
+  `compile: build-time execution failed:`(`cause` 付き)に包まれる。
 - **複数インスタンス不可**、ただし2つの別物が混ざっているので分けて書く:
   - (a) *リスト内でのN件ベンチマーク*(例: 1コンポーネント内で1万件の
     リストアイテムを持つ場合の性能・状態保持)は、ADR-0005のfactory
