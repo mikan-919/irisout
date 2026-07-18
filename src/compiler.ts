@@ -225,16 +225,27 @@ export function compile(source: string): CompileResult {
     ...out.instrumentedDeclStatements,
     `return \`${rootHtmlSource}\`;`,
   ].join('\n')
-  const runComponent = new Function('signal', 'derived', instrumentedBody) as (
+  // __esc__: テキストマーカー式値のテキストノード文脈エスケープ
+  // (escape-initial-html design D2)。テキストノードなので `&` と `<` で十分
+  // (属性文脈には使わない ― 属性は template.ts の escapeAttrValue 側)。
+  const runComponent = new Function(
+    'signal',
+    'derived',
+    '__esc__',
+    instrumentedBody,
+  ) as (
     signalFn: typeof signal,
     derivedFn: typeof derived,
+    escFn: (v: unknown) => string,
   ) => string
+  const escapeTextValue = (v: unknown): string =>
+    String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;')
   // 構文検査(assertTopLevelShape / render.ts の scope limit 群)をすり抜けた
   // 未知の経路が残っても、生の実行時エラーではなく「コンパイルの失敗」として
   // 報告する安全網(scope-limit-coverage design D3)。元エラーは cause に保持。
   let initialHtml: string
   try {
-    initialHtml = runComponent(signal, derived)
+    initialHtml = runComponent(signal, derived, escapeTextValue)
   } catch (e) {
     throw new Error(
       `compile: build-time execution failed: ${e instanceof Error ? e.message : String(e)}`,

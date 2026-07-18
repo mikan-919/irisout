@@ -9,6 +9,13 @@ TypeScript書き直しは M5.5(ネストした構造ユニット)+`use=`アク�
 (ADR-0011)まで完了。「使ってもらえる閾値」(M5+`use=`)に到達済み
 (proposal参照)。`legacy/`(元のJS実装)は参照専用で以後メンテナンスしない。
 
+2026-07-18: テキスト式値が初期 HTML へ**未エスケープで焼き込まれる注入穴**を
+発見・修正(計画外バグ、change `escape-initial-html`)。
+`signal("<img onerror=...>")` が `dist/index.html` に生 HTML として注入され、
+かつ実行時更新(`textContent`)と表示が食い違っていた。ビルド時実行にのみ
+`__esc__`(`&`/`<` のエンティティ化)を注入して修正。生成コード・ランタイムは
+不変(ADR-0004)。
+
 2026-07-18: mount/hydrate 時のマーカー存在検証を追加(change
 `loud-hydration-mismatch`)。DOM と生成コードの不一致は黙って no-op に
 ならず、欠落 ID を列挙して throw する。この検証はランタイム固定費として

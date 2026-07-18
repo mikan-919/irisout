@@ -204,7 +204,10 @@ function buildTextMarker(
         sourceRendered,
       } = analyzeExpr(ctx, exprPath as NodePath<t.Expression>, instanceId)
       outputParts.push({ type: 'expr', code: rendered })
-      sourceParts.push({ type: 'expr', code: sourceRendered })
+      // ビルド時実行で初期 HTML に焼き込まれる式値のみ HTML エスケープする
+      // (escape-initial-html design D1)。出力側(textContent 用の rendered)は
+      // HTML を解釈しないのでエスケープ不要 ― ADR-0004: 出力を膨らませない。
+      sourceParts.push({ type: 'expr', code: `__esc__(${sourceRendered})` })
       for (const d of exprDeps) deps.add(d)
     }
   }
