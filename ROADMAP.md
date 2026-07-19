@@ -14,11 +14,12 @@ ADR-0007、ADR-0005の追記、ADR-0008+下記「次のアクション」を参�
 
 ### 0. ハンドラからの関数越え書き込みが追跡されない(2026-07-19 発見)
 
-**決着済み(ADR-0013、2026-07-19)**: 追跡(旧選択肢 (b))を採用。
-callee の binding が動きゾーンの function 宣言に解決される呼び出しは
-本体を再帰解析(visited-set・深さ制限なし)し、書き換え済み関数を出力に
-1回だけ emit する。binding 未解決(グローバル)は素通し、ローカル解決
-だが動きゾーン関数でないものは scope limit。実装 change は未起票。
+**解消済み(ADR-0013、change `cross-function-handler-writes`、2026-07-19)**:
+追跡(旧選択肢 (b))を採用・実装。callee の binding が動きゾーンの function
+宣言に解決される呼び出しは本体を再帰解析(visited-set・深さ制限なし)し、
+書き換え済み関数を出力に1回だけ emit する。binding 未解決(グローバル)は
+素通し、ローカル解決だが動きゾーン関数でないものは scope limit(詳細は
+STATUS.md 既知の制約)。
 
 `scripts/build.ts`はminify未対応(ADR-0003で明示的に先送り)。counter
 フィクスチャで手動計測: 995B→389B(約61%削減、`bun build --minify`)。

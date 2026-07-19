@@ -2,7 +2,7 @@
 
 ## ステータス
 
-決定済み(change 未起票)
+決定済み(change `cross-function-handler-writes` で実装済み)
 
 ## コンテキスト
 

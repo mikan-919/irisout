@@ -28,6 +28,15 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
 あわせて、構造ユニットを唯一の子に持つ要素のハンドラが黙って捨てられる
 計画外バグを発見・修正(ユニットのマーカー id へ配線)。
 
+2026-07-19: ハンドラ/action 本体からの動きゾーン関数呼び出しの追跡を実装
+(ADR-0013、change `cross-function-handler-writes`、ROADMAP 論点0 解消)。
+`onClick={() => toggle(todo.id)}` のような引数つき補助関数呼び出しで
+`toggle` 本体の signal 書き込みが解析されず **update_*() が黙って落ちて
+いた** M2 以来のバグを解消。callee の binding が動きゾーンの function 宣言と
+同一なら本体を再帰解析(visited-set・深さ制限なし)し、`writeDeclIds` を
+呼び出し元へ合流、書き換え済み関数を authored 名のままモジュールスコープへ
+1回だけ emit する。あわせて新しい scope limit を2つ追加(下記制約参照)。
+
 ## マイルストーン表
 
 | M | 内容 | 状態 | 備考 |
@@ -112,6 +121,21 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
   `try`/`switch`・関数/クラス宣言・`var`・値を返す `return`、および
   ソース順で追跡書き込みより後ろの `return` も同様に `scope limit` で拒否
   する(D3: 末尾 `update_*()` の取りこぼしを防ぐため)。
+- **ハンドラ/action 本体からの動きゾーン関数呼び出しは追跡する**(ADR-0013、
+  change `cross-function-handler-writes`)。callee の binding が動きゾーン
+  (render 後)の function 宣言と同一なら本体を再帰解析(visited-set・深さ
+  制限なし)して書き込み先を呼び出し元へ合流し、書き換え済み関数を authored
+  名のままモジュールスコープへ1回だけ emit する。追跡呼び出しは D3 の
+  「追跡書き込み」として数え、その後ろの `return` を拒否する。以下は
+  `scope limit`:
+  - binding は解決できるが動きゾーンの function 宣言でない呼び出し(仮引数・
+    ハンドラ内ローカル束縛・変数ゾーン由来の識別子を関数として呼ぶ)。
+    binding 未解決(グローバル)は従来どおり素通し。
+  - 追跡対象として呼ばれる関数の authored 名が生成側予約名(`update_*` /
+    `__` 接頭辞)と衝突する場合(黙ってリネームしない)。
+  - なお `onClick={toggle}`(識別子参照ハンドラ)は従来どおり本体を
+    マーカーごとにインライン展開する。同じ関数が参照と呼び出しの両方で
+    使われると本体が重複して出力されるのは許容(統一は実需が出てから)。
 - **`use={fn}`アクション(ADR-0011、change `use-action-impl`)はtop-level
   要素のみ実装済み**。以下は明示的な scope limit・別changeへの先送り:
   - リストアイテム/条件分岐ブランチ内の`use=`は返り値クロージャの動的

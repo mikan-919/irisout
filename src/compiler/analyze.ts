@@ -7,7 +7,7 @@
 import type { NodePath } from '@babel/traverse'
 import type * as t from '@babel/types'
 import { resolveToSignals } from './decl-graph.js'
-import type { CompilerState, DeclId } from './state.js'
+import type { CompilerState, DeclId, TrackedFn } from './state.js'
 import { declKey } from './state.js'
 
 interface Edit {
@@ -66,6 +66,197 @@ function render(
   }
   out += source.slice(cursor, end)
   return out
+}
+
+// cross-function-handler-writes design D1: ハンドラ/action 本体の識別子巡回で
+// 「signal/derived でない識別子の直接呼び出し」を分類する。callee が動きゾーン
+// 関数(render 後の function 宣言)と binding 同一なら追跡対象として記録し、
+// binding 未解決(グローバル等)は素通し、それ以外(仮引数・ローカル束縛)は
+// scope limit で拒否する。追跡した場合、呼び出し式自体は書き換えず callee 名を
+// そのまま残す。追跡呼び出しは ADR-0009 D3 の「追跡書き込み」として数えるため
+// onWrite で位置を通知する(呼び出しより後ろの return を拒否)。
+// 戻り値はこの識別子を callee として処理したか(呼び出し元は編集不要で return)。
+function tryHandleTrackedCallee(
+  ctx: CompilerState,
+  idPath: NodePath<t.Identifier>,
+  instanceId: number,
+  calleeNames: Set<string>,
+  onWrite: (start: number) => void,
+): void {
+  const parent = idPath.parentPath
+  if (!parent?.isCallExpression() || parent.node.callee !== idPath.node) return
+  const name = idPath.node.name
+  const binding = idPath.scope.getBinding(name)
+  if (!binding) return // グローバル → 素通し(従来どおり)
+  const fn = ctx.movementFns.get(name)
+  if (!fn || binding.path.node !== fn.node) {
+    throw new Error(
+      `compile: calling locally-bound "${name}" from a handler/action body is not supported, only movement-zone functions are tracked (scope limit)`,
+    )
+  }
+  ensureTrackedFn(ctx, name, instanceId)
+  calleeNames.add(name)
+  onWrite(parent.node.start!)
+}
+
+// 追跡対象呼び出し先を1回だけ解析して ctx.trackedFns へ記録する(design D2)。
+// 循環(自己/相互再帰)はエントリを本体解析の前に登録することで打ち切る。
+function ensureTrackedFn(
+  ctx: CompilerState,
+  name: string,
+  instanceId: number,
+): void {
+  if (ctx.trackedFns.has(name)) return
+  // design D4/task 3.2: 生成側予約名と衝突する authored 名は黙ってリネームせず拒否。
+  if (name.startsWith('__') || name.startsWith('update_')) {
+    throw new Error(
+      `compile: tracked function "${name}" collides with a generated reserved name (\`update_*\`/\`__\` prefix) (scope limit)`,
+    )
+  }
+  const fnPath = ctx.movementFns.get(name)!
+  const params = fnPath.get('params') as NodePath<t.Node>[]
+  const paramSource =
+    params.length > 0
+      ? ctx.source.slice(
+          params[0]!.node.start!,
+          params[params.length - 1]!.node.end!,
+        )
+      : ''
+  // 循環時の再入防止のため、本体解析より前にエントリを登録する。
+  const entry: TrackedFn = {
+    name,
+    paramSource,
+    rendered: '',
+    writeDeclIds: new Set(),
+    calleeNames: new Set(),
+  }
+  ctx.trackedFns.set(name, entry)
+  const stmts = fnPath.get('body.body') as NodePath<t.Statement>[]
+  const core = analyzeHandlerStatementsCore(ctx, stmts, instanceId)
+  entry.rendered = core.rendered
+  entry.writeDeclIds = core.writeDeclIds
+  entry.calleeNames = core.calleeNames
+}
+
+// 呼び出しグラフを visited-set で辿り、名前集合から到達可能な追跡関数の
+// 直接書き込み(root signal)を推移的に集める(循環安全)。
+function collectTransitiveWrites(
+  ctx: CompilerState,
+  names: Set<string>,
+  out: Set<DeclId>,
+  visited: Set<string> = new Set(),
+): void {
+  for (const name of names) {
+    if (visited.has(name)) continue
+    visited.add(name)
+    const fn = ctx.trackedFns.get(name)
+    if (!fn) continue
+    for (const w of fn.writeDeclIds) out.add(w)
+    collectTransitiveWrites(ctx, fn.calleeNames, out, visited)
+  }
+}
+
+// ハンドラ本体(文配列)の中核解析。読み取り書き換え・書き込み代入化・
+// 追跡呼び出し検出・D3(追跡書き込み後の return 拒否)を行い、書き換え済み
+// テキスト・直接書き込み root signal・直接 callee 名を返す。update_*() の合流は
+// 呼び出し元(analyzeHandlerBody / ハンドラ末尾)に任せるためここでは行わない。
+function analyzeHandlerStatementsCore(
+  ctx: CompilerState,
+  stmts: NodePath<t.Statement>[],
+  instanceId: number,
+): { rendered: string; writeDeclIds: Set<DeclId>; calleeNames: Set<string> } {
+  for (const stmt of stmts) validateHandlerStatement(stmt)
+
+  if (stmts.length === 0)
+    return { rendered: '', writeDeclIds: new Set(), calleeNames: new Set() }
+
+  const writeDeclIds = new Set<DeclId>()
+  const calleeNames = new Set<string>()
+  const edits: Edit[] = []
+  let firstWriteStart: number | null = null
+  const noteWrite = (pos: number) => {
+    if (firstWriteStart == null || pos < firstWriteStart) firstWriteStart = pos
+  }
+
+  const visit = (idPath: NodePath<t.Identifier>) => {
+    const id = resolveDeclId(ctx, idPath, instanceId)
+    if (!id) {
+      tryHandleTrackedCallee(ctx, idPath, instanceId, calleeNames, noteWrite)
+      return
+    }
+    const outputName = ctx.declOutputName.get(id)
+    if (!outputName) return
+
+    const parent = idPath.parentPath
+    if (parent?.isCallExpression() && parent.node.callee === idPath.node) {
+      if (parent.node.arguments.length === 0) {
+        edits.push({
+          start: parent.node.start!,
+          end: parent.node.end!,
+          text: outputName,
+        })
+        return
+      }
+      if (parent.node.arguments.length > 1) {
+        throw new Error(
+          `compile: signal writes take exactly one argument, got ${parent.node.arguments.length} for "${idPath.node.name}" (scope limit)`,
+        )
+      }
+      if (ctx.declKind.get(id) === 'derived') {
+        throw new Error(
+          `compile: cannot write to derived "${idPath.node.name}"`,
+        )
+      }
+      const arg = parent.node.arguments[0]!
+      edits.push({
+        start: parent.node.start!,
+        end: arg.start!,
+        text: `${outputName} = `,
+      })
+      edits.push({ start: arg.end!, end: parent.node.end!, text: '' })
+      noteWrite(parent.node.start!)
+      for (const sig of resolveToSignals(ctx, id, new Set()))
+        writeDeclIds.add(sig)
+      return
+    }
+
+    if (outputName !== idPath.node.name) {
+      edits.push({
+        start: idPath.node.start!,
+        end: idPath.node.end!,
+        text: outputName,
+      })
+    }
+  }
+
+  for (const stmt of stmts) {
+    stmt.traverse({
+      Identifier(idPath) {
+        if (idPath.isReferencedIdentifier()) visit(idPath)
+      },
+    })
+  }
+
+  if (firstWriteStart != null) {
+    const returnStarts: number[] = []
+    for (const stmt of stmts) collectReturnStarts(stmt, returnStarts)
+    if (returnStarts.some((start) => start > firstWriteStart!)) {
+      throw new Error(
+        'compile: a `return` after a tracked signal write is not supported, the write would be lost (scope limit)',
+      )
+    }
+  }
+
+  return {
+    rendered: render(
+      ctx.source,
+      stmts[0]!.node.start!,
+      stmts[stmts.length - 1]!.node.end!,
+      edits,
+    ),
+    writeDeclIds,
+    calleeNames,
+  }
 }
 
 export function analyzeExpr(
@@ -144,11 +335,17 @@ export function analyzeHandlerExpr(
   instanceId: number,
 ): HandlerAnalysis {
   const writeDeclIds = new Set<DeclId>()
+  const calleeNames = new Set<string>()
   const edits: Edit[] = []
 
   const visit = (idPath: NodePath<t.Identifier>) => {
     const id = resolveDeclId(ctx, idPath, instanceId)
-    if (!id) return
+    if (!id) {
+      // cross-function-handler-writes: 単一式ハンドラ本体(`() => toggle(id)`)
+      // からの動きゾーン関数呼び出しを追跡する(D3 は式1つなので該当なし)。
+      tryHandleTrackedCallee(ctx, idPath, instanceId, calleeNames, () => {})
+      return
+    }
     const outputName = ctx.declOutputName.get(id)
     if (!outputName) return
 
@@ -194,6 +391,7 @@ export function analyzeHandlerExpr(
   }
 
   forEachReferencedIdentifier(exprPath, visit)
+  collectTransitiveWrites(ctx, calleeNames, writeDeclIds)
 
   return {
     rendered: render(
@@ -291,91 +489,12 @@ export function analyzeHandlerBody(
   stmts: NodePath<t.Statement>[],
   instanceId: number,
 ): HandlerAnalysis {
-  for (const stmt of stmts) validateHandlerStatement(stmt)
-
-  if (stmts.length === 0) return { rendered: '', writeDeclIds: new Set() }
-
-  const writeDeclIds = new Set<DeclId>()
-  const edits: Edit[] = []
-  let firstWriteStart: number | null = null
-
-  const visit = (idPath: NodePath<t.Identifier>) => {
-    const id = resolveDeclId(ctx, idPath, instanceId)
-    if (!id) return
-    const outputName = ctx.declOutputName.get(id)
-    if (!outputName) return
-
-    const parent = idPath.parentPath
-    if (parent?.isCallExpression() && parent.node.callee === idPath.node) {
-      if (parent.node.arguments.length === 0) {
-        edits.push({
-          start: parent.node.start!,
-          end: parent.node.end!,
-          text: outputName,
-        })
-        return
-      }
-      if (parent.node.arguments.length > 1) {
-        throw new Error(
-          `compile: signal writes take exactly one argument, got ${parent.node.arguments.length} for "${idPath.node.name}" (scope limit)`,
-        )
-      }
-      if (ctx.declKind.get(id) === 'derived') {
-        throw new Error(
-          `compile: cannot write to derived "${idPath.node.name}"`,
-        )
-      }
-      const arg = parent.node.arguments[0]!
-      edits.push({
-        start: parent.node.start!,
-        end: arg.start!,
-        text: `${outputName} = `,
-      })
-      edits.push({ start: arg.end!, end: parent.node.end!, text: '' })
-      if (firstWriteStart == null || parent.node.start! < firstWriteStart) {
-        firstWriteStart = parent.node.start!
-      }
-      for (const sig of resolveToSignals(ctx, id, new Set()))
-        writeDeclIds.add(sig)
-      return
-    }
-
-    if (outputName !== idPath.node.name) {
-      edits.push({
-        start: idPath.node.start!,
-        end: idPath.node.end!,
-        text: outputName,
-      })
-    }
-  }
-
-  for (const stmt of stmts) {
-    stmt.traverse({
-      Identifier(idPath) {
-        if (idPath.isReferencedIdentifier()) visit(idPath)
-      },
-    })
-  }
-
-  if (firstWriteStart != null) {
-    const returnStarts: number[] = []
-    for (const stmt of stmts) collectReturnStarts(stmt, returnStarts)
-    if (returnStarts.some((start) => start > firstWriteStart!)) {
-      throw new Error(
-        'compile: a `return` after a tracked signal write is not supported, the write would be lost (scope limit)',
-      )
-    }
-  }
-
-  return {
-    rendered: render(
-      ctx.source,
-      stmts[0]!.node.start!,
-      stmts[stmts.length - 1]!.node.end!,
-      edits,
-    ),
-    writeDeclIds,
-  }
+  const core = analyzeHandlerStatementsCore(ctx, stmts, instanceId)
+  // cross-function-handler-writes design D3: 追跡呼び出し先の推移的な書き込み先を
+  // 合流し、update_*() は従来どおりハンドラ末尾(codegen)で一括発火させる。
+  const writeDeclIds = new Set(core.writeDeclIds)
+  collectTransitiveWrites(ctx, core.calleeNames, writeDeclIds)
+  return { rendered: core.rendered, writeDeclIds }
 }
 
 // ADR-0011: action本体・ネストした関数本体・返り値クロージャで共有する
@@ -390,9 +509,15 @@ function analyzeActionIdentifier(
   readDeclIds: Set<DeclId>,
   writeDeclIds: Set<DeclId>,
   onWrite: (start: number) => void,
+  calleeNames: Set<string>,
 ): void {
   const id = resolveDeclId(ctx, idPath, instanceId)
-  if (!id) return
+  if (!id) {
+    // cross-function-handler-writes: action 本体からの動きゾーン関数呼び出しも
+    // ハンドラと同じ規則で追跡する(onWrite で D3 の追跡書き込み位置を通知)。
+    tryHandleTrackedCallee(ctx, idPath, instanceId, calleeNames, onWrite)
+    return
+  }
   const outputName = ctx.declOutputName.get(id)
   if (!outputName) return
 
@@ -464,6 +589,7 @@ function analyzeActionStatements(
 
   const readDeclIds = new Set<DeclId>()
   const writeDeclIds = new Set<DeclId>()
+  const calleeNames = new Set<string>()
   const edits: Edit[] = []
   const nestedScopes: ReturnType<typeof analyzeFunctionBodyScope>[] = []
   let firstWriteStart: number | null = null
@@ -481,6 +607,7 @@ function analyzeActionStatements(
           firstWriteStart = pos
         }
       },
+      calleeNames,
     )
 
   const captureNested = (
@@ -513,6 +640,10 @@ function analyzeActionStatements(
       )
     }
   }
+
+  // cross-function-handler-writes D3: 追跡呼び出し先の推移的書き込みを合流し、
+  // このスコープ末尾の update_*() 発火(finalize)に含める。
+  collectTransitiveWrites(ctx, calleeNames, writeDeclIds)
 
   const start = stmts[0]!.node.start!
   const end = stmts[stmts.length - 1]!.node.end!
@@ -558,6 +689,7 @@ function analyzeActionExprScope(
 ): ActionScopeAnalysis {
   const readDeclIds = new Set<DeclId>()
   const writeDeclIds = new Set<DeclId>()
+  const calleeNames = new Set<string>()
   const edits: Edit[] = []
 
   forEachReferencedIdentifier(exprPath, (idPath) =>
@@ -569,8 +701,10 @@ function analyzeActionExprScope(
       readDeclIds,
       writeDeclIds,
       () => {},
+      calleeNames,
     ),
   )
+  collectTransitiveWrites(ctx, calleeNames, writeDeclIds)
 
   const start = exprPath.node.start!
   const end = exprPath.node.end!

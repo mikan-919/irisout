@@ -98,6 +98,9 @@ export interface GenerateModuleInput {
   handlers: HandlerOutput[]
   actions: ActionOutput[]
   attrBindings: AttrBinding[] // ADR-0012: トップレベルの動的属性
+  // cross-function-handler-writes: 追跡対象として呼ばれた動きゾーン関数を
+  // authored 名のままモジュールスコープへ1回だけ emit する(design D4)。
+  emittedFns: { name: string; params: string; body: string }[]
   initialHtml: string
 }
 
@@ -511,11 +514,19 @@ export function generateModule({
   handlers,
   actions,
   attrBindings,
+  emittedFns,
   initialHtml,
 }: GenerateModuleInput): string {
   const outLines: string[] = []
   outLines.push("import { mount, hydrate } from '../src/runtime.js';", '')
   outLines.push(...declStatements.map((s) => `export ${s}`), '')
+  // cross-function-handler-writes design D4: 追跡された動きゾーン関数を authored
+  // 名のままモジュールスコープへ emit する(update_*() は本体に入れない — D3)。
+  // 関数宣言なので hoist され、ハンドラ/他の追跡関数からそのまま呼べる。
+  for (const fn of emittedFns) {
+    outLines.push(`function ${fn.name}(${fn.params}) {${fn.body}}`)
+  }
+  if (emittedFns.length > 0) outLines.push('')
   outLines.push(`const __INITIAL_HTML__ = ${JSON.stringify(initialHtml)};`, '')
 
   // 検証用の期待マーカー ID(トップレベルマーカー全部+ハンドラのみの

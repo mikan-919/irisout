@@ -273,6 +273,14 @@ export function compile(source: string): CompileResult {
     }
   }
 
+  // cross-function-handler-writes: 追跡された動きゾーン関数を emit 用の素の
+  // 文字列へ落とす(Map の挿入順 = 追跡順で1回ずつ)。
+  const emittedFns = [...ctx.trackedFns.values()].map((f) => ({
+    name: f.name,
+    params: f.paramSource,
+    body: f.rendered,
+  }))
+
   const code = generateModule({
     declStatements: out.declStatements,
     markers: markerOutputs,
@@ -283,6 +291,7 @@ export function compile(source: string): CompileResult {
     handlers: handlerOutputs,
     actions: actionOutputs,
     attrBindings: ctx.attrBindings,
+    emittedFns,
     initialHtml,
   })
 

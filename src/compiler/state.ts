@@ -1,6 +1,9 @@
 // compile() 全体で共有するミュータブルな状態。analyze.ts / render.ts /
 // decl-graph.ts はここで作った ctx を受け取って読み書きする。
 
+import type { NodePath } from '@babel/traverse'
+import type * as t from '@babel/types'
+
 // DeclId と MarkerId はどちらも `m0`/`decl_0_42` のような文字列だが、
 // 意味的に別物。ブランドしてコンパイル時に取り違えを防ぐ(実行時コストゼロ)。
 export type DeclId = string & { readonly __brand: 'DeclId' }
@@ -121,6 +124,22 @@ export interface ActionDecl {
     | null
 }
 
+// cross-function-handler-writes: ハンドラ/action から追跡対象として呼ばれた
+// 動きゾーン関数の解析結果。writeDeclIds は自分の本体が直接書く root signal
+// (推移解決済み)、calleeNames は自分が呼ぶ別の追跡関数。推移的な書き込み
+// 集合は呼び出しグラフを visited-set で辿って求める(自己/相互再帰を安全に
+// 打ち切る)。rendered は update_*() を含まない書き換え済み本体 — update は
+// 呼び出し元ハンドラ末尾のみで発火する(design D3)。
+export interface TrackedFn {
+  name: string
+  /** authored の仮引数テキスト(括弧なし。0引数なら空文字列)。 */
+  paramSource: string
+  /** 書き換え済み本体(中括弧の中身、update_*() なし)。 */
+  rendered: string
+  writeDeclIds: Set<DeclId>
+  calleeNames: Set<string>
+}
+
 export interface CompilerState {
   source: string
 
@@ -144,6 +163,14 @@ export interface CompilerState {
 
   markerCounter: number
   instanceCounter: number
+
+  // cross-function-handler-writes: 動きゾーン(render 後)の function 宣言表。
+  // render.ts の一時 handlerFns と同じ内容を、呼び出し追跡(callee の binding
+  // 同一性確認)のため analyze.ts から参照できるよう ctx へ載せる。
+  movementFns: Map<string, NodePath<t.FunctionDeclaration>>
+  // 追跡対象として呼ばれ、モジュールスコープへ emit する関数(名前 → 解析結果)。
+  // Map の挿入順にちょうど1回ずつ codegen が emit する。
+  trackedFns: Map<string, TrackedFn>
 }
 
 export function createCompilerState(source: string): CompilerState {
@@ -162,6 +189,8 @@ export function createCompilerState(source: string): CompilerState {
     attrBindings: [],
     markerCounter: 0,
     instanceCounter: 0,
+    movementFns: new Map(),
+    trackedFns: new Map(),
   }
 }
 

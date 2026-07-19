@@ -951,6 +951,9 @@ export function compileComponent(
     }
     handlerFns.set(stmt.node.id.name, stmt as NodePath<t.FunctionDeclaration>)
   }
+  // cross-function-handler-writes: 呼び出し追跡(analyze.ts)が callee の
+  // binding 同一性を確認できるよう、動きゾーン関数表を ctx へ載せる。
+  ctx.movementFns = handlerFns
 
   return renderElement(ctx, renderJsxPath, instanceId, handlerFns)
 }
