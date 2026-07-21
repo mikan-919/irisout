@@ -3,6 +3,32 @@
 実装の「今」の状態(現在地・マイルストーン進捗・既知の制約)をまとめたもの。
 設計判断待ちの論点・次のアクションの計画は `ROADMAP.md` を参照。
 
+## 現在地(2026-07-21・型検査基盤)
+
+authored `.jsx` の型検査基盤を実装(change `jsx-type-checking-foundation`、
+ROADMAP 次のアクション10)。`types/jsx.d.ts`でグローバル`JSX`namespace
+(`Element`・`IntrinsicElements`・`IntrinsicAttributes`)と`signal`/
+`derived`/`render`のグローバル関数シグネチャを宣言し、`examples/`配下
+専用の`examples/tsconfig.json`(`allowJs`+`checkJs`+`jsx: "preserve"`、
+`types: []`)で`examples/*.jsx`を型検査対象にした。ルートの`tsconfig.json`
+は無変更 ― `allowJs`/`checkJs`をルートへ足すと
+`examples/todomvc.handwritten.js`(`test/todomvc-handwritten.test.ts`が
+importする比較用の手書きJS、型検査対象外)まで巻き込まれ、既存の
+`@ts-expect-error`抑制が壊れるため、examples専用の別プロジェクトに
+切り出した。あわせて`node_modules/@types/react`が自動包含され`JSX`
+namespaceを上書きする踏み台バグを`types: []`で踏みつぶした(実装前調査
+未発見の計画外の落とし穴)。ADR-0011が先送りしていた`use=`のJSX型定義
+(design.md Decision 6)も同時に解消した。
+
+属性名は意図的に緩い(共通属性`key`/`use`/`onXxx`/`children`のみ明示し、
+他は`string`キーで許容 ― コンパイラ自身が host 属性名をホワイトリスト化
+していないため)。`examples/tsconfig.json`は`strict: false`(authored
+`.jsx`は型注釈を書けない素のJS構文なので、strictを掛けるとハンドラ引数の
+ほぼ全てが implicit any でエラーになり実用にならない)。型が通ることと
+実行時に`compile()`が受理することは別軸のまま ― 型はコンパイラの
+scope limit判定を代替しない(例: リストアイテム内の`use=`は型上は書けるが
+実行時は既存のscope limitのまま、下記制約参照)。
+
 ## 現在地(2026-07-21)
 
 同一ファイル内の複数コンポーネント合成を実装(ADR-0014、change

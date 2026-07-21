@@ -225,7 +225,9 @@ UNRESOLVED(06)/(07)は正当なUXだが書けない=コンパイラの穴)。両
 本ADRの設計決定は change `use-action-impl` で実装済み(下記3箇所)。
 JSX型定義(`JSX.IntrinsicElements`の`use`宣言)は同changeのdesign.md
 Decision 6で明示的にスコープ外とし、別changeへ先送りした
-(authored `.jsx`の型検査基盤自体が未整備のため)。
+(authored `.jsx`の型検査基盤自体が未整備のため)。この先送りは change
+`jsx-type-checking-foundation`(2026-07-21)で解消済み ―
+`types/jsx.d.ts`の`JSX.IntrinsicElements`共通属性に`use`を型付けした。
 
 - `src/compiler/render.ts`: `use`属性の解析・識別子参照ルールの解決
   (ADR-0008のハンドラ配線ルールの転用)。トップレベル要素のみ受理し、
