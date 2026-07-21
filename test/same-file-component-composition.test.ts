@@ -252,6 +252,73 @@ function TodoItem({ todo, onToggle }) {
     ).toEqual([true, true])
   })
 
+  it('examples/todomvc.jsxのTodoItem相当: propが直接ハンドラ参照のまま素通しされ、コミット+編集終了+削除が動く', async () => {
+    // examples/todomvc.jsx のTodoItemと同じ構造(propをこのコンポーネント
+    // 自身の文で包まず、ハンドラ属性値としてそのまま素通しする形)。
+    // `(e) => { onCommitEdit(...); ...; }`のように追加の文で包むと
+    // 置換後の呼び出しがソース位置ベースの書き換え検出に乗らない
+    // (実装前調査で確認した既知の制約、examples/todomvc.jsx参照)。
+    const source = `
+export function TodoApp() {
+  const todos = signal([{ id: 1, text: 'a', completed: false }]);
+  render(
+    <ul>
+      {todos().map((todo) => (
+        <TodoItem
+          todo={todo}
+          onCommitEdit={(e) => e.key === 'Enter' && commitEdit(todo.id, e.target.value)}
+          onRemove={() => removeTodo(todo.id)}
+        />
+      ))}
+    </ul>
+  );
+  function commitEdit(id, text) {
+    const t = text.trim();
+    if (t !== '') {
+      todos(todos().map((x) => (x.id === id ? { ...x, text: t } : x)));
+    }
+  }
+  function removeTodo(id) {
+    todos(todos().filter((t) => t.id !== id));
+  }
+}
+
+function TodoItem({ todo, onCommitEdit, onRemove }) {
+  const editing = signal(false);
+  render(
+    <li key={todo.id} class={editing() ? 'editing' : ''}>
+      <span onDblClick={() => editing(true)}>{todo.text}</span>
+      <input value={todo.text} onKeyDown={onCommitEdit} onBlur={() => editing(false)} />
+      <button type='button' onClick={onRemove}>x</button>
+    </li>
+  );
+}
+`
+    const { code } = compile(source)
+    expect(code).toContain('commitEdit(todo.id, e.target.value)')
+    const container = await mount(code)
+    const li = container.querySelector('li')!
+
+    dispatch(container, li.querySelector('span'), 'dblclick')
+    expect(li.className.trim()).toBe('editing')
+
+    const editInput = li.querySelector('input') as HTMLInputElement
+    editInput.value = 'edited'
+    const KeyboardEvent = (
+      container.ownerDocument as unknown as {
+        defaultView: { KeyboardEvent: typeof globalThis.KeyboardEvent }
+      }
+    ).defaultView.KeyboardEvent
+    editInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+    expect(li.querySelector('span')?.textContent).toBe('edited')
+
+    dispatch(container, editInput, 'blur')
+    expect(li.className.trim()).toBe('')
+
+    dispatch(container, li.querySelector('button'), 'click')
+    expect(container.querySelectorAll('li').length).toBe(0)
+  })
+
   it('子要素を持つコンポーネント参照を拒否する', () => {
     const source = `
 export function App() {

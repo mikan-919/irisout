@@ -173,8 +173,12 @@ function substituteProps(
     }
   }
 
-  clonedFnPath.scope.crawl()
+  // 1つ前のprop置換によるreplaceWithがscope情報を古くする(実装前調査で
+  // 確認した既知のパターン ― 別のバインディングのreferencePathsが古い
+  // ままになり、置換漏れになる)ため、propごとに再クロールしてから
+  // 参照を引く。
   for (const propName of propNames) {
+    clonedFnPath.scope.crawl()
     const argNode = argExprByProp.get(propName)!
     const binding = clonedFnPath.scope.getOwnBinding(propName)
     if (!binding) continue
