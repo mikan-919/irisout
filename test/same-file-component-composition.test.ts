@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'bun:test'
+import { parse } from '@babel/parser'
+import { collectTopLevelComponents } from '../src/compiler/inline-components.js'
 import { compile } from '../src/compiler.js'
 import { createContainer, loadGenerated } from './helpers.js'
 
@@ -135,6 +137,31 @@ export function App() {
 }
 `
     expect(() => compile(source)).toThrow(/scope limit/)
+  })
+})
+
+describe('collectTopLevelComponents', () => {
+  it('複数コンポーネントが宣言されたソースから正しい名前→NodePath表が得られる(task 1.2)', () => {
+    const source = `
+export function App() {
+  render(<div><Foo /></div>);
+}
+function Foo() {
+  render(<span>foo</span>);
+}
+function Bar() {
+  render(<span>bar</span>);
+}
+`
+    const ast = parse(source, {
+      sourceType: 'module',
+      plugins: ['typescript', 'jsx'],
+    })
+    const table = collectTopLevelComponents(ast)
+    expect([...table.keys()].sort()).toEqual(['App', 'Bar', 'Foo'])
+    expect(table.get('App')!.node.id?.name).toBe('App')
+    expect(table.get('Foo')!.node.id?.name).toBe('Foo')
+    expect(table.get('Bar')!.node.id?.name).toBe('Bar')
   })
 })
 
@@ -531,5 +558,120 @@ export function App() {
     expect(() => compile(source)).toThrow(
       /only signal\(\)\/derived\(\) declarations are allowed before the return.*scope limit/,
     )
+  })
+
+  it('rest要素を含む分割代入props(`{ count, ...rest }`)を拒否する', () => {
+    const source = `
+export function App() {
+  render(<div><Foo count="1" /></div>);
+}
+function Foo({ count, ...rest }) {
+  render(<span>{count}</span>);
+}
+`
+    expect(() => compile(source)).toThrow(/shorthand destructured props/)
+  })
+
+  it('サポート外のprop値の形(JSX要素をそのままpropに渡す)を拒否する', () => {
+    const source = `
+export function App() {
+  render(<div><Foo label=<span>hi</span> /></div>);
+}
+function Foo({ label }) {
+  render(<span>{label}</span>);
+}
+`
+    expect(() => compile(source)).toThrow(/unsupported prop value form/)
+  })
+
+  it('値なしのboolean-shorthand prop(`<Foo enabled />`)を拒否する(対応する実引数テキストが存在しないため)', () => {
+    const source = `
+export function App() {
+  render(<div><Foo enabled /></div>);
+}
+function Foo({ enabled }) {
+  render(<span>{enabled}</span>);
+}
+`
+    expect(() => compile(source)).toThrow(
+      /value-less boolean-shorthand prop.*scope limit/,
+    )
+  })
+
+  it('明示的な値を持つboolean prop(`<Foo enabled={true} />`)はトップレベル位置で渡せる', async () => {
+    const source = `
+export function App() {
+  render(<div><Foo enabled={true} /></div>);
+}
+function Foo({ enabled }) {
+  render(<span>{enabled}</span>);
+}
+`
+    const { code } = compile(source)
+    const container = await mount(code)
+    expect(container.querySelector('span')?.textContent).toBe('true')
+  })
+
+  it('別名で渡されたpropを式の内部(三項演算子の条件等)で参照すると拒否する(壊れたコード生成の回帰確認)', () => {
+    // 実装前調査で判明した不具合: propの参照位置が呼び出し先本体の式全体
+    // ではなく、より大きな式にネストしている場合(例: `enabled ? .. : ..`の
+    // 条件部分)、render()のソーステキストスライス方式は呼び出し先の古い
+    // ソーステキストをそのまま埋め込んでしまい、存在しない識別子を参照する
+    // 壊れたコードを生成する(黙って成功していた)。propの実引数名が呼び出し
+    // 先のパラメータ名と一致するbare identifierの場合のみ安全なので、
+    // それ以外は明示的にscope limitで拒否する。
+    const source = `
+export function App() {
+  render(<div><Foo enabled={true} /></div>);
+}
+function Foo({ enabled }) {
+  render(<span>{enabled ? 'on' : 'off'}</span>);
+}
+`
+    expect(() => compile(source)).toThrow(
+      /referenced inside a larger expression.*scope limit/,
+    )
+  })
+
+  it('別名で渡されたpropをリストアイテム内のメンバー式で参照すると拒否する(壊れたコード生成の回帰確認)', () => {
+    // 上と同じ不具合の別パターン: 呼び出し元のitem変数名(t)が呼び出し先の
+    // props名(item)と異なる場合、`item.done`のネストした参照は安全に
+    // 書き換えられない。名前が一致する`todo`パターン(既存テスト)は
+    // 引き続き許可される。
+    const source = `
+export function App() {
+  render(
+    <ul>
+      {[{ id: 1, done: true }].map((t) => (
+        <Foo key={t.id} item={t} />
+      ))}
+    </ul>
+  );
+}
+function Foo({ item }) {
+  render(<li key={item.id}>{item.done ? 'y' : 'n'}</li>);
+}
+`
+    expect(() => compile(source)).toThrow(
+      /referenced inside a larger expression.*scope limit/,
+    )
+  })
+
+  it('インライン化後のASTが既存のsole-child制約に違反する場合、展開後のASTに対して既存のscope limitを出す', () => {
+    const source = `
+export function App() {
+  const todos = signal([{ id: 1 }]);
+  render(
+    <div>
+      <Foo />
+      {todos().map((t) => <span key={t.id}>{t.id}</span>)}
+    </div>
+  );
+}
+function Foo() {
+  render(<span>hi</span>);
+}
+`
+    expect(() => compile(source)).toThrow(/sole child.*scope limit/)
   })
 })

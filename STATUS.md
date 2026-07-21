@@ -194,15 +194,21 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
     一切持たない場合のみ動作する ― 条件分岐ブランチは三項/`&&`の式
     位置でブロック文を置けないため、ローカルsignal付きコンポーネントの
     ブランチへのインライン化は現状未対応(実装は同一ユニットのみ)。
-  - **propsの参照は、置換対象がJSX属性値/式コンテナの中身全体である
-    場合のみ正しく動く**。呼び出し先コンポーネント自身が追加の文で
-    prop呼び出しを包む(例: `(e) => { onFoo(...); bar(); }`)と、
-    置換後の内容がソース位置ベースの書き換え検出(`analyze.ts`の
-    identifier-visitベースのedit機構)に乗らず、置換前のソーステキストが
-    出力に残る(実装前調査で確認、`examples/todomvc.jsx`のTodoItemに
-    回避策の実例あり)。propをハンドラ属性値へ素通しする形
-    (`onKeyDown={onFoo}`)か、テキスト/属性の式コンテナの中身全体として
-    使う形は問題ない。
+  - **propsの参照は、置換対象がJSX属性値/式コンテナの中身全体(または
+    ハンドラarrowのconcise body)である場合、または実引数がprops名と
+    同名のbare identifier(`<TodoItem todo={todo} />`)である場合のみ
+    安全**。それ以外(例: `{enabled ? 'on' : 'off'}`のように三項演算子の
+    条件部分で参照する、または`<Foo item={t} />`のようにprops名と異なる
+    名前の実引数をメンバー式内で参照する)は、置換後の内容がソース位置
+    ベースの書き換え検出(`analyze.ts`のidentifier-visitベースのedit機構)
+    に乗らず、呼び出し先の古いソーステキストが出力に残ってしまう
+    (実装前調査で確認)。`src/compiler/inline-components.ts`の
+    `assertSafeToSubstitute`が安全でない組み合わせを検出し
+    `compile: ... is referenced inside a larger expression ... (scope
+    limit)`で明示的に拒否する(黙って壊れたコードを出さない)。値なしの
+    boolean-shorthand属性(`<Foo enabled/>`)も、対応する実引数テキストが
+    ソース上に存在しないため同様に拒否する ― `enabled={true}`のように
+    明示的な値を渡せば(トップレベル位置であれば)使える。
   - 名前衝突: ルートスコープへ統合されるsignal/derived宣言名・動きゾーン
     関数名は、呼び出し元の既存識別子と衝突する場合のみ、衝突した側を
     コンポーネント名で接頭辞化してリネームする(例: `TodoItem_count`,

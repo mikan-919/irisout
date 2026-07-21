@@ -123,23 +123,50 @@ onToggle={fn} />`の各JSXAttributeから、対応するプロパティ名の実
 `NodePath.scope.getBinding(name)`を使い、無関係な同名変数(シャドーイング)
 を誤って置換しないことを保証する。
 
+**実装上の制約(実装前調査で判明、`assertSafeToSubstitute`で強制)**:
+`analyze.ts`のrender()はEditリスト方式(docs/conventions.md)で、対象式の
+`start`/`end`を基準にソーステキストをスライスし、識別子ごとのeditだけを
+その範囲内で適用する。props置換はこの範囲の**外側**からクローンした
+ノードを直接AST置換するため、置換位置が「呼び出し先本体の式全体
+(JSX式コンテナの中身・ハンドラarrowのconcise body)」ではなく、より
+大きな式(三項演算子・メンバー式・二項式等)の内部にネストしている場合、
+render()は呼び出し先の**古いソーステキストをそのまま埋め込んでしまい**、
+存在しない識別子を参照する壊れたコードを生成する(黙って成功するため
+発見しにくい)。唯一の例外は、実引数がpropsのパラメータ名と**文字通り
+同じ名前のbare identifier**である場合(`<TodoItem todo={todo} />`の
+`todo.completed`等)― 置換前後でソーステキストが同一になるため、
+render()のEditリストに乗らなくても偶然正しい。`assertSafeToSubstitute`
+(`inline-components.ts`)が「置換対象が式全体」または「同名bare
+identifier」のいずれでもない参照を検出し、`compile: component prop "X"
+... is referenced inside a larger expression ... (scope limit)`で
+明示的に拒否する。値なしのboolean-shorthand属性(`<Foo enabled/>`)も、
+対応する実引数のソーステキストが元から存在しない(start/endを持てない)
+ため同じ理由で拒否する。
+
 ### D4. 名前衝突の検出とリネーム(ADR-0014決定5)
 
 `assignOutputName`(`src/compiler/state.ts:204`)は既に`usedOutputNames`
 グローバル集合を見て衝突時に`$1`,`$2`...を付ける既存のハイジーン機構を
 持つ。ADR-0014は衝突時に読みやすいコンポーネント名接頭辞
 (`TodoItem_count`)を求めているため、これを**`assignOutputName`の前段**
-として実装する: インライン化パスが各signal/derived宣言のnaturalNameを
-決める際、その時点で`ctx.usedOutputNames`に既に同名が存在する場合のみ
-`${componentName}_${naturalName}`を候補にしてから`assignOutputName`へ渡す
-(存在しなければ素のnaturalNameのまま渡す ― 大多数の非衝突ケースで
-prefixノイズを持ち込まない、決定5の理由と一致)。
+として実装する。
+
+**実装上の制約**: `inlineComponents(ast)`は`compile()`内で
+`createCompilerState()`より前に呼ばれる(D1)ため、実装時点では`ctx`
+(および`ctx.usedOutputNames`)がまだ存在しない。そのため実際の衝突検出は
+`ctx.usedOutputNames`ではなく、呼び出し元コンポーネント関数の
+Babel scope(`componentPath.scope.getOwnBinding(name)`)を直接見て行う
+(`renameCollidingRootDecls`/`renameCollidingMovementFns`、
+`inline-components.ts`)。この時点でのAST上の識別子衝突は、後段の
+`assignOutputName`が見る`usedOutputNames`の衝突と実質的に同じ集合を
+指す(このパスの直後にsignal/derived宣言がそのまま呼び出し元の変数
+ゾーンへ挿入されるため)ので、狙いである「衝突時のみコンポーネント名で
+接頭辞化」は変わらず達成される。
 
 動きゾーンのfunction宣言名(ハンドラ識別子参照解決表 `handlerFns`/
 `ctx.movementFns`のキー)も同じ規則で衝突検出・リネームする ―
-こちらは`usedOutputNames`とは別の名前空間(関数名 vs signal出力変数名)
-なので、`ctx.usedOutputNames`とは別に「呼び出し元の動きゾーンに既に
-存在する関数名の集合」を都度チェックする。
+こちらも同様に、呼び出し元コンポーネントのBabel scopeを直接見て
+「呼び出し元の動きゾーンに既に存在する関数名」をチェックする。
 
 ### D5. 変数ゾーン宣言の再配置:ルートスコープ vs ローカルsignal
 

@@ -153,7 +153,15 @@ function substituteProps(
     if (nameNode.type !== 'JSXIdentifier') continue
     const valueNode = attrPath.node.value
     if (valueNode == null) {
-      argExprByProp.set(nameNode.name, t.booleanLiteral(true))
+      // 値なしのboolean-shorthand属性(`<Foo enabled/>`)には対応する
+      // ソーステキストが元から存在しない(実引数式が無いのでstart/endを
+      // 持てない)。renderのソーステキストスライス方式(docs/conventions.md)
+      // は常に有効なstart/endを前提にするため、位置を持たない合成ノードを
+      // 渡すと`ctx.source.slice(undefined, undefined)`(=ソース全文)が
+      // 埋め込まれる壊れたコードになる(実装前調査で確認)。明示的に拒否する。
+      throw new Error(
+        `compile: value-less boolean-shorthand prop "${nameNode.name}" on "${tagName}" is not supported yet, pass an explicit value like \`${nameNode.name}={true}\` (scope limit)`,
+      )
     } else if (valueNode.type === 'StringLiteral') {
       argExprByProp.set(nameNode.name, valueNode)
     } else if (valueNode.type === 'JSXExpressionContainer') {
@@ -184,8 +192,60 @@ function substituteProps(
     const binding = clonedFnPath.scope.getOwnBinding(propName)
     if (!binding) continue
     for (const refPath of [...binding.referencePaths]) {
+      assertSafeToSubstitute(refPath, argNode, propName, tagName)
       refPath.replaceWith(cloneWithPositions(argNode))
     }
+  }
+}
+
+// analyze.ts(render()関数、docs/conventions.md「Editリスト方式」)は、置換対象
+// 式全体の元ソース範囲を土台に、識別子ごとのeditだけをその範囲内で適用する。
+// props置換はJSXAttribute/JSXExpressionContainerの外からクローンしたノードを
+// 直接AST置換するため、参照位置が「呼び出し先本体の式全体」(=置換後ノード
+// 自身の(呼び出し元の)start/endがそのままrenderの基準範囲になる)ではなく
+// より大きな式の内部にネストしている場合、renderは呼び出し先の古いソース
+// テキストをそのまま埋め込んでしまい、存在しない識別子を参照する壊れた
+// コードを生成する(実装前調査で確認: `<Foo enabled/>`のboolean-shorthand、
+// 別名props、リテラルpropsのいずれも同じ壊れ方をする。一方
+// `<TodoItem todo={todo} />`のようにprops名と実引数の識別子名が一致する
+// bare identifierは、置換後も呼び出し先の元テキストと文字通り同じなので
+// 安全)。安全と判定できない組み合わせは黙って壊れたコードを出さず、ここで
+// 明示的に拒否する。
+function assertSafeToSubstitute(
+  refPath: NodePath<t.Node>,
+  argNode: t.Expression,
+  propName: string,
+  tagName: string,
+): void {
+  const isSameNameBareIdentifier =
+    argNode.type === 'Identifier' && argNode.name === propName
+  if (isSameNameBareIdentifier || isTopLevelSubstitutionBoundary(refPath)) {
+    return
+  }
+  throw new Error(
+    `compile: component prop "${propName}" on "${tagName}" is referenced inside a larger expression and cannot be safely substituted unless passed under the same name (e.g. \`${propName}={${propName}}\`) (scope limit)`,
+  )
+}
+
+// refPathが「値がそのまま丸ごと差し替わる」位置(JSXの式コンテナ・ハンドラ
+// arrowのconcise body、そのarrow自体がさらに式コンテナ直下にある場合も含む)
+// まで、透過的な祖先だけを辿って到達できるかを判定する。届く前に他の式
+// (MemberExpression・BinaryExpression・ConditionalExpression等)に当たったら
+// ネストとみなしfalseを返す。
+function isTopLevelSubstitutionBoundary(refPath: NodePath<t.Node>): boolean {
+  let current: NodePath<t.Node> = refPath
+  for (;;) {
+    const parent = current.parentPath
+    if (!parent) return false
+    if (parent.isJSXExpressionContainer()) return true
+    if (
+      parent.isArrowFunctionExpression() &&
+      parent.get('body').node === current.node
+    ) {
+      current = parent
+      continue
+    }
+    return false
   }
 }
 
