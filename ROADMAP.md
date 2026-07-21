@@ -241,11 +241,13 @@ transition/animation、portal、error boundary、async/resource
    を実装し、`examples/todomvc.jsx`の`TodoApp`から`TodoItem`を切り出した。
    children/slot・自己/相互再帰参照・複数ファイルは引き続きscope limit
    (詳細はSTATUS.md既知の制約参照)。
-10. **未計画:** authored `.jsx` の型検査基盤(`types/jsx.d.ts` + examplesの
-   tsconfig組み込み)。`use=`のJSX型定義(ADR-0011 design.md Decision 6)は
-   これに依存して先送りされている ― `signal`/`render`/ハンドラ属性を含め
-   authored code の型宣言が現状一切無く、`use`だけ型を付けても
-   エディタ体験は成立しないため、一括整備が前提。
+10. ~~authored `.jsx` の型検査基盤~~ — **完了**(change
+   `jsx-type-checking-foundation`)。`types/jsx.d.ts`(グローバル`JSX`
+   namespace・`signal`/`derived`/`render`のシグネチャ)+
+   `examples/tsconfig.json`(examples専用、ルートtsconfigとは分離)を実装。
+   先送りされていた`use=`のJSX型定義(ADR-0011 design.md Decision 6)も
+   あわせて解消した。属性名レベルの厳密化・コンポーネントprops型の
+   厳密な推論は引き続き未対応(詳細はSTATUS.md既知の制約参照)。
 
 ## 参考資料
 
