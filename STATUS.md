@@ -3,6 +3,21 @@
 実装の「今」の状態(現在地・マイルストーン進捗・既知の制約)をまとめたもの。
 設計判断待ちの論点・次のアクションの計画は `ROADMAP.md` を参照。
 
+## 現在地(2026-07-21)
+
+同一ファイル内の複数コンポーネント合成を実装(ADR-0014、change
+`same-file-component-composition`、ROADMAP §4・UNRESOLVED-04 解消)。
+`<Component/>`参照を`findRootComponent`より前の独立した前処理パス
+(`src/compiler/inline-components.ts`)でコンパイル時ASTインライン化する
+― `compileComponent`/`renderElement`は無変更のまま単一コンポーネント
+前提で動く。propsはshorthand分割代入のみ対応するコンパイル時識別子
+置換(実行時オブジェクトなし)。リストアイテムへインライン化された
+コンポーネントの変数ゾーンは「ローカルsignal」(factory クロージャ専有、
+module scopeに一切出ない)になり、同一ユニット直下のテキスト/属性
+バインディングのみそこへの依存を許可する(下記制約参照)。名前衝突は
+検出時のみ対応(signal出力名は既存の`assignOutputName`の`$n`ハイジーンに
+自然に乗り、動きゾーン関数名は衝突時に明示的にscope limit拒否)。
+
 ## 現在地(2026-07-19)
 
 TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証)まで完了。
@@ -50,6 +65,7 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
 | M5.5 | ネストした構造ユニット(条件分岐の中のリスト/リストアイテムの中の条件分岐、UNRESOLVED-06/07) | **DONE** | change `m5-5-nested-structural-units`。1階層ネストのみ、2階層以上は引き続きscope limit |
 | `use=` | top-level要素へのaction接続(ADR-0011) | **DONE** | change `use-action-impl`。ユニット内`use=`・JSX型宣言は未実装のまま(下記制約参照) |
 | M6 | 全マイルストーン横断のno-wrapper検証 | **DONE** | change `m6-no-wrapper-verification`。全機能同居フィクスチャで no-wrapper・import面・実DOM動作を固定(`test/no-wrapper.test.ts`)。サイズ予算係数は 4x のまま据え置き(counter が固定費支配の最悪ケースのため。締め直しは minify 着手時に再検討 ― ROADMAP「minify」) |
+| 合成 | 同一ファイル内の複数コンポーネント合成(ADR-0014) | **DONE** | change `same-file-component-composition`。コンパイル時ASTインライン化、root scope + list itemのみ、children/slot・再帰・複数ファイルは未対応のまま(下記制約参照) |
 
 ## 既知の制約(現時点のcodegenの限界)
 
@@ -86,8 +102,11 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
 - 静的host属性はM4、動的(式コンテナ)host属性値はADR-0012(change
   `dynamic-attribute-bindings`)で実装済み。attribute/property の使い分けは
   固定表(`checked` = booleanプロパティ、`value` = 文字列プロパティ、他は
-  `setAttribute`)。ユニット内の属性式が追跡 signal を参照するのは
-  テキストと同じく `scope limit`(UNRESOLVED-04 とセットで将来緩める)。
+  `setAttribute`)。ユニット内の属性式が**ルート**signalを参照するのは
+  テキストと同じく `scope limit`。**同一ユニット直下で宣言されたローカル
+  signal**(下記「同一ファイル内コンポーネント合成」参照)への依存のみ
+  ADR-0014(change `same-file-component-composition`)で許可した
+  (UNRESOLVED-04解消)。
 - **リスト(`.map()`)・条件分岐(三項/`&&`)はM5+M5.5で実装済み**
   (change `m5-list-conditional-factory-closures` /
   `m5-5-nested-structural-units`)。ネストは1階層まで(リストアイテム内の
@@ -98,12 +117,21 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
   - リスト/条件分岐の式コンテナが親要素の唯一の子でない場合(兄弟要素との
     混在)。コメントアンカー機構を持たないための単純化。ネストした構造
     ユニットにも同様に適用される。
-  - リストアイテム本体・条件分岐ブランチ本体の中のテキストで追跡対象の
+  - リストアイテム本体・条件分岐ブランチ本体の中のテキストで**ルート**
     signal/derivedを直接参照すること(item要素のフィールド参照は対象外 ―
-    trackされないので素通りする)。ネストした構造ユニットの条件式・配列式
-    はこの制限の対象外(依存は外側マーカーへバブルアップし、正しく更新が
-    届く)。ハンドラ内での signal 読み書きも対象外(通常のハンドラと同じ
-    仕組みで動く)。
+    trackされないので素通りする)。**同一ユニット直下のローカルsignal**
+    への依存はADR-0014で許可(上記参照)。ネストした構造ユニットの条件式・
+    配列式はルートsignal依存の制限対象外(依存は外側マーカーへバブル
+    アップし、正しく更新が届く)。ただしネストした構造ユニットが
+    **祖先ユニットのローカルsignal**に依存することは、ローカルsignalの
+    declIdがグローバルなsignalToMarkersへ漏れて壊れたコードを生成する
+    ため明示的に拒否する(ADR-0014、UNRESOLVED-07の編集モードspan/input
+    入れ替えが該当、引き続き未解決)。ハンドラ内でのsignal読み書きも
+    ルートsignal制限の対象外(通常のハンドラと同じ仕組みで動く)。
+  - `.map()`のコールバックのブロック本体(`=> { ... }`)は、
+    「signal()/derived()宣言 + 最終return」の形(ADR-0014のローカル
+    signal宣言)のみ受理する。それ以外の文を含むブロック本体は引き続き
+    `scope limit`。
   - リストアイテムに `key` 属性がない場合、または `key` が追跡対象の
     signalを参照する場合。
   - `.map()` のコールバックがブロック本体(`=> { ... }`)の場合(concise
@@ -150,3 +178,32 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
     その内部の書き込みに対する`update_*`挿入位置は本体全体の実行時点に
     まとまる(リスナー発火時ではない)。ブロック本体は正しく分離される
     (`src/compiler/analyze.ts`の`analyzeActionExprScope`コメント参照)。
+- **同一ファイル内コンポーネント合成(ADR-0014、change
+  `same-file-component-composition`)は同一ファイル・root scopeと
+  list itemへのインライン化のみ実装済み**。以下は明示的な scope limit・
+  別changeへの先送り:
+  - `<Component>children</Component>`(children/slot)は`scope limit`。
+    実需が出るまで対応しない(ADR-0014決定7)。
+  - 自己/相互再帰参照(`function A() { render(<A/>) }`等)は
+    `scope limit`(展開中コンポーネント名のvisited集合で検出)。
+  - propsは`function Foo({ a, b })`形のshorthand分割代入のみ対応。
+    非shorthand(`{ a: x }`)・複数仮引数・spread propsは`scope limit`。
+  - コンポーネントを構造ユニット(list item)へインライン化できるのは
+    `.map()`アイテムの位置のみ。条件分岐ブランチへのインライン化は、
+    対象コンポーネントが変数ゾーン宣言(ローカルsignalになる宣言)を
+    一切持たない場合のみ動作する ― 条件分岐ブランチは三項/`&&`の式
+    位置でブロック文を置けないため、ローカルsignal付きコンポーネントの
+    ブランチへのインライン化は現状未対応(実装は同一ユニットのみ)。
+  - **propsの参照は、置換対象がJSX属性値/式コンテナの中身全体である
+    場合のみ正しく動く**。呼び出し先コンポーネント自身が追加の文で
+    prop呼び出しを包む(例: `(e) => { onFoo(...); bar(); }`)と、
+    置換後の内容がソース位置ベースの書き換え検出(`analyze.ts`の
+    identifier-visitベースのedit機構)に乗らず、置換前のソーステキストが
+    出力に残る(実装前調査で確認、`examples/todomvc.jsx`のTodoItemに
+    回避策の実例あり)。propをハンドラ属性値へ素通しする形
+    (`onKeyDown={onFoo}`)か、テキスト/属性の式コンテナの中身全体として
+    使う形は問題ない。
+  - 名前衝突: signal/derived出力名は既存の`assignOutputName`の`$n`
+    ハイジーンに自然に乗るため対応不要。動きゾーン関数名の衝突は
+    リネームせず明示的に`scope limit`で拒否する(実需が出るまで
+    未対応)。

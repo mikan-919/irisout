@@ -154,19 +154,19 @@
 
 ## 7. ドキュメント更新
 
-- [ ] 7.1 `STATUS.md`のマイルストーン表・既知の制約(リストアイテム内で
+- [x] 7.1 `STATUS.md`のマイルストーン表・既知の制約(リストアイテム内で
       追跡signalを参照できない、UNRESOLVED-04関連の記述)を、本changeで
       実装された範囲(同一ユニット内ローカルsignalのみ許可)に合わせて
       更新する。
-- [ ] 7.2 `ROADMAP.md`の§2 UNRESOLVED-04・§4(同一ファイル内合成)の
+- [x] 7.2 `ROADMAP.md`の§2 UNRESOLVED-04・§4(同一ファイル内合成)の
       「未実装」表記を実装済みに更新し、次のアクション欄の記述
       (「ADR-0014の実装が先で、次に触るとすれば9番の後」の注記)を
       整理する。
-- [ ] 7.3 `docs/architecture.md`にインライン化前処理パスの位置づけ
+- [x] 7.3 `docs/architecture.md`にインライン化前処理パスの位置づけ
       (compileComponentより前・render-tree走査は無変更)を追記する
       (該当箇所が無ければ追加、既にある場合はそのまま流用)。
 
 ## 8. 全体確認
 
-- [ ] 8.1 `bun run check-all`(biome check --write && tsc --noEmit &&
-      bun test)を実行し、全て通ることを確認する。
+- [x] 8.1 `bun run check-all`(biome check --write && tsc --noEmit &&
+      bun test)を実行し、全て通ることを確認する。121 tests pass, 0 fail。

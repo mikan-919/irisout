@@ -47,12 +47,15 @@ STATUS.md 既知の制約)。
   プロパティ反映)で実装。
 - (04) アイテムごとのローカル編集状態を authoring API でどう表現するか /
   コンポーネント全体で1つの `editingId` signal を代用(TodoMVCが同時1件
-  編集の性質に依存した暫定策で、一般形には拡張できない) / **解消済み
-  (ADR-0014、2026-07-21 grilling)**: `TodoItem` コンポーネントの変数
-  ゾーンに `const editing = signal(false)` を持たせ、構造ユニットへ
-  インライン化された「ローカルsignal」(`CONTEXT.md`)としてアイテム
-  ごとに独立させる。`editingId` ハックは不要になる。未実装(設計決定
-  のみ)。
+  編集の性質に依存した暫定策で、一般形には拡張できない) / **解消済み・
+  実装済み(ADR-0014、change `same-file-component-composition`、
+  2026-07-21)**: `TodoItem` コンポーネントの変数ゾーンに
+  `const editing = signal(false)` を持たせ、構造ユニットへインライン化
+  された「ローカルsignal」(`CONTEXT.md`)としてアイテムごとに独立させた。
+  `editingId` ハックは`examples/todomvc.jsx`から除去済み。編集モードの
+  表示切り替えは、span/input のDOM入れ替え(07、引き続き未解決)ではなく
+  同一ユニット直下の動的class属性バインディングに変更した(詳細は
+  `examples/todomvc.jsx`のコメント参照)。
 - (05) フィルタで一時的にリストから外れるだけのアイテムを「削除」と
   区別する設計 / handwritten側は「todos配列からの削除」でのみkeyed Map
   から破棄し、フィルタでの非表示はDOM着脱のみで対応(状態保持を優先) /
@@ -103,22 +106,26 @@ irisoutの責務として明言しているが、現状の実装は以下の理�
 
 - `<Component/>`のようなJSXタグ参照そのものが
   `compile: component references (<${tagName}/>) are not supported yet
-  (scope limit)`で拒否される(`src/compiler/render.ts:446`)。**同一
-  ファイル内であっても**複数コンポーネントの合成は現状不可能。
+  (scope limit)`で拒否されていた(`src/compiler/render.ts`)問題は、
+  **同一ファイル内に限り解消・実装済み**(下記参照)。
 - `compile(source: string)`(`src/compiler.ts:137`)は単一文字列を1回だけ
   受け取るシグネチャで、モジュール解決の余地がない。加えて Program 直下は
   関数宣言のみ許可(change `scope-limit-coverage`、STATUS.md既知の制約)の
   ため、`import`文自体が現状scope limitで拒否される ― 複数ファイルは
   「未実装」以前に「入力として受け付けない」段階。
 
-**同一ファイル内の合成は解消済み(ADR-0014、2026-07-21 grilling、未実装)**:
-`TodoApp`→`TodoItem`(構造ユニットの中身の切り出し)を具体的な検証対象に、
-呼び出し箇所ごとのコンパイル時ASTインライン化(render-tree走査より前の
-独立前処理パス)・propsは分割代入の純粋な置換(ランタイムprimitiveなし)・
-名前衝突は検出時のみコンポーネント名でリネーム、を決定した。ADR-0014
-「決定」参照。children/slot・再帰参照は今回のスコープ外(scope limit)。
+**同一ファイル内の合成は解消済み・実装済み(ADR-0014、change
+`same-file-component-composition`、2026-07-21)**: `TodoApp`→`TodoItem`
+(構造ユニットの中身の切り出し)を具体的な検証対象に、呼び出し箇所ごとの
+コンパイル時ASTインライン化(render-tree走査より前の独立前処理パス
+`src/compiler/inline-components.ts`)・propsはshorthand分割代入のみの
+純粋な置換(ランタイムprimitiveなし)・名前衝突は検出時のみ対応
+(signal出力名は既存の`assignOutputName`ハイジーンに乗る、動きゾーン
+関数名の衝突はリネームせず明示的にscope limit拒否)を実装した。
+children/slot・自己/相互再帰参照はscope limitで拒否。詳細な制約は
+STATUS.md参照。
 
-以下は**複数ファイル**側のみ残る問い(同一ファイル内合成の決定とは
+以下は**複数ファイル**側のみ残る問い(同一ファイル内合成の実装とは
 独立に検討してよい ― ADR-0014「検討した代替案」参照):
 
 1. **複数ファイルにまたがる場合のビルド時実行の単位** ― ファイルごとに
@@ -132,7 +139,8 @@ irisoutの責務として明言しているが、現状の実装は以下の理�
 
 複数ファイル対応(上記1・2)は、実需(具体的にどんなアプリを組みたいか)
 が出ない限り今それだけで進める理由は薄い。ADR-0014(同一ファイル内合成)
-の実装が先で、次に触るとすれば9番(型検査基盤)の後になる。
+の実装が完了したので、次に触るとすれば下記「次のアクション」9番
+(型検査基盤)になる。
 
 ### 5. 基本機能セット(Svelte/Solid水準)のギャップ一覧(2026-07-21 提起、未着手)
 
@@ -226,7 +234,14 @@ transition/animation、portal、error boundary、async/resource
 8. ~~動的属性バインディング(UNRESOLVED 02/03)~~ — **完了**(ADR-0012、
    change `dynamic-attribute-bindings`)。あわせてユニットホスト要素の
    ハンドラが黙って捨てられるバグを修正。
-9. **未計画:** authored `.jsx` の型検査基盤(`types/jsx.d.ts` + examplesの
+9. ~~同一ファイル内の複数コンポーネント合成(ADR-0014、UNRESOLVED-04)~~ —
+   **完了**(change `same-file-component-composition`)。コンパイル時
+   ASTインライン化(root scope + list itemのみ)・shorthand propsの
+   コンパイル時識別子置換・ローカルsignal(構造ユニット専有の変数ゾーン)
+   を実装し、`examples/todomvc.jsx`の`TodoApp`から`TodoItem`を切り出した。
+   children/slot・自己/相互再帰参照・複数ファイルは引き続きscope limit
+   (詳細はSTATUS.md既知の制約参照)。
+10. **未計画:** authored `.jsx` の型検査基盤(`types/jsx.d.ts` + examplesの
    tsconfig組み込み)。`use=`のJSX型定義(ADR-0011 design.md Decision 6)は
    これに依存して先送りされている ― `signal`/`render`/ハンドラ属性を含め
    authored code の型宣言が現状一切無く、`use`だけ型を付けても
