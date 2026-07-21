@@ -137,3 +137,211 @@ export function App() {
     expect(() => compile(source)).toThrow(/scope limit/)
   })
 })
+
+function dispatch(container: Element, el: Element | null, type: string): void {
+  if (!el) throw new Error('dispatch: element not found')
+  const Event = (
+    container.ownerDocument as unknown as {
+      defaultView: { Event: typeof globalThis.Event }
+    }
+  ).defaultView.Event
+  el.dispatchEvent(new Event(type))
+}
+
+describe('same-file-component-composition: コンポーネント参照のASTインライン化', () => {
+  it('トップレベルの子コンポーネント参照を展開してコンパイル・実行できる', async () => {
+    const source = `
+export function App() {
+  const count = signal(0);
+  render(
+    <div>
+      <Footer count={count()} />
+      <button onClick={inc}>+</button>
+    </div>
+  );
+  function inc() { count(count() + 1); }
+}
+
+function Footer({ count }) {
+  render(<span>{count} items</span>);
+}
+`
+    const { code } = compile(source)
+    expect(code).not.toContain(
+      'compile: component references (<Footer/>) are not supported yet',
+    )
+    const container = await mount(code)
+    const span = container.querySelector('span')
+    expect(span?.textContent).toBe('0 items')
+    dispatch(container, container.querySelector('button'), 'click')
+    expect(span?.textContent).toBe('1 items')
+  })
+
+  it('シャドーイングされた同名ローカル変数(ハンドラ自身のイベント引数)は誤って置換されない', () => {
+    // ADR-0009: ハンドラの第1仮引数は任意の識別子名を受理する。ここでは
+    // 意図的にpropsと同名の"count"を使い、ハンドラ本体からの"count"参照が
+    // props置換(プロパティ"count" -> 呼び出し元の実引数式)の対象に
+    // ならず、ハンドラ自身の引数のまま残ることを検証する。
+    const source = `
+export function App() {
+  render(<div><Foo count="caller-value" /></div>);
+}
+function Foo({ count }) {
+  render(<span onClick={(count) => count}>{count}</span>);
+}
+`
+    const { code } = compile(source)
+    // render JSX 側のプロパティ参照は呼び出し元の実引数へ置換される。
+    expect(code).toContain('caller-value')
+    // ハンドラ自身のイベント引数への参照はシャドーイングされ、
+    // "caller-value" へ置換されずに残る。
+    expect(code).toMatch(/\(count, \.\.\.__args\) => \{ count; {1,2}\}/)
+  })
+
+  it('リストアイテムへインライン化されたTodoItemがproxy propsとローカルsignalの両方で動く', async () => {
+    const source = `
+export function TodoApp() {
+  const todos = signal([
+    { id: 1, text: 'a', completed: false },
+    { id: 2, text: 'b', completed: true },
+  ]);
+  render(
+    <ul>
+      {todos().map((todo) => (
+        <TodoItem todo={todo} onToggle={() => toggleTodo(todo.id)} />
+      ))}
+    </ul>
+  );
+  function toggleTodo(id) {
+    todos(todos().map((t) => (t.id === id ? { ...t, completed: !t.completed } : t)));
+  }
+}
+
+function TodoItem({ todo, onToggle }) {
+  const editing = signal(false);
+  render(
+    <li key={todo.id} class={editing() ? 'editing' : ''}>
+      <input type="checkbox" checked={todo.completed} onChange={onToggle} />
+      <span onDblClick={() => editing(true)}>{todo.text}</span>
+    </li>
+  );
+}
+`
+    const { code } = compile(source)
+    expect(code).not.toMatch(/^export let editing/m)
+    const container = await mount(code)
+    const lis = container.querySelectorAll('li')
+    expect(lis.length).toBe(2)
+    expect([...lis].map((li) => li.querySelector('span')?.textContent)).toEqual(
+      ['a', 'b'],
+    )
+    expect(
+      [...lis].map(
+        (li) => (li.querySelector('input') as HTMLInputElement).checked,
+      ),
+    ).toEqual([false, true])
+
+    dispatch(container, lis[0]!.querySelector('span'), 'dblclick')
+    expect([...lis].map((li) => li.className)).toEqual(['editing', ''])
+
+    dispatch(container, lis[0]!.querySelector('input'), 'change')
+    expect(
+      [...lis].map(
+        (li) => (li.querySelector('input') as HTMLInputElement).checked,
+      ),
+    ).toEqual([true, true])
+  })
+
+  it('子要素を持つコンポーネント参照を拒否する', () => {
+    const source = `
+export function App() {
+  render(<div><Wrapper><span>hi</span></Wrapper></div>);
+}
+function Wrapper({ children }) {
+  render(<div>wrap</div>);
+}
+`
+    expect(() => compile(source)).toThrow(/component children.*scope limit/)
+  })
+
+  it('自己再帰参照を拒否する', () => {
+    const source = `
+export function App() {
+  render(<div><Item /></div>);
+}
+function Item() {
+  render(<Item />);
+}
+`
+    expect(() => compile(source)).toThrow(
+      /recursive component reference "Item".*scope limit/,
+    )
+  })
+
+  it('相互再帰参照を拒否する(無限展開せずに停止する)', () => {
+    const source = `
+export function App() {
+  render(<div><A /></div>);
+}
+function A() {
+  render(<B />);
+}
+function B() {
+  render(<A />);
+}
+`
+    expect(() => compile(source)).toThrow(
+      /recursive component reference "A".*scope limit/,
+    )
+  })
+
+  it('必須propが渡されていない場合は拒否する', () => {
+    const source = `
+export function App() {
+  render(<div><Foo /></div>);
+}
+function Foo({ count }) {
+  render(<span>{count}</span>);
+}
+`
+    expect(() => compile(source)).toThrow(/missing prop "count"/)
+  })
+
+  it('shorthand以外の分割代入props(`{ count: c }`)を拒否する', () => {
+    const source = `
+export function App() {
+  const x = signal(1);
+  render(<div><Foo count={x()} /></div>);
+}
+function Foo({ count: c }) {
+  render(<span>{c}</span>);
+}
+`
+    expect(() => compile(source)).toThrow(/shorthand destructured props/)
+  })
+
+  it('2つの異なるコンポーネントの同名signalは衝突時のみリネームされ、独立して動く', async () => {
+    const source = `
+export function App() {
+  render(<div><A /><B /></div>);
+}
+function A() {
+  const count = signal(1);
+  render(<span onClick={() => count(count() + 1)}>{count()}</span>);
+}
+function B() {
+  const count = signal(2);
+  render(<em onClick={() => count(count() + 1)}>{count()}</em>);
+}
+`
+    const { code } = compile(source)
+    const container = await mount(code)
+    const span = container.querySelector('span')
+    const em = container.querySelector('em')
+    expect(span?.textContent).toBe('1')
+    expect(em?.textContent).toBe('2')
+    dispatch(container, span, 'click')
+    expect(span?.textContent).toBe('2')
+    expect(em?.textContent).toBe('2')
+  })
+})

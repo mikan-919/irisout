@@ -36,6 +36,28 @@ function resolveDeclId(
   return ctx.declIdByKey.get(declKey(instanceId, start)) ?? null
 }
 
+// same-file-component-composition (ADR-0014決定5): 名前衝突時、
+// インライン化パスはBabel scopeの`binding.scope.rename()`で識別子を
+// リネームする ― `.name`だけが書き換わり`.start`/`.end`(ソース上の位置)は
+// 保持される。この関数の呼び出し元は「outputNameとidPath.node.nameが違えば
+// 編集する」という判定だけでは、リネーム後の名前がたまたま
+// assignOutputNameの結果と一致する場合に編集不要と誤判定し、render()が
+// ソーステキスト(リネーム前の古い名前)をそのままスライスしてしまう
+// (実装前調査で確認)。ソース上の実際のテキストと現在の名前を比較し、
+// 一致しなければ(=リネーム済みなら)常に編集対象に含める。
+function identifierNeedsRewrite(
+  ctx: CompilerState,
+  idPath: NodePath<t.Identifier>,
+  outputName: string,
+): boolean {
+  const { start, end } = idPath.node
+  if (start == null || end == null) return true
+  return (
+    outputName !== idPath.node.name ||
+    ctx.source.slice(start, end) !== idPath.node.name
+  )
+}
+
 // 式のルート自身と、その中で参照されるすべての識別子に visit を適用する。
 // (path.traverse はルートノード自体には入らないので、ルートが識別子の場合を
 // 別扱いする必要がある。)
@@ -220,7 +242,7 @@ function analyzeHandlerStatementsCore(
       return
     }
 
-    if (outputName !== idPath.node.name) {
+    if (identifierNeedsRewrite(ctx, idPath, outputName)) {
       edits.push({
         start: idPath.node.start!,
         end: idPath.node.end!,
@@ -277,7 +299,7 @@ export function analyzeExpr(
 
     const idStart = idPath.node.start!
     const idEnd = idPath.node.end!
-    if (outputName !== idPath.node.name) {
+    if (identifierNeedsRewrite(ctx, idPath, outputName)) {
       sourceEdits.push({ start: idStart, end: idEnd, text: outputName })
     }
 
@@ -299,7 +321,7 @@ export function analyzeExpr(
       return
     }
 
-    if (outputName !== idPath.node.name) {
+    if (identifierNeedsRewrite(ctx, idPath, outputName)) {
       outputEdits.push({ start: idStart, end: idEnd, text: outputName })
     }
   }
@@ -381,7 +403,7 @@ export function analyzeHandlerExpr(
       return
     }
 
-    if (outputName !== idPath.node.name) {
+    if (identifierNeedsRewrite(ctx, idPath, outputName)) {
       edits.push({
         start: idPath.node.start!,
         end: idPath.node.end!,
@@ -554,7 +576,7 @@ function analyzeActionIdentifier(
   }
 
   readDeclIds.add(id)
-  if (outputName !== idPath.node.name) {
+  if (identifierNeedsRewrite(ctx, idPath, outputName)) {
     edits.push({
       start: idPath.node.start!,
       end: idPath.node.end!,
