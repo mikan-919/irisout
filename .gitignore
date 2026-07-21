@@ -1,5 +1,8 @@
 node_modules
 .claude
+.codex
+.pi
 package-lock.json
 bun.lock
 dist
+plans
