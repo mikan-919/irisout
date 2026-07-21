@@ -18,31 +18,35 @@
 
 ## コンパイルパイプライン
 
-エントリは `src/compiler.ts` の `compile(source)`。処理は5段:
+エントリは `src/compiler.ts` の `compile(source)`。処理は6段:
 
 ```
 source (.jsx)
   │ 1. @babel/parser で parse(静的 AST)
   ▼
-findRootComponent()          ── 2. 誰からも参照されない唯一のトップレベル関数をルートとする
+inlineComponents()            ── 2. 同一ファイル内<Component/>参照をコンパイル時ASTインライン化
+  │    (src/compiler/inline-components.ts、ADR-0014)。findRootComponent()より前に完結する
+  │    独立した前処理パスで、以後のパイプラインはコンポーネント合成という概念を一切知らない。
   ▼
-compileComponent()           ── 3. render ツリーを深さ優先で走査(src/compiler/render.ts)
+findRootComponent()          ── 3. 誰からも参照されない唯一のトップレベル関数をルートとする
+  ▼
+compileComponent()           ── 4. render ツリーを深さ優先で走査(src/compiler/render.ts)
   │    ・signal()/derived() 宣言 → declId 発行 + 出力文生成
   │    ・JSX 式 → マーカー発行 + 依存(deps)収集(src/compiler/analyze.ts)
   │    ・onXxx ハンドラ → 書き込み先 signal(writeDeclIds)収集
   ▼
-new Function() でビルド時実行 ── 4. 計装済みスクリプトを Node 上で1回実行し、
+new Function() でビルド時実行 ── 5. 計装済みスクリプトを Node 上で1回実行し、
   │    (a) タグ付けした呼び出しが本当に signal/derived か検証(ADR-0001 #3)
   │    (b) 実際の初期 HTML をタダで取得
   ▼
-generateModule()             ── 5. 依存グラフから ES モジュールを文字列組み立て(src/codegen.ts)
+generateModule()             ── 6. 依存グラフから ES モジュールを文字列組み立て(src/codegen.ts)
   │    ・宣言はプレーン変数(ADR-0006: signal ラッパーは出力に残らない)
   │    ・root signal ごとに専用 update_<name>() を生成
   ▼
 { code, initialHtml, ... }
 ```
 
-`compileComponent()`(3)が受理しないパターンに当たると、常に
+`compileComponent()`(4)が受理しないパターンに当たると、常に
 `compile:`+`(scope limit)`エラーで拒否する(ADR-0004の裏面、
 「安全に拒否する」)。この拒否からの公式な逃げ道は`use=`アクション
 (ADR-0011、設計決定済み・未実装): 実要素にactionを接続し、本体から
@@ -56,6 +60,7 @@ triage手続きで捌く — コンパイラの受理条件自体を場当たり
 | ファイル | 責務 |
 |---|---|
 | `src/compiler.ts` | パイプライン全体の統括。ルート特定、ビルド時実行、discovery 検証 |
+| `src/compiler/inline-components.ts` | 同一ファイル内`<Component/>`参照のコンパイル時ASTインライン化(ADR-0014)。findRootComponent()より前に完結する独立した前処理パス |
 | `src/compiler/state.ts` | `compile()` 全体で共有するミュータブル状態 `CompilerState`(ctx)と ID 型 |
 | `src/compiler/render.ts` | JSX ツリーの走査。宣言・マーカー・ハンドラを ctx に積み、HTML テンプレートソースを組み立てる |
 | `src/compiler/analyze.ts` | 式の解析。識別子を declId に解決し、出力用/ビルド時実行用の2種類のソースを生成 |

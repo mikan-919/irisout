@@ -2,7 +2,8 @@
 
 ## ステータス
 
-決定済み・未実装(2026-07-21 grilling、ROADMAP.md §4・§2 UNRESOLVED-04の続き)
+**決定済み・実装済み**(change `same-file-component-composition`。
+2026-07-21 grilling、ROADMAP.md §4・§2 UNRESOLVED-04の続き)
 
 ## コンテキスト
 

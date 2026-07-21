@@ -4,14 +4,20 @@
 //
 // 実装済み: 1階層のリスト・条件分岐(M5)、ネストした構造ユニット =
 // UNRESOLVED-06/07(M5.5、change `m5-5-nested-structural-units`)、
-// `use=`属性 = UNRESOLVED-01(ADR-0011、change `use-action-impl`)。
-// 下記の `{visibleTodos().length > 0 && (<ul>...)}`(06: 条件分岐の中の
-// リスト)と、編集モードのspan/input切り替え(07: リストアイテムの中の
-// 条件分岐)は実際にコンパイルできる形になっている。
+// `use=`属性 = UNRESOLVED-01(ADR-0011、change `use-action-impl`)、
+// 同一ファイル内の複数コンポーネント合成・ローカルsignal = UNRESOLVED-04
+// (ADR-0014、change `same-file-component-composition`)。
 //
-// フィクスチャ全体のコンパイルを今も妨げているのは、ハンドラ以外の動的
-// (式コンテナ)属性値(UNRESOLVED-02/03)。既知のスコープ外なので
-// 個別の注記は付けない。
+// このフィクスチャ全体のコンパイルを今も妨げているのは同一ファイル内合成と
+// 無関係な既存のscope limit: `{visibleTodos().length > 0 && (<ul>...)}`が
+// `<div class='todoapp'>`のsole childでないこと(M5のsole-child制約)、
+// および外側の条件分岐 > リスト > (ネストしていた)条件分岐という3階層の
+// 入れ子がM5.5の「1階層まで」を超えること。編集モードのUIも、span/input
+// のDOM入れ替え(UNRESOLVED-07、未解決のまま)ではなく、実物のTodoMVCと
+// 同じCSSクラストグル方式(`<li class={editing() ? 'editing' : ...}>`)に
+// している ― これは`TodoItem`のローカルsignal`editing`への同一ユニット
+// 直下の依存(動的class属性バインディング)として書け、07の入れ子構造
+// ユニットを必要としない。
 
 export function TodoApp() {
   // ── 変数ゾーン: const のみ(signal/derived) ──
@@ -32,20 +38,6 @@ export function TodoApp() {
 
   const activeCount = derived(() => todos().filter((t) => !t.completed).length)
 
-  // UNRESOLVED(04): アイテムごとのローカル編集状態(ダブルクリックで
-  // 編集開始)をauthoring APIでどう表現するかが未決定。ADR-0005は
-  // 生成コード側(factory関数内の素のローカル変数)までしか規定して
-  // おらず、authored JSX側で「このアイテムだけの状態」を書く構文がない。
-  // ここではコンポーネント全体で1つのsignal(editingId、編集中のtodo id
-  // またはnull)を暫定的に代用する。TodoMVCは同時に1件しか編集できない
-  // UIなので偶然動くが、複数アイテムが独立に状態を持つ一般形には
-  // 拡張できない暫定策である。ゾーン配置規則(constは変数ゾーン)は
-  // ADR-0008の決定なので、暫定扱いにせずここに置く。
-  // (M5.5の判断) 07のネスト条件分岐で編集UI自体は書けるようになったが、
-  // この04(アイテムごとの状態を書く構文)は解消しない ― 引き続き
-  // スコープ外。editingIdの暫定代用もそのまま。
-  const editingId = signal(null)
-
   // ── UIゾーン: render() 文(returnではない) ──
   render(
     <div class='todoapp'>
@@ -58,45 +50,15 @@ export function TodoApp() {
       {visibleTodos().length > 0 && (
         <ul class='todo-list'>
           {visibleTodos().map((todo) => (
-            <li key={todo.id} class={todo.completed ? 'completed' : ''}>
-              {/* UNRESOLVED(02) 解消済み(ADR-0012、change
-                  dynamic-attribute-bindings): 動的class は setAttribute
-                  反映の動的属性バインディングとして書ける。 */}
-              <input
-                type='checkbox'
-                checked={todo.completed}
-                onChange={() => toggleTodo(todo.id)}
-              />
-              {/* UNRESOLVED(03) 解消済み(ADR-0012): checked は固定表により
-                  DOMプロパティとして都度反映される(初期HTMLはpresence)。 */}
-              {/* M5.5(UNRESOLVED-07解消): 編集モードのspan/input切り替えは、
-                  リストアイテム内にネストした条件分岐ユニット(1階層ネスト)
-                  として書ける。構造ユニットは親要素の唯一の子でなければ
-                  ならない(M5のsole-child制約)ため、専用のdivで包む。 */}
-              {/* UNRESOLVED(08): 編集中テキストの下書き保持先は未規定のまま
-                  (07では解消しない)。ここではinput要素自身のvalueをsource
-                  of truthとし、確定はEnterでe.target.value経由に寄せる。
-                  編集開始時のtodo.textのプリフィル(value={todo.text})は
-                  ADR-0012 の value プロパティバインディングで書けるように
-                  なった(下書きの保持先そのものは未規定のまま)。 */}
-              <div>
-                {editingId() === todo.id ? (
-                  <input
-                    onKeyDown={(e) =>
-                      e.key === 'Enter' && commitEdit(todo.id, e.target.value)
-                    }
-                  />
-                ) : (
-                  /* biome-ignore lint/a11y/noStaticElementInteractions: フィクスチャなのでa11y対応はスコープ外 */
-                  <span onDblClick={() => startEditing(todo.id)}>
-                    {todo.text}
-                  </span>
-                )}
-              </div>
-              <button type='button' onClick={() => removeTodo(todo.id)}>
-                x
-              </button>
-            </li>
+            <TodoItem
+              key={todo.id}
+              todo={todo}
+              onToggle={() => toggleTodo(todo.id)}
+              onCommitEdit={(e) =>
+                e.key === 'Enter' && commitEdit(todo.id, e.target.value)
+              }
+              onRemove={() => removeTodo(todo.id)}
+            />
           ))}
         </ul>
       )}
@@ -154,15 +116,63 @@ export function TodoApp() {
     filter(next)
   }
 
-  function startEditing(id) {
-    editingId(id)
-  }
-
   function commitEdit(id, text) {
     const t = text.trim()
     if (t !== '') {
       todos(todos().map((x) => (x.id === id ? { ...x, text: t } : x)))
     }
-    editingId(null)
   }
+}
+
+// same-file-component-composition(ADR-0014)で切り出したリストアイテムの
+// コンポーネント。UNRESOLVED-04(アイテムごとのローカル編集状態)は、
+// コンポーネント全体で1つのsignalを使い回す`editingId`ハックではなく、
+// このコンポーネント自身の変数ゾーンに`editing`ローカルsignalを持たせる
+// ことで解消する ― `TodoApp`の`.map()`アイテム位置へインライン化されると
+// factoryクロージャ専有のローカル状態になり(CONTEXT.md「ローカルsignal」)、
+// アイテムごとに自動的に独立する。呼び出し箇所の`<TodoItem key={todo.id}
+// .../>`のkeyはlintのuseJsxKeyInIterable対応のみが目的で、コンパイラは
+// 展開後にこのコンポーネント自身が持つ`<li key={todo.id}>`のkeyだけを見る
+// (propとしては受け取らない)。
+function TodoItem({ todo, onToggle, onCommitEdit, onRemove }) {
+  const editing = signal(false)
+
+  render(
+    <li
+      key={todo.id}
+      class={`${todo.completed ? 'completed' : ''} ${editing() ? 'editing' : ''}`}
+    >
+      <input type='checkbox' checked={todo.completed} onChange={onToggle} />
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: フィクスチャなのでa11y対応はスコープ外 */}
+      <span onDblClick={() => editing(true)}>{todo.text}</span>
+      {/* UNRESOLVED(08): 編集中テキストの下書き保持先は未規定のまま。
+          ここではinput要素自身のvalueをsource of truthとし、確定は
+          Enterでe.target.value経由に寄せる。編集開始時のtodo.textの
+          プリフィルはADR-0012のvalueプロパティバインディングで書ける。
+          UNRESOLVED(07、編集モードのspan/input DOM入れ替え)は未解決の
+          まま ― このフィクスチャではspan/input両方を常にDOMへ出し、
+          実物のTodoMVCと同じCSSクラストグル(上のclass属性)で表示を
+          切り替えることで07を必要としない形にしている。
+          `onCommitEdit`をこのコンポーネント自身の文でラップせず
+          `onKeyDown={onCommitEdit}`のまま素通しにしているのは、
+          コンポーネント合成の実装上の制約(props置換は識別子参照全体を
+          呼び出し元の式で置き換える方式のため、置換対象がハンドラ属性値
+          そのものである場合は正しく動くが、このコンポーネント側で
+          `(e) => { onCommitEdit(...); ...; }`のように追加の文で包むと、
+          置換後の呼び出し式がソース位置ベースの書き換え検出に乗らず
+          置換が反映されない、実装前調査で確認した既知の制約)。
+          「Enterキーのときだけ」の判定は呼び出し元(TodoApp)の引数式
+          `(e) => e.key === 'Enter' && commitEdit(...)`側に持たせ、
+          編集モードの終了はこのコンポーネント自身の`onBlur`(propを
+          経由しない、ローカルなだけの書き込み)に委ねている。 */}
+      <input
+        value={todo.text}
+        onKeyDown={onCommitEdit}
+        onBlur={() => editing(false)}
+      />
+      <button type='button' onClick={onRemove}>
+        x
+      </button>
+    </li>,
+  )
 }

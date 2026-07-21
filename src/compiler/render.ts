@@ -32,6 +32,7 @@ import type {
   ContentPart,
   DeclId,
   ListMarker,
+  LocalDecl,
   MarkerId,
   StructuralUnitBody,
   TextMarker,
@@ -53,7 +54,7 @@ type JSXChild =
 // 動きゾーン(render後)の function宣言テーブル。ハンドラの識別子参照を
 // この表で解決する(ADR-0008)。render の1パス中だけ有効な一時状態なので
 // ctx には積まず、renderElement/collectAttrs へ引数で渡す。
-type HandlerFns = Map<string, NodePath<t.FunctionDeclaration>>
+export type HandlerFns = Map<string, NodePath<t.FunctionDeclaration>>
 
 function emitSignal(
   ctx: CompilerState,
@@ -129,12 +130,20 @@ function emitDerived(
   return id
 }
 
-function processDeclarationStatement(
-  ctx: CompilerState,
+interface ParsedSignalDecl {
+  kind: 'signal' | 'derived'
+  naturalName: string
+  declaratorStart: number
+  argPath: NodePath<t.Expression>
+}
+
+// `const x = signal(...)` / `const x = derived(...)` の形を検証し、
+// emitSignal/emitDerived(ルート・ローカル共通)が要る材料を取り出す純関数。
+// ctx を触らない ― root/local どちらの宣言ゾーンからも共有する
+// (same-file-component-composition: 構造ユニットのローカル宣言も同じ形)。
+function parseSignalDeclStatement(
   stmt: NodePath<t.Statement>,
-  instanceId: number,
-  out: RenderOutput,
-): void {
+): ParsedSignalDecl {
   const scopeLimit = new Error(
     'compile: only top-level `signal()`/`derived()` declarations are supported in this milestone (scope limit)',
   )
@@ -162,21 +171,129 @@ function processDeclarationStatement(
   const argPath = stmt.get(
     'declarations.0.init.arguments.0',
   ) as NodePath<t.Expression>
-  const naturalName = declarator.id.name
-  if (init.callee.name === 'signal') {
+  return {
+    kind: init.callee.name as 'signal' | 'derived',
+    naturalName: declarator.id.name,
+    declaratorStart: declarator.start!,
+    argPath,
+  }
+}
+
+function processDeclarationStatement(
+  ctx: CompilerState,
+  stmt: NodePath<t.Statement>,
+  instanceId: number,
+  out: RenderOutput,
+): void {
+  const { kind, naturalName, declaratorStart, argPath } =
+    parseSignalDeclStatement(stmt)
+  if (kind === 'signal') {
     const { rendered, sourceRendered } = analyzeExpr(ctx, argPath, instanceId)
     emitSignal(
       ctx,
       instanceId,
-      declarator.start!,
+      declaratorStart,
       naturalName,
       rendered,
       sourceRendered,
       out,
     )
   } else {
-    emitDerived(ctx, instanceId, declarator.start!, naturalName, argPath, out)
+    emitDerived(ctx, instanceId, declaratorStart, naturalName, argPath, out)
   }
+}
+
+// same-file-component-composition: 構造ユニット(list item/conditional
+// branch)へインライン化されたコンポーネントの変数ゾーン宣言(CONTEXT.md
+// 「ローカルsignal」)。ルートの emitSignal/emitDerived と違い、
+// out.declStatements/instrumentedDeclStatements へは一切書かない ―
+// 構造ユニットの中身は初期HTMLに焼き込まれない(空のコンテナのまま mount
+// 時に populate される、design.md D5)ため、ビルド時実行の対象にもならない。
+// generateFactory(codegen.ts)がこの戻り値を factory 内の `let` として出す。
+function emitLocalSignal(
+  ctx: CompilerState,
+  instanceId: number,
+  declaratorStart: number,
+  naturalName: string,
+  rendered: string,
+): LocalDecl {
+  const id = toDeclId(`decl_${instanceId}_${declaratorStart}`)
+  ctx.declIdByKey.set(declKey(instanceId, declaratorStart), id)
+  ctx.declKind.set(id, 'signal')
+  ctx.localDeclIds.add(id)
+  const outputName = assignOutputName(ctx, naturalName, id)
+  return { id, kind: 'signal', outputName, rendered }
+}
+
+function emitLocalDerived(
+  ctx: CompilerState,
+  instanceId: number,
+  declaratorStart: number,
+  naturalName: string,
+  argPath: NodePath<t.Expression>,
+): LocalDecl {
+  if (
+    !argPath.isArrowFunctionExpression() ||
+    argPath.node.params.length !== 0
+  ) {
+    throw new Error(
+      'compile: derived() must be called with a zero-arg concise arrow function `() => expr` (scope limit)',
+    )
+  }
+  const bodyPath = argPath.get('body')
+  if (bodyPath.isBlockStatement()) {
+    throw new Error(
+      'compile: derived() body must be a single expression, not a block (scope limit)',
+    )
+  }
+
+  const id = toDeclId(`decl_${instanceId}_${declaratorStart}`)
+  ctx.declIdByKey.set(declKey(instanceId, declaratorStart), id)
+  ctx.declKind.set(id, 'derived')
+  ctx.localDeclIds.add(id)
+  const outputName = assignOutputName(ctx, naturalName, id)
+
+  const { deps, rendered } = analyzeExpr(
+    ctx,
+    bodyPath as NodePath<t.Expression>,
+    instanceId,
+  )
+  for (const dep of deps) {
+    if (ctx.declKind.get(dep) === 'derived') {
+      throw new Error(
+        'compile: derived-of-derived is not supported yet (scope limit)',
+      )
+    }
+  }
+  ctx.derivedDeps.set(id, deps)
+  ctx.derivedRecompute.set(id, rendered)
+  return { id, kind: 'derived', outputName, rendered }
+}
+
+export function processLocalDeclarationStatement(
+  ctx: CompilerState,
+  stmt: NodePath<t.Statement>,
+  instanceId: number,
+): LocalDecl {
+  const { kind, naturalName, declaratorStart, argPath } =
+    parseSignalDeclStatement(stmt)
+  if (kind === 'signal') {
+    const { rendered } = analyzeExpr(ctx, argPath, instanceId)
+    return emitLocalSignal(
+      ctx,
+      instanceId,
+      declaratorStart,
+      naturalName,
+      rendered,
+    )
+  }
+  return emitLocalDerived(
+    ctx,
+    instanceId,
+    declaratorStart,
+    naturalName,
+    argPath,
+  )
 }
 
 // JSXText/式の子の連なりを、1回の textContent 置換で更新するアトミックな
@@ -617,6 +734,22 @@ function renderElement(
   return `<${tagName}${attrs}${dynBake} data-iris-id="${markerId}">${sourceInner}</${tagName}>`
 }
 
+// same-file-component-composition: list item の arrow 本体が bare JSX
+// (concise body)か、ローカルsignal宣言+最終return JSXのブロック本体かを
+// 緩く判定する(軽量なゲートのみ ― 「returnの前がsignal/derived宣言だけか」
+// の厳密な検証は resolveUnitBodySource が実際にlistとして処理する際に行う)。
+function looksLikeUnitBodyJsx(bodyPath: NodePath<t.Node>): boolean {
+  if (bodyPath.isJSXElement()) return true
+  if (!bodyPath.isBlockStatement()) return false
+  const stmts = bodyPath.get('body') as NodePath<t.Statement>[]
+  const last = stmts[stmts.length - 1]
+  return (
+    (last?.isReturnStatement() &&
+      (last.get('argument') as NodePath<t.Node | null>).isJSXElement()) ??
+    false
+  )
+}
+
 // M5(ADR-0005): 式コンテナの中身が「リスト(`.map()`)」「条件分岐(三項/`&&`)」
 // のどちらかの構造ユニットの形をしているかを判定する。どちらでもなければ
 // null(既存の text マーカー等、通常の子として扱われる)。
@@ -637,7 +770,7 @@ function classifyStructuralExpr(
         arg?.isArrowFunctionExpression() &&
         params?.length === 1 &&
         params[0]!.isIdentifier() &&
-        arg.get('body').isJSXElement()
+        looksLikeUnitBodyJsx(arg.get('body'))
       ) {
         return 'list'
       }
@@ -677,6 +810,52 @@ function classifyStructuralExpr(
 // 依存 signal の update_* が外側ユニットの update を(そして外側の update が
 // 内側の update を)駆動する。テキストマーカーの追跡 signal 参照は引き続き
 // scope limit。
+// same-file-component-composition: list item のarrow本体は、従来の
+// bare JSX(concise body)に加えて、ローカルsignal/derived宣言+最終return
+// のブロック本体も受理する(インライン化パスがコンポーネントの変数ゾーンを
+// ここへ展開するために使う形、design.md D5)。ブロック内で許すのは
+// signal()/derived()宣言と最終returnのみ。
+function resolveUnitBodySource(
+  bodyPath: NodePath<t.BlockStatement | t.Expression>,
+): {
+  jsxPath: NodePath<t.JSXElement>
+  localDeclStmts: NodePath<t.VariableDeclaration>[]
+} {
+  if (bodyPath.isJSXElement()) {
+    return { jsxPath: bodyPath, localDeclStmts: [] }
+  }
+  if (!bodyPath.isBlockStatement()) {
+    throw new Error(
+      'compile: list item body must be a JSX element or a block of local signal/derived declarations ending in return (scope limit)',
+    )
+  }
+  const stmts = bodyPath.get('body') as NodePath<t.Statement>[]
+  const last = stmts[stmts.length - 1]
+  if (!last?.isReturnStatement()) {
+    throw new Error(
+      'compile: list item block body must end with a return statement (scope limit)',
+    )
+  }
+  const returnArg = last.get('argument') as NodePath<t.Expression | null>
+  if (!returnArg.isJSXElement()) {
+    throw new Error(
+      'compile: list item block body must return a JSX element (scope limit)',
+    )
+  }
+  const localDeclStmts = stmts.slice(0, -1)
+  for (const s of localDeclStmts) {
+    if (!s.isVariableDeclaration()) {
+      throw new Error(
+        'compile: only signal()/derived() declarations are allowed before the return in a list item block body (scope limit)',
+      )
+    }
+  }
+  return {
+    jsxPath: returnArg,
+    localDeclStmts: localDeclStmts as NodePath<t.VariableDeclaration>[],
+  }
+}
+
 function renderStructuralUnitBody(
   ctx: CompilerState,
   elementPath: NodePath<t.JSXElement>,
@@ -684,7 +863,18 @@ function renderStructuralUnitBody(
   handlerFns: HandlerFns,
   unitDepth: number,
   skipAttrName?: string,
+  localDeclStmts: NodePath<t.VariableDeclaration>[] = [],
 ): { body: StructuralUnitBody; nestedDeps: Set<DeclId> } {
+  // same-file-component-composition (design.md D5/D6): このユニット直下の
+  // ローカルsignal/derived宣言を先に処理する。以後のテキスト/属性の
+  // scope limit判定は「このユニット自身が宣言したローカルsignalかどうか」
+  // だけを基準にする ― 祖先ユニットのローカルsignalは対象に含まれない
+  // (bodyLocalDeclIds はこの呼び出し1回ぶんの宣言だけを持つ)。
+  const localDecls = localDeclStmts.map((stmt) =>
+    processLocalDeclarationStatement(ctx, stmt, instanceId),
+  )
+  const bodyLocalDeclIds = new Set(localDecls.map((d) => d.id))
+
   const markersBefore = ctx.markers.length
   const handlersBefore = ctx.handlers.length
   const attrsBefore = ctx.attrBindings.length
@@ -698,11 +888,16 @@ function renderStructuralUnitBody(
     | ConditionalMarker
   )[]
   const localHandlers = ctx.handlers.splice(handlersBefore)
-  // ADR-0012 決定5: ユニット内の属性式が追跡 signal を参照するのはテキストと
-  // 同じ scope limit(item フィールド参照のみ許す)。
+  // ADR-0012 決定5: ユニット内の属性式が追跡signalを参照するのは、依存先が
+  // 全てこのユニット自身のローカルsignalである場合に限り許可する
+  // (same-file-component-composition design D6)。ルートsignal・祖先
+  // ユニットのローカルsignalへの依存は従来どおり拒否する。
   const localAttrBindings = ctx.attrBindings.splice(attrsBefore)
   for (const b of localAttrBindings) {
-    if (b.deps.size > 0) {
+    const leaksBeyondThisUnit = [...b.deps].some(
+      (d) => !bodyLocalDeclIds.has(d),
+    )
+    if (leaksBeyondThisUnit) {
       throw new Error(
         'compile: attribute binding referencing a tracked signal inside a list item or conditional branch is not supported yet (scope limit)',
       )
@@ -713,18 +908,38 @@ function renderStructuralUnitBody(
     const deps = ctx.markerDeps.get(m.id)
     ctx.markerDeps.delete(m.id)
     if (m.kind === 'text') {
-      if (deps && deps.size > 0) {
+      const leaksBeyondThisUnit = deps
+        ? [...deps].some((d) => !bodyLocalDeclIds.has(d))
+        : false
+      if (leaksBeyondThisUnit) {
         throw new Error(
           'compile: referencing a tracked signal inside a list item or conditional branch is not supported yet (scope limit)',
         )
       }
     } else {
-      // ネストした構造ユニット自身の依存(さらに内側からバブル済みの分を含む)。
-      for (const d of deps ?? []) nestedDeps.add(d)
+      // ネストした構造ユニット自身の依存(さらに内側からバブル済みの分を
+      // 含む)。ローカルsignalへの依存は、グローバルなsignalToMarkersへ
+      // 漏れてモジュールスコープに存在しない変数を参照する壊れたコードに
+      // なるため、合流させず明示的に拒否する(design.md D6、UNRESOLVED-07
+      // 相当のネストは本changeでも未解決のまま)。
+      for (const d of deps ?? []) {
+        if (ctx.localDeclIds.has(d)) {
+          throw new Error(
+            'compile: a nested structural unit depending on a local signal is not supported yet (scope limit)',
+          )
+        }
+        nestedDeps.add(d)
+      }
     }
   }
   return {
-    body: { template, localMarkers, localHandlers, localAttrBindings },
+    body: {
+      template,
+      localMarkers,
+      localHandlers,
+      localAttrBindings,
+      localDecls,
+    },
     nestedDeps,
   }
 }
@@ -753,7 +968,9 @@ function renderListUnit(
   ) as NodePath<t.ArrowFunctionExpression>
   const itemParam = (arrowPath.get('params.0') as NodePath<t.Identifier>).node
     .name
-  const itemPath = arrowPath.get('body') as NodePath<t.JSXElement>
+  const { jsxPath: itemPath, localDeclStmts } = resolveUnitBodySource(
+    arrowPath.get('body'),
+  )
 
   const keyAttrPath = itemPath
     .get('openingElement')
@@ -796,6 +1013,7 @@ function renderListUnit(
     handlerFns,
     unitDepth,
     'key',
+    localDeclStmts,
   )
   // M5.5: ネストしたユニットの依存はこのリストマーカーの依存に合流させる。
   // 該当 signal の update_* がリストの keyed diff を再実行し、既存アイテムの
@@ -878,7 +1096,7 @@ function renderConditionalUnit(
 
 // 文が render(<JSX>) マーカー呼び出しなら、その JSX 引数 path を返す。
 // render() 以外の呼び出し・非 ExpressionStatement は null(判定のみ)。
-function renderCallJsx(
+export function renderCallJsx(
   stmt: NodePath<t.Statement>,
 ): NodePath<t.JSXElement> | null {
   if (!stmt.isExpressionStatement()) return null
@@ -895,16 +1113,19 @@ function renderCallJsx(
   return args[0] as NodePath<t.JSXElement>
 }
 
-// ADR-0008: コンポーネント本体を「変数ゾーン → render() → 動きゾーン」の3構造で
-// 走査する。UI は return ではなく render(<JSX>) マーカーで宣言する。配置違反
-// (return / render 欠如・複数 / 変数ゾーンの function 宣言 / 動きゾーンの
-// const 宣言)は compile error で拒否する。
-export function compileComponent(
-  ctx: CompilerState,
+export interface ComponentZones {
+  varZoneStmts: NodePath<t.Statement>[]
+  renderJsxPath: NodePath<t.JSXElement>
+  movementZoneFns: HandlerFns
+}
+
+// ADR-0008のゾーン構造(変数ゾーン→render()→動きゾーン)を、ctx を触らず
+// 純粋に位置だけで特定する。same-file-component-composition: この特定
+// ロジックはインライン化パス(compileComponent が動く前)からも同じ形で
+// 要るため、compileComponent 本体から共有ヘルパーへ切り出した。
+export function splitComponentZones(
   componentPath: NodePath<t.FunctionDeclaration>,
-  instanceId: number,
-  out: RenderOutput,
-): string {
+): ComponentZones {
   const stmts = componentPath.get('body.body') as NodePath<t.Statement>[]
 
   // UIゾーン(render() 文)の位置を特定する。ちょうど1つでなければならない。
@@ -934,14 +1155,10 @@ export function compileComponent(
     )
   }
 
-  // 変数ゾーン(render前): signal()/derived() の const 宣言のみ。function宣言
-  // など他の文は processDeclarationStatement の scope limit が拒否する。
-  for (let i = 0; i < renderIndex; i++) {
-    processDeclarationStatement(ctx, stmts[i]!, instanceId, out)
-  }
+  const varZoneStmts = stmts.slice(0, renderIndex)
 
   // 動きゾーン(render後): function宣言のみ。ハンドラ識別子参照の解決表に積む。
-  const handlerFns: HandlerFns = new Map()
+  const movementZoneFns: HandlerFns = new Map()
   for (let i = renderIndex + 1; i < stmts.length; i++) {
     const stmt = stmts[i]!
     if (!stmt.isFunctionDeclaration() || !stmt.node.id) {
@@ -949,11 +1166,37 @@ export function compileComponent(
         'compile: only function declarations are allowed after render() (scope limit)',
       )
     }
-    handlerFns.set(stmt.node.id.name, stmt as NodePath<t.FunctionDeclaration>)
+    movementZoneFns.set(
+      stmt.node.id.name,
+      stmt as NodePath<t.FunctionDeclaration>,
+    )
   }
+
+  return { varZoneStmts, renderJsxPath, movementZoneFns }
+}
+
+// ADR-0008: コンポーネント本体を「変数ゾーン → render() → 動きゾーン」の3構造で
+// 走査する。UI は return ではなく render(<JSX>) マーカーで宣言する。配置違反
+// (return / render 欠如・複数 / 変数ゾーンの function 宣言 / 動きゾーンの
+// const 宣言)は compile error で拒否する。
+export function compileComponent(
+  ctx: CompilerState,
+  componentPath: NodePath<t.FunctionDeclaration>,
+  instanceId: number,
+  out: RenderOutput,
+): string {
+  const { varZoneStmts, renderJsxPath, movementZoneFns } =
+    splitComponentZones(componentPath)
+
+  // 変数ゾーン(render前): signal()/derived() の const 宣言のみ。function宣言
+  // など他の文は processDeclarationStatement の scope limit が拒否する。
+  for (const stmt of varZoneStmts) {
+    processDeclarationStatement(ctx, stmt, instanceId, out)
+  }
+
   // cross-function-handler-writes: 呼び出し追跡(analyze.ts)が callee の
   // binding 同一性を確認できるよう、動きゾーン関数表を ctx へ載せる。
-  ctx.movementFns = handlerFns
+  ctx.movementFns = movementZoneFns
 
-  return renderElement(ctx, renderJsxPath, instanceId, handlerFns)
+  return renderElement(ctx, renderJsxPath, instanceId, movementZoneFns)
 }
