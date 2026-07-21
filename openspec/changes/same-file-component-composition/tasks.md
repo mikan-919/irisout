@@ -58,24 +58,27 @@
 
 ## 5. 構造ユニットへのローカルsignal付きインライン化
 
-- [ ] 5.1 `src/compiler/state.ts`の`StructuralUnitBody`に、ユニット
+- [x] 5.1 `src/compiler/state.ts`の`StructuralUnitBody`に、ユニット
       ローカルのsignal/derived宣言を表す新フィールド(例:
       `localDecls`)を追加する。
-- [ ] 5.2 `renderListUnit`/`renderStructuralUnitBody`
+- [x] 5.2 `renderListUnit`/`renderStructuralUnitBody`
       (`src/compiler/render.ts`)が、`.map()`アイテムのarrow本体が
       bare JSXではなくブロック本体
       (`(item) => { const x = signal(...); return <li>...</li>; }`)の
-      場合も受理するよう拡張する。ブロック内で許容する文はsignal/derived
-      宣言と最終`return`のみとし、他の文は`scope limit`で拒否する
-      (条件分岐ブランチ側も同様に対応する)。
+      場合も受理するよう拡張した(`resolveUnitBodySource`/
+      `looksLikeUnitBodyJsx`)。ブロック内で許容する文はsignal/derived
+      宣言と最終`return`のみ。**条件分岐ブランチ側は対象外のまま**
+      ―三項/`&&`のブランチは式の位置でBlockStatementを構文的に
+      置けないため(`cond ? { ...; return x } : y`は無効なJS)、
+      ローカルsignalはlist itemでのみサポートする。
 - [ ] 5.3 インライン化パス(セクション2/3)が、構造ユニット内の呼び出し
       箇所を展開する際、呼び出し先の変数ゾーン宣言をルート変数ゾーンでは
       なく、上記のブロック形式のローカル宣言として呼び出し箇所の直前に
       配置するよう分岐を追加する(呼び出し箇所がトップレベルか構造ユニット
       内かの判定はJSX要素のNodePathの祖先を辿って判定する)。
-- [ ] 5.4 `ctx`に「このDeclIdはローカルsignal宣言である」ことを引ける
+- [x] 5.4 `ctx`に「このDeclIdはローカルsignal宣言である」ことを引ける
       `localDeclIds: Set<DeclId>`を追加する。
-- [ ] 5.5 `renderStructuralUnitBody`のローカルマーカー依存チェックを
+- [x] 5.5 `renderStructuralUnitBody`のローカルマーカー依存チェックを
       変更する: (a) **このボディに直接spliceされた**テキスト/属性
       バインディングの依存先が全て`ctx.localDeclIds`のメンバーである
       場合のみscope limitを投げず許可する。ルートsignalへの依存は
@@ -86,26 +89,26 @@
       is not supported yet (scope limit)`で明示的に拒否する(ローカル
       signalのDeclIdがグローバルな`signalToMarkers`へ漏れて壊れた
       コードを生成することを防ぐガード)。
-- [ ] 5.6 `src/codegen.ts`の`generateFactory`が、`StructuralUnitBody`の
+- [x] 5.6 `src/codegen.ts`の`generateFactory`が、`StructuralUnitBody`の
       `localDecls`をfactory関数本体の先頭(`__el__`確保の直後)で
       `let <name> = <init>;`として宣言する。新しいupdate関数は作らない
       ― 既存の`update()`(item仮引数がある場合に生成される)がテキスト/
       属性の再描画を担う既存ロジックをそのまま使う。
-- [ ] 5.6b `body.localHandlers`のうち`writeDeclIds`が`ctx.localDeclIds`と
+- [x] 5.6b `body.localHandlers`のうち`writeDeclIds`が`ctx.localDeclIds`と
       交差するハンドラについて、既存の`updateNames`呼び出しに加えて
       bare `update()`呼び出しを追記する配線を追加する(同一ユニット直下
       限定なので関数宣言の巻き上げにより参照は曖昧にならない)。
-- [ ] 5.7 テスト: リストアイテムへインライン化されたローカルsignalが
+- [x] 5.7 テスト: リストアイテムへインライン化されたローカルsignalが
       モジュールスコープに一切現れないこと。
-- [ ] 5.8 テスト: 同一ユニット直下でローカルsignalに依存する動的class
+- [x] 5.8 テスト: 同一ユニット直下でローカルsignalに依存する動的class
       属性バインディング(`class={editing() ? 'editing' : ''}`相当)が、
       そのユニットのローカルハンドラ発火後に正しく切り替わること。
-- [ ] 5.8b テスト: ネストした構造ユニット(条件分岐)がリストアイテムの
+- [x] 5.8b テスト: ネストした構造ユニット(条件分岐)がリストアイテムの
       ローカルsignalに依存する場合、`(scope limit)`を含むcompile error
       で拒否されること(グローバルへ漏れないことの回帰確認)。
-- [ ] 5.9 テスト: アイテムが複数あるとき、各アイテムのローカルsignalが
+- [x] 5.9 テスト: アイテムが複数あるとき、各アイテムのローカルsignalが
       互いに独立していること(1件のトグルが他のアイテムに影響しない)。
-- [ ] 5.10 テスト: ルートsignalへの依存は本changeの対象外として引き続き
+- [x] 5.10 テスト: ルートsignalへの依存は本changeの対象外として引き続き
       `scope limit`で拒否されること(回帰確認)。
 
 ## 6. examples/todomvc.jsxの更新

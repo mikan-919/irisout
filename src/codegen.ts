@@ -22,6 +22,7 @@ import type {
   ActionMarker,
   AttrBinding,
   DeclId,
+  LocalDecl,
   MarkerId,
   TextMarker,
 } from './compiler/state.js'
@@ -36,6 +37,10 @@ export interface HandlerOutput {
   updateNames: string[]
   /** ADR-0009: 第1仮引数(イベントオブジェクト)の authored 名。なければ null。 */
   param: string | null
+  /** same-file-component-composition: このユニット自身のローカルsignalへ
+   * 書き込む場合、既存のupdateNames呼び出しに加えてこのユニットの
+   * factoryが持つ`update()`クロージャも呼ぶ(design.md D5)。 */
+  callLocalUpdate: boolean
 }
 
 // M5: StructuralUnitBody(state.ts)のハンドラを HandlerDecl から
@@ -47,6 +52,8 @@ export interface StructuralUnitBodyOutput {
   localHandlers: HandlerOutput[]
   /** ADR-0012: このユニット専有の動的属性バインディング。 */
   localAttrBindings: AttrBinding[]
+  /** same-file-component-composition: このユニット直下のローカルsignal宣言。 */
+  localDecls: LocalDecl[]
 }
 
 export interface ListMarkerOutput {
@@ -109,11 +116,21 @@ export interface GenerateModuleInput {
 // querySelector が自分自身を対象にしないので、先に自分自身を確認する。
 const FIND_HELPER = `function __find__(root, id) { return root.getAttribute("data-iris-id") === id ? root : root.querySelector(\`[data-iris-id="\${id}"]\`); }`
 
-function renderHandlerCall(h: HandlerOutput): string {
+// itemParam: このハンドラを含む factory の item 仮引数名(無ければ null)。
+// same-file-component-composition: ローカルsignal書き込み後に呼ぶ
+// `update()`は itemParam != null の factory では item 引数を要求する
+// (`function update(__next__) { <itemParam> = __next__; ... }`) ―
+// 引数無しで呼ぶと item が undefined で上書きされる(design.md D5)。
+function renderHandlerCall(h: HandlerOutput, itemParam: string | null): string {
   const updateCalls = h.updateNames.map((name) => `update_${name}();`).join(' ')
+  // same-file-component-composition: このユニット自身のローカルsignalへの
+  // 書き込みは、モジュールscopeのupdate_*ではなくこのfactory自身の
+  // `update()`クロージャを呼ぶ(design.md D5、bare識別子 ― 同一ユニット
+  // 直下限定なので関数宣言の巻き上げにより参照は曖昧にならない)。
+  const localUpdateCall = h.callLocalUpdate ? `update(${itemParam ?? ''});` : ''
   // ADR-0009 D4: 第1引数があるハンドラのみ authored 名を束縛する。
   const params = h.param ? `${h.param}, ...__args` : '...__args'
-  return `(${params}) => { ${h.rendered}; ${updateCalls} }`
+  return `(${params}) => { ${h.rendered}; ${updateCalls}${localUpdateCall ? ` ${localUpdateCall}` : ''} }`
 }
 
 // ADR-0012 決定2: 動的属性1個ぶんの設定文。boolProp/prop はプロパティ代入、
@@ -184,6 +201,12 @@ function generateFactory(
   lines.push(`function ${factoryName}(${itemParam ?? ''}) {`)
   lines.push(`  const __node__ = ${templateVar}.content.cloneNode(true);`)
   lines.push('  const __el__ = __node__.firstElementChild;')
+  // same-file-component-composition: このユニットへインライン化された
+  // コンポーネントのローカルsignal(CONTEXT.md)。module scopeへは出さず、
+  // このfactoryインスタンス専有のクロージャ変数として宣言する(design D5)。
+  for (const d of body.localDecls) {
+    lines.push(`  let ${d.outputName} = ${d.rendered};`)
+  }
   for (const m of body.localMarkers) {
     lines.push(
       `  const __${m.id}__ = __find__(__el__, ${JSON.stringify(m.id)});`,
@@ -234,7 +257,7 @@ function generateFactory(
   }
   for (const h of body.localHandlers) {
     lines.push(
-      `  __find__(__el__, ${JSON.stringify(h.markerId)}).addEventListener(${JSON.stringify(h.eventName)}, ${renderHandlerCall(h)});`,
+      `  __find__(__el__, ${JSON.stringify(h.markerId)}).addEventListener(${JSON.stringify(h.eventName)}, ${renderHandlerCall(h, itemParam)});`,
     )
   }
   // テキスト/属性の再設定が要るのは item 仮引数(自身または外側)を参照
@@ -557,7 +580,7 @@ export function generateModule({
   // 後、そのハンドラが書き込んだ signal ぶんの update_* をまとめて呼ぶ。
   for (const h of handlers) {
     outLines.push(
-      `const __handler_${h.markerId}_${h.eventName} = ${renderHandlerCall(h)};`,
+      `const __handler_${h.markerId}_${h.eventName} = ${renderHandlerCall(h, null)};`,
     )
   }
   if (handlers.length > 0) outLines.push('')

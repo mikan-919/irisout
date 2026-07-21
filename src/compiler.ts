@@ -163,7 +163,16 @@ export function compile(source: string): CompileResult {
   // M5: リスト/条件分岐のローカルハンドラ(StructuralUnitBody.localHandlers)
   // も同じ変換が要るので、ctx.handlers 直下・構造ユニット内の両方に使う
   // 共通ヘルパーにする。
-  const convertHandler = (h: HandlerDecl): HandlerOutput => ({
+  // same-file-component-composition: ユニット直下のローカルハンドラのうち、
+  // このユニット自身のローカルsignalへ書き込むものは、既存の`updateNames`
+  // (モジュールscopeのupdate_*)呼び出しに加えて、このユニットのfactoryが
+  // 既に持つ`update()`クロージャも呼ぶ(design.md D5 ― 新しいupdate関数は
+  // 作らず、M5が生成する既存のupdate()を再利用する)。ルートハンドラには
+  // ローカルsignalの概念が無いため localDeclIds は省略可能。
+  const convertHandler = (
+    h: HandlerDecl,
+    localDeclIds?: Set<DeclId>,
+  ): HandlerOutput => ({
     markerId: h.markerId,
     eventName: h.eventName,
     rendered: h.rendered,
@@ -172,8 +181,11 @@ export function compile(source: string): CompileResult {
       .filter((id) => signalToMarkers.has(id))
       .map((id) => ctx.declOutputName.get(id)!)
       .sort(),
+    callLocalUpdate: localDeclIds
+      ? [...h.writeDeclIds].some((id) => localDeclIds.has(id))
+      : false,
   })
-  const handlerOutputs = ctx.handlers.map(convertHandler)
+  const handlerOutputs = ctx.handlers.map((h) => convertHandler(h))
 
   // M5.5: ネストした構造ユニット(body.localMarkers 内の list/conditional)の
   // ローカルハンドラにも同じ変換が要るため、body と marker で相互再帰する。
@@ -188,14 +200,20 @@ export function compile(source: string): CompileResult {
             body: b.body ? convertBody(b.body) : null,
           })),
         }
-  const convertBody = (body: StructuralUnitBody): StructuralUnitBodyOutput => ({
-    template: body.template,
-    localMarkers: body.localMarkers.map((m) =>
-      m.kind === 'text' ? m : convertUnitMarker(m),
-    ),
-    localHandlers: body.localHandlers.map(convertHandler),
-    localAttrBindings: body.localAttrBindings,
-  })
+  const convertBody = (body: StructuralUnitBody): StructuralUnitBodyOutput => {
+    const localDeclIds = new Set(body.localDecls.map((d) => d.id))
+    return {
+      template: body.template,
+      localMarkers: body.localMarkers.map((m) =>
+        m.kind === 'text' ? m : convertUnitMarker(m),
+      ),
+      localHandlers: body.localHandlers.map((h) =>
+        convertHandler(h, localDeclIds),
+      ),
+      localAttrBindings: body.localAttrBindings,
+      localDecls: body.localDecls,
+    }
+  }
   const markerOutputs: MarkerOutput[] = ctx.markers.map((m) => {
     if (m.kind === 'text' || m.kind === 'action') return m
     return convertUnitMarker(m)
@@ -264,7 +282,12 @@ export function compile(source: string): CompileResult {
     )
   }
 
+  // same-file-component-composition: ローカルsignal(構造ユニットへ
+  // インライン化されたコンポーネントの変数ゾーン宣言)は、コンテナが
+  // 初期HTMLで空のまま焼かれる(design.md D5)ためビルド時実行の対象に
+  // ならず、registry には現れない。discovery check の対象外にする。
   for (const [id, kind] of ctx.declKind) {
+    if (ctx.localDeclIds.has(id)) continue
     const entry = registry.get(id)
     if (!entry || entry.kind !== kind) {
       throw new Error(

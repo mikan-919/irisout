@@ -53,6 +53,19 @@ export interface AttrBinding {
   deps: Set<DeclId>
 }
 
+// same-file-component-composition: 構造ユニット(list item/conditional
+// branch)へインライン化されたコンポーネントの変数ゾーン宣言(CONTEXT.md
+// 「ローカルsignal」)。module scope へは一切出さず、factory クロージャ内の
+// `let`として宣言される(codegen.ts の generateFactory 参照)。
+export interface LocalDecl {
+  id: DeclId
+  kind: DeclKind
+  /** 出力向けの変数名(この unit の factory 内でのみ有効)。 */
+  outputName: string
+  /** 初期化式(出力向け、read call を裸の識別子へ書き換え済み)。 */
+  rendered: string
+}
+
 // M5(ADR-0005): リストアイテム/条件分岐ブランチの中身。テンプレート HTML
 // (data-iris-id 付き、ローカルスコープの marker/handler を含む)と、
 // factory 関数生成に要る材料をまとめて持つ。ローカル marker はグローバルな
@@ -66,6 +79,8 @@ export interface StructuralUnitBody {
   localHandlers: HandlerDecl[]
   /** ADR-0012: このユニット専有の動的属性バインディング。 */
   localAttrBindings: AttrBinding[]
+  /** same-file-component-composition: このユニット直下のローカルsignal宣言。 */
+  localDecls: LocalDecl[]
 }
 
 // リストアイテムの key(item から導出、素の式なのでラップしない)は、
@@ -171,6 +186,13 @@ export interface CompilerState {
   // 追跡対象として呼ばれ、モジュールスコープへ emit する関数(名前 → 解析結果)。
   // Map の挿入順にちょうど1回ずつ codegen が emit する。
   trackedFns: Map<string, TrackedFn>
+
+  // same-file-component-composition: 構造ユニットへインライン化された
+  // ローカルsignal/derived の declId 集合(CONTEXT.md「ローカルsignal」)。
+  // グローバルな signalToMarkers/module update_* へは絶対に合流させない
+  // (design.md D6 ― 漏れるとモジュールスコープに存在しない変数を参照する
+  // 壊れたコードになる)。
+  localDeclIds: Set<DeclId>
 }
 
 export function createCompilerState(source: string): CompilerState {
@@ -191,6 +213,7 @@ export function createCompilerState(source: string): CompilerState {
     instanceCounter: 0,
     movementFns: new Map(),
     trackedFns: new Map(),
+    localDeclIds: new Set(),
   }
 }
 
