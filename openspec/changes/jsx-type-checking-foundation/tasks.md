@@ -12,7 +12,10 @@
 
 ## 2. tsconfig 組み込み
 
-- [x] 2.1 `tsconfig.json`の`include`に`examples/**/*.jsx`を追加する。
+- [x] 2.1 `examples/tsconfig.json`を新設し、`include`に`**/*.jsx`を追加する
+  (ルートの`tsconfig.json`の`include`へ直接足す案は実装中に断念 ―
+  `examples/*.handwritten.js`まで巻き込まれ既存の`@ts-expect-error`が
+  壊れることが判明したため。design.md Decision 2参照)。
 - [x] 2.2 `compilerOptions`に`allowJs: true`・`checkJs: true`・
   `jsx: "preserve"`を追加する(design.md Decision 1/2)。
 

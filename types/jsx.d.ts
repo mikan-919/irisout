@@ -20,7 +20,7 @@
 // `compile: use= inside list/conditional units is not supported yet
 // (scope limit)` で拒否される)。
 
-type IrisEventHandler<E extends Event = Event> = (event: E) => void
+type IrisEventHandler = (event: Event) => void
 
 // mount 時に1回呼ばれ、返り値があれば「更新のたびに呼ばれる再描画
 // クロージャ」として配線される(ADR-0011 `use=` action、src/codegen.ts)。
