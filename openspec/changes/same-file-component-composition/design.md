@@ -44,6 +44,28 @@ designで明文化する。
   signalに依存するケース(実需・検証対象に無いので今回は素通しせず
   scope limitで拒否する)。
 
+**実装前の実地検証で判明した追加のNon-Goal**: `examples/todomvc.jsx`を
+実際に現行コンパイラへ通したところ、ADR-0014とは無関係な既存scope limit
+(`{visibleTodos().length > 0 && (<ul>...)}`が`<div class='todoapp'>`の
+sole childでない ― M5のsole-child制約、`render.ts:567`)に**現状でも
+ぶつかることを確認した**(このフィクスチャは元々「まだコンパイルできない
+仕様フィクスチャ」と明記されている)。さらに、このフィクスチャの構造
+(外側の条件分岐 > リスト > リストアイテム内の条件分岐)はM5.5の
+「1階層ネストのみ」の制約に対しては**3構造ユニットの入れ子**になり、
+仮にsole-child制約を解消しても`unitDepth>=2`のscope limitに別途ぶつかる。
+これらは本changeのスコープ外(ROADMAP UNRESOLVED-06/07・§5の別課題)。
+**本changeは`examples/todomvc.jsx`全体を実際にコンパイルが通る状態には
+しない** ― `TodoApp`→`TodoItem`分割とローカルsignal自体の検証は、これらの
+無関係な制約を踏まないテスト専用フィクスチャで行う(task 6.4はこの前提に
+合わせて更新する)。あわせて、UNRESOLVED-07(編集モードのspan/input
+入れ替え)は「ネストした構造ユニットが祖先ユニットのローカルsignalに
+依存する」ケースに該当し、本changeでも引き続きscope limitのまま
+(下記D6参照)。`TodoItem`の`editing`ローカルsignalは、07のDOM入れ替え
+ではなく**同一ユニット内の動的class属性バインディング**
+(`class={editing() ? 'editing' : ''}`、実物のTodoMVCと同じCSSベースの
+編集インジケータ)で検証する ― これは「同一ユニット内での直接依存」
+(D6で許可する範囲)に収まる。
+
 ## Decisions
 
 ### D1. インライン化は独立した前処理パス、`findRootComponent`の前に実行
@@ -139,42 +161,69 @@ prefixノイズを持ち込まない、決定5の理由と一致)。
   signal/derived宣言と最終`return`のみ(scope limitで他を拒否、
   `assertTopLevelShape`と同じ発想)。
 - 検出したローカルsignal宣言は`StructuralUnitBody`
-  (`src/compiler/state.ts:63`)に新フィールド(例:
-  `localDecls: LocalDeclOutput[]`)として持たせ、`generateFactory`
-  (`src/codegen.ts:173`)がfactory関数本体の先頭で`let <name> = <init>;`
-  を宣言し、そのfactoryクロージャ内のローカル関数として`update_<name>()`
-  を生成する(module scopeの`update_*`生成ロジックと同型だが出力先が
-  factory本体という点だけが違う)。
-- 依存グラフ(`resolveToSignals`、`src/compiler/decl-graph.ts`)は
-  DeclIdが「ルートscope」か「ローカルscope」かを区別しないため、
-  ローカルsignalのDeclIdも同じ`ctx.declKind`/`ctx.derivedDeps`に載せて
-  よい。ただし`signalToMarkers`(`compiler.ts:122`)はグローバル
-  `ctx.markerDeps`だけを見るため、ローカルsignalに依存するローカル
-  マーカーの依存関係は**ユニット内で閉じて**別途解決する必要がある
-  (下記D6参照 ― グローバルの`signalToMarkers`/module `update_*`とは
-  別系統)。
+  (`src/compiler/state.ts:63`)に新フィールド`localDecls: LocalDeclOutput[]`
+  として持たせる(DeclId・出力名・kind・レンダー済み初期化式)。
+  `ctx`にはこのDeclId集合を「ローカル宣言である」と引ける
+  `localDeclIds: Set<DeclId>`を追加する(D6の判定・拒否の両方で使う)。
+- **`generateFactory`は新しい関数を作らない**。既存の`generateFactory`
+  (`src/codegen.ts:173`)は`itemParam`がある(=リストアイテム)場合、
+  常に`function update(...) {...}`をfactory本体の先頭付近に生成し
+  (テキスト/属性/ネストしたユニットの再描画をまとめて行う、既存M5の
+  仕組み)、生成直後に1回呼ぶ(初期HTMLがユニット部分を空で焼くため)。
+  ローカルsignalの書き込みで必要な「このアイテムの表示だけ更新する」は
+  **この既存の`update()`をそのまま再利用**すれば足りる ― 新しい
+  `update_<name>()`をfactory内に追加で生成する必要はない(ADR-0014決定6の
+  文言は「factory内のローカル関数」だが、既存の`update()`がまさにそれに
+  当たる。屋上屋を避ける)。
+- factory本体の先頭(`__node__`/`__el__`確保の直後)で
+  `let <name> = <init>;`を`localDecls`ごとに宣言する。
+- ローカルsignalへ書き込むローカルハンドラ(`body.localHandlers`のうち
+  `writeDeclIds`が`ctx.localDeclIds`と交差するもの)は、他の
+  `updateNames`呼び出しに加えて**bare `update()`呼び出し**を追記する
+  (D6で述べる「同一ユニット直下限定」であれば、このハンドラの
+  `addEventListener`行と`function update(...)`宣言は同じfactory関数の
+  同じネスト深さにあり、関数宣言の巻き上げにより参照は曖昧にならない)。
+- 依存グラフ(`resolveToSignals`、`src/compiler/decl-graph.ts`)はDeclIdが
+  ルート/ローカルを区別しないため、ローカルsignalのDeclIdも同じ
+  `ctx.declKind`/`ctx.derivedDeps`に載せてよい(recompute式の解決に使う
+  ため)。ただし**`ctx.markerDeps`/グローバルの`signalToMarkers`には
+  絶対に載せない**(下記D6のガード参照 ― 載せると生成コードがモジュール
+  スコープに存在しない変数を参照する壊れた出力になる、実装前調査で
+  確認した実際の失敗モード)。
 
-### D6. ユニット内マーカーのローカルsignal依存を許可(scope limit解除は限定的)
+### D6. ユニット内マーカーのローカルsignal依存を許可する範囲(同一ボディ直下のみ)
 
-`renderStructuralUnitBody`(`render.ts:680`)は現状、ローカルテキスト
-マーカー・属性バインディングが何らかのtracked signalに依存していたら
-無条件に`scope limit`で拒否する(`render.ts`内の該当throw、
-`STATUS.md`既知の制約)。これを次のように限定的に緩める:
+`renderStructuralUnitBody`(`render.ts:680`)は現状、**自分のボディに
+直接splice された**テキストマーカー・属性バインディングが何らかの
+tracked signalに依存していたら無条件に`scope limit`で拒否する
+(`STATUS.md`既知の制約)。ネストした構造ユニット(list/conditional)の
+依存は`nestedDeps`として外側へバブルアップする既存のM5.5機構が別途ある
+(そちらは拒否ではなく合流)。
 
-- 依存先DeclIdが**同一ユニットのローカルsignal宣言**(D5で新設)である
-  場合 → 許可。`generateFactory`がそのローカルsignalの`update_<name>()`
-  から、同じfactory内のローカルマーカー(テキスト/ネストした条件分岐)を
-  直接更新する配線を生成する(module側の`update_*`生成コードと同じ
-  パターンをfactoryスコープに閉じて複製)。
-- 依存先DeclIdがルートsignal、または**別のユニット/祖先ユニット**の
-  ローカルsignalである場合 → 従来どおり`scope limit`で拒否(Non-Goals
-  参照。実需・検証対象に無い)。
+実装前調査で判明した重要な制約: **ネストした構造ユニット(例:
+リストアイテム内の条件分岐)がそのアイテム自身のローカルsignalに依存する
+ケース(UNRESOLVED-07の編集モードspan/input入れ替えが該当)は、既存の
+`nestedDeps`バブリングにそのまま乗せると、ローカルsignalのDeclIdが
+グローバルな`ctx.markerDeps`/`signalToMarkers`まで漏れ、存在しない
+モジュールスコープ変数を参照する壊れたコードを生成する**(トレースして
+確認済み)。これは本changeでは資さない(Non-Goals参照、UNRESOLVED-07は
+引き続き未解決のまま)。よって:
 
-この判定には「このDeclIdはどのユニット(またはルート)で宣言された
-ローカルsignalか」を引ける表が要る ― `ctx`に
-`localDeclOwnerUnit: Map<DeclId, MarkerId | 'root'>`のような追跡を追加し、
-`renderStructuralUnitBody`のsplice処理で「今スプライスしているunit自身が
-所有者かどうか」を判定する。
+- **同一ボディへ直接spliceされたテキストマーカー・属性バインディング**が
+  依存先DeclIdとして`ctx.localDeclIds`に含まれるものだけを持つ場合 →
+  許可する(scope limitを投げない)。生成コードは既存の`update()`が
+  そのテキスト/属性を再描画する(既存のrefreshTexts/refreshAttrsの仕組み
+  がそのまま使える ― コード変更は「スロー条件の緩和」のみで、
+  codegen側の再描画ロジック自体は無変更)。
+- **ネストした構造ユニット(list/conditional)の`nestedDeps`に
+  `ctx.localDeclIds`のメンバーが含まれる場合** → 従来の「合流」ではなく
+  明示的に`scope limit`で拒否する:
+  `compile: a nested structural unit depending on a local signal is not
+  supported yet (scope limit)`。これにより UNRESOLVED-07 相当の入れ子は
+  安全に拒否され、グローバルへの漏れを防ぐ。
+- それ以外(依存先がルートsignal、または`ctx.localDeclIds`に無いdeclId) →
+  従来どおりの挙動(テキスト/属性は無条件scope limit、ネストユニットは
+  合流)を変更しない。
 
 ### D7. 動きゾーン(function宣言)の統合
 

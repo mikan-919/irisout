@@ -86,28 +86,42 @@ JSXタグを、既存のrender-tree走査(`compileComponent`)より前に実行�
 - **THEN** 1つのアイテムで`editing`を書き換えても、他のアイテムの
   `editing`状態には一切影響しない(JSクロージャによるインスタンス分離)
 
-### Requirement: 同一ユニット内ローカルsignalへのローカルマーカー依存を許可
-コンパイラは、構造ユニット本体内のローカルマーカー(テキスト・ネストした
-条件分岐・属性バインディング)が、**同一ユニット内で宣言されたローカル
-signal/derived**に依存することを許可しなければならない(SHALL)。この
-場合、対応するローカル`update_<name>()`がそのローカルマーカーを更新する
-配線を生成しなければならない(SHALL)。ルートスコープのsignal、または
-別ユニット・祖先ユニットで宣言されたローカルsignalへの依存は、従来どおり
-`scope limit`で拒否しなければならない(SHALL)。
+### Requirement: 同一ボディ直下のローカルマーカーのローカルsignal依存を許可
+コンパイラは、構造ユニット本体に**直接**含まれるローカルマーカー(テキスト・
+属性バインディング)が、**同一ユニット内で宣言されたローカルsignal/
+derived**に依存することを許可しなければならない(SHALL)。この場合、
+そのユニットの既存の`update()`関数(M5、item仮引数を持つ場合に生成される)
+がそのローカルマーカーを更新しなければならない(SHALL)。ルートスコープの
+signal、または別ユニット・祖先ユニットで宣言されたローカルsignalへの依存は、
+従来どおり`scope limit`で拒否しなければならない(SHALL)。
 
-#### Scenario: ローカルsignalに依存するネストした条件分岐が動く
+#### Scenario: ローカルsignalに依存する動的属性バインディングが動く
 - **WHEN** リストアイテム内の`TodoItem`インライン化が`editing`ローカル
-  signalと、それに依存するネストした条件分岐(`editing() ? <input/> :
-  <span>...</span>`)を持つ
+  signalと、それに同一ユニット直下で依存する動的class属性バインディング
+  (`class={editing() ? 'editing' : ''}`)を持つ
 - **THEN** コンパイラはscope limitエラーを出さずに完了し、生成コードを
-  実行すると`editing`を書き換えるハンドラの発火後にそのアイテム内の
-  表示だけが切り替わる
+  実行すると`editing`を書き換えるローカルハンドラの発火後にそのアイテムの
+  class属性だけが切り替わる
 
 #### Scenario: ルートsignalへの依存は引き続き拒否
 - **WHEN** リストアイテム本体内のテキストマーカーがルートスコープの
   signal/derivedを直接参照する(インライン化を経由しない従来通りの形)
 - **THEN** コンパイラは`(scope limit)`を含むcompile errorで拒否する
   (本changeで導入する許可の対象外)
+
+### Requirement: ネストした構造ユニットの祖先ローカルsignal依存を明示的に拒否
+コンパイラは、ネストした構造ユニット(list/conditional)の依存
+(`nestedDeps`)に祖先ユニットのローカルsignal/derivedが含まれる場合、
+既存の依存合流(バブリング)には乗せず、`(scope limit)`を含む
+compile errorで拒否しなければならない(SHALL)。ローカルsignalの
+DeclIdをグローバルな依存解決(`signalToMarkers`)へ漏らしてはならない
+(SHALL NOT)。
+
+#### Scenario: ネストした条件分岐が祖先のローカルsignalに依存する場合は拒否
+- **WHEN** リストアイテム内のローカルsignal`editing`に、そのアイテム内に
+  ネストした条件分岐(`editing() ? <input/> : <span>`)が依存している
+- **THEN** コンパイラは`(scope limit)`を含むcompile errorで拒否し、
+  モジュールスコープに存在しない変数を参照する壊れたコードを生成しない
 
 ### Requirement: children/slotの明示的な拒否
 コンパイラは、コンポーネント参照JSX要素が子要素を持つ場合

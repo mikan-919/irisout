@@ -73,25 +73,36 @@
       なく、上記のブロック形式のローカル宣言として呼び出し箇所の直前に
       配置するよう分岐を追加する(呼び出し箇所がトップレベルか構造ユニット
       内かの判定はJSX要素のNodePathの祖先を辿って判定する)。
-- [ ] 5.4 `ctx`に「このDeclIdはどのユニット(またはroot)で宣言された
-      ローカルsignalか」を引ける追跡(例:
-      `localDeclOwnerUnit: Map<DeclId, MarkerId | 'root'>`)を追加する。
-- [ ] 5.5 `renderStructuralUnitBody`のローカルマーカー依存チェック
-      (現状: 追跡signal依存を無条件scope limit)を、依存先が「同一ユニット
-      所有のローカルsignal」の場合のみ許可するよう変更する。それ以外
-      (ルートsignal、別ユニット/祖先ユニットのローカルsignal)は従来どおり
-      拒否する。
+- [ ] 5.4 `ctx`に「このDeclIdはローカルsignal宣言である」ことを引ける
+      `localDeclIds: Set<DeclId>`を追加する。
+- [ ] 5.5 `renderStructuralUnitBody`のローカルマーカー依存チェックを
+      変更する: (a) **このボディに直接spliceされた**テキスト/属性
+      バインディングの依存先が全て`ctx.localDeclIds`のメンバーである
+      場合のみscope limitを投げず許可する。ルートsignalへの依存は
+      従来どおり無条件拒否のまま。(b) ネストした構造ユニットの
+      `nestedDeps`に`ctx.localDeclIds`のメンバーが含まれる場合、
+      既存の合流(bubbling)には乗せず
+      `compile: a nested structural unit depending on a local signal
+      is not supported yet (scope limit)`で明示的に拒否する(ローカル
+      signalのDeclIdがグローバルな`signalToMarkers`へ漏れて壊れた
+      コードを生成することを防ぐガード)。
 - [ ] 5.6 `src/codegen.ts`の`generateFactory`が、`StructuralUnitBody`の
-      `localDecls`をfactory関数本体の先頭で`let <name> = <init>;`として
-      宣言し、そのローカルsignalに依存するローカルマーカー(テキスト/
-      ネストした条件分岐/属性バインディング)を更新するローカル
-      `update_<name>()`関数を生成し、対応するローカルハンドラの書き込み後に
-      それを呼び出す配線を追加する。
+      `localDecls`をfactory関数本体の先頭(`__el__`確保の直後)で
+      `let <name> = <init>;`として宣言する。新しいupdate関数は作らない
+      ― 既存の`update()`(item仮引数がある場合に生成される)がテキスト/
+      属性の再描画を担う既存ロジックをそのまま使う。
+- [ ] 5.6b `body.localHandlers`のうち`writeDeclIds`が`ctx.localDeclIds`と
+      交差するハンドラについて、既存の`updateNames`呼び出しに加えて
+      bare `update()`呼び出しを追記する配線を追加する(同一ユニット直下
+      限定なので関数宣言の巻き上げにより参照は曖昧にならない)。
 - [ ] 5.7 テスト: リストアイテムへインライン化されたローカルsignalが
       モジュールスコープに一切現れないこと。
-- [ ] 5.8 テスト: 同一ユニット内のローカルsignalに依存するネストした
-      条件分岐(`editing() ? <input/> : <span>`相当)が、そのユニットの
-      ローカルハンドラ発火後に正しく切り替わること。
+- [ ] 5.8 テスト: 同一ユニット直下でローカルsignalに依存する動的class
+      属性バインディング(`class={editing() ? 'editing' : ''}`相当)が、
+      そのユニットのローカルハンドラ発火後に正しく切り替わること。
+- [ ] 5.8b テスト: ネストした構造ユニット(条件分岐)がリストアイテムの
+      ローカルsignalに依存する場合、`(scope limit)`を含むcompile error
+      で拒否されること(グローバルへ漏れないことの回帰確認)。
 - [ ] 5.9 テスト: アイテムが複数あるとき、各アイテムのローカルsignalが
       互いに独立していること(1件のトグルが他のアイテムに影響しない)。
 - [ ] 5.10 テスト: ルートsignalへの依存は本changeの対象外として引き続き
@@ -99,16 +110,36 @@
 
 ## 6. examples/todomvc.jsxの更新
 
+**前提(実装前調査で判明)**: `examples/todomvc.jsx`は現行コンパイラでも
+`{visibleTodos().length > 0 && (<ul>...)}`が親要素のsole childでないこと
+(既存M5の制約、ADR-0014と無関係)で既にコンパイルが通らない。また
+このフィクスチャの構造(条件分岐 > リスト > リストアイテム内の条件分岐)は
+3ユニットの入れ子でM5.5の「1階層まで」を超える。編集モードのspan/input
+入れ替え(UNRESOLVED-07)も本changeでは解決しない(セクション5の
+「ネストユニットの祖先ローカルsignal依存」は明示的にscope limitのまま)。
+よって本セクションは**フィクスチャ全体をコンパイル可能にすることを
+目標にしない**。
+
 - [ ] 6.1 `TodoApp`から`TodoItem`コンポーネントを切り出す: `todo`・
       `onToggle`等をpropsとして受け取り、`editingId`ハックを
       `TodoItem`内の`const editing = signal(false)`に置き換える。
-- [ ] 6.2 UNRESOLVED-04の注記(ADR-0014解消済み・実装済みに更新)と
-      冒頭コメントを、本change実装後の実態に合わせて更新する。
+      編集モードの表示切り替えはspan/input入れ替え(07、未解決のまま)
+      ではなく、`class={editing() ? 'editing' : ''}`の動的class属性
+      バインディング(実物のTodoMVCと同じCSSベースの編集インジケータ)
+      にする ― これはセクション5で実装する「同一ユニット直下」の
+      依存に収まる。
+- [ ] 6.2 冒頭コメントを実態に合わせて更新する: UNRESOLVED-04は
+      ADR-0014により解消・実装済みにする一方、フィクスチャ全体は
+      (sole-child制約・3階層ネスト・UNRESOLVED-07により)引き続き
+      コンパイルできないことを明記する。
 - [ ] 6.3 `examples/todomvc.handwritten.js`との整合を確認する(手書き
       目標出力側の構造に変更が要るか確認し、要らなければその旨を記録する)。
-- [ ] 6.4 更新した`examples/todomvc.jsx`が実際にコンパイルできることを
-      確認する回帰テストを追加する(golden-output/regression testsの
-      既存の仕組みに乗せる、`generated-output-regression-tests`参照)。
+- [ ] 6.4 同一ファイル内コンポーネント合成+ローカルsignalの動作を検証する
+      専用のテストフィクスチャ(`test/`配下、sole-child制約や3階層ネスト
+      を踏まない最小限の構成)を追加し、コンパイル成功+生成コードの
+      実行結果(初期表示・ローカルsignal書き換え後のclass切り替え)を
+      回帰テストする。`examples/todomvc.jsx`自体をコンパイルするテストは
+      追加しない(6の前提より対象外)。
 
 ## 7. ドキュメント更新
 
