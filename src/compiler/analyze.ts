@@ -104,6 +104,7 @@ function tryHandleTrackedCallee(
   instanceId: number,
   calleeNames: Set<string>,
   onWrite: (start: number) => void,
+  edits: Edit[],
 ): void {
   const parent = idPath.parentPath
   if (!parent?.isCallExpression() || parent.node.callee !== idPath.node) return
@@ -119,6 +120,16 @@ function tryHandleTrackedCallee(
   ensureTrackedFn(ctx, name, instanceId)
   calleeNames.add(name)
   onWrite(parent.node.start!)
+  // same-file-component-composition: インライン化パスが名前衝突時に
+  // callee識別子をリネームする(ADR-0014決定5)と、ノードの`.name`は
+  // 更新済みだがソース上の実テキストは元のままになる。追跡呼び出しの
+  // callee名は従来「書き換え不要」の前提だったため、ここでも
+  // identifierNeedsRewriteで実テキストとの食い違いを検出して edit を積む
+  // (実装前調査で確認: リネームされた追跡呼び出しの出力に古い名前が
+  // 残ってしまうバグ)。
+  if (identifierNeedsRewrite(ctx, idPath, name)) {
+    edits.push({ start: idPath.node.start!, end: idPath.node.end!, text: name })
+  }
 }
 
 // 追跡対象呼び出し先を1回だけ解析して ctx.trackedFns へ記録する(design D2)。
@@ -203,7 +214,14 @@ function analyzeHandlerStatementsCore(
   const visit = (idPath: NodePath<t.Identifier>) => {
     const id = resolveDeclId(ctx, idPath, instanceId)
     if (!id) {
-      tryHandleTrackedCallee(ctx, idPath, instanceId, calleeNames, noteWrite)
+      tryHandleTrackedCallee(
+        ctx,
+        idPath,
+        instanceId,
+        calleeNames,
+        noteWrite,
+        edits,
+      )
       return
     }
     const outputName = ctx.declOutputName.get(id)
@@ -365,7 +383,14 @@ export function analyzeHandlerExpr(
     if (!id) {
       // cross-function-handler-writes: 単一式ハンドラ本体(`() => toggle(id)`)
       // からの動きゾーン関数呼び出しを追跡する(D3 は式1つなので該当なし)。
-      tryHandleTrackedCallee(ctx, idPath, instanceId, calleeNames, () => {})
+      tryHandleTrackedCallee(
+        ctx,
+        idPath,
+        instanceId,
+        calleeNames,
+        () => {},
+        edits,
+      )
       return
     }
     const outputName = ctx.declOutputName.get(id)
@@ -537,7 +562,7 @@ function analyzeActionIdentifier(
   if (!id) {
     // cross-function-handler-writes: action 本体からの動きゾーン関数呼び出しも
     // ハンドラと同じ規則で追跡する(onWrite で D3 の追跡書き込み位置を通知)。
-    tryHandleTrackedCallee(ctx, idPath, instanceId, calleeNames, onWrite)
+    tryHandleTrackedCallee(ctx, idPath, instanceId, calleeNames, onWrite, edits)
     return
   }
   const outputName = ctx.declOutputName.get(id)

@@ -8,6 +8,7 @@
 import type { NodePath } from '@babel/traverse'
 import traverseImport from '@babel/traverse'
 import * as t from '@babel/types'
+import type { HandlerFns } from './render.js'
 import { renderCallJsx, splitComponentZones } from './render.js'
 
 const traverse =
@@ -226,6 +227,31 @@ function renameCollidingRootDecls(
   }
 }
 
+// ADR-0014決定5: 動きゾーンのfunction宣言名も同じ規則(検出時のみ
+// コンポーネント名で接頭辞化してリネーム)を適用する。動きゾーン関数の
+// バインディングもclonedFnPath自身のスコープにあるため、
+// renameCollidingRootDeclsと同じくclonedFnPath.scope.rename()で本体内の
+// 参照(ハンドラ識別子参照含む)も追随させる。
+function renameCollidingMovementFns(
+  clonedFnPath: NodePath<t.FunctionDeclaration>,
+  movementZoneFns: HandlerFns,
+  componentPath: NodePath<t.FunctionDeclaration>,
+  tagName: string,
+): void {
+  componentPath.scope.crawl()
+  clonedFnPath.scope.crawl()
+  for (const name of [...movementZoneFns.keys()]) {
+    if (!componentPath.scope.getOwnBinding(name)) continue
+    let candidate = `${tagName}_${name}`
+    let n = 1
+    while (componentPath.scope.getOwnBinding(candidate)) {
+      candidate = `${tagName}_${name}$${n++}`
+    }
+    clonedFnPath.scope.rename(name, candidate)
+    componentPath.scope.crawl()
+  }
+}
+
 // componentPathの現在のvar zone文の中からrender()文を探す(呼び出し箇所は
 // root scopeにある限り必ずrender()のJSX引数木の中にあるので、そこがvar
 // zone宣言の挿入位置になる)。
@@ -274,6 +300,36 @@ function findEnclosingListItemArrow(
     current = current.parentPath
   }
   return null
+}
+
+// jsxPathの祖先を、関数境界に当たる前まで遡り、三項/`&&`の条件分岐ブランチ
+// (ConditionalExpressionのconsequent/alternate、LogicalExpressionの右辺)
+// に包まれているかを判定する。findEnclosingListItemArrowがnullを返した後
+// (=list itemではない)にだけ呼ぶ ― 変数ゾーン宣言を持つコンポーネントを
+// 条件分岐ブランチへインライン化すると、ローカルsignalにすべき宣言が
+// ルートスコープへ静かに昇格してしまう(実装前調査で確認した不具合:
+// 三項/`&&`の式位置はブロック文を構文的に置けずローカルsignal化できない
+// ため、render.tsのresolveUnitBodySourceによる受理もできない ―
+// list item同様に安全な受け皿がないので明示的に拒否する必要がある)。
+function isInsideConditionalBranch(jsxPath: NodePath<t.JSXElement>): boolean {
+  let current: NodePath<t.Node> | null = jsxPath.parentPath
+  while (current) {
+    if (
+      current.isConditionalExpression() ||
+      (current.isLogicalExpression() && current.node.operator === '&&')
+    ) {
+      return true
+    }
+    if (
+      current.isArrowFunctionExpression() ||
+      current.isFunctionDeclaration() ||
+      current.isFunctionExpression()
+    ) {
+      return false
+    }
+    current = current.parentPath
+  }
+  return false
 }
 
 // list item arrowの現在の本体(bare JSXまたは既存のblock)をblockに変換
@@ -362,25 +418,30 @@ function expandComponentRef(
     }
     finalJsxPath.replaceWith(renderJsxNode)
   } else {
-    // ルートスコープへのインライン化。signal/derived宣言名の衝突は
-    // renameCollidingRootDeclsが検出時のみリネームする(ADR-0014決定5)。
-    // 動きゾーンの関数名は解決表(Map)のキーが単純上書きされるだけで
-    // 衝突検出が無いため、ここで明示チェックする。
-    const callerMovementNames = new Set(
-      splitComponentZones(componentPath).movementZoneFns.keys(),
-    )
-    for (const name of zones.movementZoneFns.keys()) {
-      if (callerMovementNames.has(name)) {
-        clonedFnPath.remove()
-        throw new Error(
-          `compile: colliding movement-zone function name "${name}" from inlined component "${tagName}" is not supported yet (scope limit)`,
-        )
-      }
+    // ルートスコープへのインライン化。呼び出し箇所が条件分岐ブランチの中
+    // (list itemではない)にあり、かつ対象コンポーネントが変数ゾーン宣言を
+    // 持つ場合、それはローカルsignalになるべきだが受け皿がない(三項/`&&`
+    // の式位置はブロック文を構文的に置けない)。黙ってルートスコープへ
+    // 昇格させると壊れた挙動(本来インスタンスごとのはずの状態がモジュール
+    // スコープで共有される)になるため、明示的に拒否する。
+    if (zones.varZoneStmts.length > 0 && isInsideConditionalBranch(jsxPath)) {
+      clonedFnPath.remove()
+      throw new Error(
+        `compile: inlining component "${tagName}" with its own variable-zone declarations into a conditional branch is not supported yet (scope limit)`,
+      )
     }
 
+    // signal/derived宣言名・動きゾーン関数名の衝突は、検出時のみ
+    // コンポーネント名で接頭辞化してリネームする(ADR-0014決定5)。
     renameCollidingRootDecls(
       clonedFnPath,
       zones.varZoneStmts,
+      componentPath,
+      tagName,
+    )
+    renameCollidingMovementFns(
+      clonedFnPath,
+      zones.movementZoneFns,
       componentPath,
       tagName,
     )

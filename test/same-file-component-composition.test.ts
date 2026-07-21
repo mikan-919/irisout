@@ -10,14 +10,14 @@ import { createContainer, loadGenerated } from './helpers.js'
 // bare JSX に加えてブロック本体も受理するようになったのは、インライン化
 // パスがコンポーネントの変数ゾーンをこの形へ展開するため。
 
-function dispatchClick(container: Element, el: Element | null): void {
-  if (!el) throw new Error('dispatchClick: element not found')
+function dispatch(container: Element, el: Element | null, type: string): void {
+  if (!el) throw new Error('dispatch: element not found')
   const Event = (
     container.ownerDocument as unknown as {
       defaultView: { Event: typeof globalThis.Event }
     }
   ).defaultView.Event
-  el.dispatchEvent(new Event('click'))
+  el.dispatchEvent(new Event(type))
 }
 
 async function mount(code: string): Promise<Element> {
@@ -60,7 +60,7 @@ export function App() {
     const container = await mount(code)
     const lis = container.querySelectorAll('li')
     expect([...lis].map((li) => li.className)).toEqual(['', ''])
-    dispatchClick(container, lis[0]!.querySelector('span'))
+    dispatch(container, lis[0]!.querySelector('span'), 'click')
     expect([...lis].map((li) => li.className)).toEqual(['editing', ''])
   })
 
@@ -68,8 +68,8 @@ export function App() {
     const { code } = compile(TODO_SOURCE)
     const container = await mount(code)
     const lis = container.querySelectorAll('li')
-    dispatchClick(container, lis[0]!.querySelector('span'))
-    dispatchClick(container, lis[1]!.querySelector('span'))
+    dispatch(container, lis[0]!.querySelector('span'), 'click')
+    dispatch(container, lis[1]!.querySelector('span'), 'click')
     expect([...lis].map((li) => li.className)).toEqual(['editing', 'editing'])
     // item1 だけ元に戻すような書き込みは無いが、少なくとも item0 の状態が
     // item1 の書き換えで壊れていないことを別途確認する。
@@ -93,7 +93,7 @@ export function App() {
     const { code: code2 } = compile(onlyFirst)
     const container2 = await mount(code2)
     const lis2 = container2.querySelectorAll('li')
-    dispatchClick(container2, lis2[0]!.querySelector('span'))
+    dispatch(container2, lis2[0]!.querySelector('span'), 'click')
     expect([...lis2].map((li) => li.className)).toEqual(['editing', ''])
   })
 
@@ -137,16 +137,6 @@ export function App() {
     expect(() => compile(source)).toThrow(/scope limit/)
   })
 })
-
-function dispatch(container: Element, el: Element | null, type: string): void {
-  if (!el) throw new Error('dispatch: element not found')
-  const Event = (
-    container.ownerDocument as unknown as {
-      defaultView: { Event: typeof globalThis.Event }
-    }
-  ).defaultView.Event
-  el.dispatchEvent(new Event(type))
-}
 
 describe('same-file-component-composition: コンポーネント参照のASTインライン化', () => {
   it('トップレベルの子コンポーネント参照を展開してコンパイル・実行できる', async () => {
@@ -410,5 +400,136 @@ function B() {
     dispatch(container, span, 'click')
     expect(span?.textContent).toBe('2')
     expect(em?.textContent).toBe('2')
+  })
+
+  it('2つの異なるコンポーネントの同名動きゾーン関数は衝突時のみリネームされ、両方が独立して動く', async () => {
+    const source = `
+export function App() {
+  render(<div><A /><B /></div>);
+}
+function A() {
+  const count = signal(0);
+  render(<span onClick={() => inc()}>{count()}</span>);
+  function inc() { count(count() + 1); }
+}
+function B() {
+  const count = signal(0);
+  render(<em onClick={() => inc()}>{count()}</em>);
+  function inc() { count(count() + 1); }
+}
+`
+    const { code } = compile(source)
+    expect(code).toContain('function inc()')
+    expect(code).toContain('function B_inc()')
+    const container = await mount(code)
+    const span = container.querySelector('span')
+    const em = container.querySelector('em')
+    dispatch(container, em, 'click')
+    expect(span?.textContent).toBe('0')
+    expect(em?.textContent).toBe('1')
+  })
+
+  it('ローカル状態を持つコンポーネントを条件分岐ブランチへインライン化することは拒否する', () => {
+    // ローカルsignalの受け皿はlist itemのみ(design.md参照、三項/`&&`の
+    // 式位置はブロック文を構文的に置けないため)。変数ゾーン宣言を持つ
+    // コンポーネントが条件分岐ブランチに来た場合、ルートスコープへ黙って
+    // 昇格させると本来インスタンスごとのはずの状態がモジュールスコープで
+    // 共有されてしまうため、明示的に拒否する。
+    const source = `
+export function App() {
+  const show = signal(true);
+  render(<div>{show() ? <Foo /> : <span>none</span>}</div>);
+}
+function Foo() {
+  const count = signal(0);
+  render(<button onClick={() => count(count() + 1)}>click</button>);
+}
+`
+    expect(() => compile(source)).toThrow(
+      /variable-zone declarations into a conditional branch.*scope limit/,
+    )
+  })
+
+  it('状態を持たないコンポーネントを条件分岐ブランチへインライン化するのは許可する(回帰確認)', async () => {
+    const source = `
+export function App() {
+  const show = signal(true);
+  render(<div>{show() ? <Foo label="hi" /> : <span>none</span>}</div>);
+}
+function Foo({ label }) {
+  render(<span>{label}</span>);
+}
+`
+    const { code } = compile(source)
+    const container = await mount(code)
+    expect(container.querySelector('span')?.textContent).toBe('hi')
+  })
+
+  it('spread props(`{...props}`)を拒否する', () => {
+    const source = `
+export function App() {
+  const p = signal({ count: 1 });
+  render(<div><Foo {...p()} /></div>);
+}
+function Foo({ count }) {
+  render(<span>{count}</span>);
+}
+`
+    expect(() => compile(source)).toThrow(/spread props.*scope limit/)
+  })
+
+  it('複数の仮引数を取るコンポーネントを拒否する', () => {
+    const source = `
+export function App() {
+  render(<div><Foo a="1" b="2" /></div>);
+}
+function Foo(a, b) {
+  render(<span>{a}</span>);
+}
+`
+    expect(() => compile(source)).toThrow(
+      /single destructured parameter.*scope limit/,
+    )
+  })
+
+  it('動きゾーン関数を持つコンポーネントをリストアイテムへインライン化することは拒否する', () => {
+    const source = `
+export function App() {
+  const todos = signal([{ id: 1 }]);
+  render(
+    <ul>
+      {todos().map((todo) => (
+        <Item todo={todo} />
+      ))}
+    </ul>
+  );
+}
+function Item({ todo }) {
+  render(<li key={todo.id} onClick={helper}>{todo.id}</li>);
+  function helper() {}
+}
+`
+    expect(() => compile(source)).toThrow(
+      /its own handler functions into a list item.*scope limit/,
+    )
+  })
+
+  it('リストアイテムのブロック本体でsignal/derived宣言以外の文を拒否する', () => {
+    const source = `
+export function App() {
+  const todos = signal([{ id: 1 }]);
+  render(
+    <ul>
+      {todos().map((todo) => {
+        console.log(todo);
+        return <li key={todo.id}>{todo.id}</li>;
+      })}
+    </ul>
+  );
+}
+`
+    expect(() => compile(source)).toThrow(
+      /only signal\(\)\/derived\(\) declarations are allowed before the return.*scope limit/,
+    )
   })
 })

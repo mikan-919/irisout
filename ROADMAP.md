@@ -120,8 +120,8 @@ irisoutの責務として明言しているが、現状の実装は以下の理�
 コンパイル時ASTインライン化(render-tree走査より前の独立前処理パス
 `src/compiler/inline-components.ts`)・propsはshorthand分割代入のみの
 純粋な置換(ランタイムprimitiveなし)・名前衝突は検出時のみ対応
-(signal出力名は既存の`assignOutputName`ハイジーンに乗る、動きゾーン
-関数名の衝突はリネームせず明示的にscope limit拒否)を実装した。
+(signal/derived宣言名・動きゾーン関数名とも、衝突した側をコンポーネント名
+で接頭辞化してリネーム)を実装した。
 children/slot・自己/相互再帰参照はscope limitで拒否。詳細な制約は
 STATUS.md参照。
 
