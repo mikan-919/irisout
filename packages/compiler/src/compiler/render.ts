@@ -78,6 +78,32 @@ function emitSignal(
   return id
 }
 
+function emitCollection(
+  ctx: CompilerState,
+  instanceId: number,
+  declaratorStart: number,
+  naturalName: string,
+  rendered: string,
+  sourceRendered: string,
+  keyRendered: string,
+  keySourceRendered: string,
+  out: RenderOutput,
+): DeclId {
+  const id = toDeclId(`decl_${instanceId}_${declaratorStart}_${naturalName}`)
+  ctx.declIdByKey.set(declKey(instanceId, declaratorStart, naturalName), id)
+  ctx.declKind.set(id, 'collection')
+  const outputName = assignOutputName(ctx, naturalName, id)
+  ctx.collectionKeyRendered.set(id, keyRendered)
+  out.declStatements.push(
+    `const __collection_${outputName}__ = __createCollectionState__(${rendered}, ${keyRendered});`,
+    `let ${outputName} = __collection_${outputName}__.values;`,
+  )
+  out.instrumentedDeclStatements.push(
+    `const ${outputName} = collection(${sourceRendered}, ${keySourceRendered}, ${JSON.stringify(id)});`,
+  )
+  return id
+}
+
 function emitDerived(
   ctx: CompilerState,
   instanceId: number,
@@ -126,10 +152,11 @@ function emitDerived(
 }
 
 interface ParsedSignalDecl {
-  kind: 'signal' | 'derived'
+  kind: 'signal' | 'derived' | 'collection'
   naturalName: string
   declaratorStart: number
   argPath: NodePath<t.Expression>
+  keyPath: NodePath<t.Expression> | null
 }
 
 // `const x = signal(...)` / `const x = derived(...)` の形を検証し、
@@ -138,7 +165,7 @@ interface ParsedSignalDecl {
 // (same-file-component-composition: 構造ユニットのローカル宣言も同じ形)。
 function parseSignalDeclStatement(stmt: NodePath<t.Statement>): ParsedSignalDecl {
   const scopeLimit = new Error(
-    'compile: only top-level `signal()`/`derived()` declarations are supported in this milestone (scope limit)',
+    'compile: only top-level `signal()`/`derived()`/`collection()` declarations are supported in this milestone (scope limit)',
   )
   if (!stmt.isVariableDeclaration() || stmt.node.declarations.length !== 1) {
     throw scopeLimit
@@ -148,7 +175,9 @@ function parseSignalDeclStatement(stmt: NodePath<t.Statement>): ParsedSignalDecl
   if (
     init?.type !== 'CallExpression' ||
     init.callee.type !== 'Identifier' ||
-    (init.callee.name !== 'signal' && init.callee.name !== 'derived')
+    (init.callee.name !== 'signal' &&
+      init.callee.name !== 'derived' &&
+      init.callee.name !== 'collection')
   ) {
     throw scopeLimit
   }
@@ -161,12 +190,19 @@ function parseSignalDeclStatement(stmt: NodePath<t.Statement>): ParsedSignalDecl
     )
   }
 
-  const argPath = stmt.get('declarations.0.init.arguments.0') as NodePath<t.Expression>
+  const args = stmt.get('declarations.0.init.arguments') as NodePath<t.Expression>[]
+  if (init.callee.name === 'collection' && args.length !== 2) {
+    throw new Error('compile: collection() takes exactly an initial array and a key selector')
+  }
+  if (init.callee.name !== 'collection' && args.length !== 1) {
+    throw new Error(`compile: ${init.callee.name}() takes exactly one argument`)
+  }
   return {
-    kind: init.callee.name as 'signal' | 'derived',
+    kind: init.callee.name as 'signal' | 'derived' | 'collection',
     naturalName: declarator.id.name,
     declaratorStart: declarator.start!,
-    argPath,
+    argPath: args[0]!,
+    keyPath: args[1] ?? null,
   }
 }
 
@@ -176,10 +212,34 @@ function processDeclarationStatement(
   instanceId: number,
   out: RenderOutput,
 ): void {
-  const { kind, naturalName, declaratorStart, argPath } = parseSignalDeclStatement(stmt)
+  const { kind, naturalName, declaratorStart, argPath, keyPath } = parseSignalDeclStatement(stmt)
   if (kind === 'signal') {
     const { rendered, sourceRendered } = analyzeExpr(ctx, argPath, instanceId)
     emitSignal(ctx, instanceId, declaratorStart, naturalName, rendered, sourceRendered, out)
+  } else if (kind === 'collection') {
+    if (
+      !keyPath?.isArrowFunctionExpression() ||
+      keyPath.node.params.length !== 1 ||
+      keyPath.node.params[0]?.type !== 'Identifier' ||
+      keyPath.get('body').isBlockStatement()
+    ) {
+      throw new Error(
+        'compile: collection() key selector must be a one-argument concise arrow function `(item) => key` (scope limit)',
+      )
+    }
+    const initial = analyzeExpr(ctx, argPath, instanceId)
+    const key = analyzeExpr(ctx, keyPath as NodePath<t.Expression>, instanceId)
+    emitCollection(
+      ctx,
+      instanceId,
+      declaratorStart,
+      naturalName,
+      initial.rendered,
+      initial.sourceRendered,
+      key.rendered,
+      key.sourceRendered,
+      out,
+    )
   } else {
     emitDerived(ctx, instanceId, declaratorStart, naturalName, argPath, out)
   }
@@ -252,6 +312,11 @@ export function processLocalDeclarationStatement(
   if (kind === 'signal') {
     const { rendered } = analyzeExpr(ctx, argPath, instanceId)
     return emitLocalSignal(ctx, instanceId, declaratorStart, naturalName, rendered)
+  }
+  if (kind === 'collection') {
+    throw new Error(
+      'compile: collection() is only supported in the root variable zone (scope limit)',
+    )
   }
   return emitLocalDerived(ctx, instanceId, declaratorStart, naturalName, argPath)
 }
@@ -873,6 +938,13 @@ function renderListUnit(
   const callee = exprPath.get('callee') as NodePath<t.MemberExpression>
   const arrayObjPath = callee.get('object') as NodePath<t.Expression>
   const { deps, rendered: arrayRendered } = analyzeExpr(ctx, arrayObjPath, instanceId)
+  const directDep = deps.size === 1 ? [...deps][0]! : null
+  const collectionDeclId =
+    directDep &&
+    ctx.declKind.get(directDep) === 'collection' &&
+    arrayRendered === ctx.declOutputName.get(directDep)
+      ? directDep
+      : null
 
   const arrowPath = exprPath.get('arguments.0') as NodePath<t.ArrowFunctionExpression>
   const itemParam = (arrowPath.get('params.0') as NodePath<t.Identifier>).node.name
@@ -921,6 +993,7 @@ function renderListUnit(
     itemParam,
     arrayRendered,
     keyRendered,
+    collectionDeclId,
     body,
   })
   ctx.markerDeps.set(markerId, deps)

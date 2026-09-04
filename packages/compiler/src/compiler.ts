@@ -40,7 +40,7 @@ import type {
   StructuralUnitBody,
 } from './compiler/state.ts'
 import { createCompilerState } from './compiler/state.ts'
-import { derived, registry, signal } from '@irisout/runtime'
+import { collection, derived, registry, signal } from '@irisout/runtime'
 
 export interface CompileResult {
   code: string
@@ -167,7 +167,13 @@ export function compile(source: string): CompileResult {
     m: ListMarker | ConditionalMarker,
   ): ListMarkerOutput | ConditionalMarkerOutput =>
     m.kind === 'list'
-      ? { ...m, body: convertBody(m.body) }
+      ? {
+          ...m,
+          collectionOutputName: m.collectionDeclId
+            ? ctx.declOutputName.get(m.collectionDeclId)!
+            : null,
+          body: convertBody(m.body),
+        }
       : {
           ...m,
           branches: m.branches.map((b) => ({
@@ -219,12 +225,14 @@ export function compile(source: string): CompileResult {
   const runComponent = new Function(
     'signal',
     'derived',
+    'collection',
     '__esc__',
     '__escAttr__',
     instrumentedBody,
   ) as (
     signalFn: typeof signal,
     derivedFn: typeof derived,
+    collectionFn: typeof collection,
     escFn: (v: unknown) => string,
     escAttrFn: (v: unknown) => string,
   ) => string
@@ -237,7 +245,7 @@ export function compile(source: string): CompileResult {
   // 報告する安全網(scope-limit-coverage design D3)。元エラーは cause に保持。
   let initialHtml: string
   try {
-    initialHtml = runComponent(signal, derived, escapeTextValue, escapeAttrTextValue)
+    initialHtml = runComponent(signal, derived, collection, escapeTextValue, escapeAttrTextValue)
   } catch (e) {
     throw new Error(
       `compile: build-time execution failed: ${e instanceof Error ? e.message : String(e)}`,
@@ -274,6 +282,7 @@ export function compile(source: string): CompileResult {
     declOutputName: ctx.declOutputName,
     derivedDeps: ctx.derivedDeps,
     derivedRecompute: ctx.derivedRecompute,
+    collectionKeyRendered: ctx.collectionKeyRendered,
     handlers: handlerOutputs,
     actions: actionOutputs,
     attrBindings: ctx.attrBindings,

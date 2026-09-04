@@ -1,8 +1,9 @@
-// signal()/derived() はビルド時専用(ADR-0006):コンパイル中に Node 上で
-// 実行され、リアクティブ状態の発見に使われるだけ。生成される出力コードは
-// プレーン変数を使うので、この2つの関数は生成モジュールから一切 import
+// signal()/derived()/collection() のauthoring accessorはビルド時専用
+// (ADR-0006/0019):コンパイル中に Node 上で実行され、リアクティブ状態の発見に
+// 使われるだけ。生成される出力コードはプレーン変数と専用stateを使うので、
+// これらの関数は生成モジュールから一切 import
 // されない。`declId` はビルド時 discovery のためだけにコンパイラが注入する
-// もので、コンポーネント作者が使う公開 signal/derived API の一部ではない
+// もので、コンポーネント作者が使う公開 signal/derived/collection API の一部ではない
 // (docs/adr/0006-generated-output-drops-runtime-signal-wrapper.md 参照)。
 //
 // mount()/hydrate() と List helper は生成モジュールから必要時に import される、
@@ -10,7 +11,7 @@
 // ADR-0015の更新アドレスとkeyed DOM順序だけを管理する。
 
 type DeclId = string
-type DeclKind = 'signal' | 'derived'
+type DeclKind = 'signal' | 'derived' | 'collection'
 
 // CONCEPT.v3: List 全体を再描画せず、listId / itemId / bindingId の3段アドレスで
 // 更新先を特定する。文字列の連結やハッシュはホットパスで作らず、List と item は
@@ -53,6 +54,75 @@ export function updateListBinding(item: ListItemState, bindingId: string, value:
   }
   item.bindings.set(bindingId, value)
   return true
+}
+
+export interface CollectionState<T, K> {
+  values: T[]
+  readonly keyOf: (value: T) => K
+  readonly index: Map<K, number>
+}
+
+function buildCollectionIndex<T, K>(values: readonly T[], keyOf: (value: T) => K): Map<K, number> {
+  const index = new Map<K, number>()
+  values.forEach((value, position) => {
+    const key = keyOf(value)
+    if (index.has(key)) throw new Error(`collection: duplicate key ${String(key)}`)
+    index.set(key, position)
+  })
+  return index
+}
+
+export function createCollectionState<T, K>(
+  initial: readonly T[],
+  keyOf: (value: T) => K,
+): CollectionState<T, K> {
+  const values = Array.from(initial)
+  return { values, keyOf, index: buildCollectionIndex(values, keyOf) }
+}
+
+export function replaceCollection<T, K>(state: CollectionState<T, K>, next: readonly T[]): T[] {
+  const values = Array.from(next)
+  const index = buildCollectionIndex(values, state.keyOf)
+  state.values = values
+  state.index.clear()
+  for (const [key, position] of index) state.index.set(key, position)
+  return state.values
+}
+
+export function updateCollectionItem<T, K>(
+  state: CollectionState<T, K>,
+  key: K,
+  updater: (current: T) => T,
+): T {
+  const index = state.index.get(key)
+  if (index === undefined) throw new Error(`collection.update: unknown key ${String(key)}`)
+  const next = updater(state.values[index]!)
+  const nextKey = state.keyOf(next)
+  if (!Object.is(nextKey, key)) {
+    throw new Error(
+      `collection.update: key must remain ${String(key)}, received ${String(nextKey)}`,
+    )
+  }
+  state.values[index] = next
+  return next
+}
+
+export function updateListItem<T>(
+  runtime: ListRuntime<T>,
+  itemId: unknown,
+  next: T,
+  update?: ListItemUpdater<T>,
+): void {
+  const record = runtime.items.get(itemId)
+  if (!record) {
+    throw new Error(`updateListItem: unknown item ${String(itemId)} in list ${runtime.listId}`)
+  }
+  if (update) update(record.handle, next)
+  else if (record.handle.update) record.handle.update(next)
+  else
+    throw new Error(
+      `updateListItem: no updater for item ${String(itemId)} in list ${runtime.listId}`,
+    )
 }
 
 // key の照合と DOM 順序の調整だけを共有ランタイムが担当し、item 内の細粒度更新は
@@ -129,6 +199,40 @@ export function signal<T>(initial: T, declId?: DeclId): (...args: [] | [T]) => T
 export function derived<T>(compute: () => T, declId?: DeclId): () => T {
   if (declId) registry.set(declId, { kind: 'derived' })
   return compute
+}
+
+export interface CollectionAccessor<T, K> {
+  (): readonly T[]
+  (next: readonly T[]): readonly T[]
+  update(key: K, updater: (current: T) => T): T
+}
+
+export function collection<T, K>(
+  initial: readonly T[],
+  keyOf: (value: T) => K,
+  declId?: DeclId,
+): CollectionAccessor<T, K> {
+  let values = Array.from(initial)
+  const accessor = ((...args: [] | [readonly T[]]): readonly T[] => {
+    if (args.length === 0) return values
+    values = Array.from(args[0]!)
+    return values
+  }) as CollectionAccessor<T, K>
+  accessor.update = (key, updater) => {
+    const index = values.findIndex((value) => Object.is(keyOf(value), key))
+    if (index < 0) throw new Error(`collection.update: unknown key ${String(key)}`)
+    const next = updater(values[index]!)
+    const nextKey = keyOf(next)
+    if (!Object.is(nextKey, key)) {
+      throw new Error(
+        `collection.update: key must remain ${String(key)}, received ${String(nextKey)}`,
+      )
+    }
+    values[index] = next
+    return next
+  }
+  if (declId) registry.set(declId, { kind: 'collection' })
+  return accessor
 }
 
 // すでに DOM 上に存在する(静的ビルドで焼き込み済みの)HTML から

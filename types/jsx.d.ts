@@ -36,7 +36,17 @@ type IrisCommonAttributes<El extends Element> = {
   [attr: string]: unknown
 }
 
+interface IrisCollection<T, K> {
+  (): readonly T[]
+  (next: readonly T[]): readonly T[]
+  update(key: K, updater: (current: T) => T): T
+}
+
 declare function signal<T>(initial: T): (...args: [] | [T]) => T
+declare function collection<T, K>(
+  initial: readonly T[],
+  keyOf: (item: T) => K,
+): IrisCollection<T, K>
 declare function derived<T>(compute: () => T): () => T
 declare function render(element: JSX.Element): void
 

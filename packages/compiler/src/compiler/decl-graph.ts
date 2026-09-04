@@ -11,7 +11,7 @@ export function resolveToSignals(
 ): Set<DeclId> {
   if (visited.has(declId)) return new Set()
   visited.add(declId)
-  if (ctx.declKind.get(declId) === 'signal') return new Set([declId])
+  if (ctx.declKind.get(declId) !== 'derived') return new Set([declId])
   const result = new Set<DeclId>()
   for (const upstream of ctx.derivedDeps.get(declId) ?? []) {
     for (const sig of resolveToSignals(ctx, upstream, visited)) result.add(sig)

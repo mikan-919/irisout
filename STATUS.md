@@ -27,9 +27,11 @@ CONCEPT.v3への移行に伴い、List更新を共有最小ランタイムへ切
 並べ替えは`reconcileList()`が担当し、順序が同じDOM要素は再挿入しない。
 Listを使わない生成物にはList helperのimport自体を出力しない。
 
-既存のauthoring APIと対応構文は変更していない。配列更新時のkey全走査は残る。変更itemの直接通知は実ブラウザ比較で効果を確認したが、
-現行の配列setterから変更item IDを取得できないため、collection更新APIの設計まで製品導入を
-延期した(ADR-0017)。更新バッチとイベント委譲は未判断。
+keyed collection APIを追加した(ADR-0019)。`collection(initial, keyOf)`は
+`signal()`と同じ読み取り・全体setterに加えて`collection.update(key, updater)`を持つ。
+直接の`collection().map()`は変更itemのhandleをMapから引いてO(1)で通知し、同じcollectionを
+描画する複数ListとList以外の依存markerも更新する。通常setter、派生した配列式、ネストListは
+従来どおり全体reconcileへフォールバックする。更新バッチとイベント委譲は未判断。
 
 ## 現在地(2026-07-21・型検査基盤)
 

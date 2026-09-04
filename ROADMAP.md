@@ -18,15 +18,15 @@ listId / itemId / bindingIdを分離して保持し、値が変わったbinding�
 
 変更itemの直接通知は比較済み(ADR-0017)。N=10,000の反復1件更新ではaddressedの
 0.870ms/件に対してdirectは0.001ms/件、追加コストは比較fixtureでgzip +50B、heapは
-ほぼ同等だった。ただし現行の配列setterは変更item IDを供給できず、ID発見の全走査を
-残すと利点が消える。製品導入は明示的なcollection更新APIの設計まで延期し、現行runtimeは
-変更しない。
+ほぼ同等だった。この結果を受け、`collection(initial, keyOf)`と
+`collection.update(key, updater)`を導入した(ADR-0019)。値だけの更新は対象handleへ直接
+通知し、通常setterによる構造変更は従来どおり`reconcileList()`する。
 
 component instance境界は実装済み(ADR-0018)。生成moduleの複数mount/hydrateと、
 stateを持つ同じ子componentの複数使用を独立させた。
 
-残るruntime判断はイベント委譲と更新バッチ。collection更新APIを検討する場合は、
-ADR-0017のdirect fixtureを比較基準にする。
+残るruntime判断はイベント委譲、更新バッチ、およびcollectionの構造操作API。
+構造操作は通常setterで表現できるため、実需と比較結果が出るまで追加しない。
 
 quixのビルド時トラッカー採用可否・list itemのイベント配線方式・authoring API
 ゾーン化(inline arrow併存含む)とM4/M5の実装順序は決着済み(それぞれ
@@ -270,6 +270,9 @@ transition/animation、portal、error boundary、async/resource
 11. ~~component instance境界~~ — **完了**(ADR-0018)。生成コードを
     `createComponent()`クロージャへ移し、同じ生成moduleの複数mount/hydrateと、
     stateを持つ同じ子componentの複数使用を独立させた。
+12. ~~keyed collection item直接更新~~ — **完了**(ADR-0019)。
+    `collection(initial, keyOf)`と`collection.update(key, updater)`を追加し、直接の
+    `collection().map()`を全key走査なしで対象List handleへ更新する。
 
 ## 参考資料
 

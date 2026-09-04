@@ -1,11 +1,14 @@
 // List最小ランタイムのplayground。追加・binding更新・並べ替え・削除を通して、
 // keyに対応するDOM要素を再利用しながら必要な箇所だけを更新する。
 export function ListPlayground() {
-  const items = signal([
-    { id: 1, text: 'alpha' },
-    { id: 2, text: 'beta' },
-    { id: 3, text: 'gamma' },
-  ])
+  const items = collection(
+    [
+      { id: 1, text: 'alpha' },
+      { id: 2, text: 'beta' },
+      { id: 3, text: 'gamma' },
+    ],
+    (item) => item.id,
+  )
 
   render(
     <main>
@@ -38,7 +41,8 @@ export function ListPlayground() {
   }
 
   function renameFirst() {
-    items(items().map((item, index) => (index === 0 ? { ...item, text: item.text + '!' } : item)))
+    const first = items()[0]
+    if (first) items.update(first.id, (item) => ({ ...item, text: item.text + '!' }))
   }
 
   function reverseItems() {

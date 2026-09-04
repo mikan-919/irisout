@@ -205,6 +205,29 @@ function analyzeHandlerStatementsCore(
     if (!outputName) return
 
     const parent = idPath.parentPath
+    const memberCall = parent?.isMemberExpression() ? parent.parentPath : null
+    if (
+      ctx.declKind.get(id) === 'collection' &&
+      parent?.isMemberExpression() &&
+      !parent.node.computed &&
+      parent.get('property').isIdentifier({ name: 'update' }) &&
+      memberCall?.isCallExpression() &&
+      memberCall.node.callee === parent.node
+    ) {
+      if (memberCall.node.arguments.length !== 2) {
+        throw new Error(
+          `compile: collection.update() takes exactly a key and an updater for "${idPath.node.name}"`,
+        )
+      }
+      const firstArg = memberCall.node.arguments[0]!
+      edits.push({
+        start: idPath.node.start!,
+        end: firstArg.start!,
+        text: `update_${outputName}_item(`,
+      })
+      noteWrite(memberCall.node.start!)
+      return
+    }
     if (parent?.isCallExpression() && parent.node.callee === idPath.node) {
       if (parent.node.arguments.length === 0) {
         edits.push({
@@ -226,9 +249,16 @@ function analyzeHandlerStatementsCore(
       edits.push({
         start: parent.node.start!,
         end: arg.start!,
-        text: `${outputName} = `,
+        text:
+          ctx.declKind.get(id) === 'collection'
+            ? `${outputName} = __replaceCollection__(__collection_${outputName}__, `
+            : `${outputName} = `,
       })
-      edits.push({ start: arg.end!, end: parent.node.end!, text: '' })
+      edits.push({
+        start: arg.end!,
+        end: parent.node.end!,
+        text: ctx.declKind.get(id) === 'collection' ? ')' : '',
+      })
       noteWrite(parent.node.start!)
       for (const sig of resolveToSignals(ctx, id, new Set())) writeDeclIds.add(sig)
       return
@@ -359,6 +389,28 @@ export function analyzeHandlerExpr(
     if (!outputName) return
 
     const parent = idPath.parentPath
+    const memberCall = parent?.isMemberExpression() ? parent.parentPath : null
+    if (
+      ctx.declKind.get(id) === 'collection' &&
+      parent?.isMemberExpression() &&
+      !parent.node.computed &&
+      parent.get('property').isIdentifier({ name: 'update' }) &&
+      memberCall?.isCallExpression() &&
+      memberCall.node.callee === parent.node
+    ) {
+      if (memberCall.node.arguments.length !== 2) {
+        throw new Error(
+          `compile: collection.update() takes exactly a key and an updater for "${idPath.node.name}"`,
+        )
+      }
+      const firstArg = memberCall.node.arguments[0]!
+      edits.push({
+        start: idPath.node.start!,
+        end: firstArg.start!,
+        text: `update_${outputName}_item(`,
+      })
+      return
+    }
     if (parent?.isCallExpression() && parent.node.callee === idPath.node) {
       if (parent.node.arguments.length === 0) {
         edits.push({
@@ -380,9 +432,16 @@ export function analyzeHandlerExpr(
       edits.push({
         start: parent.node.start!,
         end: arg.start!,
-        text: `${outputName} = `,
+        text:
+          ctx.declKind.get(id) === 'collection'
+            ? `${outputName} = __replaceCollection__(__collection_${outputName}__, `
+            : `${outputName} = `,
       })
-      edits.push({ start: arg.end!, end: parent.node.end!, text: '' })
+      edits.push({
+        start: arg.end!,
+        end: parent.node.end!,
+        text: ctx.declKind.get(id) === 'collection' ? ')' : '',
+      })
       for (const sig of resolveToSignals(ctx, id, new Set())) writeDeclIds.add(sig)
       return
     }

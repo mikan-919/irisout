@@ -66,6 +66,8 @@ export interface ListMarkerOutput {
   itemParam: string
   arrayRendered: string
   keyRendered: string
+  collectionDeclId: DeclId | null
+  collectionOutputName: string | null
   body: StructuralUnitBodyOutput
 }
 
@@ -102,6 +104,7 @@ export interface GenerateModuleInput {
   declOutputName: Map<DeclId, string>
   derivedDeps: Map<DeclId, Set<DeclId>>
   derivedRecompute: Map<DeclId, string>
+  collectionKeyRendered: Map<DeclId, string>
   handlers: HandlerOutput[]
   actions: ActionOutput[]
   attrBindings: AttrBinding[] // ADR-0012: トップレベルの動的属性
@@ -490,8 +493,11 @@ function generateListUpdate(marker: ListMarkerOutput, elExpr: string): string[] 
   const usesSharedUpdater =
     bodyUnits(marker.body).length === 0 && marker.body.localDecls.length === 0
   const updaterArg = usesSharedUpdater ? `, __create_${marker.id}__update__` : ''
+  const keyOf = marker.collectionOutputName
+    ? `(${marker.itemParam}) => { const __key__ = ${marker.keyRendered}; if (!Object.is(__collection_${marker.collectionOutputName}__.keyOf(${marker.itemParam}), __key__)) throw new Error("collection List key does not match collection identity"); return __key__; }`
+    : `(${marker.itemParam}) => ${marker.keyRendered}`
   return [
-    `  __reconcileList__(__list_${marker.id}__, ${elExpr}, ${marker.arrayRendered}, (${marker.itemParam}) => ${marker.keyRendered}, __create_${marker.id}__${updaterArg});`,
+    `  __reconcileList__(__list_${marker.id}__, ${elExpr}, ${marker.arrayRendered}, ${keyOf}, __create_${marker.id}__${updaterArg});`,
   ]
 }
 
@@ -564,6 +570,7 @@ export function generateModule({
   declOutputName,
   derivedDeps,
   derivedRecompute,
+  collectionKeyRendered,
   handlers,
   actions,
   attrBindings,
@@ -579,6 +586,16 @@ export function generateModule({
       'reconcileList as __reconcileList__',
       'updateListBinding as __updateListBinding__',
     )
+  }
+  if (collectionKeyRendered.size > 0) {
+    runtimeImports.push(
+      'createCollectionState as __createCollectionState__',
+      'replaceCollection as __replaceCollection__',
+      'updateCollectionItem as __updateCollectionItem__',
+    )
+    if (markers.some((marker) => marker.kind === 'list' && marker.collectionDeclId !== null)) {
+      runtimeImports.push('updateListItem as __updateListItem__')
+    }
   }
   moduleLines.push(`import { ${runtimeImports.join(', ')} } from '@irisout/runtime';`, '')
   instanceLines.push(...declStatements, '')
@@ -686,44 +703,71 @@ export function generateModule({
     attrsByMarker.set(b.markerId, list)
   }
 
+  const appendMarkerUpdate = (lines: string[], mId: MarkerId): void => {
+    // 動的属性の再設定(属性のみの marker id は markers に実体を持たない
+    // ため、marker 解決より先に処理する)。
+    const bindings = attrsByMarker.get(mId)
+    if (bindings) {
+      lines.push(
+        `  { const __el = __markers__.get(${JSON.stringify(mId)}); if (__el) { ${bindings.map((b) => renderAttrSet('__el', b)).join(' ')} } }`,
+      )
+    }
+    const marker = markers.find((m) => m.id === mId)
+    if (!marker) return
+    if (marker.kind === 'text') {
+      lines.push(
+        `  { const __el = __markers__.get(${JSON.stringify(mId)}); if (__el) { __el.textContent = \`${innerTemplateSource(marker.contentParts)}\`; } }`,
+      )
+    } else if (marker.kind === 'list') {
+      lines.push(...generateListUpdate(marker, `__markers__.get(${JSON.stringify(marker.id)})`))
+    } else if (marker.kind === 'action') {
+      lines.push(`  if (__use_${mId}__) __use_${mId}__();`)
+    } else {
+      lines.push(
+        ...generateConditionalUpdate(
+          marker,
+          `__markers__.get(${JSON.stringify(marker.id)})`,
+          condDispatchesUpdate(marker, false),
+        ),
+      )
+    }
+  }
+
   for (const [signalId, markerIds] of signalToMarkers) {
     const name = declOutputName.get(signalId)
     instanceLines.push(`function update_${name}() {`)
     for (const derivedId of signalToDerivedRecomputes.get(signalId) ?? []) {
       instanceLines.push(`  ${declOutputName.get(derivedId)} = ${derivedRecompute.get(derivedId)};`)
     }
-    for (const mId of markerIds) {
-      // 動的属性の再設定(属性のみの marker id は markers に実体を持たない
-      // ため、marker 解決より先に処理する)。
-      const bindings = attrsByMarker.get(mId)
-      if (bindings) {
-        instanceLines.push(
-          `  { const __el = __markers__.get(${JSON.stringify(mId)}); if (__el) { ${bindings.map((b) => renderAttrSet('__el', b)).join(' ')} } }`,
-        )
+    for (const mId of markerIds) appendMarkerUpdate(instanceLines, mId)
+    instanceLines.push('}', '')
+  }
+
+  for (const collectionId of collectionKeyRendered.keys()) {
+    const name = declOutputName.get(collectionId)!
+    const directLists = markers.filter(
+      (marker): marker is ListMarkerOutput =>
+        marker.kind === 'list' && marker.collectionDeclId === collectionId,
+    )
+    instanceLines.push(`function update_${name}_item(__key__, __updater__) {`)
+    instanceLines.push(
+      `  const __next__ = __updateCollectionItem__(__collection_${name}__, __key__, __updater__);`,
+    )
+    for (const derivedId of signalToDerivedRecomputes.get(collectionId) ?? []) {
+      instanceLines.push(`  ${declOutputName.get(derivedId)} = ${derivedRecompute.get(derivedId)};`)
+    }
+    for (const mId of signalToMarkers.get(collectionId) ?? []) {
+      const direct = directLists.find((marker) => marker.id === mId)
+      if (!direct) {
+        appendMarkerUpdate(instanceLines, mId)
+        continue
       }
-      const marker = markers.find((m) => m.id === mId)
-      if (!marker) continue
-      if (marker.kind === 'text') {
-        instanceLines.push(
-          `  { const __el = __markers__.get(${JSON.stringify(mId)}); if (__el) { __el.textContent = \`${innerTemplateSource(marker.contentParts)}\`; } }`,
-        )
-      } else if (marker.kind === 'list') {
-        instanceLines.push(
-          ...generateListUpdate(marker, `__markers__.get(${JSON.stringify(marker.id)})`),
-        )
-      } else if (marker.kind === 'action') {
-        // design Decision 5: ガード付き呼び出し(action呼び出し前のpopulate中は
-        // __use_<id>__ が未初期化のため)。
-        instanceLines.push(`  if (__use_${mId}__) __use_${mId}__();`)
-      } else {
-        instanceLines.push(
-          ...generateConditionalUpdate(
-            marker,
-            `__markers__.get(${JSON.stringify(marker.id)})`,
-            condDispatchesUpdate(marker, false),
-          ),
-        )
-      }
+      const usesSharedUpdater =
+        bodyUnits(direct.body).length === 0 && direct.body.localDecls.length === 0
+      const updaterArg = usesSharedUpdater ? `, __create_${direct.id}__update__` : ''
+      instanceLines.push(
+        `  __updateListItem__(__list_${direct.id}__, __key__, __next__${updaterArg});`,
+      )
     }
     instanceLines.push('}', '')
   }

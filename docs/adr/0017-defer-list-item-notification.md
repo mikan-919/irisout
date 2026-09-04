@@ -2,7 +2,8 @@
 
 ## ステータス
 
-**決定済み・比較fixture実装済み**(2026-09-04)。製品runtimeへの導入は延期する。
+**決定済み・比較fixture実装済み**(2026-09-04)。延期条件だったkeyed collection APIを
+ADR-0019で決定・実装し、製品runtimeへ導入済み。
 
 ## コンテキスト
 
@@ -41,8 +42,9 @@ addressed比でraw +199B、gzip +50B、N=10,000 mount後のretained JS heap差�
 - 値だけの変更: listId / itemIdから既存handleを直接更新する
 - key集合または順序の変更: `reconcileList()`で構造を更新する
 
-それまでは製品コードの`createListRuntime()`、`reconcileList()`、生成コードを変更しない。
-benchmarkの`direct`は将来案の比較基準であり、公開APIではない。
+この延期条件はADR-0019の`collection(initial, keyOf)`と`collection.update(key, updater)`で
+満たされた。通常setterは`reconcileList()`を維持し、`collection.update()`だけがbenchmarkの
+`direct`と同型のhandle直接更新を使う。
 
 ## 検討した代替案
 
@@ -64,4 +66,4 @@ benchmarkの`direct`は将来案の比較基準であり、公開APIではない
 
 - 直接通知の速度、bundle、heapの比較基準が残る。
 - 現行APIの意味を変えず、推測ベースの複雑なコンパイラ最適化を避ける。
-- 次に直接通知へ進む条件は、変更item IDを明示するcollection更新APIの設計開始である。
+- 変更item IDを明示するcollection更新APIをADR-0019で導入し、製品経路でもO(1)通知を利用できる。

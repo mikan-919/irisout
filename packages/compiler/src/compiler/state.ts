@@ -12,7 +12,7 @@ export type MarkerId = string & { readonly __brand: 'MarkerId' }
 export const toDeclId = (s: string): DeclId => s as DeclId
 export const toMarkerId = (s: string): MarkerId => s as MarkerId
 
-export type DeclKind = 'signal' | 'derived'
+export type DeclKind = 'signal' | 'derived' | 'collection'
 
 export interface TextContentPart {
   type: 'text'
@@ -94,6 +94,8 @@ export interface ListMarker {
   arrayRendered: string
   /** `key={...}` の出力向けレンダー結果(item 仮引数を参照する式)。 */
   keyRendered: string
+  /** 配列式が直接 `collection()` を読んでいる場合の宣言ID。それ以外はnull。 */
+  collectionDeclId: DeclId | null
   body: StructuralUnitBody
 }
 
@@ -167,6 +169,8 @@ export interface CompilerState {
   // ADR-0006: 出力側は signal()/derived() ラッパーを持たないので、依存する
   // root signal の update_* 内でこの式を直接代入して derived を再計算する。
   derivedRecompute: Map<DeclId, string>
+  // collection declId -> identity selector。生成コードのindex管理に使う。
+  collectionKeyRendered: Map<DeclId, string>
   usedOutputNames: Set<string>
 
   markers: Marker[]
@@ -202,6 +206,7 @@ export function createCompilerState(source: string): CompilerState {
     declOutputName: new Map(),
     derivedDeps: new Map(),
     derivedRecompute: new Map(),
+    collectionKeyRendered: new Map(),
     usedOutputNames: new Set(),
     markers: [],
     markerDeps: new Map(),
