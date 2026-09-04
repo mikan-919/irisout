@@ -36,6 +36,12 @@ conditional状態、`use=`の返り値をモジュール直下に1組だけ置�
 binding名を加える。同じソース位置から複製された子コンポーネント呼び出しでも、各宣言、依存、
 handler更新先を分離する。
 
+Listの通常経路では、itemごとに`update`クロージャを作らない。factoryはDOM参照、現在値、
+binding状態だけを持つhandle objectを返し、factoryと同じスコープに1個だけ生成した
+`update(handle, next)`を全itemで共有する。runtimeの`reconcileList()`は既存keyの更新時に
+この共有関数へhandleを渡す。ネストした構造ユニットまたはローカルsignalを持つitemは、外側の
+lexical scopeを保持する必要があるため、現時点では従来のhandle更新経路を使う。
+
 ## 結果
 
 - 同じ生成モジュールを複数containerへmount/hydrateでき、状態とDOM更新が混ざらない。

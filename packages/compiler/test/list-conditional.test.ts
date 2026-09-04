@@ -3,8 +3,8 @@ import { compile } from '../src/compiler.js'
 import { createContainer, loadGenerated } from './helpers.js'
 
 // M5(ADR-0005): リスト(`.map()`)・条件分岐(三項/`&&`)の factory-per-unit
-// クロージャ実装。specs/list-conditional-rendering/spec.md の各 Scenario と
-// tasks.md 3.3/4.1/4.2/6.2 に対応する。
+// 実装。通常のList itemはデータhandleと共有update関数を使う。
+// specs/list-conditional-rendering/spec.md の各 Scenario とtasks.md 3.3/4.1/4.2/6.2 に対応する。
 
 function dispatchClick(container: Element, el: Element | null): void {
   if (!el) throw new Error('dispatchClick: element not found')
@@ -71,6 +71,14 @@ describe('M5: list rendering (keyed reuse factory)', () => {
     // 貼り直しされていなければ、2回目のクリックでも同じリスナーが働く。
     dispatchClick(container, firstLi.querySelector('.rename'))
     expect(firstLi.querySelector('span')?.textContent).toBe('a!!')
+  })
+
+  it('shares one update function across item state objects', () => {
+    const { code } = compile(LIST_SOURCE)
+    expect(code).toContain('function __create_m3__update__(__handle__, __next__)')
+    expect(code).toContain('return __handle__;')
+    expect(code).toContain('__create_m3__, __create_m3__update__')
+    expect(code).not.toContain('return { el: __el__, update };')
   })
 
   it('updates only the changed item binding without reordering stable DOM', async () => {

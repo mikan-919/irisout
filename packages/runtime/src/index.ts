@@ -21,10 +21,13 @@ export interface ListItemState {
   readonly bindings: Map<string, unknown>
 }
 
-export interface ListItemHandle<T> {
+export interface ListItemHandle<T = unknown> {
   el: Element
-  update(next: T): void
+  /** 複雑なネスト構造向けの互換経路。通常のList itemは共有updaterを使う。 */
+  update?(next: T): void
 }
+
+export type ListItemUpdater<T> = (handle: ListItemHandle<T>, next: T) => void
 
 interface ListRecord<T> {
   state: ListItemState
@@ -53,14 +56,16 @@ export function updateListBinding(item: ListItemState, bindingId: string, value:
 }
 
 // key の照合と DOM 順序の調整だけを共有ランタイムが担当し、item 内の細粒度更新は
-// factory が生成した handle.update() に委譲する。末尾から insertBefore() することで
-// 順序が変わっていない要素には DOM 操作を発生させない。
+// コンパイラが生成した共有 update(handle, next) に委譲する。handle 自身に関数を
+// 持たせないため、List の行数に比例した update クロージャ割り当ては発生しない。
+// 末尾から insertBefore() することで順序が変わっていない要素には DOM 操作を発生させない。
 export function reconcileList<T>(
   runtime: ListRuntime<T>,
   container: Element | undefined,
   values: readonly T[],
   keyOf: (value: T) => unknown,
   create: (value: T, state: ListItemState) => ListItemHandle<T>,
+  update?: ListItemUpdater<T>,
 ): void {
   const seen = new Set<unknown>()
   const ordered: ListRecord<T>[] = []
@@ -73,7 +78,12 @@ export function reconcileList<T>(
     seen.add(itemId)
     let record = runtime.items.get(itemId)
     if (record) {
-      record.handle.update(value)
+      if (update) update(record.handle, value)
+      else if (record.handle.update) record.handle.update(value)
+      else
+        throw new Error(
+          `reconcileList: no updater for item ${String(itemId)} in list ${runtime.listId}`,
+        )
     } else {
       const state: ListItemState = {
         listId: runtime.listId,

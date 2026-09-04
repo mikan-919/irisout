@@ -121,7 +121,7 @@ const FIND_HELPER = `function __find__(root, id) { return root.getAttribute("dat
 // `update()`は itemParam != null の factory では item 引数を要求する
 // (`function update(__next__) { <itemParam> = __next__; ... }`) ―
 // 引数無しで呼ぶと item が undefined で上書きされる(design.md D5)。
-function renderHandlerCall(h: HandlerOutput, itemParam: string | null): string {
+function renderHandlerCall(h: HandlerOutput, itemParam: string | null, prelude = ''): string {
   const updateCalls = h.updateNames.map((name) => `update_${name}();`).join(' ')
   // same-file-component-composition: このユニット自身のローカルsignalへの
   // 書き込みは、モジュールscopeのupdate_*ではなくこのfactory自身の
@@ -130,7 +130,7 @@ function renderHandlerCall(h: HandlerOutput, itemParam: string | null): string {
   const localUpdateCall = h.callLocalUpdate ? `update(${itemParam ?? ''});` : ''
   // ADR-0009 D4: 第1引数があるハンドラのみ authored 名を束縛する。
   const params = h.param ? `${h.param}, ...__args` : '...__args'
-  return `(${params}) => { ${h.rendered}; ${updateCalls}${localUpdateCall ? ` ${localUpdateCall}` : ''} }`
+  return `(${params}) => { ${prelude}${h.rendered}; ${updateCalls}${localUpdateCall ? ` ${localUpdateCall}` : ''} }`
 }
 
 // ADR-0012 決定2: 動的属性1個ぶんの設定文。boolProp/prop はプロパティ代入、
@@ -203,6 +203,67 @@ function generateFactory(
   const texts = bodyTexts(body)
   const units = bodyUnits(body)
   const childScope = inItemScope || itemParam != null
+
+  // 通常のList itemは、行ごとのupdateクロージャではなくデータhandleを返す。
+  // update関数はfactoryと同じスコープに1個だけ生成し、runtimeが
+  // update(handle, next)として呼ぶ。ネスト構造またはローカルsignalを持つitemは
+  // まだ外側のlexical scopeを必要とするため、下の汎用factory経路を使う。
+  if (itemParam != null && units.length === 0 && body.localDecls.length === 0) {
+    const lines: string[] = []
+    const updateName = `${factoryName}update__`
+    const attrs = body.localAttrBindings
+    const foundIds = new Set(body.localMarkers.map((m) => m.id))
+    const refIds = new Set<string>([
+      ...body.localMarkers.map((m) => m.id),
+      ...attrs.map((b) => b.markerId),
+    ])
+
+    lines.push(`function ${updateName}(__handle__, __next__) {`)
+    lines.push(`  const ${itemParam} = __handle__.value = __next__;`)
+    lines.push('  const __item__ = __handle__.item;')
+    for (const id of refIds) lines.push(`  const __${id}__ = __handle__.refs.${id};`)
+    for (const m of texts) {
+      const valueVar = `__value_${m.id}__`
+      lines.push(
+        `  const ${valueVar} = \`${innerTemplateSource(m.contentParts)}\`;`,
+        `  if (__updateListBinding__(__item__, ${JSON.stringify(m.id)}, ${valueVar})) __${m.id}__.textContent = ${valueVar};`,
+      )
+    }
+    attrs.forEach((b, i) => {
+      const valueVar = `__attr_${i}__`
+      const bindingId = `${b.markerId}:${b.name}`
+      lines.push(
+        `  const ${valueVar} = ${b.rendered};`,
+        `  if (__updateListBinding__(__item__, ${JSON.stringify(bindingId)}, ${valueVar})) ${renderAttrSet(`__${b.markerId}__`, { ...b, rendered: valueVar })}`,
+      )
+    })
+    lines.push('}')
+    lines.push(`function ${factoryName}(${itemParam}, __item__) {`)
+    lines.push(`  const __node__ = ${templateVar}.content.cloneNode(true);`)
+    lines.push('  const __el__ = __node__.firstElementChild;')
+    for (const m of body.localMarkers) {
+      lines.push(`  const __${m.id}__ = __find__(__el__, ${JSON.stringify(m.id)});`)
+    }
+    for (const id of new Set(attrs.map((b) => b.markerId))) {
+      if (!foundIds.has(id)) {
+        lines.push(`  const __${id}__ = __find__(__el__, ${JSON.stringify(id)});`)
+      }
+    }
+    const refs = [...refIds].map((id) => `${id}: __${id}__`).join(', ')
+    lines.push(
+      `  const __handle__ = { el: __el__, item: __item__, value: ${itemParam}, refs: { ${refs} } };`,
+    )
+    for (const h of body.localHandlers) {
+      lines.push(
+        `  __find__(__el__, ${JSON.stringify(h.markerId)}).addEventListener(${JSON.stringify(h.eventName)}, ${renderHandlerCall(h, itemParam, `${itemParam} = __handle__.value; `)});`,
+      )
+    }
+    lines.push(`  ${updateName}(__handle__, ${itemParam});`)
+    lines.push('  return __handle__;')
+    lines.push('}')
+    return lines
+  }
+
   const lines: string[] = []
   const params = itemParam ? `${itemParam}, __item__` : ''
   lines.push(`function ${factoryName}(${params}) {`)
@@ -426,8 +487,11 @@ function generateStructuralUnits(
 // M5.5: elExpr はリストのマーカー要素の取得式 ― トップレベルは
 // __markers__.get()、ネスト時は外側 factory クロージャの __<id>__ 変数。
 function generateListUpdate(marker: ListMarkerOutput, elExpr: string): string[] {
+  const usesSharedUpdater =
+    bodyUnits(marker.body).length === 0 && marker.body.localDecls.length === 0
+  const updaterArg = usesSharedUpdater ? `, __create_${marker.id}__update__` : ''
   return [
-    `  __reconcileList__(__list_${marker.id}__, ${elExpr}, ${marker.arrayRendered}, (${marker.itemParam}) => ${marker.keyRendered}, __create_${marker.id}__);`,
+    `  __reconcileList__(__list_${marker.id}__, ${elExpr}, ${marker.arrayRendered}, (${marker.itemParam}) => ${marker.keyRendered}, __create_${marker.id}__${updaterArg});`,
   ]
 }
 

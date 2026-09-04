@@ -72,7 +72,7 @@ function mountLegacy(items: readonly Item[]): MountedList {
         handle = createItem(item)
         handles.set(item.id, handle)
       }
-      handle.update(item)
+      handle.update!(item)
     }
     for (const [id, handle] of handles) {
       if (seen.has(id)) continue
@@ -86,15 +86,16 @@ function mountLegacy(items: readonly Item[]): MountedList {
   return { container, update }
 }
 
-function createAddressedItem(item: Item, state: ListItemState): ListItemHandle<Item> {
-  const el = document.createElement('li')
-  const handle = {
-    el,
-    update(next: Item) {
-      if (updateListBinding(state, 'text', next.text)) el.textContent = next.text
-    },
-  }
-  handle.update(item)
+type AddressedItemHandle = ListItemHandle<Item> & { state: ListItemState }
+
+function updateAddressedItem(handle: ListItemHandle<Item>, next: Item): void {
+  const addressed = handle as AddressedItemHandle
+  if (updateListBinding(addressed.state, 'text', next.text)) addressed.el.textContent = next.text
+}
+
+function createAddressedItem(item: Item, state: ListItemState): AddressedItemHandle {
+  const handle = { el: document.createElement('li'), state }
+  updateAddressedItem(handle, item)
   return handle
 }
 
@@ -103,7 +104,14 @@ function mountAddressed(items: readonly Item[], direct: boolean): MountedList {
   document.body.appendChild(container)
   const runtime = createListRuntime<Item>('bench-list')
   const update = (nextItems: readonly Item[]) =>
-    reconcileList(runtime, container, nextItems, (item) => item.id, createAddressedItem)
+    reconcileList(
+      runtime,
+      container,
+      nextItems,
+      (item) => item.id,
+      createAddressedItem,
+      updateAddressedItem,
+    )
   update(items)
   if (!direct) return { container, update }
 
@@ -113,7 +121,7 @@ function mountAddressed(items: readonly Item[], direct: boolean): MountedList {
     updateItem(item) {
       const record = runtime.items.get(item.id)
       if (!record) throw new Error(`direct List update: unknown item ${item.id}`)
-      record.handle.update(item)
+      updateAddressedItem(record.handle, item)
     },
   }
 }
