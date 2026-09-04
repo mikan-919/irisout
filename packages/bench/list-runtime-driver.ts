@@ -12,7 +12,11 @@ interface Item {
 }
 
 type Implementation = 'legacy' | 'addressed'
-type Scenario = 'updateOne' | 'appendOne' | 'removeOne' | 'reverse' | 'updateAll'
+type UpdateScenario = 'updateOne' | 'appendOne' | 'removeOne' | 'reverse' | 'updateAll'
+type Scenario = 'mount' | UpdateScenario
+
+declare const __LIST_RUNTIME_IMPLEMENTATION__: Implementation
+const implementation = __LIST_RUNTIME_IMPLEMENTATION__
 
 interface MountedList {
   container: HTMLElement
@@ -96,7 +100,7 @@ function mountAddressed(items: readonly Item[]): MountedList {
   return { container, update }
 }
 
-function nextItemsFor(items: readonly Item[], scenario: Scenario): Item[] {
+function nextItemsFor(items: readonly Item[], scenario: UpdateScenario): Item[] {
   switch (scenario) {
     case 'updateOne':
       return items.map((item, index) =>
@@ -113,15 +117,15 @@ function nextItemsFor(items: readonly Item[], scenario: Scenario): Item[] {
   }
 }
 
-function mount(implementation: Implementation, items: readonly Item[]): MountedList {
+function mount(items: readonly Item[]): MountedList {
   return implementation === 'legacy' ? mountLegacy(items) : mountAddressed(items)
 }
 
-function measureMount(implementation: Implementation, size: number): ListRuntimeResult {
+function measureMount(size: number): ListRuntimeResult {
   document.body.textContent = ''
   const items = makeItems(size)
   const start = performance.now()
-  const mounted = mount(implementation, items)
+  const mounted = mount(items)
   const elapsedMs = performance.now() - start
   const elements = mounted.container.children
   const result = {
@@ -135,15 +139,11 @@ function measureMount(implementation: Implementation, size: number): ListRuntime
   return result
 }
 
-function measureUpdate(
-  implementation: Implementation,
-  size: number,
-  scenario: Scenario,
-): ListRuntimeResult {
+function measureUpdate(size: number, scenario: UpdateScenario): ListRuntimeResult {
   document.body.textContent = ''
   const items = makeItems(size)
   const nextItems = nextItemsFor(items, scenario)
-  const mounted = mount(implementation, items)
+  const mounted = mount(items)
   const observer = new MutationObserver(() => {})
   observer.observe(mounted.container, { childList: true, characterData: true, subtree: true })
 
@@ -165,13 +165,38 @@ function measureUpdate(
   return result
 }
 
+let retainedList: MountedList | undefined
+
+function prepareHeap(size: number, scenario: Scenario): ListRuntimeResult {
+  document.body.textContent = ''
+  const items = makeItems(size)
+  retainedList = mount(items)
+  if (scenario !== 'mount') retainedList.update(nextItemsFor(items, scenario))
+
+  const elements = retainedList.container.children
+  return {
+    elapsedMs: 0,
+    mutationCount: 0,
+    itemCount: elements.length,
+    firstText: elements[0]?.textContent ?? null,
+    lastText: elements[elements.length - 1]?.textContent ?? null,
+  }
+}
+
+function releaseHeap(): void {
+  retainedList = undefined
+  document.body.textContent = ''
+}
+
 declare global {
   interface Window {
     __listRuntimeBench: {
       measureMount: typeof measureMount
       measureUpdate: typeof measureUpdate
+      prepareHeap: typeof prepareHeap
+      releaseHeap: typeof releaseHeap
     }
   }
 }
 
-window.__listRuntimeBench = { measureMount, measureUpdate }
+window.__listRuntimeBench = { measureMount, measureUpdate, prepareHeap, releaseHeap }

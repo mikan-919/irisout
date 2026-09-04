@@ -18,9 +18,10 @@ listId / itemId / bindingIdを分離して保持し、値が変わったbinding�
 
 残る判断は、変更itemの直接通知によるkey全走査の省略、イベント委譲、更新バッチ。
 旧方式とaddressed runtimeを同じ実DOM fixtureで比較する基盤を
-`packages/bench/list-runtime.playwright.ts`に追加した。初回のChromium実測では
-現行方式のDOM mutation削減と速度改善を確認したが、メモリと方式別bundle sizeは
-未計測。これらも比較してから、どこまでを共有責務にするか後続ADRで決める。
+`packages/bench/list-runtime.playwright.ts`に追加し、時間・DOM mutation・方式別bundle・
+retained JS heapを計測した。N=10,000の1件更新は約23倍高速、bundleはgzipで339B増、
+mount後heapは約2.39倍だった。次はこの交換条件を基準に、変更itemの直接通知を別fixtureで
+比較してから、共有責務に加えるか後続ADRで決める。
 
 quixのビルド時トラッカー採用可否・list itemのイベント配線方式・authoring API
 ゾーン化(inline arrow併存含む)とM4/M5の実装順序は決着済み(それぞれ

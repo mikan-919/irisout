@@ -17,10 +17,13 @@ NixOSではPlaywright配布版Chromiumが共有ライブラリを解決できな
 PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=$(command -v chromium) bun run bench:list-runtime
 ```
 
-短い確認には環境変数で件数と反復回数を絞れる。
+短い確認には環境変数で件数、時間計測の反復回数、heap計測の反復回数を絞れる。
 
 ```bash
-IRISOUT_BENCH_SIZES=100,1000 IRISOUT_BENCH_REPEATS=3 bun run bench:list-runtime
+IRISOUT_BENCH_SIZES=100,1000 \
+IRISOUT_BENCH_REPEATS=3 \
+IRISOUT_BENCH_HEAP_REPEATS=2 \
+bun run bench:list-runtime
 ```
 
 ## 比較対象
@@ -41,8 +44,12 @@ List reconciliationとDOM反映だけを測る。
 - 全順序をreverse
 - 全件のbinding更新
 
-各セルはウォームアップ1回を捨て、既定7回の中央値を出す。時間に加えて
+各セルはウォームアップ1回を捨て、既定7回の時間中央値を出す。時間に加えて
 `MutationObserver`のrecord数を出し、最適化が実DOM操作を減らしたかも確認する。
+
+bundle sizeは方式ごとに独立entryをminifyし、raw byteとgzip byteを出す。heapは
+各方式を別pageでmountまたは更新し、CDPで強制GCした後のretained JS heap増分を
+既定3回の中央値で出す。DOM側のnative memoryやbrowser process全体のRSSは含まない。
 出力末尾のJSONは後続の結果記録や可視化に利用できる。
 
 ## 初回実測
@@ -60,15 +67,20 @@ List reconciliationとDOM反映だけを測る。
 | updateAll | 29.1ms |    13.6ms |              2.14x |                30,000 → 10,000 |
 
 現行方式がDOM mutationを意図どおり削減することは確認できた。一方、addressed方式も
-全key走査を続けるため、1件更新はN=1,000の0.2msからN=10,000の1.3msへ増える。
+全key走査を続けるため、1件更新はN=1,000の0.2msからN=10,000の1.2msへ増える。
 変更itemの直接通知を検討する際の比較基準として使う。
+
+方式別bundleとheap計測を追加した同環境の実測では、独立bundleがlegacyの
+2,565B / gzip 992Bに対し、addressedは3,363B / gzip 1,331Bだった。N=10,000 mount後の
+retained JS heapはlegacy 1,165,052B、addressed 2,783,148Bで、addressedが約2.39倍を
+使った。各itemのstateとbinding Mapを保持するコストが速度改善との明示的な交換条件になる。
 
 ## 現時点で測らないもの
 
 - 変更itemの直接通知(key全走査を省く案はまだ未実装)
 - microtask更新バッチ
 - イベント委譲
-- ブラウザheap
+- DOM native memoryとbrowser process全体のRSS
 
-heap比較はGCタイミングを固定できる専用fixtureと測定方法を決めてから追加する。
+retained JS heapは実行間の揺れがあるため絶対値ではなく、同一実行内の方式間比較に使う。
 このbenchmark単独の数値だけで次のruntime APIを決定しない。
