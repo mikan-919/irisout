@@ -65,8 +65,8 @@ function emitSignal(
   sourceRendered: string,
   out: RenderOutput,
 ): DeclId {
-  const id = toDeclId(`decl_${instanceId}_${declaratorStart}`)
-  ctx.declIdByKey.set(declKey(instanceId, declaratorStart), id)
+  const id = toDeclId(`decl_${instanceId}_${declaratorStart}_${naturalName}`)
+  ctx.declIdByKey.set(declKey(instanceId, declaratorStart, naturalName), id)
   ctx.declKind.set(id, 'signal')
   const outputName = assignOutputName(ctx, naturalName, id)
   // 出力: プレーン変数(ADR-0006) -- signal() ラッパーは出力に現れない。
@@ -98,8 +98,8 @@ function emitDerived(
     )
   }
 
-  const id = toDeclId(`decl_${instanceId}_${declaratorStart}`)
-  ctx.declIdByKey.set(declKey(instanceId, declaratorStart), id)
+  const id = toDeclId(`decl_${instanceId}_${declaratorStart}_${naturalName}`)
+  ctx.declIdByKey.set(declKey(instanceId, declaratorStart, naturalName), id)
   ctx.declKind.set(id, 'derived')
   const outputName = assignOutputName(ctx, naturalName, id)
 
@@ -199,8 +199,8 @@ function emitLocalSignal(
   naturalName: string,
   rendered: string,
 ): LocalDecl {
-  const id = toDeclId(`decl_${instanceId}_${declaratorStart}`)
-  ctx.declIdByKey.set(declKey(instanceId, declaratorStart), id)
+  const id = toDeclId(`decl_${instanceId}_${declaratorStart}_${naturalName}`)
+  ctx.declIdByKey.set(declKey(instanceId, declaratorStart, naturalName), id)
   ctx.declKind.set(id, 'signal')
   ctx.localDeclIds.add(id)
   const outputName = assignOutputName(ctx, naturalName, id)
@@ -226,8 +226,8 @@ function emitLocalDerived(
     )
   }
 
-  const id = toDeclId(`decl_${instanceId}_${declaratorStart}`)
-  ctx.declIdByKey.set(declKey(instanceId, declaratorStart), id)
+  const id = toDeclId(`decl_${instanceId}_${declaratorStart}_${naturalName}`)
+  ctx.declIdByKey.set(declKey(instanceId, declaratorStart, naturalName), id)
   ctx.declKind.set(id, 'derived')
   ctx.localDeclIds.add(id)
   const outputName = assignOutputName(ctx, naturalName, id)

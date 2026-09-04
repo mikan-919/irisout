@@ -1,57 +1,89 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
 exports[`golden: 生成コードの構造スナップショット > ADR-0009 ブロック本体ハンドラの code を固定する 1`] = `
-"import { mount, hydrate } from '@irisout/runtime';
+"import { mount as __mount__, hydrate as __hydrate__ } from '@irisout/runtime';
 
-export let count = 0;
+export function createComponent() {
+  let count = 0;
 
-const __INITIAL_HTML__ = "<div><span data-iris-id=\\"m0\\">0</span><button data-iris-id=\\"m1\\">+</button></div>";
+  const __INITIAL_HTML__ = "<div><span data-iris-id=\\"m0\\">0</span><button data-iris-id=\\"m1\\">+</button></div>";
 
-const __MARKER_IDS__ = ["m0","m1"];
+  const __MARKER_IDS__ = ["m0","m1"];
 
-const __handler_m1_click = (e, ...__args) => { if (e.detail > 1) return;
+  const __handler_m1_click = (e, ...__args) => { if (e.detail > 1) return;
     const n = count + 1;
     count = n;; update_count(); };
 
-let __markers__;
+  let __markers__;
+  function mount(container) {
+    ({ markers: __markers__ } = __mount__(container, __INITIAL_HTML__, __MARKER_IDS__));
+    __markers__.get("m1")?.addEventListener("click", __handler_m1_click);
+  }
+
+  function hydrateComponentInstance(container) {
+    ({ markers: __markers__ } = __hydrate__(container, __MARKER_IDS__));
+    __markers__.get("m1")?.addEventListener("click", __handler_m1_click);
+  }
+
+  function update_count() {
+    { const __el = __markers__.get("m0"); if (__el) { __el.textContent = \`\${count}\`; } }
+  }
+
+  return { mount, hydrate: hydrateComponentInstance, update_count };
+}
+
 export function mountComponent(container) {
-  ({ markers: __markers__ } = mount(container, __INITIAL_HTML__, __MARKER_IDS__));
-  __markers__.get("m1")?.addEventListener("click", __handler_m1_click);
+  const instance = createComponent();
+  instance.mount(container);
+  return instance;
 }
 
 export function hydrateComponent(container) {
-  ({ markers: __markers__ } = hydrate(container, __MARKER_IDS__));
-  __markers__.get("m1")?.addEventListener("click", __handler_m1_click);
-}
-
-export function update_count() {
-  { const __el = __markers__.get("m0"); if (__el) { __el.textContent = \`\${count}\`; } }
+  const instance = createComponent();
+  instance.hydrate(container);
+  return instance;
 }
 "
 `;
 
 exports[`golden: 生成コードの構造スナップショット > M1 フィクスチャの code と initialHtml を固定する 1`] = `
-"import { mount, hydrate } from '@irisout/runtime';
+"import { mount as __mount__, hydrate as __hydrate__ } from '@irisout/runtime';
 
-export let count = 0;
-export let doubled = count * 2;
+export function createComponent() {
+  let count = 0;
+  let doubled = count * 2;
 
-const __INITIAL_HTML__ = "<div data-iris-id=\\"m0\\">0</div>";
+  const __INITIAL_HTML__ = "<div data-iris-id=\\"m0\\">0</div>";
 
-const __MARKER_IDS__ = ["m0"];
+  const __MARKER_IDS__ = ["m0"];
 
-let __markers__;
+  let __markers__;
+  function mount(container) {
+    ({ markers: __markers__ } = __mount__(container, __INITIAL_HTML__, __MARKER_IDS__));
+  }
+
+  function hydrateComponentInstance(container) {
+    ({ markers: __markers__ } = __hydrate__(container, __MARKER_IDS__));
+  }
+
+  function update_count() {
+    doubled = count * 2;
+    { const __el = __markers__.get("m0"); if (__el) { __el.textContent = \`\${count + doubled}\`; } }
+  }
+
+  return { mount, hydrate: hydrateComponentInstance, update_count };
+}
+
 export function mountComponent(container) {
-  ({ markers: __markers__ } = mount(container, __INITIAL_HTML__, __MARKER_IDS__));
+  const instance = createComponent();
+  instance.mount(container);
+  return instance;
 }
 
 export function hydrateComponent(container) {
-  ({ markers: __markers__ } = hydrate(container, __MARKER_IDS__));
-}
-
-export function update_count() {
-  doubled = count * 2;
-  { const __el = __markers__.get("m0"); if (__el) { __el.textContent = \`\${count + doubled}\`; } }
+  const instance = createComponent();
+  instance.hydrate(container);
+  return instance;
 }
 "
 `;
@@ -59,31 +91,47 @@ export function update_count() {
 exports[`golden: 生成コードの構造スナップショット > M1 フィクスチャの code と initialHtml を固定する 2`] = `"<div data-iris-id="m0">0</div>"`;
 
 exports[`golden: 生成コードの構造スナップショット > M2 フィクスチャの code を固定する 1`] = `
-"import { mount, hydrate } from '@irisout/runtime';
+"import { mount as __mount__, hydrate as __hydrate__ } from '@irisout/runtime';
 
-export let count = 0;
-export let doubled = count * 2;
+export function createComponent() {
+  let count = 0;
+  let doubled = count * 2;
 
-const __INITIAL_HTML__ = "<div><span data-iris-id=\\"m0\\">0</span><button data-iris-id=\\"m1\\">+</button></div>";
+  const __INITIAL_HTML__ = "<div><span data-iris-id=\\"m0\\">0</span><button data-iris-id=\\"m1\\">+</button></div>";
 
-const __MARKER_IDS__ = ["m0","m1"];
+  const __MARKER_IDS__ = ["m0","m1"];
 
-const __handler_m1_click = (...__args) => { count = count + 1; update_count(); };
+  const __handler_m1_click = (...__args) => { count = count + 1; update_count(); };
 
-let __markers__;
+  let __markers__;
+  function mount(container) {
+    ({ markers: __markers__ } = __mount__(container, __INITIAL_HTML__, __MARKER_IDS__));
+    __markers__.get("m1")?.addEventListener("click", __handler_m1_click);
+  }
+
+  function hydrateComponentInstance(container) {
+    ({ markers: __markers__ } = __hydrate__(container, __MARKER_IDS__));
+    __markers__.get("m1")?.addEventListener("click", __handler_m1_click);
+  }
+
+  function update_count() {
+    doubled = count * 2;
+    { const __el = __markers__.get("m0"); if (__el) { __el.textContent = \`\${count + doubled}\`; } }
+  }
+
+  return { mount, hydrate: hydrateComponentInstance, update_count };
+}
+
 export function mountComponent(container) {
-  ({ markers: __markers__ } = mount(container, __INITIAL_HTML__, __MARKER_IDS__));
-  __markers__.get("m1")?.addEventListener("click", __handler_m1_click);
+  const instance = createComponent();
+  instance.mount(container);
+  return instance;
 }
 
 export function hydrateComponent(container) {
-  ({ markers: __markers__ } = hydrate(container, __MARKER_IDS__));
-  __markers__.get("m1")?.addEventListener("click", __handler_m1_click);
-}
-
-export function update_count() {
-  doubled = count * 2;
-  { const __el = __markers__.get("m0"); if (__el) { __el.textContent = \`\${count + doubled}\`; } }
+  const instance = createComponent();
+  instance.hydrate(container);
+  return instance;
 }
 "
 `;

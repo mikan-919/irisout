@@ -156,8 +156,9 @@ export interface TrackedFn {
 export interface CompilerState {
   source: string
 
-  // key: `${instanceId}:${declaratorStart}` -> declId。同じ declarator ノードは
-  // コンポーネントのインスタンスごとに再訪されるので複合キーにしている。
+  // key: `${instanceId}:${declaratorStart}:${bindingName}` -> declId。同じ
+  // コンポーネントを複数箇所へインライン化するとstart位置は同じになるため、
+  // hygienic rename後のbinding名まで含めて呼び出し箇所を区別する。
   declIdByKey: Map<string, DeclId>
   declKind: Map<DeclId, DeclKind>
   declOutputName: Map<DeclId, string> // declId -> hygienic な出力識別子
@@ -215,7 +216,8 @@ export function createCompilerState(source: string): CompilerState {
   }
 }
 
-export const declKey = (instanceId: number, start: number): string => `${instanceId}:${start}`
+export const declKey = (instanceId: number, start: number, bindingName: string): string =>
+  `${instanceId}:${start}:${bindingName}`
 
 export function nextMarkerId(ctx: CompilerState): MarkerId {
   return toMarkerId(`m${ctx.markerCounter++}`)

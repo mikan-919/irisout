@@ -1,6 +1,7 @@
 // 最終 codegen:コンパイラが収集した結果(フラット化された宣言文、マーカー、
-// signal->marker 依存グラフ)から、mountComponent() とルート signal ごとの
-// update_<name>() を持つ1つの ES モジュールを組み立てる。
+// signal->marker 依存グラフ)から、createComponent()でインスタンス専有stateと
+// update_<name>()を作るESモジュールを組み立てる。mountComponent()/
+// hydrateComponent()は毎回新しいインスタンスを生成する互換エントリポイント。
 // ここは文字列組み立てのみ - AST もコンパイラ状態も触らない。
 //
 // ADR-0006: 宣言はプレーン変数として出力される(signal()/derived() ラッパー
@@ -328,8 +329,8 @@ interface StructuralUnitsCode {
 }
 
 // リスト/条件分岐マーカーぶんの <template> 変数・factory 関数・(リストのみ)
-// keyed Map を module スコープに、テンプレートの実体生成(document 依存)は
-// mountComponent/hydrateComponent 内で行う行を別に組み立てる。
+// keyed Map をcomponent instanceスコープに置き、テンプレートの実体生成
+// (document依存)はmount/hydrate内で行う行を別に組み立てる。
 function generateStructuralUnits(
   markers: MarkerOutput[],
   signalToMarkers: Map<DeclId, Set<MarkerId>>,
@@ -346,9 +347,9 @@ function generateStructuralUnits(
     declLines.push('let __doc__;', FIND_HELPER, '')
   }
 
-  // M5.5: ネストしたユニットの <template> は静的な文字列なので、module
-  // スコープに1つ置けば全 factory インスタンスで共有できる(keyed Map・
-  // 状態変数・factory 関数は外側 factory のクロージャ内 ― generateFactory 参照)。
+  // M5.5: ネストしたユニットの <template> はcomponent instanceに1つ置いて
+  // その中のfactory間で共有する(keyed Map・状態変数・factory関数は外側
+  // factoryのクロージャ内 ― generateFactory参照)。
   const emitNestedUnitTemplates = (body: StructuralUnitBodyOutput): void => {
     for (const u of bodyUnits(body)) {
       if (u.kind === 'list') {
@@ -505,8 +506,9 @@ export function generateModule({
   emittedFns,
   initialHtml,
 }: GenerateModuleInput): string {
-  const outLines: string[] = []
-  const runtimeImports = ['mount', 'hydrate']
+  const moduleLines: string[] = []
+  const instanceLines: string[] = []
+  const runtimeImports = ['mount as __mount__', 'hydrate as __hydrate__']
   if (markersHaveList(markers)) {
     runtimeImports.push(
       'createListRuntime as __createListRuntime__',
@@ -514,16 +516,16 @@ export function generateModule({
       'updateListBinding as __updateListBinding__',
     )
   }
-  outLines.push(`import { ${runtimeImports.join(', ')} } from '@irisout/runtime';`, '')
-  outLines.push(...declStatements.map((s) => `export ${s}`), '')
-  // cross-function-handler-writes design D4: 追跡された動きゾーン関数を authored
-  // 名のままモジュールスコープへ emit する(update_*() は本体に入れない — D3)。
-  // 関数宣言なので hoist され、ハンドラ/他の追跡関数からそのまま呼べる。
+  moduleLines.push(`import { ${runtimeImports.join(', ')} } from '@irisout/runtime';`, '')
+  instanceLines.push(...declStatements, '')
+  // cross-function-handler-writes design D4: 追跡された動きゾーン関数をauthored
+  // 名のままinstanceスコープへemitする(update_*()は本体に入れない — D3)。
+  // 関数宣言なのでhoistされ、ハンドラ/他の追跡関数からそのまま呼べる。
   for (const fn of emittedFns) {
-    outLines.push(`function ${fn.name}(${fn.params}) {${fn.body}}`)
+    instanceLines.push(`function ${fn.name}(${fn.params}) {${fn.body}}`)
   }
-  if (emittedFns.length > 0) outLines.push('')
-  outLines.push(`const __INITIAL_HTML__ = ${JSON.stringify(initialHtml)};`, '')
+  if (emittedFns.length > 0) instanceLines.push('')
+  instanceLines.push(`const __INITIAL_HTML__ = ${JSON.stringify(initialHtml)};`, '')
 
   // 検証用の期待マーカー ID(トップレベルマーカー全部+ハンドラのみの
   // マーカー)。factory 内部のローカルマーカーは <template> 由来で欠落
@@ -536,27 +538,29 @@ export function generateModule({
       ...attrBindings.map((b) => b.markerId),
     ]),
   ]
-  outLines.push(`const __MARKER_IDS__ = ${JSON.stringify(markerIds)};`, '')
+  instanceLines.push(`const __MARKER_IDS__ = ${JSON.stringify(markerIds)};`, '')
 
   const { declLines, templateSetupLines, signalsNeedingInitialCall } = generateStructuralUnits(
     markers,
     signalToMarkers,
   )
-  if (declLines.length > 0) outLines.push(...declLines, '')
+  if (declLines.length > 0) instanceLines.push(...declLines, '')
 
-  // 返り値クロージャを持つactionだけ、それを保持するモジュールスコープ変数を
+  // 返り値クロージャを持つactionだけ、それを保持するinstanceスコープ変数を
   // 宣言する(design Decision 5: クロージャが無ければ機構自体を出力しない)。
   const actionDeclLines = actions
     .filter((a) => a.closureRendered)
     .map((a) => `let __use_${a.markerId}__;`)
-  if (actionDeclLines.length > 0) outLines.push(...actionDeclLines, '')
+  if (actionDeclLines.length > 0) instanceLines.push(...actionDeclLines, '')
 
   // ハンドラのラッパー関数:元のハンドラ本体(書き込みは代入済み)を実行した
   // 後、そのハンドラが書き込んだ signal ぶんの update_* をまとめて呼ぶ。
   for (const h of handlers) {
-    outLines.push(`const __handler_${h.markerId}_${h.eventName} = ${renderHandlerCall(h, null)};`)
+    instanceLines.push(
+      `const __handler_${h.markerId}_${h.eventName} = ${renderHandlerCall(h, null)};`,
+    )
   }
-  if (handlers.length > 0) outLines.push('')
+  if (handlers.length > 0) instanceLines.push('')
 
   // mountComponent と hydrateComponent で共有する addEventListener 配線行
   // (markers の取得手段だけが違う: innerHTML 書き込みありか、なしか)。
@@ -579,18 +583,18 @@ export function generateModule({
   // 初期update_*(populate) → action呼び出し+返り値クロージャ初期実行。
   const actionCallLines = actions.map((a) => `  ${renderActionCall(a)}`)
 
-  outLines.push(
+  instanceLines.push(
     'let __markers__;',
-    'export function mountComponent(container) {',
-    '  ({ markers: __markers__ } = mount(container, __INITIAL_HTML__, __MARKER_IDS__));',
+    'function mount(container) {',
+    '  ({ markers: __markers__ } = __mount__(container, __INITIAL_HTML__, __MARKER_IDS__));',
     ...docSetupLines,
     ...setupLines,
     ...initialUpdateCalls,
     ...actionCallLines,
     '}',
     '',
-    'export function hydrateComponent(container) {',
-    '  ({ markers: __markers__ } = hydrate(container, __MARKER_IDS__));',
+    'function hydrateComponentInstance(container) {',
+    '  ({ markers: __markers__ } = __hydrate__(container, __MARKER_IDS__));',
     ...docSetupLines,
     ...setupLines,
     ...initialUpdateCalls,
@@ -620,35 +624,35 @@ export function generateModule({
 
   for (const [signalId, markerIds] of signalToMarkers) {
     const name = declOutputName.get(signalId)
-    outLines.push(`export function update_${name}() {`)
+    instanceLines.push(`function update_${name}() {`)
     for (const derivedId of signalToDerivedRecomputes.get(signalId) ?? []) {
-      outLines.push(`  ${declOutputName.get(derivedId)} = ${derivedRecompute.get(derivedId)};`)
+      instanceLines.push(`  ${declOutputName.get(derivedId)} = ${derivedRecompute.get(derivedId)};`)
     }
     for (const mId of markerIds) {
       // 動的属性の再設定(属性のみの marker id は markers に実体を持たない
       // ため、marker 解決より先に処理する)。
       const bindings = attrsByMarker.get(mId)
       if (bindings) {
-        outLines.push(
+        instanceLines.push(
           `  { const __el = __markers__.get(${JSON.stringify(mId)}); if (__el) { ${bindings.map((b) => renderAttrSet('__el', b)).join(' ')} } }`,
         )
       }
       const marker = markers.find((m) => m.id === mId)
       if (!marker) continue
       if (marker.kind === 'text') {
-        outLines.push(
+        instanceLines.push(
           `  { const __el = __markers__.get(${JSON.stringify(mId)}); if (__el) { __el.textContent = \`${innerTemplateSource(marker.contentParts)}\`; } }`,
         )
       } else if (marker.kind === 'list') {
-        outLines.push(
+        instanceLines.push(
           ...generateListUpdate(marker, `__markers__.get(${JSON.stringify(marker.id)})`),
         )
       } else if (marker.kind === 'action') {
         // design Decision 5: ガード付き呼び出し(action呼び出し前のpopulate中は
         // __use_<id>__ が未初期化のため)。
-        outLines.push(`  if (__use_${mId}__) __use_${mId}__();`)
+        instanceLines.push(`  if (__use_${mId}__) __use_${mId}__();`)
       } else {
-        outLines.push(
+        instanceLines.push(
           ...generateConditionalUpdate(
             marker,
             `__markers__.get(${JSON.stringify(marker.id)})`,
@@ -657,8 +661,31 @@ export function generateModule({
         )
       }
     }
-    outLines.push('}', '')
+    instanceLines.push('}', '')
   }
 
-  return outLines.join('\n')
+  const updateNames = [...signalToMarkers.keys()].map((id) => `update_${declOutputName.get(id)}`)
+  instanceLines.push(
+    `return { mount, hydrate: hydrateComponentInstance${updateNames.map((name) => `, ${name}`).join('')} };`,
+  )
+
+  moduleLines.push('export function createComponent() {')
+  moduleLines.push(...instanceLines.map((line) => (line ? `  ${line}` : '')))
+  moduleLines.push('}', '')
+  moduleLines.push(
+    'export function mountComponent(container) {',
+    '  const instance = createComponent();',
+    '  instance.mount(container);',
+    '  return instance;',
+    '}',
+    '',
+    'export function hydrateComponent(container) {',
+    '  const instance = createComponent();',
+    '  instance.hydrate(container);',
+    '  return instance;',
+    '}',
+    '',
+  )
+
+  return moduleLines.join('\n')
 }

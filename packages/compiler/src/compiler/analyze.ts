@@ -33,7 +33,7 @@ function resolveDeclId(
   if (binding?.path.node.type !== 'VariableDeclarator') return null
   const start = binding.path.node.start
   if (start == null) return null
-  return ctx.declIdByKey.get(declKey(instanceId, start)) ?? null
+  return ctx.declIdByKey.get(declKey(instanceId, start, binding.identifier.name)) ?? null
 }
 
 // same-file-component-composition (ADR-0014決定5): 名前衝突時、

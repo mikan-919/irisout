@@ -32,11 +32,11 @@ describe('initial-html-escaping: 初期表示と実行時更新の表示同一�
     const { code } = compile(injectionSource(value))
     const mod = await loadGenerated(code)
     const container = createContainer()
-    ;(mod.mountComponent as (c: Element) => void)(container)
+    const instance = (mod.mountComponent as (c: Element) => { update_msg(): void })(container)
 
     const before = container.textContent
     expect(before).toContain(value)
-    ;(mod.update_msg as () => void)()
+    instance.update_msg()
     expect(container.textContent).toBe(before)
   })
 })

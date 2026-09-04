@@ -22,6 +22,9 @@ listId / itemId / bindingIdを分離して保持し、値が変わったbinding�
 残すと利点が消える。製品導入は明示的なcollection更新APIの設計まで延期し、現行runtimeは
 変更しない。
 
+component instance境界は実装済み(ADR-0018)。生成moduleの複数mount/hydrateと、
+stateを持つ同じ子componentの複数使用を独立させた。
+
 残るruntime判断はイベント委譲と更新バッチ。collection更新APIを検討する場合は、
 ADR-0017のdirect fixtureを比較基準にする。
 
@@ -264,6 +267,9 @@ transition/animation、portal、error boundary、async/resource
     先送りされていた`use=`のJSX型定義(ADR-0011 design.md Decision 6)も
     あわせて解消した。属性名レベルの厳密化・コンポーネントprops型の
     厳密な推論は引き続き未対応(詳細はSTATUS.md既知の制約参照)。
+11. ~~component instance境界~~ — **完了**(ADR-0018)。生成コードを
+    `createComponent()`クロージャへ移し、同じ生成moduleの複数mount/hydrateと、
+    stateを持つ同じ子componentの複数使用を独立させた。
 
 ## 参考資料
 

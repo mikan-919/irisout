@@ -11,6 +11,14 @@ Bun testからVite+ Testへ移行し、exampleはVite pluginがauthored JSXをco
 初期HTMLとhydrate専用bundleを生成する。package managerには引き続きBunを使うが、
 プロジェクトコードは`bun:test`と`Bun.build`へ依存しない。
 
+## 現在地(2026-09-04・component instance境界)
+
+生成コードを`createComponent()` factoryで囲み、signal / derived、marker、handler、
+List runtime、conditional状態、`use=`返り値、`update_*`をroot instanceごとの
+クロージャへ移した(ADR-0018)。`mountComponent()` / `hydrateComponent()`は毎回
+新しいinstanceを生成して返すため、同じ生成moduleを複数containerで独立して使える。
+stateを持つ同じ子componentをroot内で複数回インライン化した場合のDeclId衝突も解消した。
+
 ## 現在地(2026-09-04・List最小ランタイム第1段階)
 
 CONCEPT.v3への移行に伴い、List更新を共有最小ランタイムへ切り出した
@@ -100,18 +108,18 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
 
 ## マイルストーン表
 
-| M      | 内容                                                                                        | 状態     | 備考                                                                                                                                                                                                                                                             |
-| ------ | ------------------------------------------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| M1     | スキャフォールド、signal/derived、テキストマーカー                                          | **DONE** | `0155e85`                                                                                                                                                                                                                                                        |
-| M2     | イベントハンドラ、書き込みトリガー更新                                                      | **DONE** | `810bc83`→`645a820`、plan 005                                                                                                                                                                                                                                    |
-| M3     | ブラウザビルドターゲット(hydrate/mount分割 + `scripts/build.ts`)                            | **DONE** | `a2905c8`、plan 001                                                                                                                                                                                                                                              |
-| M4     | 静的host要素属性                                                                            | **DONE** | `9829f88`、change `m4-static-host-attributes`                                                                                                                                                                                                                    |
-| M4.5   | authoring APIゾーン化(ADR-0008)                                                             | **DONE** | change `authoring-api-zones`。render()マーカー・識別子参照ハンドラ・ゾーン配置強制                                                                                                                                                                               |
-| M5     | list/conditional factory closures、1階層のみ(ADR-0005の新実装)                              | **DONE** | change `m5-list-conditional-factory-closures`。ネストした構造ユニット(06/07)は据え置き                                                                                                                                                                           |
-| M5.5   | ネストした構造ユニット(条件分岐の中のリスト/リストアイテムの中の条件分岐、UNRESOLVED-06/07) | **DONE** | change `m5-5-nested-structural-units`。1階層ネストのみ、2階層以上は引き続きscope limit                                                                                                                                                                           |
-| `use=` | top-level要素へのaction接続(ADR-0011)                                                       | **DONE** | change `use-action-impl`。ユニット内`use=`・JSX型宣言は未実装のまま(下記制約参照)                                                                                                                                                                                |
-| M6     | 全マイルストーン横断のno-wrapper検証                                                        | **DONE** | change `m6-no-wrapper-verification`。全機能同居フィクスチャで no-wrapper・import面・実DOM動作を固定(`test/no-wrapper.test.ts`)。サイズ予算係数は 4x のまま据え置き(counter が固定費支配の最悪ケースのため。締め直しは minify 着手時に再検討 ― ROADMAP「minify」) |
-| 合成   | 同一ファイル内の複数コンポーネント合成(ADR-0014)                                            | **DONE** | change `same-file-component-composition`。コンパイル時ASTインライン化、root scope + list itemのみ、children/slot・再帰・複数ファイルは未対応のまま(下記制約参照)                                                                                                 |
+| M      | 内容                                                                                        | 状態     | 備考                                                                                                                                                                                                                                      |
+| ------ | ------------------------------------------------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M1     | スキャフォールド、signal/derived、テキストマーカー                                          | **DONE** | `0155e85`                                                                                                                                                                                                                                 |
+| M2     | イベントハンドラ、書き込みトリガー更新                                                      | **DONE** | `810bc83`→`645a820`、plan 005                                                                                                                                                                                                             |
+| M3     | ブラウザビルドターゲット(hydrate/mount分割 + `scripts/build.ts`)                            | **DONE** | `a2905c8`、plan 001                                                                                                                                                                                                                       |
+| M4     | 静的host要素属性                                                                            | **DONE** | `9829f88`、change `m4-static-host-attributes`                                                                                                                                                                                             |
+| M4.5   | authoring APIゾーン化(ADR-0008)                                                             | **DONE** | change `authoring-api-zones`。render()マーカー・識別子参照ハンドラ・ゾーン配置強制                                                                                                                                                        |
+| M5     | list/conditional factory closures、1階層のみ(ADR-0005の新実装)                              | **DONE** | change `m5-list-conditional-factory-closures`。ネストした構造ユニット(06/07)は据え置き                                                                                                                                                    |
+| M5.5   | ネストした構造ユニット(条件分岐の中のリスト/リストアイテムの中の条件分岐、UNRESOLVED-06/07) | **DONE** | change `m5-5-nested-structural-units`。1階層ネストのみ、2階層以上は引き続きscope limit                                                                                                                                                    |
+| `use=` | top-level要素へのaction接続(ADR-0011)                                                       | **DONE** | change `use-action-impl`。ユニット内`use=`・JSX型宣言は未実装のまま(下記制約参照)                                                                                                                                                         |
+| M6     | 全マイルストーン横断のno-wrapper検証                                                        | **DONE** | change `m6-no-wrapper-verification`。全機能同居フィクスチャで no-wrapper・import面・実DOM動作を固定(`test/no-wrapper.test.ts`)。サイズ予算係数はADR-0018のinstance factory固定費に合わせ4.5x(実測4.38x)。締め直しはminify最適化時に再検討 |
+| 合成   | 同一ファイル内の複数コンポーネント合成(ADR-0014)                                            | **DONE** | change `same-file-component-composition`。コンパイル時ASTインライン化、root scope + list itemのみ、children/slot・再帰・複数ファイルは未対応のまま(下記制約参照)                                                                          |
 
 ## 既知の制約(現時点のcodegenの限界)
 
@@ -124,27 +132,10 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
   出力に反映されず黙って捨てられるため、拒否が正直な挙動。分割代入宣言子
   (`const [a] = signal(0)` 等)も同様に拒否。ビルド時実行の例外は
   `compile: build-time execution failed:`(`cause` 付き)に包まれる。
-- **複数インスタンス不可**、ただし2つの別物が混ざっているので分けて書く:
-  - (a) _リスト内でのN件ベンチマーク_(例: 1コンポーネント内で1万件の
-    リストアイテムを持つ場合の性能・状態保持)は、ADR-0005のfactory
-    closureで解決済み(M5)。
-  - (b) _トップレベルコンポーネント自体の複数mount_(同じコンポーネントを
-    2つ以上のコンテナへ`mountComponent`/`hydrateComponent`する)は別問題。
-    `__markers__`・`update_*`がモジュール直下スコープで生成される設計
-    (`src/codegen.ts:68`の`let __markers__;`)のため、M5(list item
-    factory closure)が入っても解消しない。トップレベルのmount/hydrate
-    自体をfactory化する変更が別途必要になるが、**未計画・未着手**で、
-    ロードマップ上のどのマイルストーンにも属さない。実需が出た時点で
-    設計判断すること。
-    (補足) Reactの`ref`が条件分岐で`null`になるのとは性質が違う ―
-    Reactのnullは「要素が今存在するか」を表す正常な状態遷移だが、
-    `__markers__`のnullは「同じ変数を複数のライフサイクルインスタンスで
-    共有している」ことそのものが原因で、mount/hydrateのたびに正しく
-    出し入れされる設計にはなっていない。根本的な違和感は「`__markers__`が
-    暗黙に(呼び出し順序の慣習だけを頼りに)書き込まれる」こと自体にある。
-    ADR-0005のfactory closureパターンをトップレベルにも広げれば構造的に
-    解消できるが、それはAPIの大きな変更を伴う。実需が出るまでは着手しない
-    (2026-07-05 grillingで確認済み)。
+- **複数インスタンスは対応済み**(ADR-0018): 同じ生成moduleを複数containerへ
+  mount/hydrateした場合と、stateを持つ同じ子componentをroot内で複数回使う場合の
+  どちらもstate・marker・handler・構造ユニット状態が独立する。1つの
+  `createComponent()`戻り値を複数rootへmountする使い方は保証しない。
 - 静的host属性はM4、動的(式コンテナ)host属性値はADR-0012(change
   `dynamic-attribute-bindings`)で実装済み。attribute/property の使い分けは
   固定表(`checked` = booleanプロパティ、`value` = 文字列プロパティ、他は

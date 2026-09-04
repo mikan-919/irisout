@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test'
 import { spawnSync } from 'node:child_process'
-import { readFileSync, statSync } from 'node:fs'
+import { mkdtempSync, readFileSync, statSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { compile } from '../src/compiler.js'
 
@@ -96,13 +97,17 @@ describe('golden: signal/derived ラッパー非混入(ADR-0006 回帰チェッ�
 })
 
 describe('golden: 手書き基準に対するサイズ予算', () => {
-  it('dist/app.js は手書き基準(apps/examples/counter.handwritten.js)の4倍以内', () => {
-    const outDir = path.resolve('apps/examples/dist-size-test')
+  it('dist/app.js は手書き基準(apps/examples/counter.handwritten.js)の4.5倍以内', () => {
+    const outDir = mkdtempSync(path.join(tmpdir(), 'irisout-size-test-'))
     const result = spawnSync(
       path.resolve('node_modules/.bin/vp'),
       ['-C', 'apps/examples', 'build'],
       {
-        env: { ...process.env, IRISOUT_OUT_DIR: outDir },
+        env: {
+          ...process.env,
+          IRISOUT_ENTRY: path.resolve('apps/examples/counter.jsx'),
+          IRISOUT_OUT_DIR: outDir,
+        },
       },
     )
     expect(result.status).toBe(0)
@@ -126,10 +131,12 @@ describe('golden: 手書き基準に対するサイズ予算', () => {
     // 2026-07-18: hydration-marker-verification のランタイム検証(固定費)で
     // 3x を超えたため 4x へ引き上げ(loud-hydration-mismatch の spec delta 参照。
     // 生成コード側の肥大化ではない)。
+    // 2026-09-04: ADR-0018のcomponent instance factoryという意図した固定費で
+    // 4.38xになったため、直近の余白だけを持つ4.5xへ更新した。
     console.log(
-      `[size budget] dist/app.js=${appBytes}B / handwritten=${baselineBytes}B = ${ratio.toFixed(2)}x (budget 4x)`,
+      `[size budget] dist/app.js=${appBytes}B / handwritten=${baselineBytes}B = ${ratio.toFixed(2)}x (budget 4.5x)`,
     )
 
-    expect(appBytes).toBeLessThanOrEqual(baselineBytes * 4)
+    expect(appBytes).toBeLessThanOrEqual(baselineBytes * 4.5)
   })
 })

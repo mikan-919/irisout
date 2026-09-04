@@ -41,11 +41,12 @@ describe('milestone 1: expression dependency analysis -> update_* codegen', () =
     const { code } = compile(COUNTER_SOURCE)
     const mod = await loadGenerated(code)
 
-    expect(typeof mod.update_count).toBe('function')
+    expect(mod.update_count).toBeUndefined()
     expect(mod.update_doubled).toBeUndefined()
 
     const container = createContainer()
-    ;(mod.mountComponent as (c: Element) => void)(container)
+    const instance = (mod.mountComponent as (c: Element) => { update_count(): void })(container)
+    expect(typeof instance.update_count).toBe('function')
     expect(container.querySelector('[data-iris-id="m0"]')?.textContent).toBe('0')
 
     // M1 has no handler wiring yet (that lands in M2), so there is no
@@ -54,7 +55,7 @@ describe('milestone 1: expression dependency analysis -> update_* codegen', () =
     // M2's handler tests, driven by a real dispatched DOM event. Here we
     // only confirm update_count() runs without throwing and stays
     // consistent with the current (unchanged) state.
-    ;(mod.update_count as () => void)()
+    instance.update_count()
     expect(container.querySelector('[data-iris-id="m0"]')?.textContent).toBe('0')
   })
 
