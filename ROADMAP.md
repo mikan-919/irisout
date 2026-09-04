@@ -16,12 +16,14 @@ listId / itemId / bindingIdを分離して保持し、値が変わったbinding�
 反映する。順序が同じitemの再挿入も行わない。仮想DOM、Fiber、汎用スケジューラは
 導入していない。
 
-残る判断は、変更itemの直接通知によるkey全走査の省略、イベント委譲、更新バッチ。
-旧方式とaddressed runtimeを同じ実DOM fixtureで比較する基盤を
-`packages/bench/list-runtime.playwright.ts`に追加し、時間・DOM mutation・方式別bundle・
-retained JS heapを計測した。N=10,000の1件更新は約23倍高速、bundleはgzipで339B増、
-mount後heapは約2.39倍だった。次はこの交換条件を基準に、変更itemの直接通知を別fixtureで
-比較してから、共有責務に加えるか後続ADRで決める。
+変更itemの直接通知は比較済み(ADR-0017)。N=10,000の反復1件更新ではaddressedの
+0.870ms/件に対してdirectは0.001ms/件、追加コストは比較fixtureでgzip +50B、heapは
+ほぼ同等だった。ただし現行の配列setterは変更item IDを供給できず、ID発見の全走査を
+残すと利点が消える。製品導入は明示的なcollection更新APIの設計まで延期し、現行runtimeは
+変更しない。
+
+残るruntime判断はイベント委譲と更新バッチ。collection更新APIを検討する場合は、
+ADR-0017のdirect fixtureを比較基準にする。
 
 quixのビルド時トラッカー採用可否・list itemのイベント配線方式・authoring API
 ゾーン化(inline arrow併存含む)とM4/M5の実装順序は決着済み(それぞれ

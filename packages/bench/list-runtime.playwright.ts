@@ -4,7 +4,7 @@ import path from 'node:path'
 import { gzipSync } from 'node:zlib'
 import { build } from 'vite-plus'
 import { chromium, type CDPSession, type Page } from 'playwright'
-import type { ListRuntimeResult } from './list-runtime-driver.ts'
+import type { DirectNotificationResult, ListRuntimeResult } from './list-runtime-driver.ts'
 
 const SIZES = (process.env.IRISOUT_BENCH_SIZES ?? '100,1000,10000')
   .split(',')
@@ -12,7 +12,8 @@ const SIZES = (process.env.IRISOUT_BENCH_SIZES ?? '100,1000,10000')
   .filter((size) => Number.isSafeInteger(size) && size > 0)
 const REPEATS = Number(process.env.IRISOUT_BENCH_REPEATS ?? 7)
 const HEAP_REPEATS = Number(process.env.IRISOUT_BENCH_HEAP_REPEATS ?? 3)
-const IMPLEMENTATIONS = ['legacy', 'addressed'] as const
+const NOTIFICATION_ITERATIONS = Number(process.env.IRISOUT_BENCH_NOTIFICATION_ITERATIONS ?? 100)
+const IMPLEMENTATIONS = ['legacy', 'addressed', 'direct'] as const
 const SCENARIOS = ['mount', 'updateOne', 'appendOne', 'removeOne', 'reverse', 'updateAll'] as const
 
 type Implementation = (typeof IMPLEMENTATIONS)[number]
@@ -25,6 +26,11 @@ interface MedianResult extends Omit<ListRuntimeResult, 'elapsedMs' | 'mutationCo
 
 interface HeapResult {
   retainedJsHeapBytes: number
+}
+
+interface MedianNotificationResult extends DirectNotificationResult {
+  elapsedMs: number
+  elapsedPerUpdateMs: number
 }
 
 interface Bundle {
@@ -72,6 +78,10 @@ function median(values: number[]): number {
   return sorted[Math.floor(sorted.length / 2)]!
 }
 
+function ratio(numerator: number, denominator: number): string {
+  return denominator > 0 ? `${(numerator / denominator).toFixed(2)}x` : 'n/a'
+}
+
 async function createPage(implementation: Implementation): Promise<Page> {
   const page = await browser.newPage()
   await page.setContent('<!doctype html><meta charset="utf-8"><body></body>')
@@ -106,6 +116,7 @@ async function measure(
       (run) =>
         run.itemCount === reference.itemCount &&
         run.firstText === reference.firstText &&
+        run.middleText === reference.middleText &&
         run.lastText === reference.lastText,
     )
   ) {
@@ -116,7 +127,36 @@ async function measure(
     mutationCount: median(runs.map((run) => run.mutationCount)),
     itemCount: reference.itemCount,
     firstText: reference.firstText,
+    middleText: reference.middleText,
     lastText: reference.lastText,
+  }
+}
+
+async function measureNotification(
+  implementation: 'addressed' | 'direct',
+  size: number,
+): Promise<MedianNotificationResult> {
+  const page = await createPage(implementation)
+  const run = () =>
+    page.evaluate(
+      ([size, iterations]) => window.__listRuntimeBench.measureRepeatedUpdateOne(size, iterations),
+      [size, NOTIFICATION_ITERATIONS] as const,
+    )
+
+  await run()
+  const runs: DirectNotificationResult[] = []
+  for (let repeat = 0; repeat < REPEATS; repeat++) runs.push(await run())
+  await page.close()
+
+  const middleText = runs[0]!.middleText
+  if (!runs.every((run) => run.middleText === middleText)) {
+    throw new Error(`Unstable notification result: ${implementation}/N=${size}`)
+  }
+  const elapsedMs = median(runs.map((run) => run.elapsedMs))
+  return {
+    elapsedMs,
+    elapsedPerUpdateMs: elapsedMs / NOTIFICATION_ITERATIONS,
+    middleText,
   }
 }
 
@@ -189,6 +229,11 @@ if (!Number.isSafeInteger(REPEATS) || REPEATS < 1) {
 if (!Number.isSafeInteger(HEAP_REPEATS) || HEAP_REPEATS < 1) {
   throw new Error(`IRISOUT_BENCH_HEAP_REPEATS must be a positive integer: ${HEAP_REPEATS}`)
 }
+if (!Number.isSafeInteger(NOTIFICATION_ITERATIONS) || NOTIFICATION_ITERATIONS < 1) {
+  throw new Error(
+    `IRISOUT_BENCH_NOTIFICATION_ITERATIONS must be a positive integer: ${NOTIFICATION_ITERATIONS}`,
+  )
+}
 if (SIZES.length === 0) throw new Error('IRISOUT_BENCH_SIZES must contain a positive integer')
 
 const browser = await chromium.launch({
@@ -197,6 +242,7 @@ const browser = await chromium.launch({
 })
 const results: Record<string, Record<string, Record<string, MedianResult>>> = {}
 const heap: Record<string, Record<string, Record<string, HeapResult>>> = {}
+const notification: Record<string, Record<'addressed' | 'direct', MedianNotificationResult>> = {}
 
 console.log('\n=== List runtime bundle size ===')
 for (const implementation of IMPLEMENTATIONS) {
@@ -213,32 +259,63 @@ try {
     results[size] = {}
     heap[size] = {}
     for (const scenario of SCENARIOS) {
-      const legacy = await measure('legacy', scenario, size)
-      const addressed = await measure('addressed', scenario, size)
+      const measured = {} as Record<Implementation, MedianResult>
+      for (const implementation of IMPLEMENTATIONS) {
+        measured[implementation] = await measure(implementation, scenario, size)
+      }
+      const reference = measured.legacy
       if (
-        legacy.itemCount !== addressed.itemCount ||
-        legacy.firstText !== addressed.firstText ||
-        legacy.lastText !== addressed.lastText
+        !IMPLEMENTATIONS.every((implementation) => {
+          const result = measured[implementation]
+          return (
+            result.itemCount === reference.itemCount &&
+            result.firstText === reference.firstText &&
+            result.middleText === reference.middleText &&
+            result.lastText === reference.lastText
+          )
+        })
       ) {
         throw new Error(`Implementations disagree: ${scenario}/N=${size}`)
       }
-      results[size]![scenario] = { legacy, addressed }
+      results[size]![scenario] = measured
 
-      const legacyHeap = await measureHeap('legacy', scenario, size)
-      const addressedHeap = await measureHeap('addressed', scenario, size)
-      heap[size]![scenario] = { legacy: legacyHeap, addressed: addressedHeap }
+      const measuredHeap = {} as Record<Implementation, HeapResult>
+      for (const implementation of IMPLEMENTATIONS) {
+        measuredHeap[implementation] = await measureHeap(implementation, scenario, size)
+      }
+      heap[size]![scenario] = measuredHeap
 
-      const ratio = legacy.elapsedMs / addressed.elapsedMs
-      const heapRatio = legacyHeap.retainedJsHeapBytes / addressedHeap.retainedJsHeapBytes
+      const speedup = ratio(measured.addressed.elapsedMs, measured.direct.elapsedMs)
+      const heapRatio = ratio(
+        measuredHeap.addressed.retainedJsHeapBytes,
+        measuredHeap.direct.retainedJsHeapBytes,
+      )
       console.log(
         scenario.padEnd(12),
-        `time ${legacy.elapsedMs.toFixed(3)}→${addressed.elapsedMs.toFixed(3)}ms (${ratio.toFixed(2)}x)`.padEnd(
-          34,
+        `time L/A/D ${IMPLEMENTATIONS.map((value) => measured[value].elapsedMs.toFixed(3)).join('/')}ms (A/D ${speedup})`.padEnd(
+          48,
         ),
-        `mutations ${legacy.mutationCount}→${addressed.mutationCount}`.padEnd(25),
-        `JS heap ${legacyHeap.retainedJsHeapBytes}→${addressedHeap.retainedJsHeapBytes} bytes (${heapRatio.toFixed(2)}x)`,
+        `mutations ${IMPLEMENTATIONS.map((value) => measured[value].mutationCount).join('/')}`.padEnd(
+          32,
+        ),
+        `JS heap L/A/D ${IMPLEMENTATIONS.map((value) => measuredHeap[value].retainedJsHeapBytes).join('/')} bytes (A/D ${heapRatio})`,
       )
     }
+
+    const addressedNotification = await measureNotification('addressed', size)
+    const directNotification = await measureNotification('direct', size)
+    if (addressedNotification.middleText !== directNotification.middleText) {
+      throw new Error(`Notification implementations disagree: N=${size}`)
+    }
+    notification[size] = {
+      addressed: addressedNotification,
+      direct: directNotification,
+    }
+    console.log(
+      'notify×N'.padEnd(12),
+      `A/D ${addressedNotification.elapsedPerUpdateMs.toFixed(6)}/${directNotification.elapsedPerUpdateMs.toFixed(6)}ms per update`,
+      `(${ratio(addressedNotification.elapsedMs, directNotification.elapsedMs)})`,
+    )
   }
 } finally {
   await browser.close()
@@ -250,6 +327,7 @@ console.log(
     {
       repeats: REPEATS,
       heapRepeats: HEAP_REPEATS,
+      notificationIterations: NOTIFICATION_ITERATIONS,
       sizes: SIZES,
       bundles: Object.fromEntries(
         IMPLEMENTATIONS.map((implementation) => [
@@ -262,6 +340,7 @@ console.log(
       ),
       results,
       heap,
+      notification,
     },
     null,
     2,

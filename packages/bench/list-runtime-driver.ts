@@ -11,7 +11,7 @@ interface Item {
   text: string
 }
 
-type Implementation = 'legacy' | 'addressed'
+type Implementation = 'legacy' | 'addressed' | 'direct'
 type UpdateScenario = 'updateOne' | 'appendOne' | 'removeOne' | 'reverse' | 'updateAll'
 type Scenario = 'mount' | UpdateScenario
 
@@ -21,6 +21,7 @@ const implementation = __LIST_RUNTIME_IMPLEMENTATION__
 interface MountedList {
   container: HTMLElement
   update(items: readonly Item[]): void
+  updateItem?(item: Item): void
 }
 
 export interface ListRuntimeResult {
@@ -28,7 +29,14 @@ export interface ListRuntimeResult {
   mutationCount: number
   itemCount: number
   firstText: string | null
+  middleText: string | null
   lastText: string | null
+}
+
+export interface DirectNotificationResult {
+  elapsedMs: number
+  elapsedPerUpdateMs: number
+  middleText: string | null
 }
 
 function makeItems(size: number): Item[] {
@@ -90,14 +98,24 @@ function createAddressedItem(item: Item, state: ListItemState): ListItemHandle<I
   return handle
 }
 
-function mountAddressed(items: readonly Item[]): MountedList {
+function mountAddressed(items: readonly Item[], direct: boolean): MountedList {
   const container = document.createElement('ul')
   document.body.appendChild(container)
   const runtime = createListRuntime<Item>('bench-list')
   const update = (nextItems: readonly Item[]) =>
     reconcileList(runtime, container, nextItems, (item) => item.id, createAddressedItem)
   update(items)
-  return { container, update }
+  if (!direct) return { container, update }
+
+  return {
+    container,
+    update,
+    updateItem(item) {
+      const record = runtime.items.get(item.id)
+      if (!record) throw new Error(`direct List update: unknown item ${item.id}`)
+      record.handle.update(item)
+    },
+  }
 }
 
 function nextItemsFor(items: readonly Item[], scenario: UpdateScenario): Item[] {
@@ -118,7 +136,26 @@ function nextItemsFor(items: readonly Item[], scenario: UpdateScenario): Item[] 
 }
 
 function mount(items: readonly Item[]): MountedList {
-  return implementation === 'legacy' ? mountLegacy(items) : mountAddressed(items)
+  if (implementation === 'legacy') return mountLegacy(items)
+  return mountAddressed(items, implementation === 'direct')
+}
+
+function update(mounted: MountedList, nextItems: readonly Item[], scenario: UpdateScenario): void {
+  if (
+    implementation !== 'direct' ||
+    scenario === 'appendOne' ||
+    scenario === 'removeOne' ||
+    scenario === 'reverse'
+  ) {
+    mounted.update(nextItems)
+    return
+  }
+
+  if (scenario === 'updateOne') {
+    mounted.updateItem!(nextItems[Math.floor(nextItems.length / 2)]!)
+    return
+  }
+  for (const item of nextItems) mounted.updateItem!(item)
 }
 
 function measureMount(size: number): ListRuntimeResult {
@@ -133,6 +170,7 @@ function measureMount(size: number): ListRuntimeResult {
     mutationCount: 0,
     itemCount: elements.length,
     firstText: elements[0]?.textContent ?? null,
+    middleText: elements[Math.floor(elements.length / 2)]?.textContent ?? null,
     lastText: elements[elements.length - 1]?.textContent ?? null,
   }
   mounted.container.remove()
@@ -148,7 +186,7 @@ function measureUpdate(size: number, scenario: UpdateScenario): ListRuntimeResul
   observer.observe(mounted.container, { childList: true, characterData: true, subtree: true })
 
   const start = performance.now()
-  mounted.update(nextItems)
+  update(mounted, nextItems, scenario)
   const elapsedMs = performance.now() - start
   const mutationCount = observer.takeRecords().length
   observer.disconnect()
@@ -159,10 +197,29 @@ function measureUpdate(size: number, scenario: UpdateScenario): ListRuntimeResul
     mutationCount,
     itemCount: elements.length,
     firstText: elements[0]?.textContent ?? null,
+    middleText: elements[Math.floor(elements.length / 2)]?.textContent ?? null,
     lastText: elements[elements.length - 1]?.textContent ?? null,
   }
   mounted.container.remove()
   return result
+}
+
+function measureRepeatedUpdateOne(size: number, iterations: number): DirectNotificationResult {
+  document.body.textContent = ''
+  const items = makeItems(size)
+  const target = Math.floor(items.length / 2)
+  const changedItems = nextItemsFor(items, 'updateOne')
+  const mounted = mount(items)
+
+  const start = performance.now()
+  for (let iteration = 0; iteration < iterations; iteration++) {
+    const nextItems = iteration % 2 === 0 ? changedItems : items
+    update(mounted, nextItems, 'updateOne')
+  }
+  const elapsedMs = performance.now() - start
+  const middleText = mounted.container.children[target]?.textContent ?? null
+  mounted.container.remove()
+  return { elapsedMs, elapsedPerUpdateMs: elapsedMs / iterations, middleText }
 }
 
 let retainedList: MountedList | undefined
@@ -171,7 +228,7 @@ function prepareHeap(size: number, scenario: Scenario): ListRuntimeResult {
   document.body.textContent = ''
   const items = makeItems(size)
   retainedList = mount(items)
-  if (scenario !== 'mount') retainedList.update(nextItemsFor(items, scenario))
+  if (scenario !== 'mount') update(retainedList, nextItemsFor(items, scenario), scenario)
 
   const elements = retainedList.container.children
   return {
@@ -179,6 +236,7 @@ function prepareHeap(size: number, scenario: Scenario): ListRuntimeResult {
     mutationCount: 0,
     itemCount: elements.length,
     firstText: elements[0]?.textContent ?? null,
+    middleText: elements[Math.floor(elements.length / 2)]?.textContent ?? null,
     lastText: elements[elements.length - 1]?.textContent ?? null,
   }
 }
@@ -193,10 +251,17 @@ declare global {
     __listRuntimeBench: {
       measureMount: typeof measureMount
       measureUpdate: typeof measureUpdate
+      measureRepeatedUpdateOne: typeof measureRepeatedUpdateOne
       prepareHeap: typeof prepareHeap
       releaseHeap: typeof releaseHeap
     }
   }
 }
 
-window.__listRuntimeBench = { measureMount, measureUpdate, prepareHeap, releaseHeap }
+window.__listRuntimeBench = {
+  measureMount,
+  measureUpdate,
+  measureRepeatedUpdateOne,
+  prepareHeap,
+  releaseHeap,
+}
