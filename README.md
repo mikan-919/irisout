@@ -25,8 +25,12 @@ export function Counter() {
 
   render(
     <div>
-      <p>count: {count()} / doubled: {doubled()}</p>
-      <button type="button" onClick={increment}>increment</button>
+      <p>
+        count: {count()} / doubled: {doubled()}
+      </p>
+      <button type="button" onClick={increment}>
+        increment
+      </button>
     </div>,
   )
 
@@ -57,8 +61,8 @@ export function Counter() {
 ## クイックスタート
 
 ```bash
-bun install
-bun scripts/build.ts examples/counter.jsx
+vp install
+vp build
 ```
 
 `dist/index.html`(初期 HTML 焼き込み済み)と `dist/app.js`(hydrate 専用、
@@ -91,41 +95,40 @@ TypeScript 実装は M1〜M6(全マイルストーン横断の no-wrapper 検証
 
 ## ドキュメント
 
-| ファイル | 内容 |
-|---|---|
-| [`CONCEPT.v3.md`](./CONCEPT.v3.md) | プロジェクトの目的と哲学 |
+| ファイル                                         | 内容                               |
+| ------------------------------------------------ | ---------------------------------- |
+| [`CONCEPT.v3.md`](./CONCEPT.v3.md)               | プロジェクトの目的と哲学           |
 | [`docs/architecture.md`](./docs/architecture.md) | コンパイラの内部構造・パイプライン |
-| [`docs/conventions.md`](./docs/conventions.md) | コーディング規約 |
-| [`STATUS.md`](./STATUS.md) | 実装ステータス・既知の制約 |
-| [`ROADMAP.md`](./ROADMAP.md) | 設計判断待ちの論点・次のアクション |
-| [`docs/adr/`](./docs/adr/) | 決定済みの設計判断(却下案も含む) |
+| [`docs/conventions.md`](./docs/conventions.md)   | コーディング規約                   |
+| [`STATUS.md`](./STATUS.md)                       | 実装ステータス・既知の制約         |
+| [`ROADMAP.md`](./ROADMAP.md)                     | 設計判断待ちの論点・次のアクション |
+| [`docs/adr/`](./docs/adr/)                       | 決定済みの設計判断(却下案も含む)   |
 
 ## プロジェクト構成
 
 ```
-src/
-  compiler.ts      # パイプライン全体の統括(parse → analyze → build-time exec → codegen)
-  compiler/        # ルート特定・JSX 走査・式解析・依存グラフ解決
-  codegen.ts        # 依存グラフ → ES モジュール文字列組み立て
-  runtime.ts         # signal/derived(ビルド時専用)+ mount/hydrate(ブラウザ出荷用)
-scripts/build.ts     # .jsx → dist/index.html + dist/app.js
-examples/            # サンプル入力・手書き目標出力
-bench/                # React との性能比較ベンチマーク
-test/                  # bun test(実 DOM は jsdom)
-legacy/                # 旧 JS 実装(参照専用、メンテナンスしない)
+packages/
+  compiler/          # compiler本体とVite+ Testスイート
+  runtime/           # ブラウザへ必要時に出荷する最小ランタイム
+  bench/             # Reactとの性能比較ベンチマーク
+apps/
+  examples/          # Vite+でdev/buildできるサンプルと比較用fixture
+vite.config.ts       # format・lint・typecheck・test・workspace共通設定
+legacy/              # 旧JS実装(参照専用、メンテナンスしない)
 ```
 
 ## 開発
 
 ```bash
-bun install
-bun run test         # bun test
-bun run typecheck    # tsc --noEmit
-bun run check-all     # biome check --write → typecheck → test
+vp install
+vp check             # Oxfmt + Oxlint + typecheck
+vp test --run        # Vite+ Test
+vp build             # apps/examplesをbuild
+vp run @irisout/bench#bench
 ```
 
-コミット前は `bun run check-all` を通してください。フォーマット・lint は
-biome に一任します。詳細は [`docs/conventions.md`](./docs/conventions.md)。
+コミット前は `vp check && vp test --run` を通してください。共通設定は
+`vite.config.ts`に集約しています。詳細は [`docs/conventions.md`](./docs/conventions.md)。
 
 ## ライセンス
 

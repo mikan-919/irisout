@@ -19,28 +19,28 @@
 
 ## コンパイルパイプライン
 
-エントリは `src/compiler.ts` の `compile(source)`。処理は6段:
+エントリは `packages/compiler/src/compiler.ts` の `compile(source)`。処理は6段:
 
 ```
 source (.jsx)
   │ 1. @babel/parser で parse(静的 AST)
   ▼
 inlineComponents()            ── 2. 同一ファイル内<Component/>参照をコンパイル時ASTインライン化
-  │    (src/compiler/inline-components.ts、ADR-0014)。findRootComponent()より前に完結する
+  │    (packages/compiler/src/compiler/inline-components.ts、ADR-0014)。findRootComponent()より前に完結する
   │    独立した前処理パスで、以後のパイプラインはコンポーネント合成という概念を一切知らない。
   ▼
 findRootComponent()          ── 3. 誰からも参照されない唯一のトップレベル関数をルートとする
   ▼
-compileComponent()           ── 4. render ツリーを深さ優先で走査(src/compiler/render.ts)
+compileComponent()           ── 4. render ツリーを深さ優先で走査(packages/compiler/src/compiler/render.ts)
   │    ・signal()/derived() 宣言 → declId 発行 + 出力文生成
-  │    ・JSX 式 → マーカー発行 + 依存(deps)収集(src/compiler/analyze.ts)
+  │    ・JSX 式 → マーカー発行 + 依存(deps)収集(packages/compiler/src/compiler/analyze.ts)
   │    ・onXxx ハンドラ → 書き込み先 signal(writeDeclIds)収集
   ▼
 new Function() でビルド時実行 ── 5. 計装済みスクリプトを Node 上で1回実行し、
   │    (a) タグ付けした呼び出しが本当に signal/derived か検証(ADR-0001 #3)
   │    (b) 実際の初期 HTML をタダで取得
   ▼
-generateModule()             ── 6. 依存グラフから ES モジュールを文字列組み立て(src/codegen.ts)
+generateModule()             ── 6. 依存グラフから ES モジュールを文字列組み立て(packages/compiler/src/codegen.ts)
   │    ・宣言はプレーン変数(ADR-0006: signal ラッパーは出力に残らない)
   │    ・root signal ごとに専用 update_<name>() を生成
   ▼
@@ -58,18 +58,18 @@ triage手続きで捌く — コンパイラの受理条件自体を場当たり
 
 ## モジュールの責務
 
-| ファイル | 責務 |
-|---|---|
-| `src/compiler.ts` | パイプライン全体の統括。ルート特定、ビルド時実行、discovery 検証 |
-| `src/compiler/inline-components.ts` | 同一ファイル内`<Component/>`参照のコンパイル時ASTインライン化(ADR-0014)。findRootComponent()より前に完結する独立した前処理パス |
-| `src/compiler/state.ts` | `compile()` 全体で共有するミュータブル状態 `CompilerState`(ctx)と ID 型 |
-| `src/compiler/render.ts` | JSX ツリーの走査。宣言・マーカー・ハンドラを ctx に積み、HTML テンプレートソースを組み立てる |
-| `src/compiler/analyze.ts` | 式の解析。識別子を declId に解決し、出力用/ビルド時実行用の2種類のソースを生成 |
-| `src/compiler/decl-graph.ts` | derived を辿ってルート signal 集合へ展開する推移解決 |
-| `src/codegen.ts` | 最終 codegen。文字列組み立てのみ、AST もコンパイラ状態も触らない |
-| `src/runtime.ts` | 2つの顔を持つ: signal/derived は**ビルド時専用**(discovery 用、出力に import されない)、mount/hydrate は**ブラウザ出荷用** DOM グルー |
-| `src/template.ts` | テンプレートリテラル組み立てヘルパー(render と codegen の共有部) |
-| `scripts/build.ts` | .jsx → `dist/index.html`(焼き込み済み HTML)+ `dist/app.js`(hydrate のみ) |
+| ファイル                                              | 責務                                                                                                                                                                    |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/compiler/src/compiler.ts`                   | パイプライン全体の統括。ルート特定、ビルド時実行、discovery 検証                                                                                                        |
+| `packages/compiler/src/compiler/inline-components.ts` | 同一ファイル内`<Component/>`参照のコンパイル時ASTインライン化(ADR-0014)。findRootComponent()より前に完結する独立した前処理パス                                          |
+| `packages/compiler/src/compiler/state.ts`             | `compile()` 全体で共有するミュータブル状態 `CompilerState`(ctx)と ID 型                                                                                                 |
+| `packages/compiler/src/compiler/render.ts`            | JSX ツリーの走査。宣言・マーカー・ハンドラを ctx に積み、HTML テンプレートソースを組み立てる                                                                            |
+| `packages/compiler/src/compiler/analyze.ts`           | 式の解析。識別子を declId に解決し、出力用/ビルド時実行用の2種類のソースを生成                                                                                          |
+| `packages/compiler/src/compiler/decl-graph.ts`        | derived を辿ってルート signal 集合へ展開する推移解決                                                                                                                    |
+| `packages/compiler/src/codegen.ts`                    | 最終 codegen。文字列組み立てのみ、AST もコンパイラ状態も触らない                                                                                                        |
+| `packages/runtime/src/index.ts`                       | 2つの顔を持つ: signal/derived は**ビルド時専用**。mount/hydrateと、List使用時だけimportされるkey照合・binding値キャッシュは**ブラウザ出荷用**の最小ランタイム(ADR-0015) |
+| `packages/compiler/src/template.ts`                   | テンプレートリテラル組み立てヘルパー(render と codegen の共有部)                                                                                                        |
+| `apps/examples/vite.config.ts`                        | .jsx → `dist/index.html`(焼き込み済み HTML)+ `dist/app.js`(hydrate のみ)                                                                                                |
 
 ## 重要な概念
 
@@ -85,6 +85,9 @@ triage手続きで捌く — コンパイラの受理条件自体を場当たり
 - **依存グラフが単一の真実の源**: marker→decl の直接依存(`ctx.markerDeps`)を
   `resolveToSignals()` で root signal まで推移解決し、signal→markers の逆引き
   から `update_<name>()` を生成する。ハンドラの書き込み先も同じ経路で解決。
+- **List更新アドレス**(ADR-0015): コンパイル時のList marker ID、key式のitem ID、
+  item内marker由来のbinding IDを分離して保持する。共有ランタイムはkey照合と
+  DOM順序、生成factoryはbinding単位の直接DOM更新を担当する。
 
 ## 設計変更の進め方
 

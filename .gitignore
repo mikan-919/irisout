@@ -3,7 +3,6 @@ node_modules
 .codex
 .pi
 package-lock.json
-bun.lock
 dist
 plans
 .cursor

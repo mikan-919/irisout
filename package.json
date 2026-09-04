@@ -1,33 +1,35 @@
 {
-  "name": "irisout",
+  "name": "irisout-workspace",
   "version": "0.0.0",
   "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "type": "module",
   "scripts": {
-    "test": "bun test --path-ignore-patterns='legacy/**'",
-    "build": "bun scripts/build.ts",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p examples/tsconfig.json",
-    "check-all": "biome check --write && bun run typecheck && bun run test",
+    "dev": "vp -C apps/examples dev",
+    "build": "vp -C apps/examples build",
+    "start": "bun run build && vp -C apps/examples preview",
+    "check": "vp check",
+    "check:fix": "vp check --fix",
+    "lint": "vp lint",
+    "typecheck": "vp check --no-fmt --no-lint",
+    "typecheck:tsc": "tsc --noEmit && tsc --noEmit -p apps/examples/tsconfig.json",
+    "test": "vp test --run",
+    "bench": "vp run @irisout/bench#bench",
+    "bench:browser": "vp run @irisout/bench#bench:browser",
     "prepare": "husky"
   },
-  "dependencies": {
-    "@babel/parser": "^8.0.0",
-    "@babel/traverse": "^8.0.0"
-  },
   "devDependencies": {
-    "@babel/types": "^8.0.0",
-    "playwright": "^1.61.1",
-    "@biomejs/biome": "^2.5.2",
-    "@types/bun": "^1.3.14",
-    "@types/jsdom": "^28.0.3",
-    "@types/react": "^19.2.17",
-    "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^6.0.3",
+    "@types/node": "^24.0.0",
     "husky": "^9.1.7",
-    "jsdom": "^29.1.1",
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7",
     "typescript": "^5.9.0",
-    "vite": "^8.1.4"
-  }
+    "vite-plus": "0.3.0"
+  },
+  "overrides": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@0.3.0",
+    "vitest": "4.1.11"
+  },
+  "packageManager": "bun@1.3.13"
 }

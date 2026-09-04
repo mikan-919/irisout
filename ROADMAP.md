@@ -10,15 +10,15 @@ TypeScript書き直し(`session/000_ts-rewrite-kickoff-and-m1.md`参照)で
 
 ### v3: 最小ランタイムとList更新粒度(2026-09-04 方針変更)
 
-`CONCEPT.v3.md`で「ランタイムを持たない」ことを目的から外した。静的に
-確定できる更新は引き続き専用の直接DOM操作へコンパイルする一方、Listなど
-実行時にしか決まらない動的構造には最小限の共有ヘルパーを許容する。仮想DOM、
-Fiber、汎用スケジューラを導入する方針ではない。
+**第1段階実装済み(ADR-0015)**: `CONCEPT.v3.md`で「ランタイムを持たない」
+ことを目的から外し、Listのkey照合・DOM順序調整を共有最小ランタイムへ移した。
+listId / itemId / bindingIdを分離して保持し、値が変わったbindingだけを直接DOMへ
+反映する。順序が同じitemの再挿入も行わない。仮想DOM、Fiber、汎用スケジューラは
+導入していない。
 
-次の実装planを書く前に、現行のfactory-per-item方式と最小Listランタイム案を
-同じ実ブラウザfixtureで比較する。mount・追加・削除・並べ替え・一括更新に加え、
-メモリと生成コードサイズを測り、keyed diff、イベント委譲、更新バッチのどこまでを
-共有責務にするか決める。その結果をADR-0005の後続ADRとして記録する。
+残る判断は、変更itemの直接通知によるkey全走査の省略、イベント委譲、更新バッチ。
+現行方式と同じ実ブラウザfixtureでmount・追加・削除・並べ替え・一括更新、メモリ、
+生成コードサイズを比較してから、どこまでを共有責務にするか後続ADRで決める。
 
 quixのビルド時トラッカー採用可否・list itemのイベント配線方式・authoring API
 ゾーン化(inline arrow併存含む)とM4/M5の実装順序は決着済み(それぞれ
@@ -117,7 +117,7 @@ CONCEPT.v3.mdはコンポーネント境界を可能な限りビルド後に消�
 
 - `<Component/>`のようなJSXタグ参照そのものが
   `compile: component references (<${tagName}/>) are not supported yet
-  (scope limit)`で拒否されていた(`src/compiler/render.ts`)問題は、
+(scope limit)`で拒否されていた(`src/compiler/render.ts`)問題は、
   **同一ファイル内に限り解消・実装済み**(下記参照)。
 - `compile(source: string)`(`src/compiler.ts:137`)は単一文字列を1回だけ
   受け取るシグネチャで、モジュール解決の余地がない。加えて Program 直下は
@@ -216,16 +216,16 @@ transition/animation、portal、error boundary、async/resource
 6. ~~エスケープハッチ設計~~ — **完了**(change `escape-hatch-design`、
    ADR-0010)。共存の単位(JSX要素1つ)・`<Escape mount={...} />`の記法・
    受理条件を決定。`src/`の変更は対象外(設計のみ)。
-6a. ~~エスケープハッチ実装~~ — **棚上げ**(2026-07-14)。実装change起票
+   6a. ~~エスケープハッチ実装~~ — **棚上げ**(2026-07-14)。実装change起票
    直後に「ルート要素に`use=`すれば足りるのでは」の指摘で再検討し、
    `use=`+グローバル委譲を公式な逃げ道として実装を見送った(ADR-0010
    「棚上げの経緯」・上記「3. エスケープハッチ」参照)。
-6b. ~~ref設計~~ — **完了**(change `action-use-attribute`、ADR-0011)。
+   6b. ~~ref設計~~ — **完了**(change `action-use-attribute`、ADR-0011)。
    authoring API統治原則(穴のない宣言・プレースホルダーの向き・位置的
    リアクティビティ)を明文化し、`use={fn}`属性を要素へのaction接続手段
    として採用、ref primitiveは作らないことを決定した(UNRESOLVED(01)
    解消)。`src/`の変更は対象外。
-6c. ~~`use=`属性実装~~ — **完了**(change `use-action-impl`)。
+   6c. ~~`use=`属性実装~~ — **完了**(change `use-action-impl`)。
    `src/compiler/render.ts`の`use`属性解析・識別子解決、
    `src/compiler/analyze.ts`のネストした関数への再帰書き換え・返り値
    クロージャの依存解析、`src/codegen.ts`のmount時呼び出し・
@@ -253,12 +253,12 @@ transition/animation、portal、error boundary、async/resource
    children/slot・自己/相互再帰参照・複数ファイルは引き続きscope limit
    (詳細はSTATUS.md既知の制約参照)。
 10. ~~authored `.jsx` の型検査基盤~~ — **完了**(change
-   `jsx-type-checking-foundation`)。`types/jsx.d.ts`(グローバル`JSX`
-   namespace・`signal`/`derived`/`render`のシグネチャ)+
-   `examples/tsconfig.json`(examples専用、ルートtsconfigとは分離)を実装。
-   先送りされていた`use=`のJSX型定義(ADR-0011 design.md Decision 6)も
-   あわせて解消した。属性名レベルの厳密化・コンポーネントprops型の
-   厳密な推論は引き続き未対応(詳細はSTATUS.md既知の制約参照)。
+    `jsx-type-checking-foundation`)。`types/jsx.d.ts`(グローバル`JSX`
+    namespace・`signal`/`derived`/`render`のシグネチャ)+
+    `examples/tsconfig.json`(examples専用、ルートtsconfigとは分離)を実装。
+    先送りされていた`use=`のJSX型定義(ADR-0011 design.md Decision 6)も
+    あわせて解消した。属性名レベルの厳密化・コンポーネントprops型の
+    厳密な推論は引き続き未対応(詳細はSTATUS.md既知の制約参照)。
 
 ## 参考資料
 

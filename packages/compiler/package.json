@@ -1,0 +1,20 @@
+{
+  "name": "@irisout/compiler",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/compiler.ts",
+    "./state": "./src/compiler/state.ts"
+  },
+  "dependencies": {
+    "@babel/parser": "^8.0.0",
+    "@babel/traverse": "^8.0.0",
+    "@irisout/runtime": "workspace:*"
+  },
+  "devDependencies": {
+    "@babel/types": "^8.0.0",
+    "@types/jsdom": "^28.0.3",
+    "jsdom": "^29.1.1"
+  }
+}

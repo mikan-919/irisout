@@ -61,8 +61,6 @@ declare namespace JSX {
     key?: string | number
   }
   type IntrinsicElements = {
-    [K in keyof HTMLElementTagNameMap]: IrisCommonAttributes<
-      HTMLElementTagNameMap[K]
-    >
+    [K in keyof HTMLElementTagNameMap]: IrisCommonAttributes<HTMLElementTagNameMap[K]>
   }
 }

@@ -3,6 +3,25 @@
 実装の「今」の状態(現在地・マイルストーン進捗・既知の制約)をまとめたもの。
 設計判断待ちの論点・次のアクションの計画は `ROADMAP.md` を参照。
 
+## 現在地(2026-09-04・Vite+モノレポ移行)
+
+開発ツールチェーンをVite+へ統合し、`packages/compiler`、`packages/runtime`、
+`packages/bench`、`apps/examples`のworkspaceへ分割した(ADR-0016)。テストは
+Bun testからVite+ Testへ移行し、exampleはVite pluginがauthored JSXをcompileして
+初期HTMLとhydrate専用bundleを生成する。package managerには引き続きBunを使うが、
+プロジェクトコードは`bun:test`と`Bun.build`へ依存しない。
+
+## 現在地(2026-09-04・List最小ランタイム第1段階)
+
+CONCEPT.v3への移行に伴い、List更新を共有最小ランタイムへ切り出した
+(ADR-0015)。List marker ID / key値 / item内binding IDの3段アドレスを分離して
+保持し、値が変化したbindingだけを実DOMへ反映する。keyed reuse、追加、削除、
+並べ替えは`reconcileList()`が担当し、順序が同じDOM要素は再挿入しない。
+Listを使わない生成物にはList helperのimport自体を出力しない。
+
+既存のauthoring APIと対応構文は変更していない。配列更新時のkey全走査は残る。
+変更itemの直接通知、更新バッチ、イベント委譲は実ブラウザで比較してから判断する。
+
 ## 現在地(2026-07-21・型検査基盤)
 
 authored `.jsx` の型検査基盤を実装(change `jsx-type-checking-foundation`、
@@ -72,7 +91,7 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
 2026-07-19: ハンドラ/action 本体からの動きゾーン関数呼び出しの追跡を実装
 (ADR-0013、change `cross-function-handler-writes`、ROADMAP 論点0 解消)。
 `onClick={() => toggle(todo.id)}` のような引数つき補助関数呼び出しで
-`toggle` 本体の signal 書き込みが解析されず **update_*() が黙って落ちて
+`toggle` 本体の signal 書き込みが解析されず **update\_*() が黙って落ちて
 いた** M2 以来のバグを解消。callee の binding が動きゾーンの function 宣言と
 同一なら本体を再帰解析(visited-set・深さ制限なし)し、`writeDeclIds` を
 呼び出し元へ合流、書き換え済み関数を authored 名のままモジュールスコープへ
@@ -80,18 +99,18 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
 
 ## マイルストーン表
 
-| M | 内容 | 状態 | 備考 |
-|---|------|------|------|
-| M1 | スキャフォールド、signal/derived、テキストマーカー | **DONE** | `0155e85` |
-| M2 | イベントハンドラ、書き込みトリガー更新 | **DONE** | `810bc83`→`645a820`、plan 005 |
-| M3 | ブラウザビルドターゲット(hydrate/mount分割 + `scripts/build.ts`) | **DONE** | `a2905c8`、plan 001 |
-| M4 | 静的host要素属性 | **DONE** | `9829f88`、change `m4-static-host-attributes` |
-| M4.5 | authoring APIゾーン化(ADR-0008) | **DONE** | change `authoring-api-zones`。render()マーカー・識別子参照ハンドラ・ゾーン配置強制 |
-| M5 | list/conditional factory closures、1階層のみ(ADR-0005の新実装) | **DONE** | change `m5-list-conditional-factory-closures`。ネストした構造ユニット(06/07)は据え置き |
-| M5.5 | ネストした構造ユニット(条件分岐の中のリスト/リストアイテムの中の条件分岐、UNRESOLVED-06/07) | **DONE** | change `m5-5-nested-structural-units`。1階層ネストのみ、2階層以上は引き続きscope limit |
-| `use=` | top-level要素へのaction接続(ADR-0011) | **DONE** | change `use-action-impl`。ユニット内`use=`・JSX型宣言は未実装のまま(下記制約参照) |
-| M6 | 全マイルストーン横断のno-wrapper検証 | **DONE** | change `m6-no-wrapper-verification`。全機能同居フィクスチャで no-wrapper・import面・実DOM動作を固定(`test/no-wrapper.test.ts`)。サイズ予算係数は 4x のまま据え置き(counter が固定費支配の最悪ケースのため。締め直しは minify 着手時に再検討 ― ROADMAP「minify」) |
-| 合成 | 同一ファイル内の複数コンポーネント合成(ADR-0014) | **DONE** | change `same-file-component-composition`。コンパイル時ASTインライン化、root scope + list itemのみ、children/slot・再帰・複数ファイルは未対応のまま(下記制約参照) |
+| M      | 内容                                                                                        | 状態     | 備考                                                                                                                                                                                                                                                             |
+| ------ | ------------------------------------------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M1     | スキャフォールド、signal/derived、テキストマーカー                                          | **DONE** | `0155e85`                                                                                                                                                                                                                                                        |
+| M2     | イベントハンドラ、書き込みトリガー更新                                                      | **DONE** | `810bc83`→`645a820`、plan 005                                                                                                                                                                                                                                    |
+| M3     | ブラウザビルドターゲット(hydrate/mount分割 + `scripts/build.ts`)                            | **DONE** | `a2905c8`、plan 001                                                                                                                                                                                                                                              |
+| M4     | 静的host要素属性                                                                            | **DONE** | `9829f88`、change `m4-static-host-attributes`                                                                                                                                                                                                                    |
+| M4.5   | authoring APIゾーン化(ADR-0008)                                                             | **DONE** | change `authoring-api-zones`。render()マーカー・識別子参照ハンドラ・ゾーン配置強制                                                                                                                                                                               |
+| M5     | list/conditional factory closures、1階層のみ(ADR-0005の新実装)                              | **DONE** | change `m5-list-conditional-factory-closures`。ネストした構造ユニット(06/07)は据え置き                                                                                                                                                                           |
+| M5.5   | ネストした構造ユニット(条件分岐の中のリスト/リストアイテムの中の条件分岐、UNRESOLVED-06/07) | **DONE** | change `m5-5-nested-structural-units`。1階層ネストのみ、2階層以上は引き続きscope limit                                                                                                                                                                           |
+| `use=` | top-level要素へのaction接続(ADR-0011)                                                       | **DONE** | change `use-action-impl`。ユニット内`use=`・JSX型宣言は未実装のまま(下記制約参照)                                                                                                                                                                                |
+| M6     | 全マイルストーン横断のno-wrapper検証                                                        | **DONE** | change `m6-no-wrapper-verification`。全機能同居フィクスチャで no-wrapper・import面・実DOM動作を固定(`test/no-wrapper.test.ts`)。サイズ予算係数は 4x のまま据え置き(counter が固定費支配の最悪ケースのため。締め直しは minify 着手時に再検討 ― ROADMAP「minify」) |
+| 合成   | 同一ファイル内の複数コンポーネント合成(ADR-0014)                                            | **DONE** | change `same-file-component-composition`。コンパイル時ASTインライン化、root scope + list itemのみ、children/slot・再帰・複数ファイルは未対応のまま(下記制約参照)                                                                                                 |
 
 ## 既知の制約(現時点のcodegenの限界)
 
@@ -105,10 +124,10 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
   (`const [a] = signal(0)` 等)も同様に拒否。ビルド時実行の例外は
   `compile: build-time execution failed:`(`cause` 付き)に包まれる。
 - **複数インスタンス不可**、ただし2つの別物が混ざっているので分けて書く:
-  - (a) *リスト内でのN件ベンチマーク*(例: 1コンポーネント内で1万件の
+  - (a) _リスト内でのN件ベンチマーク_(例: 1コンポーネント内で1万件の
     リストアイテムを持つ場合の性能・状態保持)は、ADR-0005のfactory
     closureで解決済み(M5)。
-  - (b) *トップレベルコンポーネント自体の複数mount*(同じコンポーネントを
+  - (b) _トップレベルコンポーネント自体の複数mount_(同じコンポーネントを
     2つ以上のコンテナへ`mountComponent`/`hydrateComponent`する)は別問題。
     `__markers__`・`update_*`がモジュール直下スコープで生成される設計
     (`src/codegen.ts:68`の`let __markers__;`)のため、M5(list item
@@ -231,7 +250,7 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
     (実装前調査で確認)。`src/compiler/inline-components.ts`の
     `assertSafeToSubstitute`が安全でない組み合わせを検出し
     `compile: ... is referenced inside a larger expression ... (scope
-    limit)`で明示的に拒否する(黙って壊れたコードを出さない)。値なしの
+limit)`で明示的に拒否する(黙って壊れたコードを出さない)。値なしの
     boolean-shorthand属性(`<Foo enabled/>`)も、対応する実引数テキストが
     ソース上に存在しないため同様に拒否する ― `enabled={true}`のように
     明示的な値を渡せば(トップレベル位置であれば)使える。
