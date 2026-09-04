@@ -94,6 +94,8 @@ describe('Vite+ example build end to end', () => {
     const appJs = readFileSync(path.join(outDir, 'app.js'), 'utf8')
     expect(appJs).toContain('hydrate: missing marker(s)')
     expect(appJs).toContain('addEventListener')
+    // 単一entryのexampleには不要なViteの互換polyfillを含めない。
+    expect(appJs).not.toContain('modulepreload')
     // ADR-0006 の回帰チェック: signal()/derived() ラッパーは生成コードにも
     // ビルド成果物にも現れない。
     expect(appJs).not.toContain('signal(')
