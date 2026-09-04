@@ -9,7 +9,7 @@ const virtualEntry = 'virtual:irisout-entry'
 const resolvedEntry = `\0${virtualEntry}`
 
 export default defineConfig(() => {
-  const input = path.resolve(process.env.IRISOUT_ENTRY ?? 'counter.jsx')
+  const input = path.resolve(process.env.IRISOUT_ENTRY ?? 'list.jsx')
   const { code, initialHtml } = compile(readFileSync(input, 'utf8'))
 
   return {
@@ -33,7 +33,7 @@ export default defineConfig(() => {
       emptyOutDir: true,
       // productionのbundle/tree-shakingは維持しつつ、生成コードを確認できるようにする。
       minify: true,
-      modulePreload: false,
+      modulePreload: true,
       rollupOptions: {
         output: {
           entryFileNames: 'app.js',

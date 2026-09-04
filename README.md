@@ -18,7 +18,7 @@ irisout は React の代替ではありません。JSX の宣言的な開発体�
 ## これは何をするものか
 
 ```tsx
-// examples/counter.jsx
+// apps/examples/counter.jsx
 export function Counter() {
   const count = signal(0)
   const doubled = derived(() => count() * 2)
@@ -66,8 +66,8 @@ vp build
 ```
 
 `dist/index.html`(初期 HTML 焼き込み済み)と `dist/app.js`(hydrate 専用、
-innerHTML は一切書かない)が生成されます。ブラウザで `dist/index.html` を
-開くだけで動作します。
+innerHTML は一切書かない)が生成されます。既定のList playgroundでは、itemの
+追加・1件更新・並べ替え・削除とkeyed DOM再利用を試せます。
 
 ## ベンチマーク
 

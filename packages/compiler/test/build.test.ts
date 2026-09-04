@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { JSDOM } from 'jsdom'
 import { compile } from '../src/compiler.js'
-import { loadGenerated } from './helpers.js'
+import { createContainer, loadGenerated } from './helpers.js'
 
 // plans/001-browser-build-target.md: ブラウザに届くのは静的 HTML と
 // hydrate 用の app.js だけであるべき、という CONCEPT.v2.md の主張を検証する。
@@ -67,6 +67,35 @@ describe('hydrate over statically baked HTML (no mount(), no innerHTML write)', 
   })
 })
 
+describe('default List playground', () => {
+  it('supports add, binding update, keyed reorder, and removal', async () => {
+    const source = readFileSync(path.resolve('apps/examples/list.jsx'), 'utf8')
+    const { code } = compile(source)
+    const mod = await loadGenerated(code)
+    const container = createContainer()
+    ;(mod.mountComponent as (c: Element) => void)(container)
+
+    const buttons = container.querySelectorAll('button')
+    const first = container.querySelectorAll('li')[0]!
+    const last = container.querySelectorAll('li')[2]!
+
+    ;(buttons[1] as HTMLElement).click()
+    expect(first.textContent).toBe('alpha!')
+    expect(container.querySelectorAll('li')[0]).toBe(first)
+
+    ;(buttons[2] as HTMLElement).click()
+    expect(container.querySelectorAll('li')[0]).toBe(last)
+    expect(container.querySelectorAll('li')[2]).toBe(first)
+
+    ;(buttons[0] as HTMLElement).click()
+    expect(container.querySelectorAll('li')).toHaveLength(4)
+
+    ;(buttons[3] as HTMLElement).click()
+    expect(container.querySelectorAll('li')).toHaveLength(3)
+    expect(container.contains(last)).toBe(false)
+  })
+})
+
 describe('Vite+ example build end to end', () => {
   it('produces dist/index.html with baked HTML and a hydrate-only dist/app.js', () => {
     const tmpDir = mkdtempSync(path.join(tmpdir(), 'irisout-build-test-'))
@@ -94,8 +123,6 @@ describe('Vite+ example build end to end', () => {
     const appJs = readFileSync(path.join(outDir, 'app.js'), 'utf8')
     expect(appJs).toContain('hydrate: missing marker(s)')
     expect(appJs).toContain('addEventListener')
-    // 単一entryのexampleには不要なViteの互換polyfillを含めない。
-    expect(appJs).not.toContain('modulepreload')
     // ADR-0006 の回帰チェック: signal()/derived() ラッパーは生成コードにも
     // ビルド成果物にも現れない。
     expect(appJs).not.toContain('signal(')

@@ -3,10 +3,35 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>irisout example</title>
+    <title>irisout List playground</title>
+    <style>
+      :root {
+        font-family: system-ui, sans-serif;
+        color-scheme: light dark;
+      }
+      body {
+        margin: 0;
+        padding: 2rem;
+      }
+      main {
+        max-width: 40rem;
+        margin: 0 auto;
+      }
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+      button {
+        padding: 0.5rem 0.75rem;
+      }
+      li {
+        padding: 0.25rem 0;
+      }
+    </style>
     <script type="module" crossorigin src="/app.js"></script>
   </head>
   <body>
-    <div id="app"><div><p data-iris-id="m0">count: 0 / doubled: 0</p><button type="button" data-iris-id="m1">increment</button></div></div>
+    <div id="app"><main><h1>irisout List playground</h1><p data-iris-id="m0">3 items</p><div class="controls"><button type="button" data-iris-id="m1">add</button><button type="button" data-iris-id="m2">update first</button><button type="button" data-iris-id="m3">reverse</button><button type="button" data-iris-id="m4">remove first</button></div><ul data-iris-id="m6"></ul></main></div>
   </body>
 </html>
