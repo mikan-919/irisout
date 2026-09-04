@@ -9,12 +9,12 @@ Reactとの比較ではなく、runtime設計の次段階を判断するため�
 bun run bench:list-runtime
 ```
 
-NixOSなどPlaywright配布版のChromiumを直接起動できない環境では、system Chromiumを
-指定できる。
+NixOSではPlaywright配布版Chromiumが共有ライブラリを解決できないため、runnerが
+`nixpkgs#chromium`を自動解決する。初回はChromiumの取得に時間とディスク容量が必要になる。
+自動判定を使わず任意のChromiumを使う場合は、実行ファイルを明示できる。
 
 ```bash
-nix shell nixpkgs#chromium --command sh -c \
-  'PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=$(command -v chromium) bun run bench:list-runtime'
+PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=$(command -v chromium) bun run bench:list-runtime
 ```
 
 短い確認には環境変数で件数と反復回数を絞れる。

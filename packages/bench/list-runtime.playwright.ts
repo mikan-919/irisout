@@ -1,3 +1,5 @@
+import { execFileSync } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { build } from 'vite-plus'
 import { chromium, type Page } from 'playwright'
@@ -95,9 +97,38 @@ if (!Number.isSafeInteger(REPEATS) || REPEATS < 1) {
 }
 if (SIZES.length === 0) throw new Error('IRISOUT_BENCH_SIZES must contain a positive integer')
 
+function resolveChromiumExecutable(): string | undefined {
+  if (process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH) {
+    return process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
+  }
+  if (!existsSync('/etc/NIXOS')) return undefined
+
+  try {
+    const outputPath = execFileSync(
+      'nix',
+      ['build', '--no-link', '--print-out-paths', 'nixpkgs#chromium'],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] },
+    )
+      .trim()
+      .split('\n')
+      .at(-1)
+    if (!outputPath) throw new Error('nix build returned no output path')
+
+    const executablePath = path.join(outputPath, 'bin/chromium')
+    if (!existsSync(executablePath)) throw new Error(`Chromium not found at ${executablePath}`)
+    console.error(`Using NixOS Chromium: ${executablePath}`)
+    return executablePath
+  } catch (error) {
+    throw new Error(
+      'Could not resolve Chromium on NixOS. Set PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH explicitly.',
+      { cause: error },
+    )
+  }
+}
+
 const browser = await chromium.launch({
   headless: true,
-  executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
+  executablePath: resolveChromiumExecutable(),
 })
 const results: Record<string, Record<string, Record<string, MedianResult>>> = {}
 
