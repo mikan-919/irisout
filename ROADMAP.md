@@ -17,8 +17,10 @@ listId / itemId / bindingIdを分離して保持し、値が変わったbinding�
 導入していない。
 
 残る判断は、変更itemの直接通知によるkey全走査の省略、イベント委譲、更新バッチ。
-現行方式と同じ実ブラウザfixtureでmount・追加・削除・並べ替え・一括更新、メモリ、
-生成コードサイズを比較してから、どこまでを共有責務にするか後続ADRで決める。
+旧方式とaddressed runtimeを同じ実DOM fixtureで比較する基盤を
+`packages/bench/list-runtime.playwright.ts`に追加した。初回のChromium実測では
+現行方式のDOM mutation削減と速度改善を確認したが、メモリと方式別bundle sizeは
+未計測。これらも比較してから、どこまでを共有責務にするか後続ADRで決める。
 
 quixのビルド時トラッカー採用可否・list itemのイベント配線方式・authoring API
 ゾーン化(inline arrow併存含む)とM4/M5の実装順序は決着済み(それぞれ

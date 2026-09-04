@@ -19,6 +19,7 @@
     "test": "vp test --run",
     "bench": "vp run @irisout/bench#bench",
     "bench:browser": "vp run @irisout/bench#bench:browser",
+    "bench:list-runtime": "vp run @irisout/bench#bench:list-runtime",
     "prepare": "husky"
   },
   "devDependencies": {

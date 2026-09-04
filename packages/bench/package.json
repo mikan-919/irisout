@@ -5,10 +5,12 @@
   "type": "module",
   "scripts": {
     "bench": "tsx todomvc-vs-react.ts",
-    "bench:browser": "tsx todomvc-vs-react.playwright.ts"
+    "bench:browser": "tsx todomvc-vs-react.playwright.ts",
+    "bench:list-runtime": "tsx list-runtime.playwright.ts"
   },
   "dependencies": {
     "@irisout/examples": "workspace:*",
+    "@irisout/runtime": "workspace:*",
     "jsdom": "^29.1.1",
     "playwright": "^1.61.1",
     "react": "^19.2.7",

@@ -31,6 +31,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@irisout/examples": "workspace:*",
+        "@irisout/runtime": "workspace:*",
         "jsdom": "^29.1.1",
         "playwright": "^1.61.1",
         "react": "^19.2.7",
