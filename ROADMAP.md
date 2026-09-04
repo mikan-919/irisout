@@ -8,6 +8,18 @@ TypeScript書き直し(`session/000_ts-rewrite-kickoff-and-m1.md`参照)で
 
 ## 設計判断待ち(次のplanを書く前に決めること)
 
+### v3: 最小ランタイムとList更新粒度(2026-09-04 方針変更)
+
+`CONCEPT.v3.md`で「ランタイムを持たない」ことを目的から外した。静的に
+確定できる更新は引き続き専用の直接DOM操作へコンパイルする一方、Listなど
+実行時にしか決まらない動的構造には最小限の共有ヘルパーを許容する。仮想DOM、
+Fiber、汎用スケジューラを導入する方針ではない。
+
+次の実装planを書く前に、現行のfactory-per-item方式と最小Listランタイム案を
+同じ実ブラウザfixtureで比較する。mount・追加・削除・並べ替え・一括更新に加え、
+メモリと生成コードサイズを測り、keyed diff、イベント委譲、更新バッチのどこまでを
+共有責務にするか決める。その結果をADR-0005の後続ADRとして記録する。
+
 quixのビルド時トラッカー採用可否・list itemのイベント配線方式・authoring API
 ゾーン化(inline arrow併存含む)とM4/M5の実装順序は決着済み(それぞれ
 ADR-0007、ADR-0005の追記、ADR-0008+下記「次のアクション」を参照)。
@@ -100,9 +112,8 @@ M5 単体ではなく **M5+`use=`** と置き直す(2026-07-14 相談)。
 
 ADR-0001の未決定事項(「複数コンポーネント境界のインライン化」「ビルド時
 実行のサンドボックス／副作用の扱い」)がM6完了後もそのまま残っている。
-CONCEPT.v2.mdは「コンポーネント」「props」「コンポーネント階層」を
-irisoutの責務として明言しているが、現状の実装は以下の理由でこれに
-到達していない:
+CONCEPT.v3.mdはコンポーネント境界を可能な限りビルド後に消すことを
+設計原則にしているが、現状の実装は以下の理由でこれに到達していない:
 
 - `<Component/>`のようなJSXタグ参照そのものが
   `compile: component references (<${tagName}/>) are not supported yet
@@ -134,7 +145,7 @@ STATUS.md参照。
    ファイル数が増えるほど無視できなくなる(build-time実行が複数ファイルの
    副作用順序に依存し始める)。
 2. **モジュール解決の範囲** ― 相対import限定か、`node_modules`越しの
-   コンポーネント共有(パッケージ化)まで見るか。CONCEPT.v2.mdの射程を
+   コンポーネント共有(パッケージ化)まで見るか。CONCEPT.v3.mdの射程を
    超える可能性があるので、まずCONCEPT側の確認が要る。
 
 複数ファイル対応(上記1・2)は、実需(具体的にどんなアプリを組みたいか)
@@ -174,7 +185,7 @@ STATUS.md参照。
   value属性+`onInput`ハンドラの手書き配線が必要(手書き相当のまま)。
 
 以下は「基本セットに含めるかどうか自体が未確定」な発展機能。
-CONCEPT.v2.mdに記述が無く、in/outの判断すら未着手:
+CONCEPT.v3.mdに記述が無く、in/outの判断すら未着手:
 transition/animation、portal、error boundary、async/resource
 (Suspense相当)、リクエスト単位のSSR(現状はビルド時に静的HTMLを1回焼く
 だけで、動的な per-request 生成とは別モデル)。
@@ -252,7 +263,8 @@ transition/animation、portal、error boundary、async/resource
 ## 参考資料
 
 - `STATUS.md` — 現在地・マイルストーン進捗・既知の制約
-- `CONCEPT.v2.md` — プロダクトコンセプト
+- `CONCEPT.v3.md` — 現在のプロダクトコンセプト
+- `CONCEPT.v2.md` — 旧コンセプト(履歴)
 - `docs/adr/0001`〜`0008` — 決定済みの設計判断
 - `session/000_ts-rewrite-kickoff-and-m1.md` — 書き直しキックオフの全経緯、
   quixとの比較

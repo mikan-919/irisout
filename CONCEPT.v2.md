@@ -1,5 +1,8 @@
 # irisout v2 コンセプト
 
+> この文書は旧方針です。現在の設計思想は [`CONCEPT.v3.md`](./CONCEPT.v3.md)
+> を参照してください。
+
 ## 目的
 
 irisout は React の代替ではありません。

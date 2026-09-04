@@ -5,7 +5,7 @@ The session directory contains a history of your previous actions; if necessary,
 
 ## ドキュメントの役割分担
 
-- `CONCEPT.v2.md` — プロジェクトの目的と哲学。迷ったらここに立ち返る。
+- `CONCEPT.v3.md` — プロジェクトの目的と哲学。迷ったらここに立ち返る。
 - `docs/architecture.md` — コンパイラの内部構造・パイプライン・設計変更の
   進め方。**コードを触る前に読むこと。**
 - `docs/conventions.md` — コーディング規約(コメント・エラー書式・型・

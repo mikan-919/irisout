@@ -1,7 +1,7 @@
 # irisout
 
-JSXから「経験豊富なエンジニアが手書きしたVanilla JS」を生成するビルド時
-コンパイラ。プロダクト全体の哲学は`CONCEPT.v2.md`、コンパイラ内部の構造は
+JSXから、静的に解決できるものを消し込み、必要最小限の直接DOM更新コードを
+生成するcompiler-firstなコンパイラ。プロダクト全体の哲学は`CONCEPT.v3.md`、コンパイラ内部の構造は
 `docs/architecture.md`を参照。ここでは**複数コンポーネント合成**
 (2026-07-21のgrillingで決定、ADR-0014・change
 `same-file-component-composition`で同一ファイル内に限り実装済み、
