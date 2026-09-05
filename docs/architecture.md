@@ -51,7 +51,7 @@ generateModule()             ── 6. 依存グラフから ES モジュール�
 `compileComponent()`(4)が受理しないパターンに当たると、常に
 `compile:`+`(scope limit)`エラーで拒否する(ADR-0004の裏面、
 「安全に拒否する」)。この拒否からの公式な逃げ道は`use=`アクション
-(ADR-0011、設計決定済み・未実装): 実要素にactionを接続し、本体から
+(ADR-0011/0022、top-level要素で実装済み): 実要素にactionを接続し、本体から
 コンパイル管理外のグローバル関数へ委譲する。専用のエスケープハッチ
 要素(`<Escape mount>`、ADR-0010)は棚上げした(ADR-0010
 「棚上げの経緯」参照)。scope limitへの苦情はADR-0011決定7の
@@ -59,18 +59,18 @@ triage手続きで捌く — コンパイラの受理条件自体を場当たり
 
 ## モジュールの責務
 
-| ファイル                                              | 責務                                                                                                                                                                    |
-| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/compiler/src/compiler.ts`                   | パイプライン全体の統括。ルート特定、ビルド時実行、discovery 検証                                                                                                        |
-| `packages/compiler/src/compiler/inline-components.ts` | 同一ファイル内`<Component/>`参照のコンパイル時ASTインライン化(ADR-0014)。findRootComponent()より前に完結する独立した前処理パス                                          |
-| `packages/compiler/src/compiler/state.ts`             | `compile()` 全体で共有するミュータブル状態 `CompilerState`(ctx)と ID 型                                                                                                 |
-| `packages/compiler/src/compiler/render.ts`            | JSX ツリーの走査。宣言・マーカー・ハンドラを ctx に積み、HTML テンプレートソースを組み立てる                                                                            |
-| `packages/compiler/src/compiler/analyze.ts`           | 式の解析。識別子を declId に解決し、出力用/ビルド時実行用の2種類のソースを生成                                                                                          |
-| `packages/compiler/src/compiler/decl-graph.ts`        | derived を辿ってルート signal 集合へ展開する推移解決                                                                                                                    |
-| `packages/compiler/src/codegen.ts`                    | 最終 codegen。文字列組み立てのみ、AST もコンパイラ状態も触らない                                                                                                        |
-| `packages/runtime/src/index.ts`                       | 2つの顔を持つ: signal/derived は**ビルド時専用**。mount/hydrateと、List使用時だけimportされるkey照合・binding値キャッシュは**ブラウザ出荷用**の最小ランタイム(ADR-0015) |
-| `packages/compiler/src/template.ts`                   | テンプレートリテラル組み立てヘルパー(render と codegen の共有部)                                                                                                        |
-| `apps/examples/vite.config.ts`                        | .jsx → `dist/index.html`(焼き込み済み HTML)+ `dist/app.js`(hydrate のみ)                                                                                                |
+| ファイル                                              | 責務                                                                                                                                                                                                |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/compiler/src/compiler.ts`                   | パイプライン全体の統括。ルート特定、ビルド時実行、discovery 検証                                                                                                                                    |
+| `packages/compiler/src/compiler/inline-components.ts` | 同一ファイル内`<Component/>`参照のコンパイル時ASTインライン化(ADR-0014)。findRootComponent()より前に完結する独立した前処理パス                                                                      |
+| `packages/compiler/src/compiler/state.ts`             | `compile()` 全体で共有するミュータブル状態 `CompilerState`(ctx)と ID 型                                                                                                                             |
+| `packages/compiler/src/compiler/render.ts`            | JSX ツリーの走査。宣言・マーカー・ハンドラを ctx に積み、HTML テンプレートソースを組み立てる                                                                                                        |
+| `packages/compiler/src/compiler/analyze.ts`           | 式の解析。識別子を declId に解決し、出力用/ビルド時実行用の2種類のソースを生成                                                                                                                      |
+| `packages/compiler/src/compiler/decl-graph.ts`        | derived を辿ってルート signal 集合へ展開する推移解決                                                                                                                                                |
+| `packages/compiler/src/codegen.ts`                    | 最終 codegen。文字列組み立てのみ、AST もコンパイラ状態も触らない                                                                                                                                    |
+| `packages/runtime/src/index.ts`                       | 2つの顔を持つ: signal/derived は**ビルド時専用**。mount/hydrate、`use=`返り値のshape検証、List使用時だけimportされるkey照合・binding値キャッシュは**ブラウザ出荷用**の最小ランタイム(ADR-0015/0022) |
+| `packages/compiler/src/template.ts`                   | テンプレートリテラル組み立てヘルパー(render と codegen の共有部)                                                                                                                                    |
+| `apps/examples/vite.config.ts`                        | .jsx → `dist/index.html`(焼き込み済み HTML)+ `dist/app.js`(hydrate のみ)                                                                                                                            |
 
 ## 重要な概念
 
@@ -83,6 +83,16 @@ triage手続きで捌く — コンパイラの受理条件自体を場当たり
 - **マーカー**: reactive な箇所に `data-iris-id` を振り、mount/hydrate 時に
   一度だけ収集して以後 DOM を探索しない。テキストの連なり(JSXText+式)は
   1回の textContent 置換で更新するアトミックな単位として1マーカーにまとめる。
+- **component lifecycle**(ADR-0022): `createComponent()` factoryは
+  `mount`/`hydrate`/`unmount`とinstance専用updateを返す。mountまたはhydrateは
+  instanceにつき1回、unmountはidempotent。unmount時にtop-level handlerを同一identity
+  でremoveし、action `destroy`を逆順に実行してからcomponent-owned DOM、marker Map、
+  List/conditional/template stateを解放する。unmount後のupdateはno-opで、同instanceの
+  再mountは拒否する。
+- **`use=` action result**: 既存の `() => void` は `update` closureとして初回+依存
+  signal update時に呼ぶ。外部resource cleanupが必要な場合だけ
+  `{ update?: () => void; destroy?: () => void }`を返し、`destroy`はunmount時のみ呼ぶ。
+  runtime境界でshapeを検証し、unit内`use=`や汎用lifecycle/effectは導入しない。
 - **依存グラフが単一の真実の源**: marker→decl の直接依存(`ctx.markerDeps`)を
   `resolveToSignals()` で root signal まで推移解決し、signal→markers の逆引き
   から `update_<name>()` を生成する。ハンドラの書き込み先も同じ経路で解決する。

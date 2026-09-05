@@ -716,7 +716,9 @@ function analyzeActionStatements(
       calleeNames,
     )
 
-  const captureNested = (fnPath: NodePath<t.FunctionExpression | t.ArrowFunctionExpression>) => {
+  const captureNested = (
+    fnPath: NodePath<t.FunctionExpression | t.ArrowFunctionExpression | t.ObjectMethod>,
+  ) => {
     nestedScopes.push(analyzeFunctionBodyScope(ctx, fnPath, instanceId))
     fnPath.skip()
   }
@@ -728,6 +730,7 @@ function analyzeActionStatements(
       },
       FunctionExpression: captureNested,
       ArrowFunctionExpression: captureNested,
+      ObjectMethod: captureNested,
     })
   }
 
@@ -841,7 +844,7 @@ function analyzeActionExprScope(
 // 両方から使う共通処理。
 function analyzeFunctionBodyScope(
   ctx: CompilerState,
-  fnPath: NodePath<t.FunctionExpression | t.ArrowFunctionExpression>,
+  fnPath: NodePath<t.FunctionExpression | t.ArrowFunctionExpression | t.ObjectMethod>,
   instanceId: number,
 ): {
   start: number
@@ -874,21 +877,133 @@ function analyzeFunctionBodyScope(
 
 export interface ActionBodyAnalysis {
   finalizeBody: (resolveUpdateCall: ResolveUpdateCall) => string
-  /** 返り値クロージャ(design D4-2)。無ければ null(design Decision 5: 配線
-   * コード自体を生成しない)。 */
-  closure: {
+  /** 返り値(function または { update?, destroy? })。無ければ null。 */
+  result: {
     finalize: (resolveUpdateCall: ResolveUpdateCall) => string
-    /** クロージャが直接読む signal/derived(推移解決前 -- ctx.markerDeps と
-     * 同じ形、resolveToSignals による展開は compiler.ts の buildSignalToMarkers
-     * に任せる)。 */
+    /** update が直接読む signal/derived(推移解決前 -- ctx.markerDeps と
+     * 同じ形、resolveToSignals による展開は compiler.ts の
+     * buildSignalToMarkers に任せる)。destroy の読み取りはここへ含めない。 */
     deps: Set<DeclId>
   } | null
 }
 
+const NO_ACTION_UPDATE: ResolveUpdateCall = () => ({
+  code: '',
+  needsCollectionBatch: false,
+})
+
+type ActionResultFunctionPath = NodePath<
+  t.FunctionExpression | t.ArrowFunctionExpression | t.ObjectMethod
+>
+
+function actionResultPropertyName(
+  property: NodePath<t.ObjectProperty | t.ObjectMethod | t.SpreadElement>,
+): string | null {
+  if (property.node.type === 'SpreadElement' || property.node.computed) return null
+  const key = property.node.key
+  if (key.type === 'Identifier') return key.name
+  if (key.type === 'StringLiteral') return key.value
+  return null
+}
+
+function actionResultFunctionPath(
+  property: NodePath<t.ObjectProperty | t.ObjectMethod | t.SpreadElement>,
+): ActionResultFunctionPath | null {
+  if (property.isObjectMethod()) {
+    if (property.node.kind !== 'method') return null
+    return property as ActionResultFunctionPath
+  }
+  if (!property.isObjectProperty()) return null
+  const value = property.get('value') as NodePath<t.Expression>
+  if (!value.isFunctionExpression() && !value.isArrowFunctionExpression()) return null
+  return value as ActionResultFunctionPath
+}
+
+function analyzeActionResultExpression(
+  ctx: CompilerState,
+  argPath: NodePath<t.Expression>,
+  instanceId: number,
+): NonNullable<ActionBodyAnalysis['result']> {
+  if (argPath.isFunctionExpression() || argPath.isArrowFunctionExpression()) {
+    if (argPath.node.params.length !== 0) {
+      throw new Error(
+        'compile: an action can only return a zero-argument update closure (scope limit)',
+      )
+    }
+    const closureScope = analyzeFunctionBodyScope(ctx, argPath, instanceId)
+    // クロージャは0引数(検証済み)なので、関数キーワード/params/矢印までの
+    // 前置テキストは書き換え不要でそのまま source から取り出せる。
+    const prefix = ctx.source.slice(argPath.node.start!, closureScope.start)
+    return {
+      deps: closureScope.readDeclIds,
+      finalize: (resolveUpdateCall) => `${prefix}${closureScope.finalize(resolveUpdateCall)}`,
+    }
+  }
+
+  if (!argPath.isObjectExpression()) {
+    throw new Error(
+      'compile: an action can only return a zero-argument update closure or { update?, destroy? } (scope limit)',
+    )
+  }
+
+  const properties = argPath.get('properties') as NodePath<
+    t.ObjectProperty | t.ObjectMethod | t.SpreadElement
+  >[]
+  const seen = new Set<string>()
+  const resultEdits: {
+    start: number
+    end: number
+    finalize: (resolveUpdateCall: ResolveUpdateCall) => string
+  }[] = []
+  let updateDeps = new Set<DeclId>()
+
+  for (const property of properties) {
+    const name = actionResultPropertyName(property)
+    if (name !== 'update' && name !== 'destroy') {
+      throw new Error(
+        'compile: an action result object may only contain update and destroy (scope limit)',
+      )
+    }
+    if (seen.has(name)) {
+      throw new Error(`compile: an action result object cannot repeat ${name} (scope limit)`)
+    }
+    seen.add(name)
+    const fnPath = actionResultFunctionPath(property)
+    if (!fnPath || fnPath.node.params.length !== 0) {
+      throw new Error(
+        `compile: an action result object ${name} must be a zero-argument function (scope limit)`,
+      )
+    }
+    const scope = analyzeFunctionBodyScope(ctx, fnPath, instanceId)
+    if (name === 'update') updateDeps = scope.readDeclIds
+    resultEdits.push({
+      start: scope.start,
+      end: scope.end,
+      finalize: (resolveUpdateCall) =>
+        scope.finalize(name === 'update' ? resolveUpdateCall : NO_ACTION_UPDATE),
+    })
+  }
+
+  return {
+    deps: updateDeps,
+    finalize: (resolveUpdateCall) =>
+      render(
+        ctx.source,
+        argPath.node.start!,
+        argPath.node.end!,
+        resultEdits.map((edit) => ({
+          start: edit.start,
+          end: edit.end,
+          text: edit.finalize(resolveUpdateCall),
+        })),
+      ),
+  }
+}
+
 // ADR-0011 design D4/D5: action本体の解析エントリポイント。render.ts の
 // resolveHandlerBody が返す body(ブロック文配列 or inline arrow の単一式)を
-// そのまま受け取る。本体トップレベルの末尾 `return <0引数関数式>` だけを
-// 返り値クロージャとして分離し(D4-2)、残りの文には通常のハンドラ同型解析
+// そのまま受け取る。本体トップレベルの末尾 `return <0引数関数式>` または
+// `return { update?, destroy? }` だけを返り値として分離し(D4-2)、残りの文には通常のハンドラ同型解析
 // (ネストした関数本体への再帰込み、D4-1)を適用する。
 export function analyzeActionBody(
   ctx: CompilerState,
@@ -896,31 +1011,28 @@ export function analyzeActionBody(
   instanceId: number,
 ): ActionBodyAnalysis {
   if (!Array.isArray(body)) {
+    if (
+      body.isFunctionExpression() ||
+      body.isArrowFunctionExpression() ||
+      body.isObjectExpression()
+    ) {
+      return {
+        finalizeBody: () => '',
+        result: analyzeActionResultExpression(ctx, body, instanceId),
+      }
+    }
     const scope = analyzeActionExprScope(ctx, body, instanceId)
-    return { finalizeBody: scope.finalize, closure: null }
+    return { finalizeBody: scope.finalize, result: null }
   }
 
   const last = body[body.length - 1]
   let bodyStmts = body
-  let closure: ActionBodyAnalysis['closure'] = null
+  let result: ActionBodyAnalysis['result'] = null
 
   if (last?.isReturnStatement() && last.node.argument != null) {
     const argPath = last.get('argument') as NodePath<t.Expression>
-    if (
-      (!argPath.isFunctionExpression() && !argPath.isArrowFunctionExpression()) ||
-      argPath.node.params.length !== 0
-    ) {
-      throw new Error('compile: an action can only `return` a zero-argument closure (scope limit)')
-    }
     bodyStmts = body.slice(0, -1)
-    const closureScope = analyzeFunctionBodyScope(ctx, argPath, instanceId)
-    // クロージャは0引数(検証済み)なので、関数キーワード/params/矢印までの
-    // 前置テキストは書き換え不要でそのまま source から取り出せる。
-    const prefix = ctx.source.slice(argPath.node.start!, closureScope.start)
-    closure = {
-      deps: closureScope.readDeclIds,
-      finalize: (resolveUpdateCall) => `${prefix}${closureScope.finalize(resolveUpdateCall)}`,
-    }
+    result = analyzeActionResultExpression(ctx, argPath, instanceId)
   }
 
   const bodyScope =
@@ -928,7 +1040,7 @@ export function analyzeActionBody(
       ? analyzeActionStatements(ctx, bodyStmts, instanceId, false)
       : { finalize: () => '' }
 
-  return { finalizeBody: bodyScope.finalize, closure }
+  return { finalizeBody: bodyScope.finalize, result }
 }
 
 // `count()` のような裸の読み取り - 追跡済み signal/derived の引数なし

@@ -19,6 +19,20 @@ List runtime、conditional状態、`use=`返り値、`update_*`をroot instance�
 新しいinstanceを生成して返すため、同じ生成moduleを複数containerで独立して使える。
 stateを持つ同じ子componentをroot内で複数回インライン化した場合のDeclId衝突も解消した。
 
+## 現在地(2026-09-05・component unmount / action destroy)
+
+`createComponent()`、`mountComponent()`、`hydrateComponent()`の戻り値に
+`unmount()`を追加した(ADR-0022)。instanceはmountまたはhydrateを一度だけ実行し、
+unmountはidempotent。unmount時に生成top-level handlerをremoveし、actionの`destroy`を
+登録順の逆順で各一回呼び、component-owned DOM、marker Map、List/conditional/template
+参照を解放する。unmount後に保持された`update_*`はno-opになる。
+
+`use=`は既存の関数返り値をupdate closureとして維持し、`void | (() => void) |
+{ update?: () => void; destroy?: () => void }`を受理する。外部timer/subscription/
+listenerの解除はaction作者の`destroy`責務であり、unit内`use=`・汎用lifecycle runtimeは
+引き続きscope limit。counter generated bundleの固定費は実測5.33xとなったため、golden
+size budgetを5.5xへ更新した。
+
 ## 現在地(2026-09-04・List最小ランタイム第1段階)
 
 CONCEPT.v3への移行に伴い、List更新を共有最小ランタイムへ切り出した
@@ -128,19 +142,19 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
 
 ## マイルストーン表
 
-| M      | 内容                                                                                        | 状態     | 備考                                                                                                                                                                                                                                      |
-| ------ | ------------------------------------------------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| M1     | スキャフォールド、signal/derived、テキストマーカー                                          | **DONE** | `0155e85`                                                                                                                                                                                                                                 |
-| M2     | イベントハンドラ、書き込みトリガー更新                                                      | **DONE** | `810bc83`→`645a820`、plan 005                                                                                                                                                                                                             |
-| M3     | ブラウザビルドターゲット(hydrate/mount分割 + `scripts/build.ts`)                            | **DONE** | `a2905c8`、plan 001                                                                                                                                                                                                                       |
-| M4     | 静的host要素属性                                                                            | **DONE** | `9829f88`、change `m4-static-host-attributes`                                                                                                                                                                                             |
-| M4.5   | authoring APIゾーン化(ADR-0008)                                                             | **DONE** | change `authoring-api-zones`。render()マーカー・識別子参照ハンドラ・ゾーン配置強制                                                                                                                                                        |
-| M5     | list/conditional factory closures、1階層のみ(ADR-0005の新実装)                              | **DONE** | change `m5-list-conditional-factory-closures`。ネストした構造ユニット(06/07)は据え置き                                                                                                                                                    |
-| M5.5   | ネストした構造ユニット(条件分岐の中のリスト/リストアイテムの中の条件分岐、UNRESOLVED-06/07) | **DONE** | change `m5-5-nested-structural-units`。1階層ネストのみ、2階層以上は引き続きscope limit                                                                                                                                                    |
-| `use=` | top-level要素へのaction接続(ADR-0011)                                                       | **DONE** | change `use-action-impl`。ユニット内`use=`・JSX型宣言は未実装のまま(下記制約参照)                                                                                                                                                         |
-| M6     | 全マイルストーン横断のno-wrapper検証                                                        | **DONE** | change `m6-no-wrapper-verification`。全機能同居フィクスチャで no-wrapper・import面・実DOM動作を固定(`test/no-wrapper.test.ts`)。サイズ予算係数はADR-0018のinstance factory固定費に合わせ4.5x(実測4.38x)。締め直しはminify最適化時に再検討 |
-| 合成   | 同一ファイル内の複数コンポーネント合成(ADR-0014)                                            | **DONE** | change `same-file-component-composition`。コンパイル時ASTインライン化、root scope + list itemのみ、children/slot・再帰・複数ファイルは未対応のまま(下記制約参照)                                                                          |
-| Batch  | 同期スコープ内の共有marker更新(ADR-0020)                                                    | **DONE** | 複数root write時だけ専用batchを生成。公開batch API・scheduler・collection構造操作・イベント委譲は対象外                                                                                                                                   |
+| M      | 内容                                                                                        | 状態     | 備考                                                                                                                                                                                                                             |
+| ------ | ------------------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M1     | スキャフォールド、signal/derived、テキストマーカー                                          | **DONE** | `0155e85`                                                                                                                                                                                                                        |
+| M2     | イベントハンドラ、書き込みトリガー更新                                                      | **DONE** | `810bc83`→`645a820`、plan 005                                                                                                                                                                                                    |
+| M3     | ブラウザビルドターゲット(hydrate/mount分割 + `scripts/build.ts`)                            | **DONE** | `a2905c8`、plan 001                                                                                                                                                                                                              |
+| M4     | 静的host要素属性                                                                            | **DONE** | `9829f88`、change `m4-static-host-attributes`                                                                                                                                                                                    |
+| M4.5   | authoring APIゾーン化(ADR-0008)                                                             | **DONE** | change `authoring-api-zones`。render()マーカー・識別子参照ハンドラ・ゾーン配置強制                                                                                                                                               |
+| M5     | list/conditional factory closures、1階層のみ(ADR-0005の新実装)                              | **DONE** | change `m5-list-conditional-factory-closures`。ネストした構造ユニット(06/07)は据え置き                                                                                                                                           |
+| M5.5   | ネストした構造ユニット(条件分岐の中のリスト/リストアイテムの中の条件分岐、UNRESOLVED-06/07) | **DONE** | change `m5-5-nested-structural-units`。1階層ネストのみ、2階層以上は引き続きscope limit                                                                                                                                           |
+| `use=` | top-level要素へのaction接続(ADR-0011)                                                       | **DONE** | `use-action-impl` + ADR-0022。関数updateと`{ update?, destroy? }`、component `unmount()`を実装。ユニット内`use=`は下記制約                                                                                                       |
+| M6     | 全マイルストーン横断のno-wrapper検証                                                        | **DONE** | change `m6-no-wrapper-verification`。全機能同居フィクスチャで no-wrapper・import面・実DOM動作を固定(`test/no-wrapper.test.ts`)。サイズ予算係数はADR-0022のlifecycle固定費を含む5.5x(実測5.33x)。締め直しはminify最適化時に再検討 |
+| 合成   | 同一ファイル内の複数コンポーネント合成(ADR-0014)                                            | **DONE** | change `same-file-component-composition`。コンパイル時ASTインライン化、root scope + list itemのみ、children/slot・再帰・複数ファイルは未対応のまま(下記制約参照)                                                                 |
+| Batch  | 同期スコープ内の共有marker更新(ADR-0020)                                                    | **DONE** | 複数root write時だけ専用batchを生成。公開batch API・scheduler・collection構造操作・イベント委譲は対象外                                                                                                                          |
 
 ## 既知の制約(現時点のcodegenの限界)
 
@@ -156,7 +170,8 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
 - **複数インスタンスは対応済み**(ADR-0018): 同じ生成moduleを複数containerへ
   mount/hydrateした場合と、stateを持つ同じ子componentをroot内で複数回使う場合の
   どちらもstate・marker・handler・構造ユニット状態が独立する。1つの
-  `createComponent()`戻り値を複数rootへmountする使い方は保証しない。
+  `createComponent()`戻り値を複数rootへmountする使い方は保証しない。instanceは
+  mount/hydrateを一度だけ実行でき、`unmount()`後の同instance再mountは拒否する。
 - 静的host属性はM4、動的(式コンテナ)host属性値はADR-0012(change
   `dynamic-attribute-bindings`)で実装済み。attribute/property の使い分けは
   固定表(`checked` = booleanプロパティ、`value` = 文字列プロパティ、他は
@@ -222,16 +237,16 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
   - なお `onClick={toggle}`(識別子参照ハンドラ)は従来どおり本体を
     マーカーごとにインライン展開する。同じ関数が参照と呼び出しの両方で
     使われると本体が重複して出力されるのは許容(統一は実需が出てから)。
-- **`use={fn}`アクション(ADR-0011、change `use-action-impl`)はtop-level
-  要素のみ実装済み**。以下は明示的な scope limit・別changeへの先送り:
+- **`use={fn}`アクション(ADR-0011/0022)はtop-level要素のみ実装済み**。関数返り値は
+  既存のupdate closure、object返り値は`{ update?, destroy? }`として実装済み。
+  `destroy`はcomponent `unmount()`時に逆順で一度だけ呼ばれる。以下は明示的な
+  scope limit・別changeへの先送り:
   - リストアイテム/条件分岐ブランチ内の`use=`は返り値クロージャの動的
     レジストリが未実装のため`scope limit`で拒否(design.md Decision 3)。
     実需(アイテム内canvas等)が出た時点で別change。
-  - JSX型定義(`JSX.IntrinsicElements`の`use`宣言)は未実装(design.md
-    Decision 6)。authored `.jsx`の型検査基盤自体が未整備なため、それを
-    一括整備する別changeで扱う。
-  - reactive params・複数action・cleanupはADR-0011の未決定事項のまま
-    (実需が出るまで作らない)。
+  - reactive params・複数action・unit内action lifecycleは未実装(実需と
+    代表fixtureが出るまで作らない)。component instance自体のcleanupはADR-0022で
+    解消済み。
   - action本体のconcise arrow(単一式)にネストしたリスナー等がある場合、
     その内部の書き込みに対する`update_*`挿入位置は本体全体の実行時点に
     まとまる(リスナー発火時ではない)。ブロック本体は正しく分離される

@@ -22,10 +22,12 @@
 
 type IrisEventHandler = (event: Event) => void
 
-// mount 時に1回呼ばれ、返り値があれば「更新のたびに呼ばれる再描画
-// クロージャ」として配線される(ADR-0011 `use=` action、src/codegen.ts)。
-// biome-ignore lint/suspicious/noConfusingVoidType: 「返り値クロージャなし」を`void`で表す意図的な設計(`undefined`への機械的置換はしない)
-type IrisUseAction<El extends Element> = (el: El) => void | (() => void)
+// mount 時に1回呼ばれ、関数返り値は従来どおり「更新のたびに呼ばれる
+// 再描画クロージャ」として配線される。object 形式は更新クロージャと
+// unmount 時だけ呼ぶ destroy を明示できる(ADR-0011/ADR-0022)。
+type IrisUseActionResult = (() => void) | { update?: () => void; destroy?: () => void }
+// biome-ignore lint/suspicious/noConfusingVoidType: 「返り値なし」を`void`で表す意図的な設計(`undefined`への機械的置換はしない)
+type IrisUseAction<El extends Element> = (el: El) => void | IrisUseActionResult
 
 type IrisCommonAttributes<El extends Element> = {
   use?: IrisUseAction<El>

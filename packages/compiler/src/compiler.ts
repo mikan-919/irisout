@@ -301,7 +301,7 @@ export function compile(source: string): CompileResult {
     markerId: a.markerId,
     elParam: a.elParam,
     bodyRendered: a.finalizeBody(resolveUpdateCall),
-    closureRendered: a.finalizeClosure ? a.finalizeClosure(resolveUpdateCall) : null,
+    resultRendered: a.finalizeResult ? a.finalizeResult(resolveUpdateCall) : null,
   }))
 
   // --- ビルド時実行:discovery の確認 + 実際の初期 HTML の取得 ---

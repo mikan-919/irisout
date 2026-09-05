@@ -96,6 +96,138 @@ export function App() {
     const { code } = compile(source)
     expect(code).not.toContain('__use_')
   })
+
+  it('supports object update/destroy results and reverse-order cleanup', async () => {
+    const source = `
+export function App() {
+  const count = signal(0);
+  render(<div><button onClick={inc}>+</button><canvas use={first}></canvas><output use={second}></output></div>);
+  function inc() { count(count() + 1); }
+  function first(el) {
+    let log = el.ownerDocument.body.querySelector('[data-log]');
+    if (!log) {
+      log = el.ownerDocument.createElement('aside');
+      log.setAttribute('data-log', 'true');
+      el.ownerDocument.body.appendChild(log);
+    }
+    return {
+      destroy() { log.textContent += 'first'; },
+    };
+  }
+  function second(el) {
+    let log = el.ownerDocument.body.querySelector('[data-log]');
+    if (!log) {
+      log = el.ownerDocument.createElement('aside');
+      log.setAttribute('data-log', 'true');
+      el.ownerDocument.body.appendChild(log);
+    }
+    const onDocumentClick = () => { log.textContent += 'event'; };
+    el.ownerDocument.addEventListener('click', onDocumentClick);
+    return {
+      update() { el.setAttribute('data-count', String(count())); },
+      destroy() {
+        el.ownerDocument.removeEventListener('click', onDocumentClick);
+        log.textContent += 'second';
+      },
+    };
+  }
+}
+`
+    const { code } = compile(source)
+    const mod = await loadGenerated(code)
+    const container = createContainer()
+    const instance = (
+      mod.mountComponent as (container: Element) => {
+        unmount(): void
+        update_count(): void
+      }
+    )(container)
+    const output = container.querySelector('output')!
+    expect(output.getAttribute('data-count')).toBe('0')
+    dispatchClick(container, container.querySelector('button'))
+    expect(output.getAttribute('data-count')).toBe('1')
+
+    const document = container.ownerDocument
+    instance.unmount()
+    expect(container.childElementCount).toBe(0)
+    expect(document.body.querySelector('aside')?.textContent).toBe('secondfirst')
+    document.dispatchEvent(new document.defaultView!.Event('click'))
+    expect(document.body.querySelector('aside')?.textContent).toBe('secondfirst')
+    expect(() => instance.update_count()).not.toThrow()
+    expect(() => instance.unmount()).not.toThrow()
+  })
+
+  it('supports an object result with update only', async () => {
+    const source = `
+export function App() {
+  const count = signal(0);
+  render(<div><button onClick={inc}>+</button><output use={setup}></output></div>);
+  function inc() { count(count() + 1); }
+  function setup(el) {
+    return { update: () => { el.textContent = String(count()); } };
+  }
+}
+`
+    const { code } = compile(source)
+    const mod = await loadGenerated(code)
+    const container = createContainer()
+    const instance = (mod.mountComponent as (container: Element) => { unmount(): void })(container)
+    const output = container.querySelector('output')!
+    expect(output.textContent).toBe('0')
+    dispatchClick(container, container.querySelector('button'))
+    expect(output.textContent).toBe('1')
+    instance.unmount()
+  })
+
+  it('supports the same object result from a concise inline use arrow', async () => {
+    const source = `
+export function App() {
+  const count = signal(0);
+  render(<div><button onClick={() => count(count() + 1)}>+</button><output use={(el) => ({ update: () => { el.textContent = String(count()); } })}></output></div>);
+}
+`
+    const { code } = compile(source)
+    const mod = await loadGenerated(code)
+    const container = createContainer()
+    const instance = (mod.mountComponent as (container: Element) => { unmount(): void })(container)
+    const output = container.querySelector('output')!
+    expect(output.textContent).toBe('0')
+    dispatchClick(container, container.querySelector('button'))
+    expect(output.textContent).toBe('1')
+    instance.unmount()
+  })
+
+  it('exposes idempotent unmount for mount and hydrate and rejects remounting an instance', async () => {
+    const source = `
+export function App() {
+  render(<div><span>ready</span></div>);
+}
+`
+    const { code, initialHtml } = compile(source)
+    const mod = await loadGenerated(code)
+    const mountedContainer = createContainer()
+    const mounted = (
+      mod.mountComponent as (container: Element) => {
+        mount(container: Element): void
+        unmount(): void
+      }
+    )(mountedContainer)
+    expect(mountedContainer.textContent).toBe('ready')
+    expect(() => mounted.mount(mountedContainer)).toThrow(/mounted or hydrated once/)
+    mounted.unmount()
+    expect(mountedContainer.childElementCount).toBe(0)
+    expect(() => mounted.unmount()).not.toThrow()
+    expect(() => mounted.mount(mountedContainer)).toThrow(/mounted or hydrated once/)
+
+    const hydratedContainer = createContainer()
+    hydratedContainer.innerHTML = initialHtml
+    const hydrated = (mod.hydrateComponent as (container: Element) => { unmount(): void })(
+      hydratedContainer,
+    )
+    expect(hydratedContainer.textContent).toBe('ready')
+    hydrated.unmount()
+    expect(hydratedContainer.childElementCount).toBe(0)
+  })
 })
 
 describe('ADR-0011: use= action attribute (rejection)', () => {
@@ -158,6 +290,18 @@ export function App() {
 }
 `
     expect(() => compile(source)).toThrow(/scope limit/)
+  })
+
+  it('rejects an invalid object action result shape', () => {
+    const source = `
+export function App() {
+  render(<canvas use={setup}></canvas>);
+  function setup(el) {
+    return { update: 42 };
+  }
+}
+`
+    expect(() => compile(source)).toThrow(/zero-argument function.*scope limit/)
   })
 
   it('rejects an unsupported statement kind inside a nested listener body', () => {

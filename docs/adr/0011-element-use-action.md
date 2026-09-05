@@ -78,22 +78,22 @@ function Chart() {
 - 1要素につきuseは1つ(JSX属性の一意性に従う)。複数actionの実需が
   出たら配列受けを検討する。
 
-### 3. シグネチャと型: `(el: 要素型) => void | (() => void)`
+### 3. シグネチャと型: `(el: 要素型) => void | (() => void) | { update?, destroy? }`
 
 - 第1引数はその要素。`JSX.IntrinsicElements`で要素ごとに
-  `use?: (el: HTMLCanvasElement) => void | (() => void)`と宣言することで、
+  `use?: (el: HTMLCanvasElement) => void | (() => void) | { update?, destroy? }`と宣言することで、
   **null無しの正確な要素型**が素のTSの代入可能性チェックで検査される。
   型の抽出(infer)は不要 — 宣言側に正解の型があるため、通常の検査方向に
   乗るだけ。エディタ型・rename・go-to-defが効く(ADR-0008の選定基準)。
-- 返り値は**引数なしの再描画クロージャ**(または無し)。コンパイラは
-  返り値クロージャの依存(signal読み)を解析し、該当する`update_*`から
-  呼び出すコードを生成する。mount時にも1回初期実行する。値の受け渡しの
-  ためのパラメータは持たない — signalはモジュールスコープのプレーン変数
-  なので、クロージャは直接現在値を読む。
-- **Svelte 5 attachmentsとは返り値の意味論が逆**(あちらは返り値=
-  cleanup)。混乱を防ぐため明記する。cleanupは作らない(ADR-0005決定4と
-  同じ理由 — DOM部分木ごとGCに委ねる)。外部リソース(タイマー、購読)の
-  実需が出た時点で`{update, destroy}`オブジェクト形式への拡張を検討する。
+- 返り値は**引数なしの再描画クロージャ**(または無し)を既存形式として維持する。
+  コンパイラは返り値クロージャの依存(signal読み)を解析し、該当する`update_*`から
+  呼び出すコードを生成する。mount時にも1回初期実行する。値の受け渡しのための
+  パラメータは持たない — signalはinstance専有のプレーン変数なので、クロージャは
+  直接現在値を読む。
+- 外部リソース(タイマー、購読、document listener等)をactionが確保する実需に応じ、
+  追加形式`{ update?: () => void; destroy?: () => void }`を採用する(ADR-0022)。
+  `update`は既存の関数返り値と同じく初回+依存signal更新時、`destroy`はcomponent
+  `unmount()`時だけ呼ぶ。関数返り値をcleanupとして再解釈しない。
 
 ### 4. 本体の解析: ADR-0009の機械を適用する
 
@@ -105,12 +105,17 @@ action本体はADR-0009のハンドラ本体と同じ解析(signal読みの書�
 クロージャだけで、ネストした関数は書き換えのみ(現在値読み+書き込み時の
 update付加)を受ける。
 
-### 5. 返り値クロージャのリアクティブ配線
+### 5. 返り値クロージャのリアクティブ配線と destroy
 
 actionが引数なしのクロージャを返す場合、コンパイラはその依存
 (signal/derived読み)を解析し、該当するすべての`update_*`からその
 クロージャを呼び出すコードを生成する。生成コードはmount時の初期化でも
 このクロージャを1回実行する。
+
+`{ update, destroy }` object を返す場合、`update`だけを上記の依存グラフへ登録し、
+`destroy`はcomponent instanceの`unmount()`から一度だけ逆順に呼び出す。既存の
+関数返り値は常にupdateとして扱い、cleanupへ変換しない。instance lifecycleと
+DOM/marker/List stateの解放範囲はADR-0022で定める。
 
 ### 6. refは作らない: 要素アクセスは3チャネル
 
@@ -175,12 +180,10 @@ UNRESOLVED(06)/(07)は正当なUXだが書けない=コンパイラの穴)。両
 - **属性名`mount=`** — `<Escape mount={...}>`(ADR-0010)が既に「管理外に
   渡す」意味で使っており、`use=`(解析対象・状態と同期)と意味が逆なのに
   同じ属性名になる。却下。
-- **返り値=cleanup(Svelte 5 attachmentsと同型)** — irisoutはADR-0005
-  決定4以来「DOM部分木ごとGCに委ねる、明示的teardownは作らない」方針を
-  一貫させている。cleanupという概念自体が不要な機構(ADR-0004)。加えて
-  返り値を「リアクティブな再描画クロージャ」として使う方が、位置的
-  リアクティビティ原則(唯一のリアクティブな返り値の置き場所)と自然に
-  一致する。却下。
+- **返り値=cleanup(Svelte 5 attachmentsと同型)** — 既存の関数返り値は
+  update closure として実装済みで、cleanupへ再解釈すると authored code の意味が
+  変わるため却下。外部リソースの明示的な解除は、後から追加した object 形式の
+  `destroy` に限定する(ADR-0022)。
 - **`untrack()`のような脱出口primitive** — 位置的リアクティビティ原則
   により、そもそも「読んだら自動購読される」実行時概念が存在しない
   (どこに書いたかで決まる)。脱出する対象がないため不要。却下。
@@ -191,13 +194,12 @@ UNRESOLVED(06)/(07)は正当なUXだが書けない=コンパイラの穴)。両
 
 ## この決定がこれまでの判断とどう整合するか
 
-- **ADR-0004(統治原則)**: `use=`はソースが要求した以上の実行(mount時
-  1回呼び出し・返り値クロージャの配線)を生成せず、cleanup機構のような
-  「使われていない機構」も追加しない。
-- **ADR-0005(factoryイディオム・teardown不要)**: actionのクロージャは
-  factory-per-unitクロージャ(リストアイテム・条件分岐ブランチ)と同一
-  イディオムの3回目の再利用。teardown不要の理由(DOM部分木ごとGC)も
-  同じ。
+- **ADR-0004(統治原則)**: `use=`はソースが要求した範囲だけを実行する。
+  既存の関数返り値は update のまま、object の `destroy` が明示された場合だけ
+  unmount cleanup を生成する。未要求の汎用 lifecycle runtime は追加しない。
+- **ADR-0005(factoryイディオム・teardown不要)**: unit 内のDOM-only listenerは
+  従来どおり subtree とともに到達不能にする。一方、component top-level action が
+  外部 resource を明示的に登録した場合は、ADR-0022 の `destroy` がその責務を担う。
 - **ADR-0008(識別子参照・ゾーン構造)**: `use=`の配線ルール(動きゾーンの
   function宣言への識別子参照、inline arrow許容)はハンドラ属性の規約を
   そのまま転用する。新しいゾーンは追加しない。
@@ -217,6 +219,8 @@ UNRESOLVED(06)/(07)は正当なUXだが書けない=コンパイラの穴)。両
   現れるまで先送り(決定6のトリガー条件参照)。
 - **第4チャネル(牙抜きref)**: 決定6の「(c)カウンタイディオムが頻出する
   実例」がトリガー条件。
+- **unit 内action lifecycle**: `.map()` item / conditional branch の `use=` と
+  action registry は、代表的な実需が出るまで scope limit のままにする。
 - **CONCEPT.v2.mdへの3原則・仮説(「書きづらいものは設計が間違っている」
   の極限定理)の昇格の要否**: ユーザー判断待ち。
 
@@ -234,6 +238,7 @@ Decision 6で明示的にスコープ外とし、別changeへ先送りした
   リストアイテム/条件分岐ブランチ内は scope limit で拒否(design.md
   Decision 3)。
 - `src/compiler/analyze.ts`: action本体のネストした関数への再帰書き換え、
-  返り値クロージャの依存(signal/derived読み)解析。
-- `src/codegen.ts`: mount時の`use`関数呼び出し・返り値クロージャの初期
-  実行・該当する`update_*`への配線コード生成。
+  関数返り値または`{ update?, destroy? }`返り値の解析。
+- `src/codegen.ts`: mount/hydrate時の`use`関数呼び出し・update初期実行・依存
+  配線、instance `unmount()`のlistener除去・DOM/structural state解放・destroy逆順実行。
+- `packages/runtime/src/index.ts`: action返り値の runtime shape 検証。

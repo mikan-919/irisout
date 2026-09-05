@@ -509,27 +509,27 @@ function collectAttrs(
 }
 
 // design.md Decision 4/5: action本体の解析(ADR-0009の機械+ネストした関数への
-// 再帰+返り値クロージャの分離)を実行し、markerId に対して ctx.actions へ登録
-// する。返り値クロージャがある場合のみ、その依存を signal/derived の依存解決
-// (ctx.markerDeps/ctx.markers)に相乗りさせる -- クロージャの update_* 配線は
-// テキストマーカー等と同じ「マーカーの依存」機構をそのまま再利用できる
-// (design Decision 5: 返り値の無いactionは配線コード自体を生成しない)。
+// 再帰+返り値(update/destroy object を含む)の分離)を実行し、markerId に対して
+// ctx.actions へ登録する。update の依存がある場合のみ、その依存を
+// signal/derived の依存解決(ctx.markerDeps/ctx.markers)に相乗りさせる。
+// destroy-only action は unmount の逆順 teardown だけを持ち、update 配線を
+// 生成しない。
 function registerAction(
   ctx: CompilerState,
   markerId: MarkerId,
   action: HandlerBody,
   instanceId: number,
 ): void {
-  const { finalizeBody, closure } = analyzeActionBody(ctx, action.body, instanceId)
-  if (closure) {
+  const { finalizeBody, result } = analyzeActionBody(ctx, action.body, instanceId)
+  if (result) {
     ctx.markers.push({ id: markerId, kind: 'action' })
-    ctx.markerDeps.set(markerId, closure.deps)
+    ctx.markerDeps.set(markerId, result.deps)
   }
   ctx.actions.push({
     markerId,
     elParam: action.param,
     finalizeBody,
-    finalizeClosure: closure?.finalize ?? null,
+    finalizeResult: result?.finalize ?? null,
   })
 }
 

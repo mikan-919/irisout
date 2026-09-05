@@ -41,8 +41,10 @@ describe('component instance boundary', () => {
     const first = createContainer()
     const second = createContainer()
 
-    const firstInstance = (mod.mountComponent as (container: Element) => unknown)(first)
-    const secondInstance = (mod.mountComponent as (container: Element) => unknown)(second)
+    const firstInstance = (mod.mountComponent as (container: Element) => { unmount(): void })(first)
+    const secondInstance = (mod.mountComponent as (container: Element) => { unmount(): void })(
+      second,
+    )
 
     expect(firstInstance).not.toBe(secondInstance)
     expectInitial(first)
@@ -65,6 +67,14 @@ describe('component instance boundary', () => {
     click(second, '.increment')
     expect(first.querySelector('.count')?.textContent).toBe('3')
     expect(second.querySelector('.count')?.textContent).toBe('3')
+
+    firstInstance.unmount()
+    expect(first.childElementCount).toBe(0)
+    expect(second.querySelector('.count')?.textContent).toBe('3')
+    click(second, '.increment')
+    expect(second.querySelector('.count')?.textContent).toBe('6')
+    expect(() => firstInstance.unmount()).not.toThrow()
+    secondInstance.unmount()
   })
 
   it('creates independent instances when the same generated module hydrates two roots', async () => {
@@ -143,5 +153,33 @@ function Counter() {
     instance.mount(container)
     expectInitial(container)
     expect(() => instance.update_count()).not.toThrow()
+  })
+
+  it('clears component-owned List/conditional DOM and makes stale updates no-op', async () => {
+    const source = `
+export function App() {
+  const show = signal(true);
+  const items = signal([{ id: 1, text: 'a' }]);
+  render(<main><section>{show() && <p>shown</p>}</section><ul>{items().map((item) => <li key={item.id}>{item.text}</li>)}</ul></main>);
+}
+`
+    const { code } = compile(source)
+    const mod = await loadGenerated(code)
+    const container = createContainer()
+    const instance = (
+      mod.mountComponent as (container: Element) => {
+        unmount(): void
+        update_show(): void
+        update_items(): void
+      }
+    )(container)
+
+    expect(container.querySelector('p')?.textContent).toBe('shown')
+    expect(container.querySelector('li')?.textContent).toBe('a')
+    instance.unmount()
+    expect(container.childElementCount).toBe(0)
+    expect(() => instance.update_show()).not.toThrow()
+    expect(() => instance.update_items()).not.toThrow()
+    expect(container.childElementCount).toBe(0)
   })
 })

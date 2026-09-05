@@ -28,6 +28,54 @@ export interface ListItemHandle<T = unknown> {
   update?(next: T): void
 }
 
+// `use=` action の返り値。関数形式は既存の「リアクティブ update closure」
+// と完全に同じ意味を持ち、object 形式では unmount 専用の destroy を追加できる。
+export type UseActionUpdate = () => void
+export type UseActionDestroy = () => void
+export type UseActionResult =
+  | void
+  | UseActionUpdate
+  | { update?: UseActionUpdate; destroy?: UseActionDestroy }
+
+export interface NormalizedUseActionResult {
+  update?: UseActionUpdate
+  destroy?: UseActionDestroy
+}
+
+// 生成コードの action 呼び出し境界で返り値を検証する。関数を先に判定する
+// のは、既存の `() => void` が持つ update 意味論を object のプロパティとして
+// 解釈しないためである。未知の object key も黙って無視せず、action の契約違反を
+// mount 時に明示する。
+export function normalizeUseActionResult(
+  value: unknown,
+  actionId: string,
+): NormalizedUseActionResult {
+  if (value === undefined) return {}
+  if (typeof value === 'function') return { update: value as UseActionUpdate }
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(
+      `use action ${actionId} must return void, a zero-argument update function, or { update?, destroy? }`,
+    )
+  }
+
+  const record = value as Record<string, unknown>
+  for (const key of Object.keys(record)) {
+    if (key !== 'update' && key !== 'destroy') {
+      throw new Error(`use action ${actionId} returned an unsupported property: ${key}`)
+    }
+  }
+  if (record.update !== undefined && typeof record.update !== 'function') {
+    throw new Error(`use action ${actionId}.update must be a function when provided`)
+  }
+  if (record.destroy !== undefined && typeof record.destroy !== 'function') {
+    throw new Error(`use action ${actionId}.destroy must be a function when provided`)
+  }
+  return {
+    update: record.update as UseActionUpdate | undefined,
+    destroy: record.destroy as UseActionDestroy | undefined,
+  }
+}
+
 export type ListItemUpdater<T> = (handle: ListItemHandle<T>, next: T) => void
 
 interface ListRecord<T> {

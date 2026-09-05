@@ -87,7 +87,15 @@ TypeScript 実装は M1〜M6(全マイルストーン横断の no-wrapper 検証
 動的バインディング、イベントハンドラ、`.map()` によるリスト(keyed reuse)、
 条件分岐(1階層ネストまで)、`use=` action(top-level 要素)、ハンドラ/action
 からの動きゾーン関数呼び出しの追跡(ADR-0013)、複数root writeで共有markerを
-一度だけ反映する同期更新batch(ADR-0020)。
+一度だけ反映する同期更新batch(ADR-0020)、component instanceの
+`unmount()`と`use=` actionの`{ update?, destroy? }` cleanup(ADR-0022)。
+
+`mountComponent(container)` / `hydrateComponent(container)` は instance を返します。
+instanceは一度だけmount/hydrateでき、`unmount()`はidempotentです。既存の
+`use={action}` の `() => void` 返り値は従来どおりリアクティブ update closure のままです。
+timer・subscription・外部 listenerなどactionが確保したresourceは、object形式の
+`{ destroy() { ... } }` で解除します。unit内(`.map()` item / conditional branch)の
+`use=`と再mountはscope limit/非対応です。
 
 既知の制約(ルートコンポーネントは1つのみ、2階層以上の構造ネスト不可、など)は [`STATUS.md`](./STATUS.md) に一覧があります。
 まだ実験的なコンパイラであり、実プロダクトでの採用は制約を理解した上で

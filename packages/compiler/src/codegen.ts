@@ -102,15 +102,15 @@ export interface UpdateBatchOutput {
 }
 
 // ADR-0011: signalToMarkers/ctx.markerDeps 確定後に compiler.ts が組み立てる
-// action1個ぶんの最終テキスト。bodyRendered/closureRendered は既に
-// 個別 update または同期 batch 呼び出し込み(design D4-1/D5) -- codegen はこれを文字列として
+// action1個ぶんの最終テキスト。bodyRendered/resultRendered は既に個別 update
+// または同期 batch 呼び出し込み(design D4-1/D5) -- codegen はこれを文字列として
 // 組み立てるだけで、ctx や AST には一切触れない。
 export interface ActionOutput {
   markerId: MarkerId
   elParam: string | null
   bodyRendered: string
-  /** 返り値クロージャの完全な関数式テキスト。無ければ null(design Decision 5)。 */
-  closureRendered: string | null
+  /** 返り値(function または { update?, destroy? })。無ければ null。 */
+  resultRendered: string | null
 }
 
 export interface GenerateModuleInput {
@@ -464,7 +464,7 @@ function generateStructuralUnits(
       const factoryName = `__create_${marker.id}__`
       declLines.push(
         `let ${tplVar};`,
-        `const __list_${marker.id}__ = __createListRuntime__(${JSON.stringify(marker.id)});`,
+        `let __list_${marker.id}__ = __createListRuntime__(${JSON.stringify(marker.id)});`,
       )
       declLines.push(
         ...generateFactory(factoryName, tplVar, marker.itemParam, marker.body, false),
@@ -576,14 +576,15 @@ function generateConditionalUpdate(
   return lines
 }
 
-// ADR-0011 design Decision 2/5: mount/hydrate 末尾でaction本体を実行し、
-// 返り値クロージャがあれば `__use_<id>__` へ代入して直後に1回初期実行する。
-// クロージャが無いactionは呼び出しのみ(配線コードを一切出さない)。
+// ADR-0011: mount/hydrate 末尾でaction本体を実行し、返り値を runtime の
+// 正規化境界へ渡す。関数形式は update、object 形式は update/destroy として
+// 保持する。既存の関数返り値は初期1回+依存 signal 更新時に呼ぶ。
 function renderActionCall(a: ActionOutput): string {
-  const fn = `function(${a.elParam ?? ''}) {${a.bodyRendered}${a.closureRendered ? ` return ${a.closureRendered};` : ''}}`
+  const fn = `function(${a.elParam ?? ''}) {${a.bodyRendered}${a.resultRendered ? ` return ${a.resultRendered};` : ''}}`
   const call = `(${fn})(__markers__.get(${JSON.stringify(a.markerId)}))`
-  if (!a.closureRendered) return `${call};`
-  return `__use_${a.markerId}__ = ${call}; if (__use_${a.markerId}__) __use_${a.markerId}__();`
+  if (!a.resultRendered) return `${call};`
+  const resultVar = `__use_result_${a.markerId}__`
+  return `{ const ${resultVar} = __normalizeUseActionResult__(${call}, ${JSON.stringify(a.markerId)}); __use_update_${a.markerId}__ = ${resultVar}.update ?? null; __use_destroy_${a.markerId}__ = ${resultVar}.destroy ?? null; if (__use_update_${a.markerId}__) __use_update_${a.markerId}__(); }`
 }
 
 export function generateModule({
@@ -604,6 +605,9 @@ export function generateModule({
   const moduleLines: string[] = []
   const instanceLines: string[] = []
   const runtimeImports = ['mount as __mount__', 'hydrate as __hydrate__']
+  if (actions.some((a) => a.resultRendered)) {
+    runtimeImports.push('normalizeUseActionResult as __normalizeUseActionResult__')
+  }
   if (markersHaveList(markers)) {
     runtimeImports.push(
       'createListRuntime as __createListRuntime__',
@@ -651,11 +655,11 @@ export function generateModule({
   )
   if (declLines.length > 0) instanceLines.push(...declLines, '')
 
-  // 返り値クロージャを持つactionだけ、それを保持するinstanceスコープ変数を
-  // 宣言する(design Decision 5: クロージャが無ければ機構自体を出力しない)。
+  // 返り値を持つactionだけ、update/destroy を保持するinstanceスコープ変数を
+  // 宣言する。返り値の無いactionには既存どおり配線機構を出力しない。
   const actionDeclLines = actions
-    .filter((a) => a.closureRendered)
-    .map((a) => `let __use_${a.markerId}__;`)
+    .filter((a) => a.resultRendered)
+    .flatMap((a) => [`let __use_update_${a.markerId}__;`, `let __use_destroy_${a.markerId}__;`])
   if (actionDeclLines.length > 0) instanceLines.push(...actionDeclLines, '')
 
   // collection.update()を含む同期batchだけが使う、インスタンス専有の
@@ -691,14 +695,91 @@ export function generateModule({
       ? ['  __doc__ = container.ownerDocument;', ...templateSetupLines]
       : []
 
+  // 生成された template は instance が保持する DOM 文書フラグメントでもある。
+  // unmount 後に instance を保持してもそれらを参照し続けないよう、トップレベル
+  // と nested unit の全 template 変数を収集して解放する。nested unit の
+  // ListRuntime は外側 runtime の items を clear すれば handle ごと到達不能になる。
+  const templateVars = new Set<string>()
+  const collectBodyTemplateVars = (body: StructuralUnitBodyOutput): void => {
+    for (const unit of bodyUnits(body)) {
+      if (unit.kind === 'list') {
+        templateVars.add(`__tpl_${unit.id}__`)
+        collectBodyTemplateVars(unit.body)
+      } else {
+        unit.branches.forEach((branch, index) => {
+          if (!branch.body) return
+          templateVars.add(`__tpl_${unit.id}_b${index}__`)
+          collectBodyTemplateVars(branch.body)
+        })
+      }
+    }
+  }
+  for (const marker of markers) {
+    if (marker.kind === 'list') {
+      templateVars.add(`__tpl_${marker.id}__`)
+      collectBodyTemplateVars(marker.body)
+    } else if (marker.kind === 'conditional') {
+      marker.branches.forEach((branch, index) => {
+        if (!branch.body) return
+        templateVars.add(`__tpl_${marker.id}_b${index}__`)
+        collectBodyTemplateVars(branch.body)
+      })
+    }
+  }
+
   // design Decision 2: 呼び出し順は マーカー収集 → ハンドラ配線 →
   // 初期update_*(populate) → action呼び出し+返り値クロージャ初期実行。
   const actionCallLines = actions.map((a) => `  ${renderActionCall(a)}`)
 
+  const actionDestroyLines = actions
+    .filter((a) => a.resultRendered)
+    .reverse()
+    .map(
+      (a) =>
+        `  if (__use_destroy_${a.markerId}__) { const __destroy__ = __use_destroy_${a.markerId}__; __use_destroy_${a.markerId}__ = null; __use_update_${a.markerId}__ = null; __destroy__(); } else { __use_update_${a.markerId}__ = null; }`,
+    )
+  const handlerRemoveLines = handlers.map(
+    (h) =>
+      `  __markers__?.get(${JSON.stringify(h.markerId)})?.removeEventListener(${JSON.stringify(h.eventName)}, __handler_${h.markerId}_${h.eventName});`,
+  )
+  const listCleanupLines = markers
+    .filter((marker): marker is ListMarkerOutput => marker.kind === 'list')
+    .flatMap((marker) => [
+      `  if (__list_${marker.id}__) __list_${marker.id}__.items.clear();`,
+      `  __list_${marker.id}__ = null;`,
+    ])
+  const conditionalCleanupLines = markers
+    .filter((marker): marker is ConditionalMarkerOutput => marker.kind === 'conditional')
+    .flatMap((marker) => [
+      `  if (__cond_${marker.id}_handle__) __cond_${marker.id}_handle__.el.remove();`,
+      `  __cond_${marker.id}_handle__ = null;`,
+      `  __cond_${marker.id}__ = -1;`,
+    ])
+  const templateCleanupLines = [...templateVars].map((name) => `  ${name} = null;`)
+  const documentCleanupLines = templateSetupLines.length > 0 ? ['  __doc__ = undefined;'] : []
+  const destroyErrorLines =
+    actionDestroyLines.length > 0
+      ? [
+          '  let __destroy_error__;',
+          ...actionDestroyLines.map(
+            (line) =>
+              `  try { ${line.trim()} } catch (__error__) { __destroy_error__ ??= __error__; }`,
+          ),
+        ]
+      : []
+  const destroyErrorThrow =
+    actionDestroyLines.length > 0 ? ['  if (__destroy_error__) throw __destroy_error__;'] : []
+
   instanceLines.push(
     'let __markers__;',
+    'let __container__;',
+    'let __mounted__ = false;',
+    'let __unmounted__ = false;',
     'function mount(container) {',
+    '  if (__mounted__ || __unmounted__) throw new Error("component instance can only be mounted or hydrated once");',
     '  ({ markers: __markers__ } = __mount__(container, __INITIAL_HTML__, __MARKER_IDS__));',
+    '  __container__ = container;',
+    '  __mounted__ = true;',
     ...docSetupLines,
     ...setupLines,
     ...initialUpdateCalls,
@@ -706,11 +787,31 @@ export function generateModule({
     '}',
     '',
     'function hydrateComponentInstance(container) {',
+    '  if (__mounted__ || __unmounted__) throw new Error("component instance can only be mounted or hydrated once");',
     '  ({ markers: __markers__ } = __hydrate__(container, __MARKER_IDS__));',
+    '  __container__ = container;',
+    '  __mounted__ = true;',
     ...docSetupLines,
     ...setupLines,
     ...initialUpdateCalls,
     ...actionCallLines,
+    '}',
+    '',
+    'function unmount() {',
+    '  if (!__mounted__ || __unmounted__) return;',
+    '  __unmounted__ = true;',
+    '  __mounted__ = false;',
+    ...handlerRemoveLines,
+    ...destroyErrorLines,
+    ...listCleanupLines,
+    ...conditionalCleanupLines,
+    '  if (__container__) __container__.replaceChildren();',
+    '  __container__ = null;',
+    '  if (__markers__) __markers__.clear();',
+    '  __markers__ = undefined;',
+    ...documentCleanupLines,
+    ...templateCleanupLines,
+    ...destroyErrorThrow,
     '}',
     '',
   )
@@ -752,7 +853,7 @@ export function generateModule({
     } else if (marker.kind === 'list') {
       lines.push(...generateListUpdate(marker, `__markers__.get(${JSON.stringify(marker.id)})`))
     } else if (marker.kind === 'action') {
-      lines.push(`  if (__use_${mId}__) __use_${mId}__();`)
+      lines.push(`  if (__use_update_${mId}__) __use_update_${mId}__();`)
     } else {
       lines.push(
         ...generateConditionalUpdate(
@@ -767,6 +868,7 @@ export function generateModule({
   for (const [signalId, markerIds] of signalToMarkers) {
     const name = declOutputName.get(signalId)
     instanceLines.push(`function update_${name}() {`)
+    instanceLines.push('  if (!__mounted__ || __unmounted__) return;')
     for (const derivedId of signalToDerivedRecomputes.get(signalId) ?? []) {
       instanceLines.push(`  ${declOutputName.get(derivedId)} = ${derivedRecompute.get(derivedId)};`)
     }
@@ -787,6 +889,7 @@ export function generateModule({
       }
     }
     instanceLines.push(`function ${batch.name}() {`)
+    instanceLines.push('  if (!__mounted__ || __unmounted__) return;')
     for (const derivedId of derivedIds) {
       instanceLines.push(`  ${declOutputName.get(derivedId)} = ${derivedRecompute.get(derivedId)};`)
     }
@@ -801,6 +904,7 @@ export function generateModule({
         marker.kind === 'list' && marker.collectionDeclId === collectionId,
     )
     instanceLines.push(`function update_${name}_item(__key__, __updater__) {`)
+    instanceLines.push('  if (!__mounted__ || __unmounted__) return;')
     instanceLines.push(
       `  const __next__ = __updateCollectionItem__(__collection_${name}__, __key__, __updater__);`,
     )
@@ -835,7 +939,7 @@ export function generateModule({
 
   const updateNames = [...signalToMarkers.keys()].map((id) => `update_${declOutputName.get(id)}`)
   instanceLines.push(
-    `return { mount, hydrate: hydrateComponentInstance${updateNames.map((name) => `, ${name}`).join('')} };`,
+    `return { mount, hydrate: hydrateComponentInstance, unmount${updateNames.map((name) => `, ${name}`).join('')} };`,
   )
 
   moduleLines.push('export function createComponent() {')

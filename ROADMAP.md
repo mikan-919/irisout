@@ -25,6 +25,12 @@ listId / itemId / bindingIdを分離して保持し、値が変わったbinding�
 component instance境界は実装済み(ADR-0018)。生成moduleの複数mount/hydrateと、
 stateを持つ同じ子componentの複数使用を独立させた。
 
+component unmount/action cleanupも実装済み(ADR-0022)。生成instanceの`unmount()`は
+一度だけmount/hydrateされたinstanceをidempotently破棄し、top-level listener、
+component-owned DOM、marker/List/conditional stateを解放する。`use=`の既存関数返り値は
+update closureの意味を維持し、外部resourceの解除は`{ update?, destroy? }`の`destroy`
+へ限定する。unit内`use=`・汎用lifecycle runtime・同instance再mountは引き続き対象外。
+
 **第2段階実装済み(ADR-0020)**: 同一ハンドラ/action/追跡関数のwrite setに複数root
 があり、同じmarkerへ依存する場合だけ、コンパイル時に専用同期batchを生成する。
 derivedは一度ずつ再計算し、markerの和集合を重複なしで最終状態へ反映する。
@@ -182,9 +188,9 @@ STATUS.md参照。
 - **context(ツリー越しの暗黙DI)**: ROADMAP・ADR・STATUSのどこにも記述が
   無い、今回はじめて言語化した論点。props(§4)が解決してもprop
   drillingを避ける手段が無いままになる。
-- **onDestroy/cleanup**: `mount()`/`hydrate()`は一方向で、unmountという
-  概念自体が実装に存在しない。`use=`アクションのcleanupも未実装
-  (STATUS.md既知の制約)。
+- **onDestroy/cleanup**: component instanceの明示的な`unmount()`とtop-level
+  `use=` actionの`{ destroy }`はADR-0022で解消済み。要素を持たない処理に対する
+  汎用`onMount`/`onDestroy`/effect runtime、unit内action lifecycleは引き続き未着手。
 - **onMount的な、要素に紐付かない起動処理**: `use=`は要素単位のmount時
   実行はカバーする(ADR-0011)が、「特定の要素を持たない副作用」(例:
   タイマー開始、WebSocket接続)を書く場所が無い。ADR-0004「`onMount`/
@@ -293,6 +299,12 @@ transition/animation、portal、error boundary、async/resource
     markerを持つ場合だけ、derived再計算とmarker反映を専用batchへまとめる。
     異なるmarker、単一root、collection direct経路、ローカルsignal updateは
     既存経路を維持する。
+14. ~~component unmount + `use=` action cleanup~~ — **完了**(ADR-0022)。
+    `createComponent()`/`mountComponent()`/`hydrateComponent()`の戻り値へ
+    idempotentな`unmount()`を追加し、top-level handler removal、component-owned DOMと
+    structural stateの解放、action `destroy`の逆順実行を実装した。既存の関数返り値は
+    update closureのまま維持し、object返り値の`update`/`destroy`を型・解析・runtime
+    検証へ追加した。unit内`use=`、再mount、汎用lifecycle runtimeは実装しない。
 
 ## 参考資料
 

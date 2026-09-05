@@ -15,21 +15,42 @@ export function createComponent() {
     count = n;; update_count(); };
 
   let __markers__;
+  let __container__;
+  let __mounted__ = false;
+  let __unmounted__ = false;
   function mount(container) {
+    if (__mounted__ || __unmounted__) throw new Error("component instance can only be mounted or hydrated once");
     ({ markers: __markers__ } = __mount__(container, __INITIAL_HTML__, __MARKER_IDS__));
+    __container__ = container;
+    __mounted__ = true;
     __markers__.get("m1")?.addEventListener("click", __handler_m1_click);
   }
 
   function hydrateComponentInstance(container) {
+    if (__mounted__ || __unmounted__) throw new Error("component instance can only be mounted or hydrated once");
     ({ markers: __markers__ } = __hydrate__(container, __MARKER_IDS__));
+    __container__ = container;
+    __mounted__ = true;
     __markers__.get("m1")?.addEventListener("click", __handler_m1_click);
   }
 
+  function unmount() {
+    if (!__mounted__ || __unmounted__) return;
+    __unmounted__ = true;
+    __mounted__ = false;
+    __markers__?.get("m1")?.removeEventListener("click", __handler_m1_click);
+    if (__container__) __container__.replaceChildren();
+    __container__ = null;
+    if (__markers__) __markers__.clear();
+    __markers__ = undefined;
+  }
+
   function update_count() {
+    if (!__mounted__ || __unmounted__) return;
     { const __el = __markers__.get("m0"); if (__el) { __el.textContent = \`\${count}\`; } }
   }
 
-  return { mount, hydrate: hydrateComponentInstance, update_count };
+  return { mount, hydrate: hydrateComponentInstance, unmount, update_count };
 }
 
 export function mountComponent(container) {
@@ -58,20 +79,40 @@ export function createComponent() {
   const __MARKER_IDS__ = ["m0"];
 
   let __markers__;
+  let __container__;
+  let __mounted__ = false;
+  let __unmounted__ = false;
   function mount(container) {
+    if (__mounted__ || __unmounted__) throw new Error("component instance can only be mounted or hydrated once");
     ({ markers: __markers__ } = __mount__(container, __INITIAL_HTML__, __MARKER_IDS__));
+    __container__ = container;
+    __mounted__ = true;
   }
 
   function hydrateComponentInstance(container) {
+    if (__mounted__ || __unmounted__) throw new Error("component instance can only be mounted or hydrated once");
     ({ markers: __markers__ } = __hydrate__(container, __MARKER_IDS__));
+    __container__ = container;
+    __mounted__ = true;
+  }
+
+  function unmount() {
+    if (!__mounted__ || __unmounted__) return;
+    __unmounted__ = true;
+    __mounted__ = false;
+    if (__container__) __container__.replaceChildren();
+    __container__ = null;
+    if (__markers__) __markers__.clear();
+    __markers__ = undefined;
   }
 
   function update_count() {
+    if (!__mounted__ || __unmounted__) return;
     doubled = count * 2;
     { const __el = __markers__.get("m0"); if (__el) { __el.textContent = \`\${count + doubled}\`; } }
   }
 
-  return { mount, hydrate: hydrateComponentInstance, update_count };
+  return { mount, hydrate: hydrateComponentInstance, unmount, update_count };
 }
 
 export function mountComponent(container) {
@@ -104,22 +145,43 @@ export function createComponent() {
   const __handler_m1_click = (...__args) => { count = count + 1; update_count(); };
 
   let __markers__;
+  let __container__;
+  let __mounted__ = false;
+  let __unmounted__ = false;
   function mount(container) {
+    if (__mounted__ || __unmounted__) throw new Error("component instance can only be mounted or hydrated once");
     ({ markers: __markers__ } = __mount__(container, __INITIAL_HTML__, __MARKER_IDS__));
+    __container__ = container;
+    __mounted__ = true;
     __markers__.get("m1")?.addEventListener("click", __handler_m1_click);
   }
 
   function hydrateComponentInstance(container) {
+    if (__mounted__ || __unmounted__) throw new Error("component instance can only be mounted or hydrated once");
     ({ markers: __markers__ } = __hydrate__(container, __MARKER_IDS__));
+    __container__ = container;
+    __mounted__ = true;
     __markers__.get("m1")?.addEventListener("click", __handler_m1_click);
   }
 
+  function unmount() {
+    if (!__mounted__ || __unmounted__) return;
+    __unmounted__ = true;
+    __mounted__ = false;
+    __markers__?.get("m1")?.removeEventListener("click", __handler_m1_click);
+    if (__container__) __container__.replaceChildren();
+    __container__ = null;
+    if (__markers__) __markers__.clear();
+    __markers__ = undefined;
+  }
+
   function update_count() {
+    if (!__mounted__ || __unmounted__) return;
     doubled = count * 2;
     { const __el = __markers__.get("m0"); if (__el) { __el.textContent = \`\${count + doubled}\`; } }
   }
 
-  return { mount, hydrate: hydrateComponentInstance, update_count };
+  return { mount, hydrate: hydrateComponentInstance, unmount, update_count };
 }
 
 export function mountComponent(container) {

@@ -35,9 +35,14 @@ Web Components(Custom Elements)による解決も検討したが、却下した�
 
 `update_<list>()`は、現行の「keyが既存なら`innerHTML`で中身だけ差し替え、なければ新規HTML文字列から生成」(`src/codegen.js`の該当ロジック)を、「keyが既存ならfactory関数が返したハンドル(要素+状態への参照)をそのまま使い回し、なければfactory関数を新規呼び出し」に変更する。これによりアイテムの生存期間中、ローカル状態とイベントリスナーは保持され続ける。
 
-### 4. 削除時の明示的teardownは現時点では作らない
+### 4. unit削除時の明示的teardownは現時点では作らない
 
 factory関数が生成する状態・リスナーは、そのインスタンス自身のDOM部分木の中だけに閉じている(外部リソースへの登録は一切ない)。keyed Mapから参照を落とし、DOM要素を`remove()`すれば、状態・リスナー・DOM部分木は一括してGC対象になる。`onLeave`的な明示的teardown呼び出しは、将来アイテムが外部リソース(タイマー、購読等)を持つ機能ができるまでは不要(ADR-0004: 使われないものは作らない)。
+
+これは `.map()` item / conditional branch **unit** の現在のscope limitに限る。component
+top-levelの`use=` actionが外部リソースを登録する場合は、component instanceの
+`unmount()`と`{ destroy }`を使う(ADR-0022)。unit内`use=`とunit専用のaction registryは、
+独立したライフサイクル設計が必要になるため引き続き対象外とする。
 
 ### 5. 生成出力からの`signal()`除去は、この決定の対象外
 

@@ -21,6 +21,11 @@ Web Components化・hyperscript風authoring API・リストアイテムの状態
 - **Web Components を却下**(ADR-0005参照): `disconnectedCallback`等のライフサイクル機構、カスタム要素のアップグレード処理は、ソースが要求していない実行時の隠れた処理を持ち込む。加えて、autonomous custom element + `display: contents`はDOMツリー構造(`nth-child`/子結合子)を書き換えるという、ソースが要求していない副作用も生む。customized built-in(`is=`)はSafariが実装しておらず、ブラウザ間で挙動が分岐する。
 - **hyperscript風API(`render([x, y], tree)`のような明示的依存配列)を却下**: JSXの式コンテナが既に持っている情報の言い換えに過ぎず、新しい実行内容を要求しない上、依存の書き忘れという新しいバグ源(Reactの`useEffect`依存配列問題と同型)を持ち込む。得るものがない。
 - **`onMount`/`onLeave`フックを保留**: 何も使っていない機構は、定義上「書かれていないのに存在する」もの。
+- **明示的なcomponent `unmount()`はこの保留と別物**: 呼び出し側が取得した
+  `createComponent()`/`mountComponent()` instanceへ明示的に要求した場合だけ、所有DOMと
+  generated listenerを解放する。`use=`が`{ destroy }`を返した場合のdestroyも、actionが
+  外部resourceの解除を明示したソース要求に限定され、暗黙のobserverや汎用hookを生成しない
+  (ADR-0022)。
 - **単一式内でのsignal呼び出し書き換えは許可、ブロック文全体の代入スキャンは将来課題として保留**: 前者はソースが既に完全に表現している情報(閉じた1つの式)を並べ替えるだけで実行内容は変わらない。後者も原理的にはこの原則に反しないが、正しさを保証するための静的解析コスト(複合代入・分割代入・配列変更メソッド等、JS代入文法の全網羅)が今のスコープを大きく超える。
 
 ### イベント配線への適用(2026-09-05)

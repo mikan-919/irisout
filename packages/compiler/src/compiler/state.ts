@@ -131,11 +131,11 @@ export interface ConditionalMarker {
   branches: ConditionalBranch[]
 }
 
-// ADR-0011/M6: `use={fn}`のトップレベル要素マーカー。返り値クロージャを
-// 持つ場合のみ push される(design.md 決定5: 返り値が無いactionは配線を
-// 生成しない)。中身(本体・クロージャのレンダー済みテキスト)は
-// signalToMarkers 確定後にしか確定しない(ActionDecl.finalizeBody/
-// finalizeClosure)ため、Marker 自体はワイヤリングの目印(id のみ)に留める。
+// ADR-0011: `use={fn}`のトップレベル要素マーカー。返り値がある action は
+// action 呼び出し対象を hydrate で検証するため push される。destroy-only action
+// も要素マーカーを必要とするが、signalToMarkers には登録しない。中身(本体・返り値のレンダー済みテキスト)は signalToMarkers
+// 確定後にしか確定しない(ActionDecl.finalizeBody/finalizeResult)ため、Marker
+// 自体はワイヤリングの目印(id のみ)に留める。
 export interface ActionMarker {
   id: MarkerId
   kind: 'action'
@@ -146,14 +146,15 @@ export type Marker = TextMarker | ListMarker | ConditionalMarker | ActionMarker
 // ADR-0011: 要素の`use=`1つぶんの解析結果。読み取り書き換え・書き込みの
 // assignment化・ネストした関数本体への再帰(design D4-1)は分析時に確定するが、
 // 挿入される`update_*()`/batch呼び出し名はsignalToMarkers確定後にしか分から
-// ないため、本体・クロージャの最終テキストは finalize 関数として遅延する。
+// ないため、本体・返り値(update/destroy object を含む)の最終テキストは
+// finalize 関数として遅延する。
 export interface ActionDecl {
   markerId: MarkerId
   /** action本体の第1仮引数(要素自身)の authored 名。0引数なら null。 */
   elParam: string | null
   finalizeBody: (resolveUpdateCall: ResolveUpdateCall) => string
-  /** 返り値クロージャ(design D4-2)。無ければ null。 */
-  finalizeClosure: ((resolveUpdateCall: ResolveUpdateCall) => string) | null
+  /** 返り値(function または { update?, destroy? })。無ければ null。 */
+  finalizeResult: ((resolveUpdateCall: ResolveUpdateCall) => string) | null
 }
 
 // cross-function-handler-writes: ハンドラ/action から追跡対象として呼ばれた
