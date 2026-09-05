@@ -29,9 +29,14 @@ unmountはidempotent。unmount時に生成top-level handlerをremoveし、action
 
 `use=`は既存の関数返り値をupdate closureとして維持し、`void | (() => void) |
 { update?: () => void; destroy?: () => void }`を受理する。外部timer/subscription/
-listenerの解除はaction作者の`destroy`責務であり、unit内`use=`・汎用lifecycle runtimeは
-引き続きscope limit。counter generated bundleの固定費は実測5.33xとなったため、golden
-size budgetを5.5xへ更新した。
+listenerの解除はaction作者の`destroy`責務である。list item・conditional branch内の
+actionは各factory handleが所有し、keyed reorderでは同じhandleを再利用する。item削除・
+branch切替・祖先unit破棄・root unmountでは子unitを先に解放し、actionを一度だけdestroy
+する。destroyの例外は残りのcleanup後に最初の例外を再送出する。
+
+actionを含まないunitは従来の`reconcileList()`とfactory経路を使い、action専用runtimeを
+importしない。counter generated bundleの固定費は実測5.33xとなったため、golden size
+budgetを5.5xへ更新した。
 
 ## 現在地(2026-09-05・構造ユニットのDOM範囲所有)
 
@@ -139,8 +144,8 @@ namespaceを上書きする踏み台バグを`types: []`で踏みつぶした(�
 `.jsx`は型注釈を書けない素のJS構文なので、strictを掛けるとハンドラ引数の
 ほぼ全てが implicit any でエラーになり実用にならない)。型が通ることと
 実行時に`compile()`が受理することは別軸のまま ― 型はコンパイラの
-scope limit判定を代替しない(例: リストアイテム内の`use=`は型上は書けるが
-実行時は既存のscope limitのまま、下記制約参照)。
+scope limit判定を代替しない(例: 字句スコープ外のsignal参照は別途拒否される、
+下記制約参照)。
 
 ## 現在地(2026-07-21)
 
@@ -202,7 +207,7 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
 | M4.5   | authoring APIゾーン化(ADR-0008)                                              | **DONE** | change `authoring-api-zones`。render()マーカー・識別子参照ハンドラ・ゾーン配置強制                                                                                                                                               |
 | M5     | list/conditional factory closures、1階層のみ(ADR-0005の新実装)               | **DONE** | change `m5-list-conditional-factory-closures`。ネストした構造ユニット(06/07)は据え置き                                                                                                                                           |
 | M5.5   | ネストした構造ユニット(条件分岐の中のリスト/リストアイテムの中の条件分岐)    | **DONE** | change `recursive-structural-authoring`。任意の深さ、unitごとの状態/cache、祖先local signalの更新接続                                                                                                                            |
-| `use=` | top-level要素へのaction接続(ADR-0011)                                        | **DONE** | `use-action-impl` + ADR-0022。関数updateと`{ update?, destroy? }`、component `unmount()`を実装。ユニット内`use=`は下記制約                                                                                                       |
+| `use=` | 要素へのaction接続(ADR-0011)                                                 | **DONE** | `use-action-impl` + `structural-unit-use-actions` + ADR-0022。top-level、list item、conditional branchをfactory単位で初期化・更新・破棄。関数updateと`{ update?, destroy? }`、component `unmount()`を実装                        |
 | M6     | 全マイルストーン横断のno-wrapper検証                                         | **DONE** | change `m6-no-wrapper-verification`。全機能同居フィクスチャで no-wrapper・import面・実DOM動作を固定(`test/no-wrapper.test.ts`)。サイズ予算係数はADR-0022のlifecycle固定費を含む5.5x(実測5.33x)。締め直しはminify最適化時に再検討 |
 | 合成   | 同一ファイル内の複数コンポーネント合成(ADR-0014)                             | **DONE** | change `same-file-component-composition`。コンパイル時ASTインライン化、root scope + list itemのみ、children/slot・再帰・複数ファイルは未対応のまま(下記制約参照)                                                                 |
 | Batch  | 同期スコープ内の共有marker更新(ADR-0020)                                     | **DONE** | 複数root write時だけ専用batchを生成。公開batch API・scheduler・collection構造操作は対象外。イベント配線はADR-0021でdirectを採用                                                                                                  |
@@ -243,20 +248,10 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
     `compile: ... (scope limit)`で拒否する。local DeclIdをrootの
     `signalToMarkers`へ漏らさない。
   - `.map()`のコールバックのブロック本体(`=> { ... }`)は、
-    「signal()/derived()宣言 + 最終return」の形のみ受理する。それ以外の文を
-    含むブロック本体は引き続き`scope limit`。
+    「signal()/derived()宣言・動きゾーンのfunction宣言 + 最終return」の形のみ
+    受理する。それ以外の文を含むブロック本体は引き続き`scope limit`。
   - リストアイテムに`key`属性がない場合、または`key`が追跡対象signalを参照する
     場合は`scope limit`。
-  - `.map()`コールバックの通常のブロック本体は、上記の局所宣言形式以外は
-    対応しない。
-  - `.map()`のコールバックのブロック本体(`=> { ... }`)は、
-    「signal()/derived()宣言 + 最終return」の形(ADR-0014のローカル
-    signal宣言)のみ受理する。それ以外の文を含むブロック本体は引き続き
-    `scope limit`。
-  - リストアイテムに `key` 属性がない場合、または `key` が追跡対象の
-    signalを参照する場合。
-  - `.map()` のコールバックがブロック本体(`=> { ... }`)の場合(concise
-    bodyのみ対応)。
 - **フィルタ全件除外時の状態破棄**(M5.5、design.md Decision 2): 条件分岐
   ブランチにネストしたリストは、外側の条件分岐が選択を切り替えてリスト
   全体を非マウントにした瞬間、keyed Map・ローカル状態が(フィルタで
@@ -264,12 +259,14 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
   状態保持」保証は、そのリスト自身がDOM上にマウントされ続けている間に
   限られる(spec「配列脱落とフィルタ除外の区別」の境界条件)。
 - ハンドラ(inline arrow / 識別子参照の function宣言 どちらも)のブロック
-  本体は4文種(式文 / `const`・`let` / `if` / 裸の `return`)に限る
-  (ADR-0009)。第1仮引数(イベントオブジェクト)は authored 名のまま受け渡す
+  本体は式文 / `const`・`let` / `if` / 裸の `return`に限る(ADR-0009)。actionの
+  初期化・destroy本体だけは例外検証のため`throw`も明示的に受理する。第1仮引数
+  (イベントオブジェクト)は authored 名のまま受け渡す
   が、分割代入・第2引数以降は `scope limit` で拒否する。ループ・
-  `try`/`switch`・関数/クラス宣言・`var`・値を返す `return`、および
-  ソース順で追跡書き込みより後ろの `return` も同様に `scope limit` で拒否
-  する(D3: 末尾 `update_*()` の取りこぼしを防ぐため)。
+  `try`/`switch`・関数/クラス宣言・`var`・値を返すハンドラの`return`、および
+  ソース順で追跡書き込みより後ろの`return`も同様に`scope limit`で拒否する
+  (D3: 末尾`update_*()`の取りこぼしを防ぐため)。`throw`は初期化・cleanupの
+  例外経路を検証するために受理する。
 - **ハンドラ/action 本体からの動きゾーン関数呼び出しは追跡する**(ADR-0013、
   change `cross-function-handler-writes`)。callee の binding が動きゾーン
   (render 後)の function 宣言と同一なら本体を再帰解析(visited-set・深さ
@@ -285,16 +282,17 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
   - なお `onClick={toggle}`(識別子参照ハンドラ)は従来どおり本体を
     マーカーごとにインライン展開する。同じ関数が参照と呼び出しの両方で
     使われると本体が重複して出力されるのは許容(統一は実需が出てから)。
-- **`use={fn}`アクション(ADR-0011/0022)はtop-level要素のみ実装済み**。関数返り値は
-  既存のupdate closure、object返り値は`{ update?, destroy? }`として実装済み。
-  `destroy`はcomponent `unmount()`時に逆順で一度だけ呼ばれる。以下は明示的な
-  scope limit・別changeへの先送り:
-  - リストアイテム/条件分岐ブランチ内の`use=`は返り値クロージャの動的
-    レジストリが未実装のため`scope limit`で拒否(design.md Decision 3)。
-    実需(アイテム内canvas等)が出た時点で別change。
-  - reactive params・複数action・unit内action lifecycleは未実装(実需と
-    代表fixtureが出るまで作らない)。component instance自体のcleanupはADR-0022で
-    解消済み。
+- **`use={fn}`アクション(ADR-0011/0022、`structural-unit-use-actions`)はtop-level要素、
+  list item、conditional branchで実装済み**。関数返り値は既存のupdate closure、object
+  返り値は`{ update?, destroy? }`として扱う。factory handleがaction resultを所有し、
+  keyed reorderでは再初期化せず、item削除・branch切替・祖先unit破棄・root `unmount()`で
+  destroyを一度だけ呼ぶ。子unitを先に解放し、例外があっても残りのcleanupを続ける。
+  以下は明示的なscope limit・別changeへの先送り:
+  - reactive paramsは未実装。actionの引数をsignal更新で再評価せず、必要なら別の実需と
+    代表fixtureで判断する。
+  - 1要素への複数actionは未実装。`use`属性は一要素一つのままとする。
+  - 汎用`onMount`/`onDestroy`/effect runtime、context、複数ファイルcomponent importは
+    未実装。component instanceのcleanupとunit action lifecycleは解消済み。
   - action本体のconcise arrow(単一式)にネストしたリスナー等がある場合、
     その内部の書き込みに対する`update_*`挿入位置は本体全体の実行時点に
     まとまる(リスナー発火時ではない)。ブロック本体は正しく分離される

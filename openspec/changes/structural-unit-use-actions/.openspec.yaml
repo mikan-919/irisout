@@ -1,0 +1,4 @@
+schema: spec-driven
+created: 2026-09-05
+goal: Connect use= actions to dynamic structural-unit elements with
+  instance-safe lifecycle and cleanup

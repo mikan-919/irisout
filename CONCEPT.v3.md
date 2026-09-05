@@ -66,9 +66,9 @@ irisout は React の代替ではありません。
 
 構造ユニットは深さを固定値で止めず、各instanceのfactoryへ再帰的に展開する。
 factoryは自身のDOM範囲、局所状態、binding cache、内側Listのkeyed Map、更新処理を
-所有する。内側unitが祖先の局所状態を読む場合は、祖先factoryの更新から内側unitへ
-接続する。branchを再生成したときは新しいcacheを作り、別instanceの前回値を使って
-更新を省略しない。
+所有する。`use=`があるfactoryはactionの初期化・update・destroyも所有する。
+内側unitが祖先の局所状態を読む場合は、祖先factoryの更新から内側unitへ接続する。
+branchを再生成したときは新しいcacheを作り、別instanceの前回値を使って更新を省略しない。
 
 イベント配線は、速度やJavaScriptヒープだけでなく、`target`、`currentTarget`、
 event objectの同一性、バブル・捕捉、非バブルイベントの意味を含めて選ぶ。実Chromium
@@ -85,8 +85,9 @@ event objectに差が出たため、現行の本番既定は直接配線であ�
 irisout はランタイムの存在を禁止しません。Listや条件分岐、component instanceの
 lifecycleなど、実行時にしか決まらない構造を正しく効率的に扱うための小さなコードを
 許容します。汎用lifecycle runtimeを暗黙に常駐させるのではなく、生成された
-component instanceが明示的な`unmount()`を持ち、top-level `use=` actionが
-`destroy`を明示した場合だけそのcleanupを保持します。
+component instanceが明示的な`unmount()`を持ち、`use=` actionの`destroy`を
+top-levelまたは構造unitの所有者factoryだけが保持します。keyed reorderでは同じ
+factory instanceを再利用し、key脱落・branch切替・祖先unit破棄時だけdestroyします。
 
 一方、次のようなアプリケーション全体を支配する汎用実行基盤は前提にしません。
 
@@ -102,6 +103,12 @@ component instanceが明示的な`unmount()`を持ち、top-level `use=` action�
 3. 専用コードの重複展開より、速度・サイズ・メモリまたは保守性で有利である。
 4. hidden workを増やさず、生成コードから挙動を追跡できる。
 5. 実ブラウザのベンチマークで判断できる。
+
+構造unitのaction lifecycleは汎用購読機構ではない。コンパイラが生成したfactory handle
+(`el`・`update`・`mount`・`destroy`)をList/conditionalの既存状態管理へ接続する。
+mountはDOM挿入後に子unit、同じunitのactionの順で実行し、destroyは子unit、同じunitの
+actionの逆順で実行する。これは外部listenerなど作者が明示したresourceの所有期間を
+DOM instanceへ合わせるための専用経路である。
 
 ---
 
@@ -128,7 +135,7 @@ irisout は compiler-first なシステムです。
 
 - ListのkeyとDOMノードの対応、再利用、移動、削除
 - 条件分岐など動的構造の生存期間
-- component instanceのmount/hydrate/unmountと、top-level `use=` actionの明示的なdestroy
+- component instanceのmount/hydrate/unmountと、top-level・構造unit内`use=` actionの明示的なdestroy
 - 実測で有利かつnative eventの意味同等性を確認した更新のバッチやイベント委譲
 - その他、コンパイル時には完結できない処理(ただし汎用lifecycle/effect runtimeは含めない)
 

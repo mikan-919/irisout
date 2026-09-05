@@ -31,6 +31,7 @@ import type {
   ConditionalMarker,
   ContentPart,
   DeclId,
+  ActionDecl,
   ListMarker,
   LocalDecl,
   MarkerId,
@@ -519,17 +520,29 @@ function registerAction(
   markerId: MarkerId,
   action: HandlerBody,
   instanceId: number,
+  local = false,
 ): void {
-  const { finalizeBody, result } = analyzeActionBody(ctx, action.body, instanceId)
-  if (result) {
+  const { finalizeBody, result, writeDeclIds, directCollectionWriteDeclIds } = analyzeActionBody(
+    ctx,
+    action.body,
+    instanceId,
+  )
+  if (!local) {
+    // void actionも対象要素をmarker registryから取得する必要がある。
+    // 返り値の有無をmarkerの有無と混同しない(ADR-0011)。
     ctx.markers.push({ id: markerId, kind: 'action' })
-    ctx.markerDeps.set(markerId, result.deps)
+    const deps = ctx.markerDeps.get(markerId) ?? new Set<DeclId>()
+    for (const dep of result?.deps ?? []) deps.add(dep)
+    ctx.markerDeps.set(markerId, deps)
   }
   ctx.actions.push({
     markerId,
     elParam: action.param,
     finalizeBody,
     finalizeResult: result?.finalize ?? null,
+    resultDeps: result?.deps ?? new Set<DeclId>(),
+    writeDeclIds,
+    directCollectionWriteDeclIds,
   })
 }
 
@@ -568,13 +581,6 @@ function renderElement(
     opts.skipAttrName,
   )
   const insideUnit = opts.insideUnit ?? false
-  // ADR-0011 design.md Decision 3: 返り値クロージャの動的レジストリが要るため、
-  // リストアイテム/条件分岐ブランチの中の `use=` は対象外のまま。
-  if (actionAttr && insideUnit) {
-    throw new Error(
-      'compile: use= inside list/conditional units is not supported yet (scope limit)',
-    )
-  }
   const attrs = renderStaticAttrs(staticAttrs)
 
   // ADR-0012: 動的属性バインディング。トップレベルのみビルド時実行で初期値を
@@ -678,7 +684,7 @@ function renderElement(
     for (const h of handlerAttrs) {
       ctx.handlers.push({ markerId, ...h })
     }
-    if (actionAttr) registerAction(ctx, markerId, actionAttr, instanceId)
+    if (actionAttr) registerAction(ctx, markerId, actionAttr, instanceId, insideUnit)
     attachAttrBindings(markerId)
     return `<${tagName}${attrs}${dynBake} data-iris-id="${markerId}">${inner}</${tagName}>`
   }
@@ -709,7 +715,7 @@ function renderElement(
     for (const h of handlerAttrs) {
       ctx.handlers.push({ markerId, ...h })
     }
-    if (actionAttr) registerAction(ctx, markerId, actionAttr, instanceId)
+    if (actionAttr) registerAction(ctx, markerId, actionAttr, instanceId, insideUnit)
     attachAttrBindings(markerId)
     return `<${tagName}${attrs}${dynBake} data-iris-id="${markerId}">${inner}</${tagName}>`
   }
@@ -729,7 +735,7 @@ function renderElement(
   for (const h of handlerAttrs) {
     ctx.handlers.push({ markerId, ...h })
   }
-  if (actionAttr) registerAction(ctx, markerId, actionAttr, instanceId)
+  if (actionAttr) registerAction(ctx, markerId, actionAttr, instanceId, insideUnit)
   attachAttrBindings(markerId)
   return `<${tagName}${attrs}${dynBake} data-iris-id="${markerId}">${sourceInner}</${tagName}>`
 }
@@ -817,9 +823,10 @@ function classifyStructuralExpr(
 function resolveUnitBodySource(bodyPath: NodePath<t.BlockStatement | t.Expression>): {
   jsxPath: NodePath<t.JSXElement>
   localDeclStmts: NodePath<t.VariableDeclaration>[]
+  localMovementFns: HandlerFns
 } {
   if (bodyPath.isJSXElement()) {
-    return { jsxPath: bodyPath, localDeclStmts: [] }
+    return { jsxPath: bodyPath, localDeclStmts: [], localMovementFns: new Map() }
   }
   if (!bodyPath.isBlockStatement()) {
     throw new Error(
@@ -835,17 +842,29 @@ function resolveUnitBodySource(bodyPath: NodePath<t.BlockStatement | t.Expressio
   if (!returnArg.isJSXElement()) {
     throw new Error('compile: list item block body must return a JSX element (scope limit)')
   }
-  const localDeclStmts = stmts.slice(0, -1)
-  for (const s of localDeclStmts) {
+  const localDeclStmts: NodePath<t.VariableDeclaration>[] = []
+  const localMovementFns: HandlerFns = new Map()
+  for (const s of stmts.slice(0, -1)) {
+    if (s.isFunctionDeclaration() && s.node.id) {
+      if (localMovementFns.has(s.node.id.name)) {
+        throw new Error(
+          `compile: duplicate movement-zone function "${s.node.id.name}" in a list item body (scope limit)`,
+        )
+      }
+      localMovementFns.set(s.node.id.name, s as NodePath<t.FunctionDeclaration>)
+      continue
+    }
     if (!s.isVariableDeclaration()) {
       throw new Error(
-        'compile: only signal()/derived() declarations are allowed before the return in a list item block body (scope limit)',
+        'compile: only signal()/derived() declarations and function declarations are allowed before the return in a list item block body (scope limit)',
       )
     }
+    localDeclStmts.push(s)
   }
   return {
     jsxPath: returnArg,
-    localDeclStmts: localDeclStmts as NodePath<t.VariableDeclaration>[],
+    localDeclStmts,
+    localMovementFns,
   }
 }
 
@@ -857,6 +876,7 @@ function renderStructuralUnitBody(
   skipAttrName?: string,
   localDeclStmts: NodePath<t.VariableDeclaration>[] = [],
   ancestorLocalDeclIds: Set<DeclId> = new Set(),
+  localMovementFns: HandlerFns = new Map(),
 ): { body: StructuralUnitBody; nestedDeps: Set<DeclId> } {
   // same-file-component-composition (design.md D5/D6): このユニット直下の
   // ローカルsignal/derived宣言を先に処理する。以後のテキスト/属性の
@@ -869,20 +889,35 @@ function renderStructuralUnitBody(
   const bodyLocalDeclIds = new Set(localDecls.map((d) => d.id))
   const accessibleLocalDeclIds = new Set([...ancestorLocalDeclIds, ...bodyLocalDeclIds])
 
+  // 子コンポーネントの動きゾーン関数は、インライン化後にlist itemの
+  // ブロックへ移されたものをこのunitだけの名前解決表へ加える。解析中だけ
+  // ctx.movementFnsにも反映し、既存の推移的書き込み検出を再利用する。
+  const unitHandlerFns: HandlerFns = new Map(handlerFns)
+  for (const [name, fn] of localMovementFns) unitHandlerFns.set(name, fn)
+  const previousMovementFns = ctx.movementFns
+  ctx.movementFns = unitHandlerFns
+
   const markersBefore = ctx.markers.length
   const handlersBefore = ctx.handlers.length
   const attrsBefore = ctx.attrBindings.length
-  const template = renderElement(ctx, elementPath, instanceId, handlerFns, {
-    skipAttrName,
-    insideUnit: true,
-    localDeclIds: accessibleLocalDeclIds,
-  })
+  const actionsBefore = ctx.actions.length
+  let template = ''
+  try {
+    template = renderElement(ctx, elementPath, instanceId, unitHandlerFns, {
+      skipAttrName,
+      insideUnit: true,
+      localDeclIds: accessibleLocalDeclIds,
+    })
+  } finally {
+    ctx.movementFns = previousMovementFns
+  }
   const localMarkers = ctx.markers.splice(markersBefore) as (
     | TextMarker
     | ListMarker
     | ConditionalMarker
   )[]
   const localHandlers = ctx.handlers.splice(handlersBefore)
+  const localActions = ctx.actions.splice(actionsBefore) as ActionDecl[]
   // ADR-0012 決定5: ユニット内の属性式が追跡signalを参照するのは、依存先が
   // 現在または祖先のローカルsignalである場合に限り許可する。ルートsignalや
   // 別の構造単位のローカルsignalは、字句的な所有範囲の外なので拒否する。
@@ -896,6 +931,16 @@ function renderStructuralUnitBody(
     }
   }
   const nestedDeps = new Set<DeclId>()
+  for (const action of localActions) {
+    for (const dep of action.resultDeps) {
+      if (ctx.localDeclIds.has(dep) && !accessibleLocalDeclIds.has(dep)) {
+        throw new Error(
+          'compile: an action result references a local signal outside its lexical scope (scope limit)',
+        )
+      }
+      if (!accessibleLocalDeclIds.has(dep)) nestedDeps.add(dep)
+    }
+  }
   for (const m of localMarkers) {
     const deps = ctx.markerDeps.get(m.id)
     ctx.markerDeps.delete(m.id)
@@ -928,6 +973,7 @@ function renderStructuralUnitBody(
       template,
       localMarkers,
       localHandlers,
+      localActions,
       localAttrBindings,
       localDecls,
     },
@@ -959,7 +1005,11 @@ function renderListUnit(
 
   const arrowPath = exprPath.get('arguments.0') as NodePath<t.ArrowFunctionExpression>
   const itemParam = (arrowPath.get('params.0') as NodePath<t.Identifier>).node.name
-  const { jsxPath: itemPath, localDeclStmts } = resolveUnitBodySource(arrowPath.get('body'))
+  const {
+    jsxPath: itemPath,
+    localDeclStmts,
+    localMovementFns,
+  } = resolveUnitBodySource(arrowPath.get('body'))
 
   const keyAttrPath = itemPath
     .get('openingElement')
@@ -991,6 +1041,7 @@ function renderListUnit(
     'key',
     localDeclStmts,
     ancestorLocalDeclIds,
+    localMovementFns,
   )
   // M5.5: ネストしたユニットの依存はこのリストマーカーの依存に合流させる。
   // 該当 signal の update_* がリストの keyed diff を再実行し、既存アイテムの

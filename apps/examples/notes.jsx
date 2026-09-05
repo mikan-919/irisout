@@ -55,6 +55,7 @@ export function NotesApp() {
           <label>
             Title
             <input
+              use={focusComposerInput}
               onInput={(e) => {
                 const target = e.target
                 if (target && 'value' in target && typeof target.value === 'string') {
@@ -100,13 +101,17 @@ export function NotesApp() {
   function archiveNote(id) {
     notes(notes().map((note) => (note.id === id ? { ...note, archived: !note.archived } : note)))
   }
+
+  function focusComposerInput(input) {
+    input.focus()
+  }
 }
 
 function NoteCard({ note, onArchive }) {
   const expanded = signal(false)
 
   render(
-    <article key={note.id} class={expanded() ? 'expanded' : ''}>
+    <article key={note.id} use={trackNoteCard} class={expanded() ? 'expanded' : ''}>
       <header>
         <h2>{note.title}</h2>
         <button type="button" onClick={() => expanded(!expanded())}>
@@ -132,4 +137,17 @@ function NoteCard({ note, onArchive }) {
       </button>
     </article>,
   )
+
+  function trackNoteCard(article) {
+    const onNotesPulse = () => {
+      const count = Number(article.getAttribute('data-pulse-count') || '0')
+      article.setAttribute('data-pulse-count', String(count + 1))
+    }
+    article.ownerDocument.addEventListener('notes-pulse', onNotesPulse)
+    return {
+      destroy() {
+        article.ownerDocument.removeEventListener('notes-pulse', onNotesPulse)
+      },
+    }
+  }
 }

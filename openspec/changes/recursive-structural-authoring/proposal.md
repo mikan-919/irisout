@@ -14,7 +14,9 @@ scope limitで残していた。実用画面のauthoringを確認するには、
   DOM範囲、局所状態、binding cache、内側Listのkeyed Map、更新処理を所有する。
 - ネストunitの条件式・配列式・handlerが現在または祖先unitの局所signalを使う
   場合、所有者factoryの更新へ接続する。root signalの直接テキスト/属性依存、
-  字句スコープ外の局所signal、既存のunit内`use=`はscope limitとして残す。
+  字句スコープ外の局所signalはscope limitとして残す。unit内`use=`の受理と
+  factory lifecycleは、後続change `structural-unit-use-actions`で実装する、という
+  切り出しにした(現在はそのchangeで実装済み)。
 - item factoryはmarker参照を一度だけ解決し、イベント登録で保存済み参照を使う。
 - TodoMVCを自然な編集条件へ変更し、フォーム・タブ・複数component・local state・
   入れ子Listを持つ`notes.jsx`をauthoring coverageの独立fixtureとして追加する。

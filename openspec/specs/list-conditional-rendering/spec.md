@@ -91,16 +91,15 @@ factory-per-unitクロージャで生成する(M5、change
 - **THEN** 内側リストのkeyed Mapの全エントリ(フィルタで非可視だった
   アイテムを含む)が破棄されてよく、これは仕様違反とみなさない
 
-### Requirement: アイテム/ブランチの明示的teardownは行わない
-コンパイラが生成するコードは、リストアイテム・条件分岐ブランチが破棄
-される際に、専用のteardown関数呼び出しを生成してはならない(SHALL NOT)。
-keyed Mapから参照が落ち、DOM要素が`remove()`されれば、状態・リスナー・
-DOM部分木はGC対象になる。
+### Requirement: actionなし構造unitの破棄
+actionを含まないリストアイテム・条件分岐ブランチは、keyed Mapから参照を外し、
+DOM要素を`remove()`して破棄しなければならない(SHALL)。この経路にaction専用の
+lifecycle registryやteardown処理を追加してはならない(SHALL NOT)。
 
-#### Scenario: アイテム削除時のteardown不在
-- **WHEN** リストアイテムがkeyed Mapから破棄される
-- **THEN** 生成されたコードは明示的なteardown関数を呼び出さず、DOM要素の
-  `remove()`のみを行う
+#### Scenario: actionなしitem削除
+- **WHEN** actionを含まないリストアイテムがkeyed Mapから破棄される
+- **THEN** 既存のfactory経路でDOM要素を`remove()`し、action lifecycle helperを
+  呼び出さない
 
 ### Requirement: ネストした構造ユニットの再帰生成
 コンパイラは、リストアイテム・条件分岐ブランチ内の構造ユニットを、深さを
@@ -154,22 +153,21 @@ update関数を、外側の構造ユニットのfactory関数のローカルス�
 DOM範囲、ローカル状態、binding cache、keyed Map、更新処理を生成しなければ
 ならない(SHALL)。外側の構造ユニット(リストアイテム・条件分岐ブランチ)が
 破棄・再生成される際、内側の構造ユニットのfactory instance・keyed Map・
-ローカル状態は、外側のDOM部分木の`remove()`とともに一括して失われる。
-明示的なteardown呼び出しは生成しない。
+ローカル状態を破棄しなければならない(SHALL)。actionを持つ内側unitは子actionを
+先にdestroyし、その後DOM部分木を`remove()`する。actionを持たない内側unitは
+従来どおりDOMと参照を解放する。
 
 #### Scenario: 外側条件分岐ブランチの切り替えによる内側リストの破棄
 - **WHEN** 条件分岐ブランチ内にリストがネストしており、外側の条件分岐が
   別のブランチ(または非選択)に切り替わる
-- **THEN** 生成されたコードは、明示的なteardown関数を呼び出さず、外側
-  ブランチのDOM要素の`remove()`のみを行う(内側リストのkeyed Mapは
-  参照ごと失われる)
+- **THEN** 内側リストのactionとkeyed Mapを解放してから外側ブランチのDOM要素を
+  `remove()`する
 
 #### Scenario: リストアイテムのkey差し替えによる内側条件分岐の破棄
 - **WHEN** リストアイテム内に条件分岐がネストしており、そのアイテムの
   keyがkeyed diffで削除対象になる
-- **THEN** 生成されたコードは、明示的なteardown関数を呼び出さず、
-  アイテムのDOM要素の`remove()`のみを行う(内側条件分岐の状態は
-  参照ごと失われる)
+- **THEN** 内側条件分岐のactionと状態を解放してからアイテムのDOM要素を
+  `remove()`する
 
 #### Scenario: 再生成されたbranchのbinding cacheは独立する
 - **WHEN** itemのローカルsignalで条件分岐を切り替え、同じbranchを再生成する

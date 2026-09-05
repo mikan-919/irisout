@@ -30,7 +30,8 @@ component unmount/action cleanupも実装済み(ADR-0022)。生成instanceの`un
 一度だけmount/hydrateされたinstanceをidempotently破棄し、top-level listener、
 component-owned DOM、marker/List/conditional stateを解放する。`use=`の既存関数返り値は
 update closureの意味を維持し、外部resourceの解除は`{ update?, destroy? }`の`destroy`
-へ限定する。unit内`use=`・汎用lifecycle runtime・同instance再mountは引き続き対象外。
+へ限定する。unit内`use=`のfactory lifecycleも`structural-unit-use-actions`で実装済み。
+汎用lifecycle runtime・同instance再mountは引き続き対象外。
 
 **第2段階実装済み(ADR-0020)**: 同一ハンドラ/action/追跡関数のwrite setに複数root
 があり、同じmarkerへ依存する場合だけ、コンパイル時に専用同期batchを生成する。
@@ -73,8 +74,8 @@ minifyを有効にしている。counterのsize budgetは`packages/compiler/test
   取得する signal 同型の呼び出し規約を暫定採用 / **解消済み(ADR-0011、
   change `use-action-impl`)**: Svelte Action風の `use={fn}` を採用・
   実装し、ref primitiveは作らない(要素アクセスは use / `e`+プラット
-  フォーム走査 / 返り値クロージャの3チャネル)。top-level要素のみで、
-  ユニット内`use=`は引き続きscope limit。JSX型定義はchange
+  フォーム走査 / 返り値クロージャの3チャネル)。top-level要素、list item、
+  conditional branchで実装済み。JSX型定義はchange
   `jsx-type-checking-foundation`で解消済み(STATUS.md参照)。
 - (02) 完了トグルに応じた動的 class 付与(`class={cond ? 'a' : ''}`)の
   生成先 / authored 側はJSXの三項式をそのまま書いた / **解消済み
@@ -195,7 +196,8 @@ STATUS.md参照。
   drillingを避ける手段が無いままになる。
 - **onDestroy/cleanup**: component instanceの明示的な`unmount()`とtop-level
   `use=` actionの`{ destroy }`はADR-0022で解消済み。要素を持たない処理に対する
-  汎用`onMount`/`onDestroy`/effect runtime、unit内action lifecycleは引き続き未着手。
+  汎用`onMount`/`onDestroy`/effect runtimeは引き続き未着手。unit内action lifecycleは
+  `structural-unit-use-actions`で実装済み。
 - **onMount的な、要素に紐付かない起動処理**: `use=`は要素単位のmount時
   実行はカバーする(ADR-0011)が、「特定の要素を持たない副作用」(例:
   タイマー開始、WebSocket接続)を書く場所が無い。ADR-0004「`onMount`/
@@ -306,13 +308,19 @@ transition/animation、portal、error boundary、async/resource
     idempotentな`unmount()`を追加し、top-level handler removal、component-owned DOMと
     structural stateの解放、action `destroy`の逆順実行を実装した。既存の関数返り値は
     update closureのまま維持し、object返り値の`update`/`destroy`を型・解析・runtime
-    検証へ追加した。unit内`use=`、再mount、汎用lifecycle runtimeは実装しない。
+    検証へ追加した。unit内`use=`は`structural-unit-use-actions`で実装済み。
+    再mount、汎用lifecycle runtimeは実装しない。
 15. ~~再帰的構造unitと祖先local signal~~ — **完了**(change
     `recursive-structural-authoring`)。任意の深さのfactory生成、unit instance専有の
     DOM範囲・状態・binding cache、祖先local signalからのowner update接続を実装した。
 16. ~~authoring coverage~~ — **完了**。`apps/examples/notes.jsx`と独立した
     `packages/compiler/test/authoring-coverage.test.ts`で、form、tabs、local state、
     条件分岐、nested List、同一ファイルcomponentを実DOMで確認した。
+17. ~~構造unit内`use=` action lifecycle~~ — **完了**(change
+    `structural-unit-use-actions`、ADR-0011/0022)。list item・conditional branch・
+    任意のネストでactionをfactory handleへ接続し、keyed reorderの再利用、item削除・
+    branch切替・祖先unit破棄・root unmountのdestroy、初期化失敗と破棄例外の回収を
+    実装・検証した。
 
 ## 参考資料
 

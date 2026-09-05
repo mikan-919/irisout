@@ -2,8 +2,8 @@
 // apps/examples/todomvc.handwritten.js を参照。
 //
 // 実装済み: リスト・条件分岐(M5)、任意の深さの構造ユニット
-// (M5.5、change `m5-5-nested-structural-units`)、top-levelの`use=`属性
-// (ADR-0011、change `use-action-impl`)、同一ファイル内の複数コンポーネント
+// (M5.5、change `m5-5-nested-structural-units`)、要素・構造unit内の`use=`属性
+// (ADR-0011/0022、change `structural-unit-use-actions`)、同一ファイル内の複数コンポーネント
 // 合成・ローカルsignal(ADR-0014、change `same-file-component-composition`)。
 //
 // 構造ユニットは親要素の兄弟と共存できるコメント範囲として生成される。

@@ -153,6 +153,36 @@ export function App() {
 `
     expect(() => compile(source)).toThrow(/scope limit/)
   })
+
+  it('リストへインライン化した同一ファイル部品のuse=をitem単位で初期化・破棄する', async () => {
+    const source = `
+export function App() {
+  const todos = signal([{ id: 1, text: 'a' }, { id: 2, text: 'b' }]);
+  render(
+    <div>
+      <button onClick={clear}>clear</button>
+      <ul>{todos().map((todo) => <TodoRow todo={todo} />)}</ul>
+    </div>
+  );
+  function clear() { todos([]); }
+}
+function TodoRow({ todo }) {
+  render(<li key={todo.id} use={track}>{todo.text}</li>);
+  function track(el) {
+    el.setAttribute('data-action-init', 'true');
+    return { destroy() { el.setAttribute('data-action-destroyed', 'true'); } };
+  }
+}
+`
+    const { code } = compile(source)
+    expect(code).not.toContain('inlining component "TodoRow" with its own handler functions')
+    const container = await mount(code)
+    const rows = [...container.querySelectorAll('li')]
+    expect(rows.map((row) => row.getAttribute('data-action-init'))).toEqual(['true', 'true'])
+    dispatch(container, container.querySelector('button'), 'click')
+    expect(container.querySelectorAll('li')).toHaveLength(0)
+    expect(rows.map((row) => row.getAttribute('data-action-destroyed'))).toEqual(['true', 'true'])
+  })
 })
 
 describe('collectTopLevelComponents', () => {
@@ -522,7 +552,7 @@ function Foo(a, b) {
     expect(() => compile(source)).toThrow(/single destructured parameter.*scope limit/)
   })
 
-  it('動きゾーン関数を持つコンポーネントをリストアイテムへインライン化することは拒否する', () => {
+  it('動きゾーン関数を持つコンポーネントをリストアイテムへインライン化できる', async () => {
     const source = `
 export function App() {
   const todos = signal([{ id: 1 }]);
@@ -539,7 +569,9 @@ function Item({ todo }) {
   function helper() {}
 }
 `
-    expect(() => compile(source)).toThrow(/its own handler functions into a list item.*scope limit/)
+    const { code } = compile(source)
+    const container = await mount(code)
+    dispatch(container, container.querySelector('li'), 'click')
   })
 
   it('リストアイテムのブロック本体でsignal/derived宣言以外の文を拒否する', () => {
@@ -557,7 +589,7 @@ export function App() {
 }
 `
     expect(() => compile(source)).toThrow(
-      /only signal\(\)\/derived\(\) declarations are allowed before the return.*scope limit/,
+      /only signal\(\)\/derived\(\) declarations and function declarations are allowed before the return.*scope limit/,
     )
   })
 

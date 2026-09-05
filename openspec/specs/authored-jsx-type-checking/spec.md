@@ -84,12 +84,13 @@ action接続)・`onXxx`パターンのイベントハンドラ属性・`children
 
 ### Requirement: 型検査は実行時 scope limit の代替ではない
 `types/jsx.d.ts`が特定の構文(例: リストアイテム内の`use=`)を型上
-許可していても、それは実行時にコンパイラの`scope limit`拒否を免れることを
-意味してはならない(MUST NOT)。この非対称性はdesign.mdおよびコード内
-コメントに明記しなければならない(MUST)。
+許可していても、それは実行時のコンパイラによる別の`scope limit`検査を免れることを
+意味してはならない(MUST NOT)。構造unit内の`use=`は現在受理されるが、字句スコープ外の
+signal参照や未対応のaction形などは引き続き拒否される。この非対称性はdesign.mdおよび
+コード内コメントに明記しなければならない(MUST)。
 
-#### Scenario: 型上は書けるが実行時は scope limit のままの構文がある
+#### Scenario: useの型検査と実行時受理は別の検査である
 - **WHEN** リストアイテム内の要素に`use=`属性を書く
-- **THEN** `tsc --noEmit`は型エラーを報告しないが、`compile()`は
-  `compile: use= inside list/conditional units is not supported yet (scope limit)`
-  で拒否する(挙動は本changeで変更しない)
+- **THEN** `tsc --noEmit`は型エラーを報告せず、`compile()`は構造unit actionの
+  受理条件を検査する。構造unit内の`use=`自体は受理されるが、型宣言はscope limit
+  検査の代替ではない

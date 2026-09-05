@@ -58,6 +58,8 @@ export interface StructuralUnitBodyOutput {
   template: string
   localMarkers: (TextMarker | ListMarkerOutput | ConditionalMarkerOutput)[]
   localHandlers: HandlerOutput[]
+  /** このfactory instanceが所有するaction。 */
+  localActions: ActionOutput[]
   /** ADR-0012: このユニット専有の動的属性バインディング。 */
   localAttrBindings: AttrBinding[]
   /** same-file-component-composition: このユニット直下のローカルsignal宣言。 */
@@ -197,6 +199,76 @@ function bodyHasList(body: StructuralUnitBodyOutput): boolean {
   })
 }
 
+function bodyHasActions(body: StructuralUnitBodyOutput): boolean {
+  return (
+    body.localActions.length > 0 ||
+    bodyUnits(body).some((unit) => {
+      if (unit.kind === 'list') return bodyHasActions(unit.body)
+      return unit.branches.some((branch) => branch.body != null && bodyHasActions(branch.body))
+    })
+  )
+}
+
+function bodyHasResultActions(body: StructuralUnitBodyOutput): boolean {
+  return (
+    body.localActions.some((action) => action.resultRendered != null) ||
+    bodyUnits(body).some((unit) => {
+      if (unit.kind === 'list') return bodyHasResultActions(unit.body)
+      return unit.branches.some(
+        (branch) => branch.body != null && bodyHasResultActions(branch.body),
+      )
+    })
+  )
+}
+
+function bodyHasLifecycleList(body: StructuralUnitBodyOutput): boolean {
+  return bodyUnits(body).some((unit) => {
+    if (unit.kind === 'list') return bodyHasActions(unit.body)
+    return unit.branches.some((branch) => branch.body != null && bodyHasLifecycleList(branch.body))
+  })
+}
+
+function markerHasActions(marker: ListMarkerOutput | ConditionalMarkerOutput): boolean {
+  return marker.kind === 'list'
+    ? bodyHasActions(marker.body)
+    : marker.branches.some((branch) => branch.body != null && bodyHasActions(branch.body))
+}
+
+function markersHaveResultActions(markers: MarkerOutput[]): boolean {
+  return markers.some((marker) => {
+    if (marker.kind === 'action') return false
+    if (marker.kind === 'list') return bodyHasResultActions(marker.body)
+    if (marker.kind === 'conditional') {
+      return marker.branches.some(
+        (branch) => branch.body != null && bodyHasResultActions(branch.body),
+      )
+    }
+    return false
+  })
+}
+
+function markersHaveStructuralActions(markers: MarkerOutput[]): boolean {
+  return markers.some((marker) => {
+    if (marker.kind === 'list') return bodyHasActions(marker.body)
+    if (marker.kind === 'conditional') {
+      return marker.branches.some((branch) => branch.body != null && bodyHasActions(branch.body))
+    }
+    return false
+  })
+}
+
+function markersHaveLifecycleList(markers: MarkerOutput[]): boolean {
+  return markers.some((marker) => {
+    if (marker.kind === 'list') return bodyHasActions(marker.body)
+    if (marker.kind === 'conditional') {
+      return marker.branches.some(
+        (branch) => branch.body != null && bodyHasLifecycleList(branch.body),
+      )
+    }
+    return false
+  })
+}
+
 function markersHaveList(markers: MarkerOutput[]): boolean {
   return markers.some((marker) => {
     if (marker.kind === 'list') return true
@@ -212,6 +284,7 @@ function markersHaveList(markers: MarkerOutput[]): boolean {
 function branchHasUpdate(body: StructuralUnitBodyOutput, inItemScope: boolean): boolean {
   return (
     bodyUnits(body).length > 0 ||
+    body.localActions.length > 0 ||
     (inItemScope && (bodyTexts(body).length > 0 || body.localAttrBindings.length > 0))
   )
 }
@@ -231,7 +304,7 @@ function condDispatchesUpdate(marker: ConditionalMarkerOutput, inItemScope: bool
 // 条件分岐 update も再実行する。inItemScope は「外側のどこかに item 仮引数が
 // あるか」― その場合のみブランチのテキストも update() で再描画する
 // (外側 item の値差し替えを閉包経由で反映するため)。
-function generateFactory(
+function generateFactoryLegacy(
   factoryName: string,
   templateVar: string,
   itemParam: string | null,
@@ -354,7 +427,7 @@ function generateFactory(
     if (u.kind === 'list') {
       lines.push(`  const __list_${u.id}__ = __createListRuntime__(${JSON.stringify(u.id)});`)
       lines.push(
-        ...generateFactory(
+        ...generateFactoryLegacy(
           `__create_${u.id}__`,
           `__tpl_${u.id}__`,
           u.itemParam,
@@ -368,7 +441,7 @@ function generateFactory(
       u.branches.forEach((branch, i) => {
         if (!branch.body) return
         lines.push(
-          ...generateFactory(
+          ...generateFactoryLegacy(
             `__create_${u.id}_b${i}__`,
             `__tpl_${u.id}_b${i}__`,
             null,
@@ -442,6 +515,260 @@ function generateFactory(
   }
   lines.push('}')
   return lines
+}
+
+// actionを含むunitは、DOM接続後のmountと、所有資源を逆順に解放する
+// destroyを明示的に持つ。actionを含まないunitは上の既存経路を使い、生成
+// コードと通常runtimeの経路を増やさない。
+function generateLifecycleFactory(
+  factoryName: string,
+  templateVar: string,
+  itemParam: string | null,
+  body: StructuralUnitBodyOutput,
+  inItemScope: boolean,
+  ancestorUpdateExprs: (string | null)[] = [],
+): string[] {
+  const texts = bodyTexts(body)
+  const units = bodyUnits(body)
+  const ownActions = body.localActions
+  const childScope = inItemScope || itemParam != null
+  const refreshTexts = (itemParam != null || inItemScope) && texts.length > 0
+  const refreshAttrs = (itemParam != null || inItemScope) && body.localAttrBindings.length > 0
+  const hasLocalSelfUpdate = body.localHandlers.some((h) => h.localUpdateLevels.includes(0))
+  const needsUpdate =
+    itemParam != null ||
+    refreshTexts ||
+    refreshAttrs ||
+    units.length > 0 ||
+    hasLocalSelfUpdate ||
+    ownActions.length > 0
+  const updateName = `${factoryName}update__`
+  const bindingStateExpr = itemParam != null ? '__item__' : '__unit_state__'
+  const selfUpdateExpr = itemParam != null ? `${updateName}(${itemParam})` : `${updateName}()`
+  const localUpdateExprs = [selfUpdateExpr, ...ancestorUpdateExprs]
+  const lines: string[] = []
+  const params = itemParam ? `${itemParam}, __item__` : ''
+
+  lines.push(`function ${factoryName}(${params}) {`)
+  lines.push(`  const __node__ = ${templateVar}.content.cloneNode(true);`)
+  lines.push('  const __el__ = __node__.firstElementChild;')
+  if (itemParam == null && (refreshTexts || refreshAttrs)) {
+    lines.push('  const __unit_state__ = { bindings: new Map() };')
+  }
+  for (const d of body.localDecls) lines.push(`  let ${d.outputName} = ${d.rendered};`)
+  for (const action of ownActions) {
+    if (action.resultRendered) {
+      lines.push(
+        `  let __use_update_${action.markerId}__;`,
+        `  let __use_destroy_${action.markerId}__;`,
+      )
+    }
+  }
+  lines.push('  let __unit_mounted__ = false;', '  let __unit_destroyed__ = false;')
+
+  for (const m of body.localMarkers) {
+    if (m.kind === 'text') {
+      lines.push(`  const __${m.id}__ = __find__(__el__, ${JSON.stringify(m.id)});`)
+    } else {
+      lines.push(`  const __range_${m.id}__ = __findRange__(__el__, ${JSON.stringify(m.id)});`)
+    }
+  }
+  const attrs = body.localAttrBindings
+  const foundIds = new Set(body.localMarkers.map((m) => m.id))
+  const elementRefIds = new Set([
+    ...attrs.map((b) => b.markerId),
+    ...body.localHandlers.map((h) => h.markerId),
+    ...ownActions.map((a) => a.markerId),
+  ])
+  for (const id of elementRefIds) {
+    if (!foundIds.has(id)) {
+      lines.push(`  const __${id}__ = __find__(__el__, ${JSON.stringify(id)});`)
+    }
+  }
+
+  for (const u of units) {
+    if (u.kind === 'list') {
+      lines.push(`  const __list_${u.id}__ = __createListRuntime__(${JSON.stringify(u.id)});`)
+      lines.push(
+        ...generateFactory(
+          `__create_${u.id}__`,
+          `__tpl_${u.id}__`,
+          u.itemParam,
+          u.body,
+          childScope,
+          localUpdateExprs,
+        ).map((l) => `  ${l}`),
+      )
+    } else {
+      lines.push(`  let __cond_${u.id}__ = -1;`, `  let __cond_${u.id}_handle__ = null;`)
+      u.branches.forEach((branch, i) => {
+        if (!branch.body) return
+        lines.push(
+          ...generateFactory(
+            `__create_${u.id}_b${i}__`,
+            `__tpl_${u.id}_b${i}__`,
+            null,
+            branch.body,
+            childScope,
+            localUpdateExprs,
+          ).map((l) => `  ${l}`),
+        )
+      })
+    }
+  }
+
+  body.localHandlers.forEach((h, index) => {
+    const handlerVar = `__unit_handler_${h.markerId}_${index}__`
+    lines.push(
+      `  const ${handlerVar} = ${renderHandlerCall(h, itemParam, '', localUpdateExprs)};`,
+      `  __${h.markerId}__.addEventListener(${JSON.stringify(h.eventName)}, ${handlerVar});`,
+    )
+  })
+  if (!refreshTexts) {
+    for (const m of texts) {
+      lines.push(`  __${m.id}__.textContent = \`${innerTemplateSource(m.contentParts)}\`;`)
+    }
+  }
+  if (!refreshAttrs) {
+    for (const b of attrs) lines.push(`  ${renderAttrSet(`__${b.markerId}__`, b)}`)
+  }
+
+  lines.push(`  function ${updateName}(${itemParam ? '__next__' : ''}) {`)
+  lines.push('    if (__unit_destroyed__) return;')
+  if (itemParam) lines.push(`    ${itemParam} = __next__;`)
+  if (refreshTexts) {
+    for (const m of texts) {
+      const valueVar = `__value_${m.id}__`
+      lines.push(
+        `    const ${valueVar} = \`${innerTemplateSource(m.contentParts)}\`;`,
+        `    if (__updateListBinding__(${bindingStateExpr}, ${JSON.stringify(m.id)}, ${valueVar})) __${m.id}__.textContent = ${valueVar};`,
+      )
+    }
+  }
+  if (refreshAttrs) {
+    attrs.forEach((b, i) => {
+      const valueVar = `__attr_${i}__`
+      const bindingId = `${b.markerId}:${b.name}`
+      lines.push(
+        `    const ${valueVar} = ${b.rendered};`,
+        `    if (__updateListBinding__(${bindingStateExpr}, ${JSON.stringify(bindingId)}, ${valueVar})) ${renderAttrSet(`__${b.markerId}__`, { ...b, rendered: valueVar })}`,
+      )
+    })
+  }
+  for (const u of units) {
+    if (u.kind === 'list') {
+      lines.push(
+        ...generateListUpdate(u, `__range_${u.id}__`, '__unit_mounted__').map((l) => `  ${l}`),
+      )
+    } else {
+      lines.push(
+        ...generateConditionalUpdate(
+          u,
+          `__range_${u.id}__`,
+          condDispatchesUpdate(u, childScope),
+          '__unit_mounted__',
+        ).map((l) => `  ${l}`),
+      )
+    }
+  }
+  for (const action of ownActions) {
+    if (action.resultRendered) {
+      lines.push(`    if (__use_update_${action.markerId}__) __use_update_${action.markerId}__();`)
+    }
+  }
+  lines.push('  }')
+  if (needsUpdate) lines.push(`  ${updateName}(${itemParam ?? ''});`)
+
+  lines.push('  function __mount_unit__() {')
+  lines.push('    if (__unit_destroyed__ || __unit_mounted__) return;')
+  lines.push('    try {')
+  for (const u of units) {
+    if (u.kind === 'list') {
+      if (bodyHasActions(u.body)) {
+        lines.push(`      __mountListRuntime__(__list_${u.id}__);`)
+      }
+    } else if (markerHasActions(u)) {
+      lines.push(`      if (__cond_${u.id}_handle__?.mount) __cond_${u.id}_handle__.mount();`)
+    }
+  }
+  for (const action of ownActions) {
+    lines.push(`      ${renderActionCall(action, `__${action.markerId}__`, localUpdateExprs)}`)
+  }
+  lines.push(
+    '      __unit_mounted__ = true;',
+    '    } catch (__error__) {',
+    '      try { __destroy_unit__(); } catch (__cleanup_error__) {}',
+    '      throw __error__;',
+    '    }',
+    '  }',
+  )
+
+  lines.push('  function __destroy_unit__() {')
+  lines.push('    if (__unit_destroyed__) return;')
+  lines.push('    __unit_destroyed__ = true;')
+  lines.push('    __unit_mounted__ = false;')
+  lines.push('    let __destroy_error__;')
+  body.localHandlers.forEach((h, index) => {
+    const handlerVar = `__unit_handler_${h.markerId}_${index}__`
+    lines.push(
+      `    __${h.markerId}__.removeEventListener(${JSON.stringify(h.eventName)}, ${handlerVar});`,
+    )
+  })
+  for (const u of units) {
+    if (u.kind === 'list') {
+      if (bodyHasActions(u.body)) {
+        lines.push(
+          `    try { __destroyListRuntime__(__list_${u.id}__); } catch (__error__) { __destroy_error__ ??= __error__; }`,
+        )
+      }
+    } else if (markerHasActions(u)) {
+      lines.push(
+        `    try { if (__cond_${u.id}_handle__) { const __handle__ = __cond_${u.id}_handle__; try { __handle__.destroy?.(); } catch (__unit_destroy_error__) { __destroy_error__ ??= __unit_destroy_error__; } try { __handle__.el.remove(); } catch (__unit_remove_error__) { __destroy_error__ ??= __unit_remove_error__; } } } catch (__error__) { __destroy_error__ ??= __error__; }`,
+        `    __cond_${u.id}_handle__ = null;`,
+        `    __cond_${u.id}__ = -1;`,
+      )
+    }
+  }
+  for (const action of [...ownActions].reverse()) {
+    if (action.resultRendered) {
+      lines.push(
+        `    try { if (__use_destroy_${action.markerId}__) { const __destroy__ = __use_destroy_${action.markerId}__; __use_destroy_${action.markerId}__ = null; __use_update_${action.markerId}__ = null; __destroy__(); } else { __use_update_${action.markerId}__ = null; } } catch (__error__) { __destroy_error__ ??= __error__; }`,
+      )
+    }
+  }
+  lines.push('    if (__destroy_error__) throw __destroy_error__;', '  }')
+  lines.push(
+    `  return { el: __el__, update: ${updateName}, mount: __mount_unit__, destroy: __destroy_unit__ };`,
+    '}',
+  )
+  return lines
+}
+
+function generateFactory(
+  factoryName: string,
+  templateVar: string,
+  itemParam: string | null,
+  body: StructuralUnitBodyOutput,
+  inItemScope: boolean,
+  ancestorUpdateExprs: (string | null)[] = [],
+): string[] {
+  return bodyHasActions(body)
+    ? generateLifecycleFactory(
+        factoryName,
+        templateVar,
+        itemParam,
+        body,
+        inItemScope,
+        ancestorUpdateExprs,
+      )
+    : generateFactoryLegacy(
+        factoryName,
+        templateVar,
+        itemParam,
+        body,
+        inItemScope,
+        ancestorUpdateExprs,
+      )
 }
 
 interface StructuralUnitsCode {
@@ -530,11 +857,12 @@ function generateStructuralUnits(
   // 呼んで populate する必要がある。text マーカーのみの signal は初期 HTML
   // で既に値が焼き込まれているので対象外(既存スナップショットを変えない)。
   const signalsNeedingInitialCall = new Set<DeclId>()
+  const populatedMarkers = new Set<MarkerId>()
   for (const [signalId, markerIds] of signalToMarkers) {
     for (const mId of markerIds) {
-      if (structuralMarkerIds.has(mId)) {
+      if (structuralMarkerIds.has(mId) && !populatedMarkers.has(mId)) {
+        populatedMarkers.add(mId)
         signalsNeedingInitialCall.add(signalId)
-        break
       }
     }
   }
@@ -547,15 +875,28 @@ function generateStructuralUnits(
 // updateListBinding()で値が変わった箇所だけ実DOMへ反映する。
 // M5.5: elExpr はリストのマーカー要素の取得式 ― トップレベルは
 // __markers__.get()、ネスト時は外側 factory クロージャの __<id>__ 変数。
-function generateListUpdate(marker: ListMarkerOutput, elExpr: string): string[] {
+function generateListUpdate(
+  marker: ListMarkerOutput,
+  elExpr: string,
+  mountExpr = 'true',
+): string[] {
+  const hasActions = bodyHasActions(marker.body)
   const usesSharedUpdater =
-    bodyUnits(marker.body).length === 0 && marker.body.localDecls.length === 0
-  const updaterArg = usesSharedUpdater ? `, __create_${marker.id}__update__` : ''
+    bodyUnits(marker.body).length === 0 &&
+    marker.body.localDecls.length === 0 &&
+    marker.body.localActions.length === 0
+  const updaterArg = usesSharedUpdater
+    ? `, __create_${marker.id}__update__`
+    : hasActions
+      ? ', undefined'
+      : ''
   const keyOf = marker.collectionOutputName
     ? `(${marker.itemParam}) => { const __key__ = ${marker.keyRendered}; if (!Object.is(__collection_${marker.collectionOutputName}__.keyOf(${marker.itemParam}), __key__)) throw new Error("collection List key does not match collection identity"); return __key__; }`
     : `(${marker.itemParam}) => ${marker.keyRendered}`
   return [
-    `  __reconcileList__(__list_${marker.id}__, ${elExpr}, ${marker.arrayRendered}, ${keyOf}, __create_${marker.id}__${updaterArg});`,
+    hasActions
+      ? `  __reconcileListWithLifecycle__(__list_${marker.id}__, ${elExpr}, ${marker.arrayRendered}, ${keyOf}, __create_${marker.id}__${updaterArg}, ${mountExpr});`
+      : `  __reconcileList__(__list_${marker.id}__, ${elExpr}, ${marker.arrayRendered}, ${keyOf}, __create_${marker.id}__${updaterArg});`,
   ]
 }
 
@@ -570,7 +911,9 @@ function generateConditionalUpdate(
   marker: ConditionalMarkerOutput,
   elExpr: string,
   dispatchUpdate: boolean,
+  mountExpr = 'true',
 ): string[] {
+  const hasActions = markerHasActions(marker)
   const hasConsequent = marker.branches[0]?.body != null
   const hasAlternate = !marker.isLogical && marker.branches[1]?.body != null
   const targetExpr = marker.isLogical
@@ -585,19 +928,36 @@ function generateConditionalUpdate(
   const branchCreateLines = marker.branches
     .map((branch, i) =>
       branch.body
-        ? `      if (__target__ === ${i}) ${handleVar} = __create_${marker.id}_b${i}__();`
+        ? `        if (__target__ === ${i}) ${handleVar} = __create_${marker.id}_b${i}__();`
         : null,
     )
     .filter((l): l is string => l !== null)
-  const lines = [
-    '  {',
-    `    const __target__ = ${targetExpr};`,
-    `    if (__target__ !== ${stateVar}) {`,
-    `      if (${handleVar}) { ${handleVar}.el.remove(); ${handleVar} = null; }`,
-    `      ${stateVar} = __target__;`,
-    ...branchCreateLines,
-    `      if (${handleVar}) { const __range__ = ${elExpr}; const __parent__ = __range__?.end.parentNode; if (__parent__) __parent__.insertBefore(${handleVar}.el, __range__.end); }`,
-  ]
+  const lines = hasActions
+    ? [
+        '  {',
+        `    const __target__ = ${targetExpr};`,
+        '    let __conditional_error__;',
+        `    if (__target__ !== ${stateVar}) {`,
+        `      if (${handleVar}) { const __old_handle__ = ${handleVar}; try { __old_handle__.destroy?.(); } catch (__error__) { __conditional_error__ ??= __error__; } try { __old_handle__.el.remove(); } catch (__error__) { __conditional_error__ ??= __error__; } ${handleVar} = null; }`,
+        `      ${stateVar} = __target__;`,
+        '      try {',
+        ...branchCreateLines,
+        `        if (${handleVar}) { const __range__ = ${elExpr}; const __parent__ = __range__?.end.parentNode; if (__parent__) { __parent__.insertBefore(${handleVar}.el, __range__.end); if (${mountExpr} && ${handleVar}.mount) ${handleVar}.mount(); } }`,
+        '      } catch (__error__) {',
+        '        __conditional_error__ ??= __error__;',
+        `        if (${handleVar}) { const __failed_handle__ = ${handleVar}; try { __failed_handle__.destroy?.(); } catch (__cleanup_error__) { __conditional_error__ ??= __cleanup_error__; } try { __failed_handle__.el.remove(); } catch (__cleanup_error__) { __conditional_error__ ??= __cleanup_error__; } ${handleVar} = null; }`,
+        `        ${stateVar} = -1;`,
+        '      }',
+      ]
+    : [
+        '  {',
+        `    const __target__ = ${targetExpr};`,
+        `    if (__target__ !== ${stateVar}) {`,
+        `      if (${handleVar}) { ${handleVar}.el.remove(); ${handleVar} = null; }`,
+        `      ${stateVar} = __target__;`,
+        ...branchCreateLines,
+        `      if (${handleVar}) { const __range__ = ${elExpr}; const __parent__ = __range__?.end.parentNode; if (__parent__) __parent__.insertBefore(${handleVar}.el, __range__.end); }`,
+      ]
   if (dispatchUpdate) {
     lines.push(
       `    } else if (${handleVar} && ${handleVar}.update) {`,
@@ -607,6 +967,7 @@ function generateConditionalUpdate(
   } else {
     lines.push('    }')
   }
+  if (hasActions) lines.push('    if (__conditional_error__) throw __conditional_error__;')
   lines.push('  }')
   return lines
 }
@@ -614,9 +975,26 @@ function generateConditionalUpdate(
 // ADR-0011: mount/hydrate 末尾でaction本体を実行し、返り値を runtime の
 // 正規化境界へ渡す。関数形式は update、object 形式は update/destroy として
 // 保持する。既存の関数返り値は初期1回+依存 signal 更新時に呼ぶ。
-function renderActionCall(a: ActionOutput): string {
-  const fn = `function(${a.elParam ?? ''}) {${a.bodyRendered}${a.resultRendered ? ` return ${a.resultRendered};` : ''}}`
-  const call = `(${fn})(__markers__.get(${JSON.stringify(a.markerId)}))`
+function renderActionCall(
+  a: ActionOutput,
+  elementExpr: string,
+  localUpdateExprs: (string | null)[] = [],
+): string {
+  const replaceLocalUpdates = (source: string): string =>
+    source.replace(/__LOCAL_(SELF_UPDATE|ANCESTOR_(\d+))__\(\);?/g, (_match, kind, levelText) => {
+      const level = kind === 'SELF_UPDATE' ? 0 : Number(levelText)
+      const updateExpr = localUpdateExprs[level]
+      if (!updateExpr) {
+        throw new Error(
+          `codegen: missing local update expression for action ${a.markerId} at level ${level}`,
+        )
+      }
+      return `${updateExpr};`
+    })
+  const bodyRendered = replaceLocalUpdates(a.bodyRendered)
+  const resultRendered = a.resultRendered ? replaceLocalUpdates(a.resultRendered) : null
+  const fn = `function(${a.elParam ?? ''}) {${bodyRendered}${resultRendered ? ` return ${resultRendered};` : ''}}`
+  const call = `(${fn})(${elementExpr})`
   if (!a.resultRendered) return `${call};`
   const resultVar = `__use_result_${a.markerId}__`
   return `{ const ${resultVar} = __normalizeUseActionResult__(${call}, ${JSON.stringify(a.markerId)}); __use_update_${a.markerId}__ = ${resultVar}.update ?? null; __use_destroy_${a.markerId}__ = ${resultVar}.destroy ?? null; if (__use_update_${a.markerId}__) __use_update_${a.markerId}__(); }`
@@ -645,7 +1023,7 @@ export function generateModule({
   const runtimeImports = hasStructuralUnits
     ? ['mountWithRanges as __mount__', 'hydrateWithRanges as __hydrate__']
     : ['mount as __mount__', 'hydrate as __hydrate__']
-  if (actions.some((a) => a.resultRendered)) {
+  if (actions.some((a) => a.resultRendered) || markersHaveResultActions(markers)) {
     runtimeImports.push('normalizeUseActionResult as __normalizeUseActionResult__')
   }
   if (markersHaveList(markers)) {
@@ -653,6 +1031,13 @@ export function generateModule({
       'createListRuntime as __createListRuntime__',
       'reconcileList as __reconcileList__',
       'updateListBinding as __updateListBinding__',
+    )
+  }
+  if (markersHaveLifecycleList(markers)) {
+    runtimeImports.push(
+      'reconcileListWithLifecycle as __reconcileListWithLifecycle__',
+      'mountListRuntime as __mountListRuntime__',
+      'destroyListRuntime as __destroyListRuntime__',
     )
   }
   if (collectionKeyRendered.size > 0) {
@@ -778,46 +1163,83 @@ export function generateModule({
 
   // design Decision 2: 呼び出し順は マーカー収集 → ハンドラ配線 →
   // 初期update_*(populate) → action呼び出し+返り値クロージャ初期実行。
-  const actionCallLines = actions.map((a) => `  ${renderActionCall(a)}`)
+  const actionCallLines = actions.map(
+    (a) => `  ${renderActionCall(a, `__markers__.get(${JSON.stringify(a.markerId)})`)}`,
+  )
 
-  const actionDestroyLines = actions
+  const actionDestroyOperations = actions
     .filter((a) => a.resultRendered)
     .reverse()
     .map(
       (a) =>
-        `  if (__use_destroy_${a.markerId}__) { const __destroy__ = __use_destroy_${a.markerId}__; __use_destroy_${a.markerId}__ = null; __use_update_${a.markerId}__ = null; __destroy__(); } else { __use_update_${a.markerId}__ = null; }`,
+        `if (__use_destroy_${a.markerId}__) { const __destroy__ = __use_destroy_${a.markerId}__; __use_destroy_${a.markerId}__ = null; __use_update_${a.markerId}__ = null; __destroy__(); } else { __use_update_${a.markerId}__ = null; }`,
     )
   const handlerRemoveLines = handlers.map(
     (h) =>
       `  __markers__?.get(${JSON.stringify(h.markerId)})?.removeEventListener(${JSON.stringify(h.eventName)}, __handler_${h.markerId}_${h.eventName});`,
   )
+  const structuralDestroyOperations: string[] = []
   const listCleanupLines = markers
     .filter((marker): marker is ListMarkerOutput => marker.kind === 'list')
-    .flatMap((marker) => [
-      `  if (__list_${marker.id}__) __list_${marker.id}__.items.clear();`,
-      `  __list_${marker.id}__ = null;`,
-    ])
+    .flatMap((marker) => {
+      if (bodyHasActions(marker.body)) {
+        structuralDestroyOperations.push(
+          `if (__list_${marker.id}__) __destroyListRuntime__(__list_${marker.id}__)`,
+        )
+        return [`  __list_${marker.id}__ = null;`]
+      }
+      return [
+        `  if (__list_${marker.id}__) __list_${marker.id}__.items.clear();`,
+        `  __list_${marker.id}__ = null;`,
+      ]
+    })
   const conditionalCleanupLines = markers
     .filter((marker): marker is ConditionalMarkerOutput => marker.kind === 'conditional')
-    .flatMap((marker) => [
-      `  if (__cond_${marker.id}_handle__) __cond_${marker.id}_handle__.el.remove();`,
-      `  __cond_${marker.id}_handle__ = null;`,
-      `  __cond_${marker.id}__ = -1;`,
-    ])
+    .flatMap((marker) => {
+      if (markerHasActions(marker)) {
+        structuralDestroyOperations.push(
+          `if (__cond_${marker.id}_handle__) { const __handle__ = __cond_${marker.id}_handle__; try { __handle__.destroy?.(); } catch (__structural_destroy_error__) { __destroy_error__ ??= __structural_destroy_error__; } try { __handle__.el.remove(); } catch (__structural_remove_error__) { __destroy_error__ ??= __structural_remove_error__; } }`,
+        )
+        return [`  __cond_${marker.id}_handle__ = null;`, `  __cond_${marker.id}__ = -1;`]
+      }
+      return [
+        `  if (__cond_${marker.id}_handle__) __cond_${marker.id}_handle__.el.remove();`,
+        `  __cond_${marker.id}_handle__ = null;`,
+        `  __cond_${marker.id}__ = -1;`,
+      ]
+    })
   const templateCleanupLines = [...templateVars].map((name) => `  ${name} = null;`)
   const documentCleanupLines = templateSetupLines.length > 0 ? ['  __doc__ = undefined;'] : []
+  const destroyOperations = [...structuralDestroyOperations, ...actionDestroyOperations]
   const destroyErrorLines =
-    actionDestroyLines.length > 0
+    destroyOperations.length > 0
       ? [
           '  let __destroy_error__;',
-          ...actionDestroyLines.map(
-            (line) =>
-              `  try { ${line.trim()} } catch (__error__) { __destroy_error__ ??= __error__; }`,
+          ...destroyOperations.map(
+            (line) => `  try { ${line} } catch (__error__) { __destroy_error__ ??= __error__; }`,
           ),
         ]
       : []
   const destroyErrorThrow =
-    actionDestroyLines.length > 0 ? ['  if (__destroy_error__) throw __destroy_error__;'] : []
+    destroyOperations.length > 0 ? ['  if (__destroy_error__) throw __destroy_error__;'] : []
+  const initializationLines = [
+    ...docSetupLines,
+    ...setupLines,
+    ...initialUpdateCalls,
+    ...actionCallLines,
+  ]
+  const shouldGuardInitialization = actions.length > 0 || markersHaveStructuralActions(markers)
+  const guardedInitializationLines =
+    shouldGuardInitialization && initializationLines.length > 0
+      ? [
+          '  try {',
+          ...initializationLines.map((line) => `  ${line}`),
+          '  } catch (__error__) {',
+          '    try { unmount(); } catch (__cleanup_error__) {}',
+          '    throw __error__;',
+          '  }',
+        ]
+      : initializationLines
 
   instanceLines.push(
     'let __markers__;',
@@ -832,10 +1254,7 @@ export function generateModule({
       : '  ({ markers: __markers__ } = __mount__(container, __INITIAL_HTML__, __MARKER_IDS__));',
     '  __container__ = container;',
     '  __mounted__ = true;',
-    ...docSetupLines,
-    ...setupLines,
-    ...initialUpdateCalls,
-    ...actionCallLines,
+    ...guardedInitializationLines,
     '}',
     '',
     'function hydrateComponentInstance(container) {',
@@ -845,10 +1264,7 @@ export function generateModule({
       : '  ({ markers: __markers__ } = __hydrate__(container, __MARKER_IDS__));',
     '  __container__ = container;',
     '  __mounted__ = true;',
-    ...docSetupLines,
-    ...setupLines,
-    ...initialUpdateCalls,
-    ...actionCallLines,
+    ...guardedInitializationLines,
     '}',
     '',
     'function unmount() {',
@@ -891,6 +1307,7 @@ export function generateModule({
     list.push(b)
     attrsByMarker.set(b.markerId, list)
   }
+  const actionMarkerIds = new Set(actions.map((action) => action.markerId))
 
   const appendMarkerUpdate = (lines: string[], mId: MarkerId): void => {
     // 動的属性の再設定(属性のみの marker id は markers に実体を持たない
@@ -907,6 +1324,9 @@ export function generateModule({
       lines.push(
         `  { const __el = __markers__.get(${JSON.stringify(mId)}); if (__el) { __el.textContent = \`${innerTemplateSource(marker.contentParts)}\`; } }`,
       )
+      if (actionMarkerIds.has(mId)) {
+        lines.push(`  if (__use_update_${mId}__) __use_update_${mId}__();`)
+      }
     } else if (marker.kind === 'list') {
       lines.push(...generateListUpdate(marker, `__ranges__.get(${JSON.stringify(marker.id)})`))
     } else if (marker.kind === 'action') {
@@ -978,7 +1398,9 @@ export function generateModule({
         continue
       }
       const usesSharedUpdater =
-        bodyUnits(direct.body).length === 0 && direct.body.localDecls.length === 0
+        bodyUnits(direct.body).length === 0 &&
+        direct.body.localDecls.length === 0 &&
+        direct.body.localActions.length === 0
       const updaterArg = usesSharedUpdater ? `, __create_${direct.id}__update__` : ''
       directUpdateLines.push(
         `  __updateListItem__(__list_${direct.id}__, __key__, __next__${updaterArg});`,

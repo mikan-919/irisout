@@ -94,7 +94,7 @@ function Chart() {
 - 外部リソース(タイマー、購読、document listener等)をactionが確保する実需に応じ、
   追加形式`{ update?: () => void; destroy?: () => void }`を採用する(ADR-0022)。
   `update`は既存の関数返り値と同じく初回+依存signal更新時、`destroy`はcomponent
-  `unmount()`時だけ呼ぶ。関数返り値をcleanupとして再解釈しない。
+  または所有unitの破棄時だけ呼ぶ。関数返り値をcleanupとして再解釈しない。
 
 ### 4. 本体の解析: ADR-0009の機械を適用する
 
@@ -104,7 +104,8 @@ action本体はADR-0009のハンドラ本体と同じ解析(signal読みの書�
 再帰的に同じ書き換えを適用する**こと。ただし原則3(位置的
 リアクティビティ)により、update_*への配線対象になるのは返り値
 クロージャだけで、ネストした関数は書き換えのみ(現在値読み+書き込み時の
-update付加)を受ける。
+update付加)を受ける。破棄・初期化失敗の契約を検証するため、action解析に限って
+`throw`文を追加で受理する。通常のハンドラと追跡functionはADR-0009の4文種を維持する。
 
 ### 5. 返り値クロージャのリアクティブ配線と destroy
 
@@ -116,7 +117,22 @@ actionが引数なしのクロージャを返す場合、コンパイラはそ�
 `{ update, destroy }` object を返す場合、`update`だけを上記の依存グラフへ登録し、
 `destroy`はcomponent instanceの`unmount()`から一度だけ逆順に呼び出す。既存の
 関数返り値は常にupdateとして扱い、cleanupへ変換しない。instance lifecycleと
-DOM/marker/List stateの解放範囲はADR-0022で定める。
+DOM/marker/List stateの解放範囲はADR-0022で定める。List item・conditional branchの
+actionはfactory handleが保持し、keyed reorderでは同じhandleを使う。key脱落・branch
+切替・祖先unit破棄では子actionを先に解放する。
+
+### 5.5 構造unitへの接続
+
+`.map()` item・conditional branchの`use=`も同じaction契約で受理する
+(change `structural-unit-use-actions`)。コンパイラはunitごとに`localActions`を収集し、
+既存のfactoryへ`mount()`・`update()`・`destroy()`を追加する。`mount()`はDOM挿入後に
+子unit、同じunitのactionの順で実行する。`destroy()`は破棄済みフラグを先に立て、
+子unit、同じunitのactionの逆順で実行する。
+
+action resultのroot signal依存は構造markerへ合流し、local signal依存はそのsignalを
+宣言したfactoryのupdateへ接続する。local DeclIdをroot registryへ登録しない。
+動的Listのkey照合・branch切替・root unmountは同じhandleのライフサイクル操作として
+扱い、汎用action registryやeffect runtimeは追加しない。
 
 ### 6. refは作らない: 要素アクセスは3チャネル
 
@@ -220,14 +236,15 @@ UNRESOLVED(06)/(07)は正当なUXだが書けない=コンパイラの穴)。両
   現れるまで先送り(決定6のトリガー条件参照)。
 - **第4チャネル(牙抜きref)**: 決定6の「(c)カウンタイディオムが頻出する
   実例」がトリガー条件。
-- **unit 内action lifecycle**: `.map()` item / conditional branch の `use=` と
-  action registry は、代表的な実需が出るまで scope limit のままにする。
+- **複数要素action・要素間相互作用の一般解**: 一要素一`use`を維持し、複数actionや
+  要素間相互作用の一般形は実例がフィクスチャに現れるまで先送りする。
 - **CONCEPT.v3.mdへの3原則・仮説(「書きづらいものは設計が間違っている」
   の極限定理)の昇格の要否**: ユーザー判断待ち。
 
 ## 実装への引き継ぎメモ
 
-本ADRの設計決定は change `use-action-impl` で実装済み(下記3箇所)。
+本ADRの基本設計はchange `use-action-impl`、構造unitへの拡張はchange
+`structural-unit-use-actions`で実装済み(下記箇所)。
 JSX型定義(`JSX.IntrinsicElements`の`use`宣言)は同changeのdesign.md
 Decision 6で明示的にスコープ外とし、別changeへ先送りした
 (当時はauthored `.jsx`の型検査基盤が未整備だったため)。この先送りは change
@@ -235,11 +252,11 @@ Decision 6で明示的にスコープ外とし、別changeへ先送りした
 `types/jsx.d.ts`の`JSX.IntrinsicElements`共通属性に`use`を型付けした。
 
 - `packages/compiler/src/compiler/render.ts`: `use`属性の解析・識別子参照ルールの解決
-  (ADR-0008のハンドラ配線ルールの転用)。トップレベル要素のみ受理し、
-  リストアイテム/条件分岐ブランチ内は scope limit で拒否(design.md
-  Decision 3)。
+  (ADR-0008のハンドラ配線ルールの転用)。top-level要素と構造unit内要素を受理し、
+  unitごとのactionをfactory bodyへ記録する。
 - `packages/compiler/src/compiler/analyze.ts`: action本体のネストした関数への再帰書き換え、
   関数返り値または`{ update?, destroy? }`返り値の解析。
 - `packages/compiler/src/codegen.ts`: mount/hydrate時の`use`関数呼び出し・update初期実行・依存
-  配線、instance `unmount()`のlistener除去・DOM/structural state解放・destroy逆順実行。
-- `packages/runtime/src/index.ts`: action返り値の runtime shape 検証。
+  配線、factory/rootのlistener除去・DOM/structural state解放・destroy逆順実行。
+- `packages/runtime/src/index.ts`: action返り値のruntime shape検証、actionを持つListの
+  reconcile/mount/destroy。

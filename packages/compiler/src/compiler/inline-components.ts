@@ -382,15 +382,10 @@ function expandComponentRef(
   if (enclosingArrow) {
     // 構造ユニット(list item)へのインライン化: 変数ゾーン宣言は
     // ローカルsignalになる(design.md D5、render.tsのresolveUnitBodySource
-    // が処理する形)。動きゾーン関数を持つコンポーネントをここへインライン
-    // 化することは今回のスコープ外(検証対象では発生しない組み合わせ)。
-    if (zones.movementZoneFns.size > 0) {
-      clonedFnPath.remove()
-      throw new Error(
-        `compile: inlining component "${tagName}" with its own handler functions into a list item is not supported yet (scope limit)`,
-      )
-    }
+    // が処理する形)。動きゾーン関数も同じlist itemのブロックへ移し、
+    // use=/on* の本体解決をそのitemインスタンスの字句範囲へ閉じ込める。
     const varZoneNodes = zones.varZoneStmts.map((s) => s.node)
+    const movementFnNodes = [...zones.movementZoneFns.values()].map((p) => p.node)
     const renderJsxNode = zones.renderJsxPath.node
     markTransformedPath(clonedFnPath, transformedNodes)
     clonedFnPath.remove()
@@ -398,6 +393,10 @@ function expandComponentRef(
     const blockPath = ensureUnitArrowBlockBody(enclosingArrow)
     if (varZoneNodes.length > 0) {
       blockPath.unshiftContainer('body', varZoneNodes)
+    }
+    if (movementFnNodes.length > 0) {
+      const bodyStmts = blockPath.get('body') as NodePath<t.Statement>[]
+      bodyStmts[bodyStmts.length - 1]!.insertBefore(movementFnNodes)
     }
     if (jsxIsWholeArrowBody) {
       const stmts = blockPath.get('body') as NodePath<t.Statement>[]

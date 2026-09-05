@@ -52,7 +52,7 @@ generateModule()             ── 6. 依存グラフから ES モジュール�
 `compileComponent()`(4)が受理しないパターンに当たると、常に
 `compile:`+`(scope limit)`エラーで拒否する(ADR-0004の裏面、
 「安全に拒否する」)。この拒否からの公式な逃げ道は`use=`アクション
-(ADR-0011/0022、top-level要素で実装済み): 実要素にactionを接続し、本体から
+(ADR-0011/0022、top-level要素と構造unit内の実要素で実装済み): 実要素にactionを接続し、本体から
 コンパイル管理外のグローバル関数へ委譲する。専用のエスケープハッチ
 要素(`<Escape mount>`、ADR-0010)は棚上げした(ADR-0010
 「棚上げの経緯」参照)。scope limitへの苦情はADR-0011決定7の
@@ -101,7 +101,8 @@ triage手続きで捌く — コンパイラの受理条件自体を場当たり
 - **`use=` action result**: 既存の `() => void` は `update` closureとして初回+依存
   signal update時に呼ぶ。外部resource cleanupが必要な場合だけ
   `{ update?: () => void; destroy?: () => void }`を返し、`destroy`はunmount時のみ呼ぶ。
-  runtime境界でshapeを検証し、unit内`use=`や汎用lifecycle/effectは導入しない。
+  構造unit内ではitem/branch factoryのinstanceがactionを所有し、keyの再利用では
+  初期化・破棄を繰り返さない。runtime境界でshapeを検証し、汎用lifecycle/effectは導入しない。
 - **依存グラフが単一の真実の源**: marker→decl の直接依存(`ctx.markerDeps`)を
   `resolveToSignals()` で root signal まで推移解決し、signal→markers の逆引き
   から `update_<name>()` を生成する。ハンドラの書き込み先も同じ経路で解決する。

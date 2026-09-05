@@ -94,6 +94,8 @@ export interface StructuralUnitBody {
   template: string
   localMarkers: (TextMarker | ListMarker | ConditionalMarker)[]
   localHandlers: HandlerDecl[]
+  /** 構造unit内の`use=`。factory instanceが初期化と破棄を所有する。 */
+  localActions: ActionDecl[]
   /** ADR-0012: このユニット専有の動的属性バインディング。 */
   localAttrBindings: AttrBinding[]
   /** same-file-component-composition: このユニット直下のローカルsignal宣言。 */
@@ -155,6 +157,11 @@ export interface ActionDecl {
   finalizeBody: (resolveUpdateCall: ResolveUpdateCall) => string
   /** 返り値(function または { update?, destroy? })。無ければ null。 */
   finalizeResult: ((resolveUpdateCall: ResolveUpdateCall) => string) | null
+  /** 返り値のupdateが読むsignal/derived。構造unitの親依存へ合流する。 */
+  resultDeps: Set<DeclId>
+  /** action本体・返り値のupdateが書く宣言。字句範囲検証に使う。 */
+  writeDeclIds: Set<DeclId>
+  directCollectionWriteDeclIds: Set<DeclId>
 }
 
 // cross-function-handler-writes: ハンドラ/action から追跡対象として呼ばれた

@@ -16,9 +16,8 @@
 //
 // 重要: 型が通ることと実行時に compile() が受理することは別軸のまま。
 // 型はコンパイラの scope limit 判定を代替しない(例: リストアイテム内の
-// use= は型上は書けるが、実行時は STATUS.md 既知の制約により
-// `compile: use= inside list/conditional units is not supported yet
-// (scope limit)` で拒否される)。
+// use= は型上も実行時も要素・リストアイテム・条件分岐ブランチで受理されるが、
+// 字句スコープ外のsignal参照など、STATUS.md のscope limitは別に適用される。
 
 type IrisEventHandler = (event: Event) => void
 

@@ -43,3 +43,10 @@ ADR-0014の方針に反する。
 三項演算子・二項演算子・ハンドラ内部のprops参照、`<Foo enabled />`の`true`を
 コンパイル時に安全に置換できる。生成コードに存在しない元props識別子が残ることは
 回帰試験で検証する。
+
+同じAST境界は、list itemへ展開したcomponentの動きゾーンfunctionと`use=` actionにも
+適用する。インライン化処理は子componentのfunction宣言をitem blockへ移し、render-tree
+走査はその宣言をitem factoryの字句スコープで解決する。actionのbody/resultは変換後の
+ASTから生成し、各itemのfactory handleがaction resultを保持する。これにより同じ
+componentを複数itemへ展開しても、props、local signal、actionのupdate/destroyが
+item間で共有されない。

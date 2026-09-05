@@ -43,7 +43,8 @@ void
 - 既存の関数形式は **update** として、mount/hydrate 直後に一度、依存 signal が更新
   されるたびに一度呼ぶ。関数に `destroy` のようなプロパティがあっても、既存意味を
   壊さないため object 形式へ変換しない。
-- object の `update` は上記関数形式と同じタイミング、`destroy` は unmount 時だけ呼ぶ。
+- object の `update` は上記関数形式と同じタイミング、top-level action の `destroy` は
+  component unmount 時、構造unit内actionの`destroy`は所有unitの破棄時だけ呼ぶ。
 - 複数 action の `destroy` は登録順の逆順で、各 action 一回だけ呼ぶ。destroy が一つ
   throw しても残りの destroy と instance cleanup は継続し、最後に最初の error を再送出
   する。
@@ -53,27 +54,47 @@ void
 - action 内部が登録した外部 resource の解除は `destroy` の責務である。runtime は
   action の内部 resource を推測して解除しない。
 
+### 構造unitのaction lifecycle
+
+`.map()` item・conditional branchの`use=`は、対応するfactory handleが保持する。
+handleは`el`、item/branch更新用の`update`、DOM接続後の`mount`、冪等な`destroy`を持つ。
+
+- Listの既存keyは同じhandleを再利用する。keyed reorderではsetup・mount・destroyを
+  追加で実行しない。
+- 新規itemはDOM順序を確定してから`mount()`する。branch切替は旧handleのdestroy、
+  旧DOMのremove、新handleの生成・挿入・mountの順で行う。
+- factoryのmountは子List/conditionalを先にmountし、その後自身のactionをsource orderで
+  初期化する。factoryのdestroyは破棄済みフラグを先に立て、local handler、子unit、
+  自身のactionの逆順で解放する。子unitのdestroyは一度だけ実行する。
+- root unmountはtop-level handlerのremove、top-level構造unitのdestroy、top-level
+  actionの逆順destroy、marker・template・containerの解放の順で行う。
+
+この明示的な順序により、子の外部listenerが親actionより先に解除される。destroyが
+例外を投げても同じ所有者の残りのaction・子unit・DOM処理を続け、最初の例外を再送出する。
+
 ### 解放範囲
 
 unmount は次の順序で instance 所有物を解放する。
 
 1. compiler が生成した top-level handler を同じ function identity で
    `removeEventListener` する。
-2. action の `destroy` を逆順に呼ぶ。
-3. top-level List の keyed Map、conditional handle、template/document 参照、marker Map
-   を解放する。
-4. mount/hydrate した container の component-owned children を remove する。
-5. container 参照と action update/destroy 参照を捨てる。
+2. top-level List item・conditional branchのhandleを子unitから順にdestroyし、DOMを
+   removeする。
+3. top-level action の `destroy` を登録順の逆順で呼ぶ。
+4. top-level Listのkeyed Map、conditional handle、template/document参照、marker Mapを
+   解放する。
+5. mount/hydrateしたcontainerのcomponent-owned childrenをremoveする。
+6. container参照とaction update/destroy参照を捨てる。
 
-List item/conditional factory 内の listener は、その factory handle と DOM subtree を
-top-level runtime から切り離すことで到達不能にする。factory 内で外部 resource を登録
-する機能は現時点の scope limit の外であり、将来受理する場合も同じ `destroy` 契約を
-追加で明示する必要がある。
+List item/conditional factory内のlistenerは、factory handleのdestroyで同じfunction
+identityを使ってremoveする。factory内actionが外部resourceを登録する場合は、top-level
+actionと同じobject形式の`destroy`で解除する。actionを含まないfactoryは従来どおり
+DOM subtreeのremoveと参照解放だけを行う。
 
 ## 対象外・意図的な制約
 
-- unit 内 (`.map()` item / conditional branch) の `use=` は引き続き scope limit。動的な
-  action registry、unit lifecycle、汎用 `onMount`/effect runtime は追加しない。
+- unit内(`.map()` item / conditional branch)の`use=`はfactory handleへ接続する。
+  動的な汎用action registry、汎用`onMount`/effect runtimeは追加しない。
 - component instance の再 mount/reuse、暗黙の DOM observer、custom element lifecycle は
   追加しない。
 - `destroy` を signal 更新へ自動接続したり、action の引数を reactive に再評価したり
@@ -83,6 +104,7 @@ top-level runtime から切り離すことで到達不能にする。factory 内
 
 - mount/hydrate の所有 DOM と生成 listener を明示的に破棄でき、instance を保持しても
   detached DOM や structural runtime を保持し続けない。
-- timer/subscription/external listener は object 形式の `destroy` で作者が正確に解除できる。
+- timer/subscription/external listener はtop-levelまたはunit actionのobject形式
+  `destroy`で作者が正確に解除できる。
 - counter の generated bundle は explicit lifecycle 固定費を含め手書き基準の実測 5.33x
   となり、snapshot のサイズ予算を 5.5x に更新した。

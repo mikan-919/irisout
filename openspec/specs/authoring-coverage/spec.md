@@ -43,7 +43,7 @@ fixtureが現在のcompilerのscope limitに依存する場合、その構文を
 追加してはならない(SHALL NOT)。
 
 #### Scenario: 未対応の機能は別軸として残す
-- **WHEN** root signalの直接動的属性、複数ファイルimport、children/slot、
-  unit内`use=`などがfixtureの要求に現れる
+- **WHEN** root signalの直接動的属性、複数ファイルimport、children/slotなどが
+  fixtureの要求に現れる
 - **THEN** 対応を捏造せず、`scope limit`または未対応事項として記録し、
   authoring coverageの既存機能試験を維持する

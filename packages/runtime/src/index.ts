@@ -26,6 +26,10 @@ export interface ListItemHandle<T = unknown> {
   el: Element
   /** 複雑なネスト構造向けの互換経路。通常のList itemは共有updaterを使う。 */
   update?(next: T): void
+  /** DOMへ接続された後に、このitemが所有するactionを初期化する。 */
+  mount?(): void
+  /** itemと子unitの所有資源を解放する。複数回呼び出しても安全であること。 */
+  destroy?(): void
 }
 
 // Structural units own the sibling range between these comments. Keeping the
@@ -242,6 +246,172 @@ export function reconcileList<T>(
     }
     anchor = el
   }
+}
+
+// actionを持つ構造unit用のreconcile経路。通常のreconcileListへaction管理を
+// 混ぜず、actionを含む生成モジュールだけがこの関数をimportすることで、
+// action未使用の出力サイズと実行経路を維持する。
+export function reconcileListWithLifecycle<T>(
+  runtime: ListRuntime<T>,
+  container: Element | DomRange | undefined,
+  values: readonly T[],
+  keyOf: (value: T) => unknown,
+  create: (value: T, state: ListItemState) => ListItemHandle<T>,
+  update?: ListItemUpdater<T>,
+  mountItems = true,
+): void {
+  const seen = new Set<unknown>()
+  const ordered: ListRecord<T>[] = []
+  const created: ListRecord<T>[] = []
+
+  const releaseCreated = (error: unknown): never => {
+    let firstError = error
+    for (let i = created.length - 1; i >= 0; i--) {
+      const record = created[i]!
+      try {
+        record.handle.destroy?.()
+      } catch (cleanupError) {
+        firstError ??= cleanupError
+      }
+      try {
+        record.handle.el.remove()
+      } catch (cleanupError) {
+        firstError ??= cleanupError
+      }
+      if (runtime.items.get(record.state.itemId) === record) {
+        runtime.items.delete(record.state.itemId)
+      }
+    }
+    throw firstError
+  }
+
+  try {
+    for (const value of values) {
+      const itemId = keyOf(value)
+      if (seen.has(itemId)) {
+        throw new Error(
+          'reconcileList: duplicate key ' + String(itemId) + ' in list ' + runtime.listId,
+        )
+      }
+      seen.add(itemId)
+      let record = runtime.items.get(itemId)
+      if (record) {
+        if (update) update(record.handle, value)
+        else if (record.handle.update) record.handle.update(value)
+        else
+          throw new Error(
+            'reconcileList: no updater for item ' + String(itemId) + ' in list ' + runtime.listId,
+          )
+      } else {
+        const state: ListItemState = {
+          listId: runtime.listId,
+          itemId,
+          bindings: new Map(),
+        }
+        record = { state, handle: create(value, state) }
+        runtime.items.set(itemId, record)
+        created.push(record)
+      }
+      ordered.push(record)
+    }
+  } catch (error) {
+    releaseCreated(error)
+  }
+
+  let firstError: unknown
+  const removed = [...runtime.items].filter(([itemId]) => !seen.has(itemId))
+  for (let i = removed.length - 1; i >= 0; i--) {
+    const [itemId, record] = removed[i]!
+    try {
+      record.handle.destroy?.()
+    } catch (error) {
+      firstError ??= error
+    }
+    try {
+      record.handle.el.remove()
+    } catch (error) {
+      firstError ??= error
+    }
+    runtime.items.delete(itemId)
+  }
+
+  let parent: Node | null = null
+  let layoutError: unknown
+  if (container) {
+    parent = isDomRange(container) ? container.start.parentNode : container
+    if (parent) {
+      const boundary = isDomRange(container) ? container.end : null
+      let anchor: ChildNode | null = null
+      for (let i = ordered.length - 1; i >= 0; i--) {
+        const el = ordered[i]!.handle.el
+        try {
+          if (el.parentNode !== parent || el.nextSibling !== (anchor ?? boundary)) {
+            parent.insertBefore(el, anchor ?? boundary)
+          }
+        } catch (error) {
+          firstError ??= error
+          layoutError ??= error
+        }
+        anchor = el
+      }
+    }
+  }
+
+  if (layoutError && created.length > 0) releaseCreated(firstError ?? layoutError)
+  if (mountItems) {
+    if (!parent) {
+      if (created.length > 0)
+        releaseCreated(firstError ?? new Error('reconcileList: range is detached'))
+    }
+    for (const record of created) {
+      if (!runtime.items.has(record.state.itemId)) continue
+      if (record.handle.el.parentNode !== parent) continue
+      try {
+        record.handle.mount?.()
+      } catch (error) {
+        releaseCreated(firstError ?? error)
+      }
+    }
+  }
+  if (firstError) throw firstError
+}
+
+// 親unitがDOMへ接続された時点で、作成済みの子itemを一度だけ接続する。
+// 各factoryのmount()は自分で二重初期化を防ぐため、この呼び出しは再入安全である。
+export function mountListRuntime<T>(runtime: ListRuntime<T>): void {
+  try {
+    for (const record of runtime.items.values()) record.handle.mount?.()
+  } catch (error) {
+    let firstError = error
+    try {
+      destroyListRuntime(runtime)
+    } catch (cleanupError) {
+      firstError ??= cleanupError
+    }
+    throw firstError
+  }
+}
+
+// listの所有者が破棄されるとき、itemを逆順に解放する。destroy例外があっても
+// 残りのitemを必ず処理し、最初の例外だけを呼び出し元へ返す。
+export function destroyListRuntime<T>(runtime: ListRuntime<T>): void {
+  let firstError: unknown
+  const records = [...runtime.items.values()]
+  for (let i = records.length - 1; i >= 0; i--) {
+    const record = records[i]!
+    try {
+      record.handle.destroy?.()
+    } catch (error) {
+      firstError ??= error
+    }
+    try {
+      record.handle.el.remove()
+    } catch (error) {
+      firstError ??= error
+    }
+  }
+  runtime.items.clear()
+  if (firstError) throw firstError
 }
 
 function isDomRange(value: Element | DomRange): value is DomRange {

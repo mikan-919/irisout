@@ -90,6 +90,19 @@ describe('M6: cross-milestone no-wrapper verification (ADR-0006)', () => {
     expect(withoutList.match(/^import .*$/gm)).toEqual([
       "import { mount as __mount__, hydrate as __hydrate__ } from '@irisout/runtime';",
     ])
+
+    const withoutAction = compile(`
+      export function App() {
+        const items = signal([{ id: 1 }]);
+        render(<ul>{items().map((item) => <li key={item.id}>{item.id}</li>)}</ul>);
+      }
+    `).code
+    expect(withoutAction).toContain('reconcileList as __reconcileList__')
+    expect(withoutAction).not.toContain('reconcileListWithLifecycle')
+    expect(withoutAction).not.toContain('mountListRuntime')
+    expect(withoutAction).not.toContain('destroyListRuntime')
+    expect(withoutAction).not.toContain('normalizeUseActionResult')
+    expect(withoutAction).not.toContain('__use_')
   })
 
   it('drives every feature end to end in a real DOM', async () => {

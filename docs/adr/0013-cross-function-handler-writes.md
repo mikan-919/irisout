@@ -53,6 +53,14 @@ emit するのは**追跡対象として実際に呼ばれた関数のみ**(未�
 相互再帰・自己再帰を打ち切る。「1階層のみ」の制限は、境界(2階層目)で
 同じ「黙って落ちる」が一段ずれて再登場するだけなので採らない。
 
+### 3.5 構造unit内actionへの適用
+
+`use=` actionの本体でも同じ推移的なwrite setを使う。action本体または追跡した
+動きゾーン関数がroot signalへ書き込む場合は、既存の`update_*()`または同期batchへ
+接続する。list item・conditional branchのlocal signalへの書き込みはroot依存表へ
+漏らさず、現在または祖先factoryのupdate式へ接続する。返り値`update`の読み取り依存は
+action初期化のwrite setとは分け、該当unitのhandle updateを駆動する。
+
 ### 4. 追跡できない呼び出しの扱い
 
 - **binding が解決できない**(`console.log` 等のグローバル): 従来どおり

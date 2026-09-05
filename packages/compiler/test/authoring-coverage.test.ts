@@ -40,6 +40,7 @@ describe('authoring coverage fixture', () => {
     const form = container.querySelector('form')!
     expect(form).not.toBeNull()
     const input = form.querySelector('input') as HTMLInputElement
+    expect(container.ownerDocument.activeElement).toBe(input)
     input.value = '新しいメモ'
     event(container, input, 'input')
     event(container, form.querySelector('button')!, 'click')
@@ -48,9 +49,23 @@ describe('authoring coverage fixture', () => {
       [...container.querySelectorAll('.note-list article h2')].map((item) => item.textContent),
     ).toEqual(['出張の準備', '新しいメモ'])
 
+    const originalArticle = container.querySelector('.note-list article')!
+    const pulse = new container.ownerDocument.defaultView!.Event('notes-pulse')
+    container.ownerDocument.dispatchEvent(pulse)
+    expect(originalArticle.getAttribute('data-pulse-count')).toBe('1')
+    event(container, originalArticle.querySelectorAll('button')[1]!, 'click')
+    expect(container.querySelectorAll('.note-list article')).toHaveLength(1)
+    container.ownerDocument.dispatchEvent(
+      new container.ownerDocument.defaultView!.Event('notes-pulse'),
+    )
+    expect(originalArticle.getAttribute('data-pulse-count')).toBe('1')
+    expect(container.querySelector('.note-list article')?.getAttribute('data-pulse-count')).toBe(
+      '2',
+    )
+
     event(container, container.querySelectorAll('.tabs button')[1]!, 'click')
     expect(
       [...container.querySelectorAll('.note-list article h2')].map((item) => item.textContent),
-    ).toEqual(['読書メモ'])
+    ).toEqual(['出張の準備', '読書メモ'])
   })
 })

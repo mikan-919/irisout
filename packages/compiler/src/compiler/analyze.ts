@@ -670,7 +670,13 @@ function eachBranchStatement(branch: NodePath<t.Statement>): NodePath<t.Statemen
 // allowValueReturn: ADR-0011 design D4-1。action本体にネストした関数式/arrow
 // 自身の return は「通常の関数の返り値」でありこの規則の対象外(design.md
 // Decision 4-1)なので、その本体を検証する再帰呼び出しでのみ true を渡す。
-function validateHandlerStatement(stmt: NodePath<t.Statement>, allowValueReturn = false): void {
+// allowThrow: actionのdestroy/初期化失敗を検証するため、action解析だけが明示的に
+// trueを渡す。通常のhandler・追跡functionはADR-0009の4文種を維持する。
+function validateHandlerStatement(
+  stmt: NodePath<t.Statement>,
+  allowValueReturn = false,
+  allowThrow = false,
+): void {
   if (stmt.isExpressionStatement()) return
   if (stmt.isVariableDeclaration()) {
     if (stmt.node.kind === 'var') {
@@ -686,14 +692,22 @@ function validateHandlerStatement(stmt: NodePath<t.Statement>, allowValueReturn 
     }
     return
   }
+  if (stmt.isThrowStatement()) {
+    if (!allowThrow) {
+      throw new Error(
+        `compile: handler statement "${stmt.node.type}" is not supported yet (scope limit)`,
+      )
+    }
+    return
+  }
   if (stmt.isIfStatement()) {
     for (const s of eachBranchStatement(stmt.get('consequent') as NodePath<t.Statement>)) {
-      validateHandlerStatement(s, allowValueReturn)
+      validateHandlerStatement(s, allowValueReturn, allowThrow)
     }
     const alt = stmt.get('alternate')
     if (alt.node) {
       for (const s of eachBranchStatement(alt as NodePath<t.Statement>)) {
-        validateHandlerStatement(s, allowValueReturn)
+        validateHandlerStatement(s, allowValueReturn, allowThrow)
       }
     }
     return
@@ -878,6 +892,9 @@ interface ActionScopeAnalysis {
   /** このスコープが直接読む signal/derived(推移解決前)。クロージャの依存
    * 解析にのみ使う。 */
   readDeclIds: Set<DeclId>
+  /** このスコープと内側の関数が書き込む宣言。 */
+  writeDeclIds: Set<DeclId>
+  directCollectionWriteDeclIds: Set<DeclId>
 }
 
 // action本体・ネストした関数本体で共有する文配列の解析(design D4-1)。
@@ -893,7 +910,7 @@ function analyzeActionStatements(
   instanceId: number,
   allowValueReturn: boolean,
 ): ActionScopeAnalysis {
-  for (const stmt of stmts) validateHandlerStatement(stmt, allowValueReturn)
+  for (const stmt of stmts) validateHandlerStatement(stmt, allowValueReturn, true)
 
   const readDeclIds = new Set<DeclId>()
   const writeDeclIds = new Set<DeclId>()
@@ -962,11 +979,23 @@ function analyzeActionStatements(
   // このスコープ末尾の update_*() 発火(finalize)に含める。
   collectTransitiveWrites(ctx, calleeNames, writeDeclIds, directCollectionWriteDeclIds)
 
+  // ネストした関数は自身の実行時に更新文を持つが、構造unit内actionの
+  // 字句スコープ検証では、その関数が書くlocal signalもaction全体の参照範囲
+  // として扱う必要がある。
+  for (const child of nestedScopes) {
+    for (const id of child.writeDeclIds) writeDeclIds.add(id)
+    for (const id of child.directCollectionWriteDeclIds) {
+      directCollectionWriteDeclIds.add(id)
+    }
+  }
+
   const start = stmts[0]!.node.start!
   const end = stmts[stmts.length - 1]!.node.end!
 
   return {
     readDeclIds,
+    writeDeclIds,
+    directCollectionWriteDeclIds,
     finalize: (resolveUpdateCall) => {
       const allEdits = [...edits]
       for (const child of nestedScopes) {
@@ -1048,6 +1077,8 @@ function analyzeActionExprScope(
   const end = exprPath.node.end!
   return {
     readDeclIds,
+    writeDeclIds,
+    directCollectionWriteDeclIds,
     finalize: (resolveUpdateCall) => {
       const rendered = ast ? ast.generate() : render(ctx.source, start, end, edits)
       const updateCall = resolveUpdateCall(writeDeclIds, directCollectionWriteDeclIds)
@@ -1076,6 +1107,8 @@ function analyzeFunctionBodyScope(
   depth: number
   finalize: (resolveUpdateCall: ResolveUpdateCall) => string
   readDeclIds: Set<DeclId>
+  writeDeclIds: Set<DeclId>
+  directCollectionWriteDeclIds: Set<DeclId>
 } {
   const bodyPath = fnPath.get('body')
   if (bodyPath.isBlockStatement()) {
@@ -1083,7 +1116,12 @@ function analyzeFunctionBodyScope(
     const inner =
       stmts.length > 0
         ? analyzeActionStatements(ctx, stmts, instanceId, true)
-        : { finalize: () => '', readDeclIds: new Set<DeclId>() }
+        : {
+            finalize: () => '',
+            readDeclIds: new Set<DeclId>(),
+            writeDeclIds: new Set<DeclId>(),
+            directCollectionWriteDeclIds: new Set<DeclId>(),
+          }
     return {
       start: bodyPath.node.start!,
       end: bodyPath.node.end!,
@@ -1091,6 +1129,8 @@ function analyzeFunctionBodyScope(
       parent: fnPath.node,
       depth: pathDepth(bodyPath as NodePath<t.Node>),
       readDeclIds: inner.readDeclIds,
+      writeDeclIds: inner.writeDeclIds,
+      directCollectionWriteDeclIds: inner.directCollectionWriteDeclIds,
       finalize: (resolveUpdateCall) => `{${inner.finalize(resolveUpdateCall)}}`,
     }
   }
@@ -1103,6 +1143,8 @@ function analyzeFunctionBodyScope(
     depth: pathDepth(bodyPath as NodePath<t.Node>),
     finalize: exprScope.finalize,
     readDeclIds: exprScope.readDeclIds,
+    writeDeclIds: exprScope.writeDeclIds,
+    directCollectionWriteDeclIds: exprScope.directCollectionWriteDeclIds,
   }
 }
 
@@ -1115,7 +1157,13 @@ export interface ActionBodyAnalysis {
      * 同じ形、resolveToSignals による展開は compiler.ts の
      * buildSignalToMarkers に任せる)。destroy の読み取りはここへ含めない。 */
     deps: Set<DeclId>
+    /** update/destroy の本体が書く宣言。字句範囲検証に使う。 */
+    writeDeclIds: Set<DeclId>
+    directCollectionWriteDeclIds: Set<DeclId>
   } | null
+  /** action本体が書く宣言。 */
+  writeDeclIds: Set<DeclId>
+  directCollectionWriteDeclIds: Set<DeclId>
 }
 
 const NO_ACTION_UPDATE: ResolveUpdateCall = () => ({
@@ -1167,6 +1215,8 @@ function analyzeActionResultExpression(
     const prefix = ctx.source.slice(argPath.node.start!, closureScope.start)
     return {
       deps: closureScope.readDeclIds,
+      writeDeclIds: closureScope.writeDeclIds,
+      directCollectionWriteDeclIds: closureScope.directCollectionWriteDeclIds,
       finalize: (resolveUpdateCall) => `${prefix}${closureScope.finalize(resolveUpdateCall)}`,
     }
   }
@@ -1187,6 +1237,8 @@ function analyzeActionResultExpression(
     finalize: (resolveUpdateCall: ResolveUpdateCall) => string
   }[] = []
   let updateDeps = new Set<DeclId>()
+  const writeDeclIds = new Set<DeclId>()
+  const directCollectionWriteDeclIds = new Set<DeclId>()
 
   for (const property of properties) {
     const name = actionResultPropertyName(property)
@@ -1207,6 +1259,10 @@ function analyzeActionResultExpression(
     }
     const scope = analyzeFunctionBodyScope(ctx, fnPath, instanceId)
     if (name === 'update') updateDeps = scope.readDeclIds
+    for (const id of scope.writeDeclIds) writeDeclIds.add(id)
+    for (const id of scope.directCollectionWriteDeclIds) {
+      directCollectionWriteDeclIds.add(id)
+    }
     resultEdits.push({
       start: scope.start,
       end: scope.end,
@@ -1217,6 +1273,8 @@ function analyzeActionResultExpression(
 
   return {
     deps: updateDeps,
+    writeDeclIds,
+    directCollectionWriteDeclIds,
     finalize: (resolveUpdateCall) =>
       render(
         ctx.source,
@@ -1250,10 +1308,17 @@ export function analyzeActionBody(
       return {
         finalizeBody: () => '',
         result: analyzeActionResultExpression(ctx, body, instanceId),
+        writeDeclIds: new Set<DeclId>(),
+        directCollectionWriteDeclIds: new Set<DeclId>(),
       }
     }
     const scope = analyzeActionExprScope(ctx, body, instanceId)
-    return { finalizeBody: scope.finalize, result: null }
+    return {
+      finalizeBody: scope.finalize,
+      result: null,
+      writeDeclIds: scope.writeDeclIds,
+      directCollectionWriteDeclIds: scope.directCollectionWriteDeclIds,
+    }
   }
 
   const last = body[body.length - 1]
@@ -1269,9 +1334,27 @@ export function analyzeActionBody(
   const bodyScope =
     bodyStmts.length > 0
       ? analyzeActionStatements(ctx, bodyStmts, instanceId, false)
-      : { finalize: () => '' }
+      : {
+          finalize: () => '',
+          writeDeclIds: new Set<DeclId>(),
+          directCollectionWriteDeclIds: new Set<DeclId>(),
+        }
 
-  return { finalizeBody: bodyScope.finalize, result }
+  const writeDeclIds = new Set(bodyScope.writeDeclIds)
+  const directCollectionWriteDeclIds = new Set(bodyScope.directCollectionWriteDeclIds)
+  if (result) {
+    for (const id of result.writeDeclIds) writeDeclIds.add(id)
+    for (const id of result.directCollectionWriteDeclIds) {
+      directCollectionWriteDeclIds.add(id)
+    }
+  }
+
+  return {
+    finalizeBody: bodyScope.finalize,
+    result,
+    writeDeclIds,
+    directCollectionWriteDeclIds,
+  }
 }
 
 // `count()` のような裸の読み取り - 追跡済み signal/derived の引数なし

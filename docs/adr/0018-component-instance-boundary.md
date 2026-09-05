@@ -52,8 +52,8 @@ lexical scopeを保持する必要があるため、現時点では従来のhand
 - 同じ生成モジュールを複数containerへmount/hydrateでき、状態とDOM更新が混ざらない。
 - stateを持つ同じ子コンポーネントをroot内で複数回使っても、それぞれ独立する。
 - List runtimeとconditional stateもroot instanceごとに作られる。
-- component-owned DOMとtop-level listenerを明示的に解放でき、`use=`の外部 resourceは
-  ADR-0022の`{ destroy }`で確実に解除できる。
+- component-owned DOMとtop-level・構造unit内listenerを明示的に解放でき、`use=`の外部
+  resourceはADR-0022の`{ destroy }`で確実に解除できる。
 - counter production bundleはexplicit lifecycle固定費を含む手書き比5.33xとなり、サイズ予算を
   5.5xへ更新した。
 - 1つの`createComponent()`を複数回mountする使い方は保証しない。1 instanceは1 rootを所有する。

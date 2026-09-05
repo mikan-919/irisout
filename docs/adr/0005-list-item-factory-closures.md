@@ -39,10 +39,11 @@ Web Components(Custom Elements)による解決も検討したが、却下した�
 
 factory関数が生成する状態・リスナーは、そのインスタンス自身のDOM部分木の中だけに閉じている(外部リソースへの登録は一切ない)。keyed Mapから参照を落とし、DOM要素を`remove()`すれば、状態・リスナー・DOM部分木は一括してGC対象になる。`onLeave`的な明示的teardown呼び出しは、将来アイテムが外部リソース(タイマー、購読等)を持つ機能ができるまでは不要(ADR-0004: 使われないものは作らない)。
 
-これは `.map()` item / conditional branch **unit** の現在のscope limitに限る。component
-top-levelの`use=` actionが外部リソースを登録する場合は、component instanceの
-`unmount()`と`{ destroy }`を使う(ADR-0022)。unit内`use=`とunit専用のaction registryは、
-独立したライフサイクル設計が必要になるため引き続き対象外とする。
+これは `.map()` item / conditional branch **unit** のactionなし経路に限る。
+component top-levelとunit内の`use=` actionが外部リソースを登録する場合は、component
+instanceまたはfactory handleの`destroy`を使う(ADR-0022、change
+`structural-unit-use-actions`)。汎用action registryは追加せず、factoryが自身のaction
+resultだけを保持する。
 
 ### 5. 生成出力からの`signal()`除去は、この決定の対象外
 

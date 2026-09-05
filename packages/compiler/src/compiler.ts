@@ -257,6 +257,40 @@ export function compile(source: string): CompileResult {
       localUpdateLevels,
     }
   }
+
+  const convertAction = (
+    a: (typeof ctx.actions)[number],
+    localScopes: Set<DeclId>[] = [],
+  ): ActionOutput => {
+    const resolveActionUpdateCall = (
+      ids: Set<DeclId>,
+      directCollectionWriteDeclIds: Set<DeclId> = new Set(),
+    ) => {
+      const plan = resolveUpdateCall(ids, directCollectionWriteDeclIds)
+      const localUpdateLevels = localScopes.flatMap((scope, level) =>
+        [...ids].some((id) => scope.has(id)) ? [level] : [],
+      )
+      const localUpdateCalls = [
+        ...new Set(
+          localUpdateLevels.map((level) =>
+            level === 0 ? '__LOCAL_SELF_UPDATE__' : `__LOCAL_ANCESTOR_${level}__`,
+          ),
+        ),
+      ]
+        .map((name) => `${name}();`)
+        .join(' ')
+      return {
+        code: [plan.code, localUpdateCalls].filter(Boolean).join(' '),
+        needsCollectionBatch: plan.needsCollectionBatch,
+      }
+    }
+    return {
+      markerId: a.markerId,
+      elParam: a.elParam,
+      bodyRendered: a.finalizeBody(resolveActionUpdateCall),
+      resultRendered: a.finalizeResult ? a.finalizeResult(resolveActionUpdateCall) : null,
+    }
+  }
   const handlerOutputs = ctx.handlers.map((h) => convertHandler(h))
 
   // M5.5: ネストした構造ユニット(body.localMarkers 内の list/conditional)の
@@ -291,6 +325,7 @@ export function compile(source: string): CompileResult {
         m.kind === 'text' ? m : convertUnitMarker(m, localScopes),
       ),
       localHandlers: body.localHandlers.map((h) => convertHandler(h, localScopes)),
+      localActions: body.localActions.map((a) => convertAction(a, localScopes)),
       localAttrBindings: body.localAttrBindings,
       localDecls: body.localDecls,
     }
@@ -304,12 +339,7 @@ export function compile(source: string): CompileResult {
   // 推移解決済み(analyzeActionIdentifier)なので、ここでは共有markerの有無に
   // 応じて個別updateまたはbatch文へ変換するだけでよい。action本体・返り値
   // クロージャの最終テキストは signalToMarkers 確定後にしか組み立てられない。
-  const actionOutputs: ActionOutput[] = ctx.actions.map((a) => ({
-    markerId: a.markerId,
-    elParam: a.elParam,
-    bodyRendered: a.finalizeBody(resolveUpdateCall),
-    resultRendered: a.finalizeResult ? a.finalizeResult(resolveUpdateCall) : null,
-  }))
+  const actionOutputs: ActionOutput[] = ctx.actions.map((a) => convertAction(a))
 
   // --- ビルド時実行:discovery の確認 + 実際の初期 HTML の取得 ---
   const instrumentedBody = [
