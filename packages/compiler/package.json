@@ -8,6 +8,7 @@
     "./state": "./src/compiler/state.ts"
   },
   "dependencies": {
+    "@babel/generator": "^8.0.0",
     "@babel/parser": "^8.0.0",
     "@babel/traverse": "^8.0.0",
     "@irisout/runtime": "workspace:*"

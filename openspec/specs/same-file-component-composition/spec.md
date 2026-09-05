@@ -3,7 +3,7 @@
 ## Purpose
 
 同一ファイル内で宣言された複数の関数を`<Component/>`形式のJSXタグで
-組み合わせる合成(ADR-0014、change `same-file-component-composition`)を
+組み合わせる合成(ADR-0014、ADR-0023、change `same-file-component-composition`)を
 規定する。既存のrender-tree走査(`compileComponent`、M1〜M6)より前に
 実行する独立した前処理パスが、コンポーネント参照をコンパイル時ASTインライン
 化で展開する。呼び出し先コンポーネントはビルド時・実行時のいずれにおいても
@@ -58,37 +58,38 @@ JSXタグを、既存のrender-tree走査(`compileComponent`)より前に実行�
   `todo`という名前のローカル変数を宣言し直している
 - **THEN** そのローカル変数への参照は呼び出し元の実引数式に置換されない
 
-### Requirement: 安全に書き換えられないネスト位置でのprops参照の明示的な拒否
-コンパイラは、propsの参照位置が呼び出し先本体の式全体(JSX式コンテナの
-中身・ハンドラarrowのconcise body)ではなく、より大きな式
-(三項演算子・メンバー式・二項式等)の内部にネストしている場合、実引数が
-props名と文字通り同じ名前のbare identifierであるときに限り置換を許可
-しなければならない(SHALL)。それ以外の組み合わせ(props名と異なる名前の
-識別子、リテラル、メンバー式・呼び出し式等)は、`(scope limit)`を含む
-compile errorで拒否しなければならない(SHALL)。値なしのboolean-shorthand
-属性(`<Foo enabled/>`)は、対応する実引数のソーステキストが元から存在
-しないため、同様に`(scope limit)`で拒否しなければならない(SHALL)。
+### Requirement: props参照を式の位置に依存せずコンパイル時に置換する
+コンパイラは、propsの参照がJSX式コンテナやハンドラの式全体でなく、三項演算子・
+二項演算子・メンバー式・呼び出し式などの内部にあっても、対応する実引数式の
+クローンへ置換しなければならない(SHALL)。実引数の識別子名がprops名と異なる
+場合、実引数が識別子でない場合、または元ソースに対応する位置を持たない
+boolean shorthandをtrueへ置換する場合も、置換後の式を元ソースのstart/endから
+切り出してはならない(SHALL NOT)。変換を含む式はASTからコード生成し、元の
+props識別子を生成コードに残してはならない(SHALL)。
 
-#### Scenario: 同名bare identifierのネスト参照は引き続き許可される
-- **WHEN** `<TodoItem todo={todo} />`が`.map((todo) => ...)`のアイテム
-  位置で呼ばれ、`TodoItem`本体が`{todo.completed}`のようにpropsと同名の
-  識別子をメンバー式の内部で参照する
-- **THEN** コンパイラはscope limitエラーを出さずに完了し、生成コードは
-  正しく動く
+#### Scenario: 三項・二項・メンバー・呼び出し式の内部で置換される
+- **WHEN** `<Foo item={items[index]} value={getValue()} />`が呼ばれ、`Foo`本体が
+  `item.done ? value + 1 : 0`を参照する
+- **THEN** コンパイラは`items[index].done ? getValue() + 1 : 0`相当の式を
+  生成し、`item.done`・`value + 1`などの元props識別子を残さない
 
-#### Scenario: 別名・非識別子のネスト参照は拒否される
-- **WHEN** propsの実引数がprops名と異なる名前の識別子(例:
-  `<Foo item={t} />`で`Foo`本体が`{item.done}`を参照する)、または
-  リテラル・メンバー式等のbare identifierでない式であり、その参照位置が
-  呼び出し先本体の式全体でもない
-- **THEN** コンパイラは`compile: ... is referenced inside a larger
-  expression ... (scope limit)`で拒否し、存在しない識別子を参照する
-  壊れたコードを生成しない
+#### Scenario: 実引数が別名のリスト項目でも置換される
+- **WHEN** `.map((t) => <Foo item={t} />)`の`Foo`本体が`item.done`・`item.id`を
+  参照する
+- **THEN** `t.done`・`t.id`相当へ置換され、コンパイラは「より大きな式」を理由と
+  するscope limit errorを出さず、生成コードは動作する
 
-#### Scenario: 値なしのboolean-shorthand propは拒否される
+#### Scenario: ハンドラの式内部で置換される
+- **WHEN** `Foo`本体のハンドラが`enabled ? onActivate() : null`または
+  `if (enabled) onActivate(event)`を含む
+- **THEN** `enabled`と`onActivate`は呼び出し元の実引数へ置換され、ハンドラは
+  その実引数を使って動作する
+
+#### Scenario: 値なしboolean shorthandはtrueへ置換される
 - **WHEN** authoredコードが`<Foo enabled />`のように値を持たない属性で
   コンポーネントを参照する
-- **THEN** コンパイラは`(scope limit)`を含むcompile errorで拒否する
+- **THEN** `enabled`の参照はboolean literal `true`へ置換され、コンパイラは
+  props実行時オブジェクトを追加しない
 
 ### Requirement: 名前衝突検出時のみのコンポーネント名リネーム
 コンパイラは、インライン化により生成されるルートスコープの識別子

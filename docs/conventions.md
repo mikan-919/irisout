@@ -42,10 +42,17 @@ throw new Error('compile: <何が> is not supported yet (scope limit)')
 - 共有状態は `CompilerState`(ctx)1個に集約し、各モジュールは ctx を
   受け取って読み書きする。モジュールレベルの可変状態を作らない。
 - codegen(`packages/compiler/src/codegen.ts`)は文字列組み立てのみ。AST・ctx を触らせない。
-- ソース変換は AST の再生成ではなく **Edit リスト方式**(`analyze.ts`):
-  元ソースの `start`/`end` 範囲を置換するエディットを集めて一括適用する。
-  ネストした置換は1つの大きな edit にせず、外側を分割して内側は同じ
-  traverse パスに解決させる。
+- ソース変換は通常 **Edit リスト方式**(`analyze.ts`)を使う。元ソースの
+  `start`/`end`範囲を置換するエディットを集めて一括適用するため、未変更ASTの
+  書式を保てる。ネストした置換は1つの大きなeditにせず、外側を分割して内側は
+  同じtraverseパスに解決させる。
+- 同一ファイルコンポーネントのprops置換、識別子変更、ASTノードの合成を含む
+  式は、元ソース上に対応する位置範囲がない場合がある。該当する式全体は
+  `packages/compiler/src/compiler/ast-codegen.ts`のASTコード生成へ切り替え、
+  `start`/`end`から文字列を切り出さない。ビルド時実行用の
+  `sourceRendered`と本番出力用の`rendered`をそれぞれ生成し、変換されていない
+  式では従来のEdit方式を使う。この混在が、位置編集の書式保持とAST変換の
+  正しさの境界である。
 
 ## テスト
 

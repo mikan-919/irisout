@@ -42,6 +42,21 @@ conditionalのbranch着脱はその範囲の親ノードと終了アンカーの
 使わない生成物は従来のmount/hydrate経路を使い、アンカー走査と範囲ヘルパーを出力
 しない。unmountは範囲Map、List/conditional参照、component-owned DOMを解放する。
 
+## 現在地(2026-09-05・同一ファイルpropsの式置換、ADR-0023)
+
+同一ファイルコンポーネントのpropsは、呼び出し元の実引数の名前や式の形に
+依存せず、呼び出し先のbinding参照を実引数式のクローンへ置換する。メンバー式・
+添字式・呼び出し式、三項演算子・二項演算子の内部、ハンドラの式内部を受理し、
+値なしの属性(`<Foo enabled />`)は`true`として置換する。props用の実行時オブジェクト
+やランタイム機構は追加せず、コンポーネントはコンパイル時に消滅する。
+
+出力は、元のASTを変更していない式では`analyze.ts`のEditリストで
+`start`/`end`範囲を再利用し、props置換・識別子変更・ASTノードの合成を含む式では
+`ast-codegen.ts`がASTからコード生成する。後者では、置換したノードの位置が
+呼び出し元ソースを指す場合や、値なし属性から合成したノードに位置がない場合でも、
+呼び出し先の古いソース文字列を切り出さない。props参照の「より大きな式」に
+対する制約は削除した。
+
 ## 現在地(2026-09-04・List最小ランタイム第1段階)
 
 CONCEPT.v3への移行に伴い、List更新を共有最小ランタイムへ切り出した
@@ -277,21 +292,11 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
     一切持たない場合のみ動作する ― 条件分岐ブランチは三項/`&&`の式
     位置でブロック文を置けないため、ローカルsignal付きコンポーネントの
     ブランチへのインライン化は現状未対応(実装は同一ユニットのみ)。
-  - **propsの参照は、置換対象がJSX属性値/式コンテナの中身全体(または
-    ハンドラarrowのconcise body)である場合、または実引数がprops名と
-    同名のbare identifier(`<TodoItem todo={todo} />`)である場合のみ
-    安全**。それ以外(例: `{enabled ? 'on' : 'off'}`のように三項演算子の
-    条件部分で参照する、または`<Foo item={t} />`のようにprops名と異なる
-    名前の実引数をメンバー式内で参照する)は、置換後の内容がソース位置
-    ベースの書き換え検出(`analyze.ts`のidentifier-visitベースのedit機構)
-    に乗らず、呼び出し先の古いソーステキストが出力に残ってしまう
-    (実装前調査で確認)。`packages/compiler/src/compiler/inline-components.ts`の
-    `assertSafeToSubstitute`が安全でない組み合わせを検出し
-    `compile: ... is referenced inside a larger expression ... (scope
-limit)`で明示的に拒否する(黙って壊れたコードを出さない)。値なしの
-    boolean-shorthand属性(`<Foo enabled/>`)も、対応する実引数テキストが
-    ソース上に存在しないため同様に拒否する ― `enabled={true}`のように
-    明示的な値を渡せば(トップレベル位置であれば)使える。
+  - propsは`function Foo({ a, b })`形のshorthand分割代入のみ対応する。参照の
+    bindingがpropsに対応する場合、実引数が識別子・メンバー式・添字式・呼び出し式
+    のいずれでも、三項演算子・二項演算子・メンバー式・呼び出し式・ハンドラの
+    内部を含めてASTから置換する。値なし属性(`<Foo enabled />`)は`true`として
+    扱う。非shorthand(`{ a: x }`)・複数仮引数・spread propsは`scope limit`。
   - 名前衝突: ルートスコープへ統合されるsignal/derived宣言名・動きゾーン
     関数名は、呼び出し元の既存識別子と衝突する場合のみ、衝突した側を
     コンポーネント名で接頭辞化してリネームする(例: `TodoItem_count`,

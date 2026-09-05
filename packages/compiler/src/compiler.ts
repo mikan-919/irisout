@@ -126,8 +126,9 @@ export function compile(source: string): CompileResult {
   // same-file-component-composition (ADR-0014, design.md D1): 同一ファイル内
   // の<Component/>参照をfindRootComponentより前にASTインライン化する。以後の
   // パイプラインはコンポーネント合成という概念を一切知らないまま動く。
-  inlineComponents(ast)
-  const ctx = createCompilerState(source)
+  const transformedNodes = new Set<t.Node>()
+  inlineComponents(ast, transformedNodes)
+  const ctx = createCompilerState(source, transformedNodes)
   const rootPath = findRootComponent(ast)
 
   const out = {

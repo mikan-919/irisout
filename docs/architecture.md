@@ -34,6 +34,7 @@ findRootComponent()          ── 3. 誰からも参照されない唯一の�
 compileComponent()           ── 4. render ツリーを深さ優先で走査(packages/compiler/src/compiler/render.ts)
   │    ・signal()/derived() 宣言 → declId 発行 + 出力文生成
   │    ・JSX 式 → マーカー発行 + 依存(deps)収集(packages/compiler/src/compiler/analyze.ts)
+  │    ・AST変換済みの式 → ASTコード生成、未変更の式 → 位置編集
   │    ・onXxx ハンドラ → 書き込み先 signal(writeDeclIds)収集
   ▼
 new Function() でビルド時実行 ── 5. 計装済みスクリプトを Node 上で1回実行し、
@@ -66,6 +67,7 @@ triage手続きで捌く — コンパイラの受理条件自体を場当たり
 | `packages/compiler/src/compiler/state.ts`             | `compile()` 全体で共有するミュータブル状態 `CompilerState`(ctx)と ID 型                                                                                                                             |
 | `packages/compiler/src/compiler/render.ts`            | JSX ツリーの走査。宣言・マーカー・ハンドラを ctx に積み、HTML テンプレートソースを組み立てる                                                                                                        |
 | `packages/compiler/src/compiler/analyze.ts`           | 式の解析。識別子を declId に解決し、出力用/ビルド時実行用の2種類のソースを生成                                                                                                                      |
+| `packages/compiler/src/compiler/ast-codegen.ts`       | props置換などAST変換を含む式を、元ソースの位置範囲に依存せずASTからコード生成する境界                                                                                                               |
 | `packages/compiler/src/compiler/decl-graph.ts`        | derived を辿ってルート signal 集合へ展開する推移解決                                                                                                                                                |
 | `packages/compiler/src/codegen.ts`                    | 最終 codegen。文字列組み立てのみ、AST もコンパイラ状態も触らない                                                                                                                                    |
 | `packages/runtime/src/index.ts`                       | 2つの顔を持つ: signal/derived は**ビルド時専用**。mount/hydrate、`use=`返り値のshape検証、List使用時だけimportされるkey照合・binding値キャッシュは**ブラウザ出荷用**の最小ランタイム(ADR-0015/0022) |
@@ -80,6 +82,13 @@ triage手続きで捌く — コンパイラの受理条件自体を場当たり
   (a) 本番出力用 = `count()` を裸の `count` へ書き換えたもの(ADR-0006)と
   (b) ビルド時実行用 = 本物のアクセサ呼び出しを保ったもの、の両方を作る。
   ビルド時実行だけが本物の signal/derived を使う。
+- **ソース文字列とASTコード生成の境界**: 元のASTを変更していない式は
+  `start`/`end`に基づくEditリストで出力し、元ソースの書式を保つ。props置換や
+  識別子変更を含む式は、置換されたノードを含む式全体を
+  `ast-codegen.ts`でASTから出力する。置換先のノードが呼び出し元ソースの位置を
+  持つ場合や、値なし属性から合成した`true`のように位置を持たない場合でも、
+  呼び出し先の古い文字列を切り出さない。この処理はpropsを実行時オブジェクトへ
+  変換するものではなく、コンパイル時に消える識別子置換である。
 - **マーカー**: reactive な箇所に `data-iris-id` を振り、mount/hydrate 時に
   一度だけ収集して以後 DOM を探索しない。テキストの連なり(JSXText+式)は
   1回の textContent 置換で更新するアトミックな単位として1マーカーにまとめる。

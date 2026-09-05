@@ -177,6 +177,11 @@ export interface TrackedFn {
 export interface CompilerState {
   source: string
 
+  // same-file-component-composition: props置換・AST生成・識別子変更を受けた
+  // ノード。analyze.tsはこの集合を見て、該当する式を元ソースのstart/endから
+  // 切り出さずASTコード生成へ切り替える。
+  transformedNodes: Set<t.Node>
+
   // key: `${instanceId}:${declaratorStart}:${bindingName}` -> declId。同じ
   // コンポーネントを複数箇所へインライン化するとstart位置は同じになるため、
   // hygienic rename後のbinding名まで含めて呼び出し箇所を区別する。
@@ -217,9 +222,13 @@ export interface CompilerState {
   localDeclIds: Set<DeclId>
 }
 
-export function createCompilerState(source: string): CompilerState {
+export function createCompilerState(
+  source: string,
+  transformedNodes: Set<t.Node> = new Set(),
+): CompilerState {
   return {
     source,
+    transformedNodes,
     declIdByKey: new Map(),
     declKind: new Map(),
     declOutputName: new Map(),

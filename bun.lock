@@ -48,6 +48,7 @@
       "name": "@irisout/compiler",
       "version": "0.0.0",
       "dependencies": {
+        "@babel/generator": "^8.0.0",
         "@babel/parser": "^8.0.0",
         "@babel/traverse": "^8.0.0",
         "@irisout/runtime": "workspace:*",

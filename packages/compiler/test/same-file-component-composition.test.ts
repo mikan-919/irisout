@@ -570,16 +570,19 @@ function Foo({ label }) {
     expect(() => compile(source)).toThrow(/unsupported prop value form/)
   })
 
-  it('値なしのboolean-shorthand prop(`<Foo enabled />`)を拒否する(対応する実引数テキストが存在しないため)', () => {
+  it('値なしのboolean-shorthand prop(`<Foo enabled />`)をtrueとして扱う', async () => {
     const source = `
 export function App() {
   render(<div><Foo enabled /></div>);
 }
 function Foo({ enabled }) {
-  render(<span>{enabled}</span>);
+  render(<span>{enabled ? 'on' : 'off'}</span>);
 }
 `
-    expect(() => compile(source)).toThrow(/value-less boolean-shorthand prop.*scope limit/)
+    const { code } = compile(source)
+    const container = await mount(code)
+    expect(container.querySelector('span')?.textContent).toBe('on')
+    expect(code).not.toContain('enabled ?')
   })
 
   it('明示的な値を持つboolean prop(`<Foo enabled={true} />`)はトップレベル位置で渡せる', async () => {
@@ -596,36 +599,30 @@ function Foo({ enabled }) {
     expect(container.querySelector('span')?.textContent).toBe('true')
   })
 
-  it('別名で渡されたpropを式の内部(三項演算子の条件等)で参照すると拒否する(壊れたコード生成の回帰確認)', () => {
-    // 実装前調査で判明した不具合: propの参照位置が呼び出し先本体の式全体
-    // ではなく、より大きな式にネストしている場合(例: `enabled ? .. : ..`の
-    // 条件部分)、render()のソーステキストスライス方式は呼び出し先の古い
-    // ソーステキストをそのまま埋め込んでしまい、存在しない識別子を参照する
-    // 壊れたコードを生成する(黙って成功していた)。propの実引数名が呼び出し
-    // 先のパラメータ名と一致するbare identifierの場合のみ安全なので、
-    // それ以外は明示的にscope limitで拒否する。
+  it('別名で渡されたpropを三項演算子の内部で置換して実行できる', async () => {
     const source = `
 export function App() {
-  render(<div><Foo enabled={true} /></div>);
+  const flag = signal(true);
+  render(<div><Foo enabled={flag()} /></div>);
 }
 function Foo({ enabled }) {
   render(<span>{enabled ? 'on' : 'off'}</span>);
 }
 `
-    expect(() => compile(source)).toThrow(/referenced inside a larger expression.*scope limit/)
+    const { code } = compile(source)
+    const container = await mount(code)
+    expect(container.querySelector('span')?.textContent).toBe('on')
+    expect(code).not.toContain('enabled ?')
   })
 
-  it('別名で渡されたpropをリストアイテム内のメンバー式で参照すると拒否する(壊れたコード生成の回帰確認)', () => {
-    // 上と同じ不具合の別パターン: 呼び出し元のitem変数名(t)が呼び出し先の
-    // props名(item)と異なる場合、`item.done`のネストした参照は安全に
-    // 書き換えられない。名前が一致する`todo`パターン(既存テスト)は
-    // 引き続き許可される。
+  it('別名で渡されたpropをリストアイテム内のメンバー式で置換して実行できる', async () => {
     const source = `
 export function App() {
+  const items = signal([{ id: 1, done: true }]);
   render(
     <ul>
-      {[{ id: 1, done: true }].map((t) => (
-        <Foo key={t.id} item={t} />
+      {items().map((t) => (
+        <Foo item={t} />
       ))}
     </ul>
   );
@@ -634,7 +631,78 @@ function Foo({ item }) {
   render(<li key={item.id}>{item.done ? 'y' : 'n'}</li>);
 }
 `
-    expect(() => compile(source)).toThrow(/referenced inside a larger expression.*scope limit/)
+    const { code } = compile(source)
+    const container = await mount(code)
+    expect(container.querySelector('li')?.textContent).toBe('y')
+    expect(code).not.toContain('item.done')
+    expect(code).not.toContain('item.id')
+  })
+
+  it('メンバー式・添字式・呼び出し式の実引数をASTから置換して実行できる', async () => {
+    const source = `
+export function App() {
+  const items = signal([{ done: false }, { done: true }]);
+  const index = signal(1);
+  const getValue = signal(41);
+  render(<div><Foo item={items()[index()]} value={getValue()} /></div>);
+}
+function Foo({ item, value }) {
+  render(<span>{item.done ? String(value + 1) : 0}</span>);
+}
+`
+    const { code } = compile(source)
+    const container = await mount(code)
+    expect(container.querySelector('span')?.textContent).toBe('42')
+    expect(code).not.toContain('item.done')
+    expect(code).not.toContain('value + 1')
+  })
+
+  it('置換後のpropsをハンドラ式の内部で使える', async () => {
+    const source = `
+export function App() {
+  const count = signal(0);
+  render(<Foo enabled={true} count={count()} onActivate={() => count(count() + 1)} />);
+}
+function Foo({ enabled, count, onActivate }) {
+  render(
+    <button onClick={() => enabled ? onActivate() : null}>
+      {enabled ? count : 0}
+    </button>
+  );
+}
+`
+    const { code } = compile(source)
+    const container = await mount(code)
+    const button = container.querySelector('button')
+    expect(button?.textContent).toBe('0')
+    dispatch(container, button, 'click')
+    expect(button?.textContent).toBe('1')
+    expect(code).not.toContain('enabled ?')
+    expect(code).not.toContain('onActivate()')
+  })
+
+  it('置換後のpropsをブロック形式ハンドラの式内部で使える', async () => {
+    const source = `
+export function App() {
+  const count = signal(0);
+  render(<Foo enabled={true} count={count()} onActivate={() => count(count() + 1)} />);
+}
+function Foo({ enabled, count, onActivate }) {
+  render(
+    <button onClick={(event) => { if (enabled) onActivate(event); }}>
+      {count}
+    </button>
+  );
+}
+`
+    const { code } = compile(source)
+    const container = await mount(code)
+    const button = container.querySelector('button')
+    expect(button?.textContent).toBe('0')
+    dispatch(container, button, 'click')
+    expect(button?.textContent).toBe('1')
+    expect(code).not.toContain('if (enabled)')
+    expect(code).not.toContain('onActivate(event)')
   })
 
   it('インライン化後も静的兄弟とリストを同じ親へ配置できる', async () => {

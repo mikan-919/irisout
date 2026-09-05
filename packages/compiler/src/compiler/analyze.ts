@@ -5,7 +5,9 @@
 // の両方を組み立てる。
 
 import type { NodePath } from '@babel/traverse'
-import type * as t from '@babel/types'
+import * as t from '@babel/types'
+import { createAstRewrite } from './ast-codegen.ts'
+import type { AstRewriteSession } from './ast-codegen.ts'
 import { resolveToSignals } from './decl-graph.ts'
 import type { CompilerState, DeclId, ResolveUpdateCall, TrackedFn } from './state.ts'
 import { declKey } from './state.ts'
@@ -82,6 +84,52 @@ function render(source: string, start: number, end: number, edits: Edit[]): stri
   return out
 }
 
+function pathDepth(path: NodePath<t.Node>): number {
+  let depth = 0
+  let current: NodePath<t.Node> | null = path
+  while (current) {
+    depth++
+    current = current.parentPath
+  }
+  return depth
+}
+
+// inline-components.tsがprops置換後のクローンへ印を付ける。印を含む式は
+// 祖先の式全体までASTコード生成へ切り替える。これにより、置換された識別子の
+// start/endが呼び出し元ソースの位置を指していても、呼び出し先の古い文字列を
+// 切り出さない。
+function usesTransformedAst(ctx: CompilerState, path: NodePath<t.Node>): boolean {
+  if (ctx.transformedNodes.has(path.node)) return true
+  let found = false
+  path.traverse({
+    enter(child: NodePath<t.Node>) {
+      if (ctx.transformedNodes.has(child.node)) {
+        found = true
+        child.skip()
+      }
+    },
+  })
+  return found
+}
+
+function planAstReplacement(
+  session: AstRewriteSession,
+  targetPath: NodePath<t.Node>,
+  root: t.Node,
+  build: (get: <T extends t.Node>(original: T) => T) => t.Node,
+): void {
+  session.replace(
+    targetPath.node,
+    targetPath.node === root ? null : (targetPath.parentPath?.node ?? null),
+    pathDepth(targetPath),
+    build,
+  )
+}
+
+function statementProgram(stmts: NodePath<t.Statement>[]): t.Program {
+  return t.program(stmts.map((stmt) => stmt.node))
+}
+
 // cross-function-handler-writes design D1: ハンドラ/action 本体の識別子巡回で
 // 「signal/derived でない識別子の直接呼び出し」を分類する。callee が動きゾーン
 // 関数(render 後の function 宣言)と binding 同一なら追跡対象として記録し、
@@ -97,6 +145,7 @@ function tryHandleTrackedCallee(
   calleeNames: Set<string>,
   onWrite: (start: number) => void,
   edits: Edit[],
+  onRename?: (idPath: NodePath<t.Identifier>, name: string) => void,
 ): void {
   const parent = idPath.parentPath
   if (!parent?.isCallExpression() || parent.node.callee !== idPath.node) return
@@ -120,7 +169,8 @@ function tryHandleTrackedCallee(
   // (実装前調査で確認: リネームされた追跡呼び出しの出力に古い名前が
   // 残ってしまうバグ)。
   if (identifierNeedsRewrite(ctx, idPath, name)) {
-    edits.push({ start: idPath.node.start!, end: idPath.node.end!, text: name })
+    if (onRename) onRename(idPath, name)
+    else edits.push({ start: idPath.node.start!, end: idPath.node.end!, text: name })
   }
 }
 
@@ -207,6 +257,10 @@ function analyzeHandlerStatementsCore(
   const directCollectionWriteDeclIds = new Set<DeclId>()
   const calleeNames = new Set<string>()
   const edits: Edit[] = []
+  const astRoot = statementProgram(stmts)
+  const ast = stmts.some((stmt) => usesTransformedAst(ctx, stmt as NodePath<t.Node>))
+    ? createAstRewrite(astRoot)
+    : null
   let firstWriteStart: number | null = null
   const noteWrite = (pos: number) => {
     if (firstWriteStart == null || pos < firstWriteStart) firstWriteStart = pos
@@ -215,7 +269,15 @@ function analyzeHandlerStatementsCore(
   const visit = (idPath: NodePath<t.Identifier>) => {
     const id = resolveDeclId(ctx, idPath, instanceId)
     if (!id) {
-      tryHandleTrackedCallee(ctx, idPath, instanceId, calleeNames, noteWrite, edits)
+      tryHandleTrackedCallee(
+        ctx,
+        idPath,
+        instanceId,
+        calleeNames,
+        noteWrite,
+        edits,
+        ast ? (path, name) => ast.rename(path.node, name) : undefined,
+      )
       return
     }
     const outputName = ctx.declOutputName.get(id)
@@ -249,6 +311,15 @@ function analyzeHandlerStatementsCore(
         directCollectionWriteDeclIds.add(sig)
       }
       noteWrite(memberCall.node.start!)
+      if (ast) {
+        const memberCallPath = memberCall as NodePath<t.CallExpression>
+        planAstReplacement(ast, memberCallPath, astRoot, (get) =>
+          t.callExpression(t.identifier(`update_${outputName}_item`), [
+            get(firstArg as t.Expression) as t.Expression,
+            get(memberCall.node.arguments[1] as t.Expression) as t.Expression,
+          ]),
+        )
+      }
       return
     }
     if (parent?.isCallExpression() && parent.node.callee === idPath.node) {
@@ -258,6 +329,11 @@ function analyzeHandlerStatementsCore(
           end: parent.node.end!,
           text: outputName,
         })
+        if (ast) {
+          planAstReplacement(ast, parent as NodePath<t.CallExpression>, astRoot, () =>
+            t.identifier(outputName),
+          )
+        }
         return
       }
       if (parent.node.arguments.length > 1) {
@@ -282,6 +358,21 @@ function analyzeHandlerStatementsCore(
         end: parent.node.end!,
         text: ctx.declKind.get(id) === 'collection' ? ')' : '',
       })
+      if (ast) {
+        const callPath = parent as NodePath<t.CallExpression>
+        planAstReplacement(ast, callPath, astRoot, (get) => {
+          const arg = parent.node.arguments[0] as t.Expression
+          const value = get(arg) as t.Expression
+          const rhs =
+            ctx.declKind.get(id) === 'collection'
+              ? t.callExpression(t.identifier('__replaceCollection__'), [
+                  t.identifier(`__collection_${outputName}__`),
+                  value,
+                ])
+              : value
+          return t.assignmentExpression('=', t.identifier(outputName), rhs)
+        })
+      }
       noteWrite(parent.node.start!)
       for (const sig of resolveToSignals(ctx, id, new Set())) writeDeclIds.add(sig)
       return
@@ -293,6 +384,7 @@ function analyzeHandlerStatementsCore(
         end: idPath.node.end!,
         text: outputName,
       })
+      if (ast) ast.rename(idPath.node, outputName)
     }
   }
 
@@ -315,7 +407,9 @@ function analyzeHandlerStatementsCore(
   }
 
   return {
-    rendered: render(ctx.source, stmts[0]!.node.start!, stmts[stmts.length - 1]!.node.end!, edits),
+    rendered: ast
+      ? ast.generate()
+      : render(ctx.source, stmts[0]!.node.start!, stmts[stmts.length - 1]!.node.end!, edits),
     writeDeclIds,
     directCollectionWriteDeclIds,
     calleeNames,
@@ -330,6 +424,9 @@ export function analyzeExpr(
   const deps = new Set<DeclId>()
   const outputEdits: Edit[] = []
   const sourceEdits: Edit[] = []
+  const useAst = usesTransformedAst(ctx, path as NodePath<t.Node>)
+  const sourceAst = useAst ? createAstRewrite(path.node) : null
+  const outputAst = useAst ? createAstRewrite(path.node) : null
 
   const visit = (idPath: NodePath<t.Identifier>) => {
     const id = resolveDeclId(ctx, idPath, instanceId)
@@ -342,6 +439,7 @@ export function analyzeExpr(
     const idEnd = idPath.node.end!
     if (identifierNeedsRewrite(ctx, idPath, outputName)) {
       sourceEdits.push({ start: idStart, end: idEnd, text: outputName })
+      if (sourceAst) sourceAst.rename(idPath.node, outputName)
     }
 
     // `count()` のような追跡済み signal/derived への引数なし呼び出しは
@@ -359,11 +457,17 @@ export function analyzeExpr(
         end: parent.node.end!,
         text: outputName,
       })
+      if (outputAst) {
+        planAstReplacement(outputAst, parent as NodePath<t.CallExpression>, path.node, () =>
+          t.identifier(outputName),
+        )
+      }
       return
     }
 
     if (identifierNeedsRewrite(ctx, idPath, outputName)) {
       outputEdits.push({ start: idStart, end: idEnd, text: outputName })
+      if (outputAst) outputAst.rename(idPath.node, outputName)
     }
   }
 
@@ -373,8 +477,8 @@ export function analyzeExpr(
   const end = path.node.end!
   return {
     deps,
-    rendered: render(ctx.source, start, end, outputEdits),
-    sourceRendered: render(ctx.source, start, end, sourceEdits),
+    rendered: outputAst ? outputAst.generate() : render(ctx.source, start, end, outputEdits),
+    sourceRendered: sourceAst ? sourceAst.generate() : render(ctx.source, start, end, sourceEdits),
   }
 }
 
@@ -402,13 +506,24 @@ export function analyzeHandlerExpr(
   const directCollectionWriteDeclIds = new Set<DeclId>()
   const calleeNames = new Set<string>()
   const edits: Edit[] = []
+  const ast = usesTransformedAst(ctx, exprPath as NodePath<t.Node>)
+    ? createAstRewrite(exprPath.node)
+    : null
 
   const visit = (idPath: NodePath<t.Identifier>) => {
     const id = resolveDeclId(ctx, idPath, instanceId)
     if (!id) {
       // cross-function-handler-writes: 単一式ハンドラ本体(`() => toggle(id)`)
       // からの動きゾーン関数呼び出しを追跡する(D3 は式1つなので該当なし)。
-      tryHandleTrackedCallee(ctx, idPath, instanceId, calleeNames, () => {}, edits)
+      tryHandleTrackedCallee(
+        ctx,
+        idPath,
+        instanceId,
+        calleeNames,
+        () => {},
+        edits,
+        ast ? (path, name) => ast.rename(path.node, name) : undefined,
+      )
       return
     }
     const outputName = ctx.declOutputName.get(id)
@@ -438,6 +553,15 @@ export function analyzeHandlerExpr(
       for (const sig of resolveToSignals(ctx, id, new Set())) {
         directCollectionWriteDeclIds.add(sig)
       }
+      if (ast) {
+        const memberCallPath = memberCall as NodePath<t.CallExpression>
+        planAstReplacement(ast, memberCallPath, exprPath.node, (get) =>
+          t.callExpression(t.identifier(`update_${outputName}_item`), [
+            get(firstArg as t.Expression) as t.Expression,
+            get(memberCall.node.arguments[1] as t.Expression) as t.Expression,
+          ]),
+        )
+      }
       return
     }
     if (parent?.isCallExpression() && parent.node.callee === idPath.node) {
@@ -447,6 +571,11 @@ export function analyzeHandlerExpr(
           end: parent.node.end!,
           text: outputName,
         })
+        if (ast) {
+          planAstReplacement(ast, parent as NodePath<t.CallExpression>, exprPath.node, () =>
+            t.identifier(outputName),
+          )
+        }
         return
       }
       if (parent.node.arguments.length > 1) {
@@ -471,6 +600,21 @@ export function analyzeHandlerExpr(
         end: parent.node.end!,
         text: ctx.declKind.get(id) === 'collection' ? ')' : '',
       })
+      if (ast) {
+        const callPath = parent as NodePath<t.CallExpression>
+        planAstReplacement(ast, callPath, exprPath.node, (get) => {
+          const arg = parent.node.arguments[0] as t.Expression
+          const value = get(arg) as t.Expression
+          const rhs =
+            ctx.declKind.get(id) === 'collection'
+              ? t.callExpression(t.identifier('__replaceCollection__'), [
+                  t.identifier(`__collection_${outputName}__`),
+                  value,
+                ])
+              : value
+          return t.assignmentExpression('=', t.identifier(outputName), rhs)
+        })
+      }
       for (const sig of resolveToSignals(ctx, id, new Set())) writeDeclIds.add(sig)
       return
     }
@@ -481,6 +625,7 @@ export function analyzeHandlerExpr(
         end: idPath.node.end!,
         text: outputName,
       })
+      if (ast) ast.rename(idPath.node, outputName)
     }
   }
 
@@ -488,7 +633,9 @@ export function analyzeHandlerExpr(
   collectTransitiveWrites(ctx, calleeNames, writeDeclIds, directCollectionWriteDeclIds)
 
   return {
-    rendered: render(ctx.source, exprPath.node.start!, exprPath.node.end!, edits),
+    rendered: ast
+      ? ast.generate()
+      : render(ctx.source, exprPath.node.start!, exprPath.node.end!, edits),
     writeDeclIds,
     directCollectionWriteDeclIds,
   }
@@ -589,12 +736,22 @@ function analyzeActionIdentifier(
   directCollectionWriteDeclIds: Set<DeclId>,
   onWrite: (start: number) => void,
   calleeNames: Set<string>,
+  root: t.Node,
+  ast?: AstRewriteSession | null,
 ): void {
   const id = resolveDeclId(ctx, idPath, instanceId)
   if (!id) {
     // cross-function-handler-writes: action 本体からの動きゾーン関数呼び出しも
     // ハンドラと同じ規則で追跡する(onWrite で D3 の追跡書き込み位置を通知)。
-    tryHandleTrackedCallee(ctx, idPath, instanceId, calleeNames, onWrite, edits)
+    tryHandleTrackedCallee(
+      ctx,
+      idPath,
+      instanceId,
+      calleeNames,
+      onWrite,
+      edits,
+      ast ? (path, name) => ast.rename(path.node, name) : undefined,
+    )
     return
   }
   const outputName = ctx.declOutputName.get(id)
@@ -625,6 +782,15 @@ function analyzeActionIdentifier(
       directCollectionWriteDeclIds.add(sig)
     }
     onWrite(memberCall.node.start!)
+    if (ast) {
+      const memberCallPath = memberCall as NodePath<t.CallExpression>
+      planAstReplacement(ast, memberCallPath, root, (get) =>
+        t.callExpression(t.identifier(`update_${outputName}_item`), [
+          get(firstArg as t.Expression) as t.Expression,
+          get(memberCall.node.arguments[1] as t.Expression) as t.Expression,
+        ]),
+      )
+    }
     return
   }
   if (parent?.isCallExpression() && parent.node.callee === idPath.node) {
@@ -635,6 +801,11 @@ function analyzeActionIdentifier(
         end: parent.node.end!,
         text: outputName,
       })
+      if (ast) {
+        planAstReplacement(ast, parent as NodePath<t.CallExpression>, root, () =>
+          t.identifier(outputName),
+        )
+      }
       return
     }
     if (parent.node.arguments.length > 1) {
@@ -652,6 +823,20 @@ function analyzeActionIdentifier(
       text: `${outputName} = `,
     })
     edits.push({ start: arg.end!, end: parent.node.end!, text: '' })
+    if (ast) {
+      const callPath = parent as NodePath<t.CallExpression>
+      planAstReplacement(ast, callPath, root, (get) => {
+        const value = get(arg as t.Expression) as t.Expression
+        const rhs =
+          ctx.declKind.get(id) === 'collection'
+            ? t.callExpression(t.identifier('__replaceCollection__'), [
+                t.identifier(`__collection_${outputName}__`),
+                value,
+              ])
+            : value
+        return t.assignmentExpression('=', t.identifier(outputName), rhs)
+      })
+    }
     for (const sig of resolveToSignals(ctx, id, new Set())) writeDeclIds.add(sig)
     onWrite(parent.node.start!)
     return
@@ -664,6 +849,7 @@ function analyzeActionIdentifier(
       end: idPath.node.end!,
       text: outputName,
     })
+    if (ast) ast.rename(idPath.node, outputName)
   }
 }
 
@@ -697,6 +883,10 @@ function analyzeActionStatements(
   const calleeNames = new Set<string>()
   const edits: Edit[] = []
   const nestedScopes: ReturnType<typeof analyzeFunctionBodyScope>[] = []
+  const astRoot = statementProgram(stmts)
+  const ast = stmts.some((stmt) => usesTransformedAst(ctx, stmt as NodePath<t.Node>))
+    ? createAstRewrite(astRoot)
+    : null
   let firstWriteStart: number | null = null
 
   const visit = (idPath: NodePath<t.Identifier>) =>
@@ -714,6 +904,8 @@ function analyzeActionStatements(
         }
       },
       calleeNames,
+      astRoot,
+      ast,
     )
 
   const captureNested = (
@@ -776,7 +968,7 @@ function analyzeActionStatements(
           text: `; ${updateCall.code}`,
         })
       }
-      const rendered = render(ctx.source, start, end, allEdits)
+      const rendered = ast ? ast.generate() : render(ctx.source, start, end, allEdits)
       if (!updateCall.code) return rendered
       if (updateCall.needsCollectionBatch) {
         return `{ __update_batch_depth__++; try { ${rendered} } finally { __update_batch_depth__--; } ${updateCall.code} }`
@@ -806,6 +998,9 @@ function analyzeActionExprScope(
   const directCollectionWriteDeclIds = new Set<DeclId>()
   const calleeNames = new Set<string>()
   const edits: Edit[] = []
+  const ast = usesTransformedAst(ctx, exprPath as NodePath<t.Node>)
+    ? createAstRewrite(exprPath.node)
+    : null
 
   forEachReferencedIdentifier(exprPath, (idPath) =>
     analyzeActionIdentifier(
@@ -818,6 +1013,8 @@ function analyzeActionExprScope(
       directCollectionWriteDeclIds,
       () => {},
       calleeNames,
+      exprPath.node,
+      ast,
     ),
   )
   collectTransitiveWrites(ctx, calleeNames, writeDeclIds, directCollectionWriteDeclIds)
@@ -827,7 +1024,7 @@ function analyzeActionExprScope(
   return {
     readDeclIds,
     finalize: (resolveUpdateCall) => {
-      const rendered = render(ctx.source, start, end, edits)
+      const rendered = ast ? ast.generate() : render(ctx.source, start, end, edits)
       const updateCall = resolveUpdateCall(writeDeclIds, directCollectionWriteDeclIds)
       if (!updateCall.code) return rendered
       if (updateCall.needsCollectionBatch) {
