@@ -4,6 +4,7 @@
 // ので `count()` のような読み取り呼び出しを裸の識別子 `count` へ書き換える)
 // の両方を組み立てる。
 
+import { parse } from '@babel/parser'
 import type { NodePath } from '@babel/traverse'
 import * as t from '@babel/types'
 import { createAstRewrite } from './ast-codegen.ts'
@@ -128,6 +129,23 @@ function planAstReplacement(
 
 function statementProgram(stmts: NodePath<t.Statement>[]): t.Program {
   return t.program(stmts.map((stmt) => stmt.node))
+}
+
+// ネストしたaction本体の最終コードを、外側のASTへ戻すための受け皿。
+// concise bodyは`return`を付けたBlockStatementへ正規化する。actionの
+// 関数本体では返り値を保ち、ASTコード生成の対象にすることで、ネストした
+// スコープを外側の元ソース位置へ再挿入しない。
+function parseGeneratedFunctionBody(code: string): t.BlockStatement {
+  const trimmed = code.trim()
+  const source = trimmed.startsWith('{')
+    ? `function __generated__() ${trimmed}`
+    : `function __generated__() { return (${trimmed}); }`
+  const file = parse(source, { sourceType: 'module', plugins: ['typescript', 'jsx'] })
+  const fn = file.program.body[0]
+  if (fn?.type !== 'FunctionDeclaration') {
+    throw new Error('compile: failed to parse generated action function body')
+  }
+  return fn.body
 }
 
 // cross-function-handler-writes design D1: ハンドラ/action 本体の識別子巡回で
@@ -952,11 +970,17 @@ function analyzeActionStatements(
     finalize: (resolveUpdateCall) => {
       const allEdits = [...edits]
       for (const child of nestedScopes) {
+        const childCode = child.finalize(resolveUpdateCall)
         allEdits.push({
           start: child.start,
           end: child.end,
-          text: child.finalize(resolveUpdateCall),
+          text: childCode,
         })
+        if (ast) {
+          ast.replace(child.node, child.parent, child.depth, () =>
+            parseGeneratedFunctionBody(childCode),
+          )
+        }
       }
       const updateCall = resolveUpdateCall(writeDeclIds, directCollectionWriteDeclIds)
       if (updateCall.code && !updateCall.needsCollectionBatch) {
@@ -973,6 +997,7 @@ function analyzeActionStatements(
       if (updateCall.needsCollectionBatch) {
         return `{ __update_batch_depth__++; try { ${rendered} } finally { __update_batch_depth__--; } ${updateCall.code} }`
       }
+      if (ast) return `${rendered}; ${updateCall.code}`
       return rendered
     },
   }
@@ -1046,6 +1071,9 @@ function analyzeFunctionBodyScope(
 ): {
   start: number
   end: number
+  node: t.Node
+  parent: t.Node | null
+  depth: number
   finalize: (resolveUpdateCall: ResolveUpdateCall) => string
   readDeclIds: Set<DeclId>
 } {
@@ -1059,6 +1087,9 @@ function analyzeFunctionBodyScope(
     return {
       start: bodyPath.node.start!,
       end: bodyPath.node.end!,
+      node: bodyPath.node,
+      parent: fnPath.node,
+      depth: pathDepth(bodyPath as NodePath<t.Node>),
       readDeclIds: inner.readDeclIds,
       finalize: (resolveUpdateCall) => `{${inner.finalize(resolveUpdateCall)}}`,
     }
@@ -1067,6 +1098,9 @@ function analyzeFunctionBodyScope(
   return {
     start: bodyPath.node.start!,
     end: bodyPath.node.end!,
+    node: bodyPath.node,
+    parent: fnPath.node,
+    depth: pathDepth(bodyPath as NodePath<t.Node>),
     finalize: exprScope.finalize,
     readDeclIds: exprScope.readDeclIds,
   }

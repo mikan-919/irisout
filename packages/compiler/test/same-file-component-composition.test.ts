@@ -705,6 +705,28 @@ function Foo({ enabled, count, onActivate }) {
     expect(code).not.toContain('onActivate(event)')
   })
 
+  it('置換後のpropsをaction本体の式内部で使える', async () => {
+    const source = `
+export function App() {
+  const count = signal(0);
+  render(
+    <div>
+      <span>{count()}</span>
+      <Foo enabled onActivate={() => count(count() + 1)} />
+    </div>
+  );
+}
+function Foo({ enabled, onActivate }) {
+  render(<button use={() => { if (enabled) onActivate(); }}>activate</button>);
+}
+`
+    const { code } = compile(source)
+    const container = await mount(code)
+    expect(container.querySelector('span')?.textContent).toBe('1')
+    expect(code).not.toContain('if (enabled)')
+    expect(code).not.toContain('onActivate()')
+  })
+
   it('インライン化後も静的兄弟とリストを同じ親へ配置できる', async () => {
     const source = `
 export function App() {
