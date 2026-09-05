@@ -80,6 +80,13 @@ bundleそのものの比較ではありません。詳細な方法論と表は
 [`packages/bench/todomvc-vs-react.results.md`](./packages/bench/todomvc-vs-react.results.md)
 にあります。
 
+2026-09-05に、現行コンパイラ生成版と手書き基準、React productionの比較を
+Chromium 152.0.7977.75で追加計測した。N=100/1,000/10,000、予熱2回後7回の
+中央値であり、手書き版をirisoutの生成性能とは扱わない。転送量、初期化、更新、
+DOM変更、JavaScriptヒープ、生成コードの調査は
+[`packages/bench/todomvc-compiler.results.md`](./packages/bench/todomvc-compiler.results.md)
+にある。
+
 ## 現在のステータス
 
 TypeScript 実装は M1〜M6(全マイルストーン横断の no-wrapper 検証)まで

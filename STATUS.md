@@ -42,6 +42,15 @@ conditionalのbranch着脱はその範囲の親ノードと終了アンカーの
 使わない生成物は従来のmount/hydrate経路を使い、アンカー走査と範囲ヘルパーを出力
 しない。unmountは範囲Map、List/conditional参照、component-owned DOMを解放する。
 
+## 現在地(2026-09-05・コンパイラ生成TodoMVC性能計測)
+
+`apps/examples/todomvc.jsx`の現行コンパイラ生成物、`apps/examples/todomvc.handwritten.js`
+の手書き基準、`apps/examples/todomvc.react.tsx`のReact productionを、同一Chromiumで
+機能試験後に比較した。N=100/1,000/10,000、予熱2回後7回の中央値で、転送量、初期化、
+更新、MutationObserverによるDOM変更、JavaScriptヒープ、生成コードの計数を記録した。
+手書き基準はコンパイラ生成物ではない。結果と条件は
+`packages/bench/todomvc-compiler.results.md`に固定した。
+
 ## 現在地(2026-09-05・同一ファイルpropsの式置換、ADR-0023)
 
 同一ファイルコンポーネントのpropsは、呼び出し元の実引数の名前や式の形に
