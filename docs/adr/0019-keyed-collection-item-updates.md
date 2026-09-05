@@ -58,7 +58,7 @@ List以外の依存markerも通常どおり更新する。`filter()`、`slice()`
 ## 対象外
 
 - `add`、`remove`、`move`などの構造操作メソッド
-- 複数item更新とbatch
+- 複数item更新を一つのcollection APIで受ける機構、およびitem direct通知のbatch
 - 任意の配列式から変更itemを推測する最適化
 - 公開subscribe API
 - collection identityとJSX `key`の静的等価性証明

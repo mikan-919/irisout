@@ -363,6 +363,7 @@ interface HandlerAttr {
   eventName: string
   rendered: string
   writeDeclIds: Set<DeclId>
+  directCollectionWriteDeclIds: Set<DeclId>
   param: string | null
 }
 
@@ -499,10 +500,10 @@ function collectAttrs(
     const exprPath = attr.get('value.expression') as NodePath<t.Expression>
     const { param, body } = resolveHandlerBody(exprPath, attrName.name, handlerFns)
     const eventName = attrName.name.slice(2).toLowerCase()
-    const { rendered, writeDeclIds } = Array.isArray(body)
+    const { rendered, writeDeclIds, directCollectionWriteDeclIds } = Array.isArray(body)
       ? analyzeHandlerBody(ctx, body, instanceId)
       : analyzeHandlerExpr(ctx, body, instanceId)
-    handlerAttrs.push({ eventName, rendered, writeDeclIds, param })
+    handlerAttrs.push({ eventName, rendered, writeDeclIds, directCollectionWriteDeclIds, param })
   }
   return { handlerAttrs, staticAttrs, actionAttr, dynamicAttrPaths }
 }

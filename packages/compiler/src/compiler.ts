@@ -26,6 +26,7 @@ import type {
   ListMarkerOutput,
   MarkerOutput,
   StructuralUnitBodyOutput,
+  UpdateBatchOutput,
 } from './codegen.ts'
 import { generateModule } from './codegen.ts'
 import { resolveToSignals } from './compiler/decl-graph.ts'
@@ -137,28 +138,125 @@ export function compile(source: string): CompileResult {
 
   const signalToMarkers = buildSignalToMarkers(ctx)
 
-  // --- M2: ハンドラの writeDeclIds をマーカーを持つ signal だけに絞り込み、
-  // update_<name>() の呼び出しリストへ変換する(legacy/src/compiler.js:139-145)。
+  // 同じ同期スコープで複数 root signal が書き込まれる場合でも、依存 marker
+  // は一度だけ更新する。marker 集合が重ならない組み合わせは従来の個別
+  // update_*() の方が小さいため、batch を生成しない(ADR-0004)。
+  const updateBatches: UpdateBatchOutput[] = []
+  const batchByRootSet = new Map<string, UpdateBatchOutput>()
+  let batchCounter = 0
+  const batchNames = new Set<string>()
+
+  const nextBatchName = (): string => {
+    let name = `__update_batch_${batchCounter++}__`
+    while (ctx.usedOutputNames.has(name) || batchNames.has(name)) {
+      name = `__update_batch_${batchCounter++}__`
+    }
+    batchNames.add(name)
+    return name
+  }
+
+  const resolveUpdatePlan = (
+    ids: Set<DeclId>,
+    directCollectionWriteDeclIds: Set<DeclId> = new Set(),
+  ): {
+    updateNames: string[]
+    updateBatchName: string | null
+    needsCollectionBatch: boolean
+  } => {
+    const rootIds = [...new Set([...ids, ...directCollectionWriteDeclIds])]
+      .filter((id) => signalToMarkers.has(id))
+      .sort()
+    // collection.update() は専用の直接通知をすでに行うため、batch になら
+    // ないスコープの末尾へ通常の update_<collection>() を足さない。ただし
+    // 同じスコープに通常の collection(next) setter もある場合は ids に
+    // 残るので、最終状態の reconcile が必要になる。
+    const updateNames = rootIds
+      .filter(
+        (id) =>
+          ctx.declKind.get(id) !== 'collection' ||
+          !directCollectionWriteDeclIds.has(id) ||
+          ids.has(id),
+      )
+      .map((id) => ctx.declOutputName.get(id)!)
+      .sort()
+    if (rootIds.length < 2) {
+      return { updateNames, updateBatchName: null, needsCollectionBatch: false }
+    }
+
+    const markerIds = new Set<MarkerId>()
+    let hasSharedMarker = false
+    for (const rootId of rootIds) {
+      for (const markerId of signalToMarkers.get(rootId) ?? []) {
+        if (markerIds.has(markerId)) hasSharedMarker = true
+        markerIds.add(markerId)
+      }
+    }
+    if (!hasSharedMarker) return { updateNames, updateBatchName: null, needsCollectionBatch: false }
+
+    const key = rootIds.join('\u0000')
+    let batch = batchByRootSet.get(key)
+    if (!batch) {
+      batch = {
+        name: nextBatchName(),
+        signalIds: rootIds,
+        markerIds: [...markerIds],
+        containsCollection: rootIds.some((id) => directCollectionWriteDeclIds.has(id)),
+      }
+      batchByRootSet.set(key, batch)
+      updateBatches.push(batch)
+    } else if (
+      !batch.containsCollection &&
+      rootIds.some((id) => directCollectionWriteDeclIds.has(id))
+    ) {
+      // 同じ root set の batch を通常の collection setter が先に登録して
+      // いても、後から collection.update() 経路が合流した時点で direct
+      // 通知の遅延が必要になる。batch は全スコープで共有するため、ここで
+      // property を昇格させ、codegen 側の item updater guard も有効にする。
+      batch.containsCollection = true
+    }
+    return {
+      updateNames: [],
+      updateBatchName: batch.name,
+      needsCollectionBatch: batch.containsCollection,
+    }
+  }
+
+  const resolveUpdateCall = (ids: Set<DeclId>, directCollectionWriteDeclIds?: Set<DeclId>) => {
+    const plan = resolveUpdatePlan(ids, directCollectionWriteDeclIds)
+    return {
+      code: plan.updateBatchName
+        ? `${plan.updateBatchName}();`
+        : plan.updateNames.map((name) => `update_${name}();`).join(' '),
+      needsCollectionBatch: plan.needsCollectionBatch,
+    }
+  }
+
+  // --- M2/ADR-0020: ハンドラの writeDeclIds をマーカーを持つ signal だけに
+  // 絞り込み、個別updateまたは共有marker用batch呼び出しへ変換する。
   // M5: リスト/条件分岐のローカルハンドラ(StructuralUnitBody.localHandlers)
   // も同じ変換が要るので、ctx.handlers 直下・構造ユニット内の両方に使う
   // 共通ヘルパーにする。
   // same-file-component-composition: ユニット直下のローカルハンドラのうち、
-  // このユニット自身のローカルsignalへ書き込むものは、既存の`updateNames`
-  // (モジュールscopeのupdate_*)呼び出しに加えて、このユニットのfactoryが
+  // このユニット自身のローカルsignalへ書き込むものは、既存のroot更新呼び出し
+  // に加えて、このユニットのfactoryが
   // 既に持つ`update()`クロージャも呼ぶ(design.md D5 ― 新しいupdate関数は
   // 作らず、M5が生成する既存のupdate()を再利用する)。ルートハンドラには
   // ローカルsignalの概念が無いため localDeclIds は省略可能。
-  const convertHandler = (h: HandlerDecl, localDeclIds?: Set<DeclId>): HandlerOutput => ({
-    markerId: h.markerId,
-    eventName: h.eventName,
-    rendered: h.rendered,
-    param: h.param,
-    updateNames: [...h.writeDeclIds]
-      .filter((id) => signalToMarkers.has(id))
-      .map((id) => ctx.declOutputName.get(id)!)
-      .sort(),
-    callLocalUpdate: localDeclIds ? [...h.writeDeclIds].some((id) => localDeclIds.has(id)) : false,
-  })
+  const convertHandler = (h: HandlerDecl, localDeclIds?: Set<DeclId>): HandlerOutput => {
+    const plan = resolveUpdatePlan(h.writeDeclIds, h.directCollectionWriteDeclIds)
+    return {
+      markerId: h.markerId,
+      eventName: h.eventName,
+      rendered: h.rendered,
+      param: h.param,
+      updateNames: plan.updateNames,
+      updateBatchName: plan.updateBatchName,
+      updateBatchNeedsCollection: plan.needsCollectionBatch,
+      callLocalUpdate: localDeclIds
+        ? [...h.writeDeclIds].some((id) => localDeclIds.has(id))
+        : false,
+    }
+  }
   const handlerOutputs = ctx.handlers.map((h) => convertHandler(h))
 
   // M5.5: ネストした構造ユニット(body.localMarkers 内の list/conditional)の
@@ -195,22 +293,15 @@ export function compile(source: string): CompileResult {
     return convertUnitMarker(m)
   })
 
-  // ADR-0011: writeDeclIds は analyze.ts 側で既に root signal へ推移解決済み
-  // (analyzeActionIdentifier)なので、ここではマーカーを持つものだけへ絞り込み
-  // 出力名へ変換するだけでよい(convertHandler の updateNames 変換と同型)。
-  const resolveUpdateNames = (ids: Set<DeclId>): string[] =>
-    [...ids]
-      .filter((id) => signalToMarkers.has(id))
-      .map((id) => ctx.declOutputName.get(id)!)
-      .sort()
-
-  // action本体・返り値クロージャの最終テキストは signalToMarkers 確定後にしか
-  // 組み立てられない(design D4-1: ネストしたスコープごとの update_* 呼び出し)。
+  // ADR-0011/ADR-0020: writeDeclIds は analyze.ts 側で既に root signal へ
+  // 推移解決済み(analyzeActionIdentifier)なので、ここでは共有markerの有無に
+  // 応じて個別updateまたはbatch文へ変換するだけでよい。action本体・返り値
+  // クロージャの最終テキストは signalToMarkers 確定後にしか組み立てられない。
   const actionOutputs: ActionOutput[] = ctx.actions.map((a) => ({
     markerId: a.markerId,
     elParam: a.elParam,
-    bodyRendered: a.finalizeBody(resolveUpdateNames),
-    closureRendered: a.finalizeClosure ? a.finalizeClosure(resolveUpdateNames) : null,
+    bodyRendered: a.finalizeBody(resolveUpdateCall),
+    closureRendered: a.finalizeClosure ? a.finalizeClosure(resolveUpdateCall) : null,
   }))
 
   // --- ビルド時実行:discovery の確認 + 実際の初期 HTML の取得 ---
@@ -279,6 +370,7 @@ export function compile(source: string): CompileResult {
     declStatements: out.declStatements,
     markers: markerOutputs,
     signalToMarkers,
+    updateBatches,
     declOutputName: ctx.declOutputName,
     derivedDeps: ctx.derivedDeps,
     derivedRecompute: ctx.derivedRecompute,

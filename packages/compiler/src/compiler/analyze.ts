@@ -7,7 +7,7 @@
 import type { NodePath } from '@babel/traverse'
 import type * as t from '@babel/types'
 import { resolveToSignals } from './decl-graph.ts'
-import type { CompilerState, DeclId, TrackedFn } from './state.ts'
+import type { CompilerState, DeclId, ResolveUpdateCall, TrackedFn } from './state.ts'
 import { declKey } from './state.ts'
 
 interface Edit {
@@ -146,6 +146,7 @@ function ensureTrackedFn(ctx: CompilerState, name: string, instanceId: number): 
     paramSource,
     rendered: '',
     writeDeclIds: new Set(),
+    directCollectionWriteDeclIds: new Set(),
     calleeNames: new Set(),
   }
   ctx.trackedFns.set(name, entry)
@@ -153,6 +154,7 @@ function ensureTrackedFn(ctx: CompilerState, name: string, instanceId: number): 
   const core = analyzeHandlerStatementsCore(ctx, stmts, instanceId)
   entry.rendered = core.rendered
   entry.writeDeclIds = core.writeDeclIds
+  entry.directCollectionWriteDeclIds = core.directCollectionWriteDeclIds
   entry.calleeNames = core.calleeNames
 }
 
@@ -162,6 +164,7 @@ function collectTransitiveWrites(
   ctx: CompilerState,
   names: Set<string>,
   out: Set<DeclId>,
+  directCollectionOut: Set<DeclId> = new Set(),
   visited: Set<string> = new Set(),
 ): void {
   for (const name of names) {
@@ -170,7 +173,8 @@ function collectTransitiveWrites(
     const fn = ctx.trackedFns.get(name)
     if (!fn) continue
     for (const w of fn.writeDeclIds) out.add(w)
-    collectTransitiveWrites(ctx, fn.calleeNames, out, visited)
+    for (const w of fn.directCollectionWriteDeclIds) directCollectionOut.add(w)
+    collectTransitiveWrites(ctx, fn.calleeNames, out, directCollectionOut, visited)
   }
 }
 
@@ -182,12 +186,25 @@ function analyzeHandlerStatementsCore(
   ctx: CompilerState,
   stmts: NodePath<t.Statement>[],
   instanceId: number,
-): { rendered: string; writeDeclIds: Set<DeclId>; calleeNames: Set<string> } {
+): {
+  rendered: string
+  writeDeclIds: Set<DeclId>
+  directCollectionWriteDeclIds: Set<DeclId>
+  calleeNames: Set<string>
+} {
   for (const stmt of stmts) validateHandlerStatement(stmt)
 
-  if (stmts.length === 0) return { rendered: '', writeDeclIds: new Set(), calleeNames: new Set() }
+  if (stmts.length === 0) {
+    return {
+      rendered: '',
+      writeDeclIds: new Set(),
+      directCollectionWriteDeclIds: new Set(),
+      calleeNames: new Set(),
+    }
+  }
 
   const writeDeclIds = new Set<DeclId>()
+  const directCollectionWriteDeclIds = new Set<DeclId>()
   const calleeNames = new Set<string>()
   const edits: Edit[] = []
   let firstWriteStart: number | null = null
@@ -225,6 +242,12 @@ function analyzeHandlerStatementsCore(
         end: firstArg.start!,
         text: `update_${outputName}_item(`,
       })
+      // collection.update() は専用の直接通知経路を持つ。別のroot writeと
+      // 同一スコープで実行される場合だけ、compiler.ts がこの集合をbatchへ
+      // 組み込む。
+      for (const sig of resolveToSignals(ctx, id, new Set())) {
+        directCollectionWriteDeclIds.add(sig)
+      }
       noteWrite(memberCall.node.start!)
       return
     }
@@ -294,6 +317,7 @@ function analyzeHandlerStatementsCore(
   return {
     rendered: render(ctx.source, stmts[0]!.node.start!, stmts[stmts.length - 1]!.node.end!, edits),
     writeDeclIds,
+    directCollectionWriteDeclIds,
     calleeNames,
   }
 }
@@ -359,6 +383,7 @@ export interface HandlerAnalysis {
   rendered: string
   /** このハンドラが書き込む root signal の declId 集合(推移解決済み)。 */
   writeDeclIds: Set<DeclId>
+  directCollectionWriteDeclIds: Set<DeclId>
 }
 
 // ハンドラ本体専用の解析。analyzeExpr と同じ識別子巡回を行うが、追跡済み
@@ -374,6 +399,7 @@ export function analyzeHandlerExpr(
   instanceId: number,
 ): HandlerAnalysis {
   const writeDeclIds = new Set<DeclId>()
+  const directCollectionWriteDeclIds = new Set<DeclId>()
   const calleeNames = new Set<string>()
   const edits: Edit[] = []
 
@@ -409,6 +435,9 @@ export function analyzeHandlerExpr(
         end: firstArg.start!,
         text: `update_${outputName}_item(`,
       })
+      for (const sig of resolveToSignals(ctx, id, new Set())) {
+        directCollectionWriteDeclIds.add(sig)
+      }
       return
     }
     if (parent?.isCallExpression() && parent.node.callee === idPath.node) {
@@ -456,11 +485,12 @@ export function analyzeHandlerExpr(
   }
 
   forEachReferencedIdentifier(exprPath, visit)
-  collectTransitiveWrites(ctx, calleeNames, writeDeclIds)
+  collectTransitiveWrites(ctx, calleeNames, writeDeclIds, directCollectionWriteDeclIds)
 
   return {
     rendered: render(ctx.source, exprPath.node.start!, exprPath.node.end!, edits),
     writeDeclIds,
+    directCollectionWriteDeclIds,
   }
 }
 
@@ -540,8 +570,9 @@ export function analyzeHandlerBody(
   // cross-function-handler-writes design D3: 追跡呼び出し先の推移的な書き込み先を
   // 合流し、update_*() は従来どおりハンドラ末尾(codegen)で一括発火させる。
   const writeDeclIds = new Set(core.writeDeclIds)
-  collectTransitiveWrites(ctx, core.calleeNames, writeDeclIds)
-  return { rendered: core.rendered, writeDeclIds }
+  const directCollectionWriteDeclIds = new Set(core.directCollectionWriteDeclIds)
+  collectTransitiveWrites(ctx, core.calleeNames, writeDeclIds, directCollectionWriteDeclIds)
+  return { rendered: core.rendered, writeDeclIds, directCollectionWriteDeclIds }
 }
 
 // ADR-0011: action本体・ネストした関数本体・返り値クロージャで共有する
@@ -555,6 +586,7 @@ function analyzeActionIdentifier(
   edits: Edit[],
   readDeclIds: Set<DeclId>,
   writeDeclIds: Set<DeclId>,
+  directCollectionWriteDeclIds: Set<DeclId>,
   onWrite: (start: number) => void,
   calleeNames: Set<string>,
 ): void {
@@ -569,6 +601,32 @@ function analyzeActionIdentifier(
   if (!outputName) return
 
   const parent = idPath.parentPath
+  const memberCall = parent?.isMemberExpression() ? parent.parentPath : null
+  if (
+    ctx.declKind.get(id) === 'collection' &&
+    parent?.isMemberExpression() &&
+    !parent.node.computed &&
+    parent.get('property').isIdentifier({ name: 'update' }) &&
+    memberCall?.isCallExpression() &&
+    memberCall.node.callee === parent.node
+  ) {
+    if (memberCall.node.arguments.length !== 2) {
+      throw new Error(
+        `compile: collection.update() takes exactly a key and an updater for "${idPath.node.name}"`,
+      )
+    }
+    const firstArg = memberCall.node.arguments[0]!
+    edits.push({
+      start: idPath.node.start!,
+      end: firstArg.start!,
+      text: `update_${outputName}_item(`,
+    })
+    for (const sig of resolveToSignals(ctx, id, new Set())) {
+      directCollectionWriteDeclIds.add(sig)
+    }
+    onWrite(memberCall.node.start!)
+    return
+  }
   if (parent?.isCallExpression() && parent.node.callee === idPath.node) {
     if (parent.node.arguments.length === 0) {
       readDeclIds.add(id)
@@ -612,7 +670,7 @@ function analyzeActionIdentifier(
 interface ActionScopeAnalysis {
   /** signalToMarkers 確定後に、このスコープ末尾へ挿入する update_* 呼び出し
    * (design Decision 5)込みの最終テキストを組み立てる。 */
-  finalize: (resolveUpdateNames: (ids: Set<DeclId>) => string[]) => string
+  finalize: (resolveUpdateCall: ResolveUpdateCall) => string
   /** このスコープが直接読む signal/derived(推移解決前)。クロージャの依存
    * 解析にのみ使う。 */
   readDeclIds: Set<DeclId>
@@ -635,6 +693,7 @@ function analyzeActionStatements(
 
   const readDeclIds = new Set<DeclId>()
   const writeDeclIds = new Set<DeclId>()
+  const directCollectionWriteDeclIds = new Set<DeclId>()
   const calleeNames = new Set<string>()
   const edits: Edit[] = []
   const nestedScopes: ReturnType<typeof analyzeFunctionBodyScope>[] = []
@@ -648,6 +707,7 @@ function analyzeActionStatements(
       edits,
       readDeclIds,
       writeDeclIds,
+      directCollectionWriteDeclIds,
       (pos) => {
         if (firstWriteStart == null || pos < firstWriteStart) {
           firstWriteStart = pos
@@ -687,31 +747,38 @@ function analyzeActionStatements(
 
   // cross-function-handler-writes D3: 追跡呼び出し先の推移的書き込みを合流し、
   // このスコープ末尾の update_*() 発火(finalize)に含める。
-  collectTransitiveWrites(ctx, calleeNames, writeDeclIds)
+  collectTransitiveWrites(ctx, calleeNames, writeDeclIds, directCollectionWriteDeclIds)
 
   const start = stmts[0]!.node.start!
   const end = stmts[stmts.length - 1]!.node.end!
 
   return {
     readDeclIds,
-    finalize: (resolveUpdateNames) => {
+    finalize: (resolveUpdateCall) => {
       const allEdits = [...edits]
       for (const child of nestedScopes) {
         allEdits.push({
           start: child.start,
           end: child.end,
-          text: child.finalize(resolveUpdateNames),
+          text: child.finalize(resolveUpdateCall),
         })
       }
-      const names = resolveUpdateNames(writeDeclIds)
-      if (names.length > 0) {
+      const updateCall = resolveUpdateCall(writeDeclIds, directCollectionWriteDeclIds)
+      if (updateCall.code && !updateCall.needsCollectionBatch) {
         allEdits.push({
           start: end,
           end,
-          text: ` ${names.map((n) => `update_${n}();`).join(' ')}`,
+          // 最終文がセミコロン無しでも、追加する update 文と連結して
+          // JavaScript の同一文にならないよう区切る。
+          text: `; ${updateCall.code}`,
         })
       }
-      return render(ctx.source, start, end, allEdits)
+      const rendered = render(ctx.source, start, end, allEdits)
+      if (!updateCall.code) return rendered
+      if (updateCall.needsCollectionBatch) {
+        return `{ __update_batch_depth__++; try { ${rendered} } finally { __update_batch_depth__--; } ${updateCall.code} }`
+      }
+      return rendered
     },
   }
 }
@@ -733,6 +800,7 @@ function analyzeActionExprScope(
 ): ActionScopeAnalysis {
   const readDeclIds = new Set<DeclId>()
   const writeDeclIds = new Set<DeclId>()
+  const directCollectionWriteDeclIds = new Set<DeclId>()
   const calleeNames = new Set<string>()
   const edits: Edit[] = []
 
@@ -744,22 +812,25 @@ function analyzeActionExprScope(
       edits,
       readDeclIds,
       writeDeclIds,
+      directCollectionWriteDeclIds,
       () => {},
       calleeNames,
     ),
   )
-  collectTransitiveWrites(ctx, calleeNames, writeDeclIds)
+  collectTransitiveWrites(ctx, calleeNames, writeDeclIds, directCollectionWriteDeclIds)
 
   const start = exprPath.node.start!
   const end = exprPath.node.end!
   return {
     readDeclIds,
-    finalize: (resolveUpdateNames) => {
+    finalize: (resolveUpdateCall) => {
       const rendered = render(ctx.source, start, end, edits)
-      const names = resolveUpdateNames(writeDeclIds)
-      return names.length > 0
-        ? `{ ${rendered}; ${names.map((n) => `update_${n}();`).join(' ')} }`
-        : rendered
+      const updateCall = resolveUpdateCall(writeDeclIds, directCollectionWriteDeclIds)
+      if (!updateCall.code) return rendered
+      if (updateCall.needsCollectionBatch) {
+        return `{ __update_batch_depth__++; try { ${rendered}; } finally { __update_batch_depth__--; } ${updateCall.code} }`
+      }
+      return `{ ${rendered}; ${updateCall.code} }`
     },
   }
 }
@@ -775,7 +846,7 @@ function analyzeFunctionBodyScope(
 ): {
   start: number
   end: number
-  finalize: (resolveUpdateNames: (ids: Set<DeclId>) => string[]) => string
+  finalize: (resolveUpdateCall: ResolveUpdateCall) => string
   readDeclIds: Set<DeclId>
 } {
   const bodyPath = fnPath.get('body')
@@ -789,7 +860,7 @@ function analyzeFunctionBodyScope(
       start: bodyPath.node.start!,
       end: bodyPath.node.end!,
       readDeclIds: inner.readDeclIds,
-      finalize: (resolveUpdateNames) => `{${inner.finalize(resolveUpdateNames)}}`,
+      finalize: (resolveUpdateCall) => `{${inner.finalize(resolveUpdateCall)}}`,
     }
   }
   const exprScope = analyzeActionExprScope(ctx, bodyPath as NodePath<t.Expression>, instanceId)
@@ -802,11 +873,11 @@ function analyzeFunctionBodyScope(
 }
 
 export interface ActionBodyAnalysis {
-  finalizeBody: (resolveUpdateNames: (ids: Set<DeclId>) => string[]) => string
+  finalizeBody: (resolveUpdateCall: ResolveUpdateCall) => string
   /** 返り値クロージャ(design D4-2)。無ければ null(design Decision 5: 配線
    * コード自体を生成しない)。 */
   closure: {
-    finalize: (resolveUpdateNames: (ids: Set<DeclId>) => string[]) => string
+    finalize: (resolveUpdateCall: ResolveUpdateCall) => string
     /** クロージャが直接読む signal/derived(推移解決前 -- ctx.markerDeps と
      * 同じ形、resolveToSignals による展開は compiler.ts の buildSignalToMarkers
      * に任せる)。 */
@@ -848,7 +919,7 @@ export function analyzeActionBody(
     const prefix = ctx.source.slice(argPath.node.start!, closureScope.start)
     closure = {
       deps: closureScope.readDeclIds,
-      finalize: (resolveUpdateNames) => `${prefix}${closureScope.finalize(resolveUpdateNames)}`,
+      finalize: (resolveUpdateCall) => `${prefix}${closureScope.finalize(resolveUpdateCall)}`,
     }
   }
 

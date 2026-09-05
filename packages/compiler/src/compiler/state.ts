@@ -14,6 +14,20 @@ export const toMarkerId = (s: string): MarkerId => s as MarkerId
 
 export type DeclKind = 'signal' | 'derived' | 'collection'
 
+// signalToMarkers 確定後に、ハンドラ/action の末尾へ挿入する更新文を
+// 解決するための関数型。通常は個別の update_<name>() を返すが、複数の
+// root signal が同じ marker を共有する場合は codegen が作った同期 batch
+// を1回だけ呼ぶ文を返す。collection.update()を含むbatchでは、既存の
+// 直接通知をスコープ末尾まで抑止する必要があるため、その情報も返す。
+export interface ResolvedUpdateCall {
+  code: string
+  needsCollectionBatch: boolean
+}
+export type ResolveUpdateCall = (
+  ids: Set<DeclId>,
+  directCollectionWriteDeclIds?: Set<DeclId>,
+) => ResolvedUpdateCall
+
 export interface TextContentPart {
   type: 'text'
   value: string
@@ -32,12 +46,15 @@ export interface TextMarker {
 
 // M2: onClick などのハンドラ1個分。writeDeclIds はこのハンドラが書き込む
 // (呼び出しを検出した) root signal の declId 集合 -- compiler.ts の後段で
-// マーカーを持つものだけに絞り込み updateNames へ変換する。
+// マーカーを持つものだけに絞り込み、個別 update または同期 batch へ変換する。
 export interface HandlerDecl {
   markerId: MarkerId
   eventName: string
   rendered: string
   writeDeclIds: Set<DeclId>
+  /** collection.update() の直接通知経路で書き込むcollection。通常の
+   * collection(next) setterとは異なり、同一スコープのbatch時だけ遅延する。 */
+  directCollectionWriteDeclIds: Set<DeclId>
   /** ADR-0009: 第1仮引数(イベントオブジェクト)の authored 名。なければ null。 */
   param: string | null
 }
@@ -128,15 +145,15 @@ export type Marker = TextMarker | ListMarker | ConditionalMarker | ActionMarker
 
 // ADR-0011: 要素の`use=`1つぶんの解析結果。読み取り書き換え・書き込みの
 // assignment化・ネストした関数本体への再帰(design D4-1)は分析時に確定するが、
-// 挿入される`update_*()`呼び出し名はsignalToMarkers確定後にしか分からない
-// ため、本体・クロージャの最終テキストは finalize 関数として遅延する。
+// 挿入される`update_*()`/batch呼び出し名はsignalToMarkers確定後にしか分から
+// ないため、本体・クロージャの最終テキストは finalize 関数として遅延する。
 export interface ActionDecl {
   markerId: MarkerId
   /** action本体の第1仮引数(要素自身)の authored 名。0引数なら null。 */
   elParam: string | null
-  finalizeBody: (resolveUpdateNames: (ids: Set<DeclId>) => string[]) => string
+  finalizeBody: (resolveUpdateCall: ResolveUpdateCall) => string
   /** 返り値クロージャ(design D4-2)。無ければ null。 */
-  finalizeClosure: ((resolveUpdateNames: (ids: Set<DeclId>) => string[]) => string) | null
+  finalizeClosure: ((resolveUpdateCall: ResolveUpdateCall) => string) | null
 }
 
 // cross-function-handler-writes: ハンドラ/action から追跡対象として呼ばれた
@@ -152,6 +169,7 @@ export interface TrackedFn {
   /** 書き換え済み本体(中括弧の中身、update_*() なし)。 */
   rendered: string
   writeDeclIds: Set<DeclId>
+  directCollectionWriteDeclIds: Set<DeclId>
   calleeNames: Set<string>
 }
 

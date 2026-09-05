@@ -32,17 +32,22 @@ import type {
 } from './compiler/state.ts'
 import { attrBindingKind, innerTemplateSource } from './template.ts'
 
-// M2: compiler.ts が writeDeclIds を(マーカーを持つ signal だけに絞って)
-// updateNames へ変換した後の、codegen 向けハンドラ表現。
+// M2/ADR-0020: compiler.ts が writeDeclIds をマーカーを持つroot signalへ
+// 解決し、通常は updateNames、共有markerがあるときは updateBatchNameへ
+// 変換した後の、codegen向けハンドラ表現。
 export interface HandlerOutput {
   markerId: MarkerId
   eventName: string
   rendered: string
   updateNames: string[]
+  /** 複数 root が同じ marker を共有するときだけ使う同期 batch 名。 */
+  updateBatchName: string | null
+  /** batch の本体で collection.update() の直接通知を遅延するか。 */
+  updateBatchNeedsCollection: boolean
   /** ADR-0009: 第1仮引数(イベントオブジェクト)の authored 名。なければ null。 */
   param: string | null
   /** same-file-component-composition: このユニット自身のローカルsignalへ
-   * 書き込む場合、既存のupdateNames呼び出しに加えてこのユニットの
+   * 書き込む場合、既存のroot更新呼び出しに加えてこのユニットの
    * factoryが持つ`update()`クロージャも呼ぶ(design.md D5)。 */
   callLocalUpdate: boolean
 }
@@ -85,9 +90,20 @@ export interface ConditionalMarkerOutput {
 
 export type MarkerOutput = TextMarker | ListMarkerOutput | ConditionalMarkerOutput | ActionMarker
 
+export interface UpdateBatchOutput {
+  /** 生成コード内だけで使う batch 関数名。公開 instance API には出さない。 */
+  name: string
+  /** この batch に含める root signal の declId。 */
+  signalIds: DeclId[]
+  /** root signal の marker 集合の和集合(重複は除去済み)。 */
+  markerIds: MarkerId[]
+  /** collection.update() の直接通知をbatch末尾まで遅延する必要があるか。 */
+  containsCollection: boolean
+}
+
 // ADR-0011: signalToMarkers/ctx.markerDeps 確定後に compiler.ts が組み立てる
 // action1個ぶんの最終テキスト。bodyRendered/closureRendered は既に
-// update_* 呼び出し込み(design D4-1/D5) -- codegen はこれを文字列として
+// 個別 update または同期 batch 呼び出し込み(design D4-1/D5) -- codegen はこれを文字列として
 // 組み立てるだけで、ctx や AST には一切触れない。
 export interface ActionOutput {
   markerId: MarkerId
@@ -101,6 +117,7 @@ export interface GenerateModuleInput {
   declStatements: string[]
   markers: MarkerOutput[]
   signalToMarkers: Map<DeclId, Set<MarkerId>>
+  updateBatches: UpdateBatchOutput[]
   declOutputName: Map<DeclId, string>
   derivedDeps: Map<DeclId, Set<DeclId>>
   derivedRecompute: Map<DeclId, string>
@@ -125,15 +142,21 @@ const FIND_HELPER = `function __find__(root, id) { return root.getAttribute("dat
 // (`function update(__next__) { <itemParam> = __next__; ... }`) ―
 // 引数無しで呼ぶと item が undefined で上書きされる(design.md D5)。
 function renderHandlerCall(h: HandlerOutput, itemParam: string | null, prelude = ''): string {
-  const updateCalls = h.updateNames.map((name) => `update_${name}();`).join(' ')
+  const updateCalls = h.updateBatchName
+    ? `${h.updateBatchName}();`
+    : h.updateNames.map((name) => `update_${name}();`).join(' ')
   // same-file-component-composition: このユニット自身のローカルsignalへの
   // 書き込みは、モジュールscopeのupdate_*ではなくこのfactory自身の
   // `update()`クロージャを呼ぶ(design.md D5、bare識別子 ― 同一ユニット
   // 直下限定なので関数宣言の巻き上げにより参照は曖昧にならない)。
   const localUpdateCall = h.callLocalUpdate ? `update(${itemParam ?? ''});` : ''
+  const body = `${prelude}${h.rendered}`
+  const scopedBody = h.updateBatchNeedsCollection
+    ? `__update_batch_depth__++; try { ${body} } finally { __update_batch_depth__--; }`
+    : body
   // ADR-0009 D4: 第1引数があるハンドラのみ authored 名を束縛する。
   const params = h.param ? `${h.param}, ...__args` : '...__args'
-  return `(${params}) => { ${prelude}${h.rendered}; ${updateCalls}${localUpdateCall ? ` ${localUpdateCall}` : ''} }`
+  return `(${params}) => { ${scopedBody}; ${updateCalls}${localUpdateCall ? ` ${localUpdateCall}` : ''} }`
 }
 
 // ADR-0012 決定2: 動的属性1個ぶんの設定文。boolProp/prop はプロパティ代入、
@@ -567,6 +590,7 @@ export function generateModule({
   declStatements,
   markers,
   signalToMarkers,
+  updateBatches,
   declOutputName,
   derivedDeps,
   derivedRecompute,
@@ -633,6 +657,13 @@ export function generateModule({
     .filter((a) => a.closureRendered)
     .map((a) => `let __use_${a.markerId}__;`)
   if (actionDeclLines.length > 0) instanceLines.push(...actionDeclLines, '')
+
+  // collection.update()を含む同期batchだけが使う、インスタンス専有の
+  // 深さカウンタ。ハンドラ/actionの本体中は直接DOM通知を抑止し、scope末尾
+  // のbatchが最終状態を一度だけ反映する。
+  if (updateBatches.some((batch) => batch.containsCollection)) {
+    instanceLines.push('let __update_batch_depth__ = 0;', '')
+  }
 
   // ハンドラのラッパー関数:元のハンドラ本体(書き込みは代入済み)を実行した
   // 後、そのハンドラが書き込んだ signal ぶんの update_* をまとめて呼ぶ。
@@ -743,6 +774,26 @@ export function generateModule({
     instanceLines.push('}', '')
   }
 
+  // 同じ同期スコープで複数 root signal が書き込まれ、marker 集合が重なる
+  // 場合だけ compiler.ts が batch を登録する。各 derived は root の複数経路
+  // から到達しても一度だけ再計算し、marker も和集合を一度だけ更新する。
+  // 既存の update_<name>() は互換性のため残し、batch は内部の呼び出し先に
+  // とどめる(公開 subscription/scheduler は導入しない)。
+  for (const batch of updateBatches) {
+    const derivedIds = new Set<DeclId>()
+    for (const signalId of batch.signalIds) {
+      for (const derivedId of signalToDerivedRecomputes.get(signalId) ?? []) {
+        derivedIds.add(derivedId)
+      }
+    }
+    instanceLines.push(`function ${batch.name}() {`)
+    for (const derivedId of derivedIds) {
+      instanceLines.push(`  ${declOutputName.get(derivedId)} = ${derivedRecompute.get(derivedId)};`)
+    }
+    for (const markerId of batch.markerIds) appendMarkerUpdate(instanceLines, markerId)
+    instanceLines.push('}', '')
+  }
+
   for (const collectionId of collectionKeyRendered.keys()) {
     const name = declOutputName.get(collectionId)!
     const directLists = markers.filter(
@@ -753,21 +804,31 @@ export function generateModule({
     instanceLines.push(
       `  const __next__ = __updateCollectionItem__(__collection_${name}__, __key__, __updater__);`,
     )
+    const directUpdateLines: string[] = []
     for (const derivedId of signalToDerivedRecomputes.get(collectionId) ?? []) {
-      instanceLines.push(`  ${declOutputName.get(derivedId)} = ${derivedRecompute.get(derivedId)};`)
+      directUpdateLines.push(
+        `  ${declOutputName.get(derivedId)} = ${derivedRecompute.get(derivedId)};`,
+      )
     }
     for (const mId of signalToMarkers.get(collectionId) ?? []) {
       const direct = directLists.find((marker) => marker.id === mId)
       if (!direct) {
-        appendMarkerUpdate(instanceLines, mId)
+        appendMarkerUpdate(directUpdateLines, mId)
         continue
       }
       const usesSharedUpdater =
         bodyUnits(direct.body).length === 0 && direct.body.localDecls.length === 0
       const updaterArg = usesSharedUpdater ? `, __create_${direct.id}__update__` : ''
-      instanceLines.push(
+      directUpdateLines.push(
         `  __updateListItem__(__list_${direct.id}__, __key__, __next__${updaterArg});`,
       )
+    }
+    if (updateBatches.some((batch) => batch.containsCollection)) {
+      instanceLines.push('  if (__update_batch_depth__ === 0) {')
+      instanceLines.push(...directUpdateLines.map((line) => `  ${line}`))
+      instanceLines.push('  }')
+    } else {
+      instanceLines.push(...directUpdateLines)
     }
     instanceLines.push('}', '')
   }

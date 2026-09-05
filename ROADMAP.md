@@ -25,7 +25,13 @@ listId / itemId / bindingIdを分離して保持し、値が変わったbinding�
 component instance境界は実装済み(ADR-0018)。生成moduleの複数mount/hydrateと、
 stateを持つ同じ子componentの複数使用を独立させた。
 
-残るruntime判断はイベント委譲、更新バッチ、およびcollectionの構造操作API。
+**第2段階実装済み(ADR-0020)**: 同一ハンドラ/action/追跡関数のwrite setに複数root
+があり、同じmarkerへ依存する場合だけ、コンパイル時に専用同期batchを生成する。
+derivedは一度ずつ再計算し、markerの和集合を重複なしで最終状態へ反映する。
+`update_<name>()`とcollectionのkeyed direct経路は互換性のため残し、
+`collection.update()`が共有markerに入るbatch時だけdirect通知を抑止する。
+
+残るruntime判断はイベント委譲、およびcollectionの構造操作API。
 構造操作は通常setterで表現できるため、実需と比較結果が出るまで追加しない。
 
 quixのビルド時トラッカー採用可否・list itemのイベント配線方式・authoring API
@@ -273,6 +279,10 @@ transition/animation、portal、error boundary、async/resource
 12. ~~keyed collection item直接更新~~ — **完了**(ADR-0019)。
     `collection(initial, keyOf)`と`collection.update(key, updater)`を追加し、直接の
     `collection().map()`を全key走査なしで対象List handleへ更新する。
+13. ~~同期更新バッチ~~ — **完了**(ADR-0020)。同一スコープの複数root writeが共有
+    markerを持つ場合だけ、derived再計算とmarker反映を専用batchへまとめる。
+    異なるmarker、単一root、collection direct経路、ローカルsignal updateは
+    既存経路を維持する。
 
 ## 参考資料
 

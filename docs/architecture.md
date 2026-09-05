@@ -43,6 +43,7 @@ new Function() でビルド時実行 ── 5. 計装済みスクリプトを No
 generateModule()             ── 6. 依存グラフから ES モジュールを文字列組み立て(packages/compiler/src/codegen.ts)
   │    ・宣言はプレーン変数(ADR-0006: signal ラッパーは出力に残らない)
   │    ・root signal ごとに専用 update_<name>() を生成
+  │    ・共有markerを持つ複数root writeにだけ同期batchを生成(ADR-0020)
   ▼
 { code, initialHtml, ... }
 ```
@@ -84,7 +85,10 @@ triage手続きで捌く — コンパイラの受理条件自体を場当たり
   1回の textContent 置換で更新するアトミックな単位として1マーカーにまとめる。
 - **依存グラフが単一の真実の源**: marker→decl の直接依存(`ctx.markerDeps`)を
   `resolveToSignals()` で root signal まで推移解決し、signal→markers の逆引き
-  から `update_<name>()` を生成する。ハンドラの書き込み先も同じ経路で解決。
+  から `update_<name>()` を生成する。ハンドラの書き込み先も同じ経路で解決する。
+  複数rootのwrite setにmarker集合の交差がある場合だけ、その和集合を一度ずつ
+  更新するinstance内同期batchを生成する(ADR-0020)。microtask schedulerや
+  汎用subscription graphは持たない。
 - **List更新アドレス**(ADR-0015): コンパイル時のList marker ID、key式のitem ID、
   item内marker由来のbinding IDを分離して保持する。共有ランタイムはkey照合と
   DOM順序、生成factoryはbinding単位の直接DOM更新を担当する。

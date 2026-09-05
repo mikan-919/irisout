@@ -31,7 +31,20 @@ keyed collection APIを追加した(ADR-0019)。`collection(initial, keyOf)`は
 `signal()`と同じ読み取り・全体setterに加えて`collection.update(key, updater)`を持つ。
 直接の`collection().map()`は変更itemのhandleをMapから引いてO(1)で通知し、同じcollectionを
 描画する複数ListとList以外の依存markerも更新する。通常setter、派生した配列式、ネストListは
-従来どおり全体reconcileへフォールバックする。更新バッチとイベント委譲は未判断。
+従来どおり全体reconcileへフォールバックする。
+
+## 現在地(2026-09-04・同期更新バッチ)
+
+ハンドラ・action・追跡された動きゾーン関数の1同期スコープが複数root signalを書き、
+同じmarkerへ依存する場合だけ、静的なwrite set/依存グラフから専用batchを生成する
+(ADR-0020)。batchは全書き込み後にderivedを一度ずつ再計算し、markerの和集合を
+重複なしで反映する。単一root・異なるmarker・同じsignalの複数回書き込みでは既存の
+`update_<name>()`を使い、未使用のbatch関数は出力しない。
+
+`collection.update()`のkeyed direct通知は維持し、別rootと共有markerを持つbatch内だけ
+instance専有の深さカウンタでdirect通知を遅延する。ローカルsignalのfactory
+`update()`、Listのkey照合/順序調整、公開batch APIやmicrotask schedulerは変更しない。
+イベント委譲とcollection構造操作APIは引き続き未着手である。
 
 ## 現在地(2026-07-21・型検査基盤)
 
@@ -122,6 +135,7 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
 | `use=` | top-level要素へのaction接続(ADR-0011)                                                       | **DONE** | change `use-action-impl`。ユニット内`use=`・JSX型宣言は未実装のまま(下記制約参照)                                                                                                                                                         |
 | M6     | 全マイルストーン横断のno-wrapper検証                                                        | **DONE** | change `m6-no-wrapper-verification`。全機能同居フィクスチャで no-wrapper・import面・実DOM動作を固定(`test/no-wrapper.test.ts`)。サイズ予算係数はADR-0018のinstance factory固定費に合わせ4.5x(実測4.38x)。締め直しはminify最適化時に再検討 |
 | 合成   | 同一ファイル内の複数コンポーネント合成(ADR-0014)                                            | **DONE** | change `same-file-component-composition`。コンパイル時ASTインライン化、root scope + list itemのみ、children/slot・再帰・複数ファイルは未対応のまま(下記制約参照)                                                                          |
+| Batch  | 同期スコープ内の共有marker更新(ADR-0020)                                                    | **DONE** | 複数root write時だけ専用batchを生成。公開batch API・scheduler・collection構造操作・イベント委譲は対象外                                                                                                                                   |
 
 ## 既知の制約(現時点のcodegenの限界)
 
