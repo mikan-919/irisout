@@ -637,7 +637,7 @@ function Foo({ item }) {
     expect(() => compile(source)).toThrow(/referenced inside a larger expression.*scope limit/)
   })
 
-  it('インライン化後のASTが既存のsole-child制約に違反する場合、展開後のASTに対して既存のscope limitを出す', () => {
+  it('インライン化後も静的兄弟とリストを同じ親へ配置できる', async () => {
     const source = `
 export function App() {
   const todos = signal([{ id: 1 }]);
@@ -652,6 +652,13 @@ function Foo() {
   render(<span>hi</span>);
 }
 `
-    expect(() => compile(source)).toThrow(/sole child.*scope limit/)
+    const { code, initialHtml } = compile(source)
+    expect(initialHtml).toContain('<span>hi</span>')
+    const mod = await loadGenerated(code)
+    const container = createContainer()
+    ;(mod.mountComponent as (c: Element) => void)(container)
+    expect(container.querySelector('span')?.textContent).toBe('hi')
+    expect(container.querySelectorAll('span')).toHaveLength(2)
+    expect(container.querySelector('span + span')?.textContent).toBe('1')
   })
 })

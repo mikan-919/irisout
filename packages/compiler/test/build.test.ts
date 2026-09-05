@@ -96,6 +96,61 @@ describe('default List playground', () => {
   })
 })
 
+describe('TodoMVC authored JSX integration', () => {
+  it('compiles the complete apps/examples/todomvc.jsx fixture', () => {
+    const source = readFileSync(path.resolve('apps/examples/todomvc.jsx'), 'utf8')
+    const { initialHtml } = compile(source)
+    expect(initialHtml).toContain('class="todoapp"')
+    expect(initialHtml).toContain('<!--irisout:start:')
+  })
+
+  it('runs add, complete, filter, edit, and remove through the real DOM', async () => {
+    const source = readFileSync(path.resolve('apps/examples/todomvc.jsx'), 'utf8')
+    const { code } = compile(source)
+    const mod = await loadGenerated(code)
+    const container = createContainer()
+    ;(mod.mountComponent as (c: Element) => { unmount(): void })(container)
+    const win = container.ownerDocument.defaultView!
+    const dispatch = (el: Element, event: Event): void => {
+      el.dispatchEvent(event)
+    }
+    const buttons = (): HTMLButtonElement[] =>
+      Array.from(container.querySelectorAll('button')) as HTMLButtonElement[]
+    const button = (label: string): HTMLButtonElement => {
+      const found = buttons().find((candidate) => candidate.textContent === label)
+      if (!found) throw new Error(`TodoMVC button not found: ${label}`)
+      return found
+    }
+
+    const newTodo = container.querySelector('input[placeholder]') as HTMLInputElement
+    newTodo.value = 'new item'
+    dispatch(newTodo, new win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    expect(container.querySelectorAll('li')).toHaveLength(3)
+
+    const firstCheckbox = container.querySelector('li input[type="checkbox"]') as HTMLInputElement
+    dispatch(firstCheckbox, new win.Event('change', { bubbles: true }))
+    expect(container.querySelector('li')?.className).toContain('completed')
+
+    dispatch(button('Active'), new win.Event('click', { bubbles: true }))
+    expect(container.querySelectorAll('li')).toHaveLength(1)
+    expect(container.querySelector('li')?.textContent).toContain('new item')
+    dispatch(button('All'), new win.Event('click', { bubbles: true }))
+
+    const firstText = container.querySelector('li span')!
+    dispatch(firstText, new win.Event('dblclick', { bubbles: true }))
+    const editInput = container.querySelector(
+      'li.editing input:not([type="checkbox"])',
+    ) as HTMLInputElement
+    editInput.value = 'edited item'
+    dispatch(editInput, new win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    expect(container.querySelector('li')?.textContent).toContain('edited item')
+
+    const firstRemove = container.querySelector('li button')!
+    dispatch(firstRemove, new win.Event('click', { bubbles: true }))
+    expect(container.querySelectorAll('li')).toHaveLength(2)
+  })
+})
+
 describe('Vite+ example build end to end', () => {
   it('produces dist/index.html with baked HTML and a hydrate-only dist/app.js', () => {
     const tmpDir = mkdtempSync(path.join(tmpdir(), 'irisout-build-test-'))

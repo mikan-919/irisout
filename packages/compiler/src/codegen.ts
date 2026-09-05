@@ -136,6 +136,11 @@ export interface GenerateModuleInput {
 // querySelector が自分自身を対象にしないので、先に自分自身を確認する。
 const FIND_HELPER = `function __find__(root, id) { return root.getAttribute("data-iris-id") === id ? root : root.querySelector(\`[data-iris-id="\${id}"]\`); }`
 
+// Structural units are represented by comment pairs instead of wrapper
+// elements. Emit this lookup only for modules that contain a structural unit;
+// ordinary text/attribute output therefore has no generated range helper.
+const FIND_RANGE_HELPER = `function __findRange__(root, id) { let start = null; let end = null; const startText = "irisout:start:" + id; const endText = "irisout:end:" + id; const visit = (node) => { for (let child = node.firstChild; child; child = child.nextSibling) { if (child.nodeType === 8) { if (child.data === startText) start = child; else if (child.data === endText) end = child; } visit(child); } }; visit(root); return start && end ? { start, end } : null; }`
+
 // itemParam: このハンドラを含む factory の item 仮引数名(無ければ null)。
 // same-file-component-composition: ローカルsignal書き込み後に呼ぶ
 // `update()`は itemParam != null の factory では item 引数を要求する
@@ -302,7 +307,11 @@ function generateFactory(
     lines.push(`  let ${d.outputName} = ${d.rendered};`)
   }
   for (const m of body.localMarkers) {
-    lines.push(`  const __${m.id}__ = __find__(__el__, ${JSON.stringify(m.id)});`)
+    if (m.kind === 'text') {
+      lines.push(`  const __${m.id}__ = __find__(__el__, ${JSON.stringify(m.id)});`)
+    } else {
+      lines.push(`  const __range_${m.id}__ = __findRange__(__el__, ${JSON.stringify(m.id)});`)
+    }
   }
   // ADR-0012: 属性のみの要素のマーカーは localMarkers に居ないので、find 定数を
   // 別途確保する(text マーカーと同居する場合は重複させない)。
@@ -390,12 +399,14 @@ function generateFactory(
     }
     for (const u of units) {
       if (u.kind === 'list') {
-        lines.push(...generateListUpdate(u, `__${u.id}__`).map((l) => `  ${l}`))
+        lines.push(...generateListUpdate(u, `__range_${u.id}__`).map((l) => `  ${l}`))
       } else {
         lines.push(
-          ...generateConditionalUpdate(u, `__${u.id}__`, condDispatchesUpdate(u, childScope)).map(
-            (l) => `  ${l}`,
-          ),
+          ...generateConditionalUpdate(
+            u,
+            `__range_${u.id}__`,
+            condDispatchesUpdate(u, childScope),
+          ).map((l) => `  ${l}`),
         )
       }
     }
@@ -431,7 +442,7 @@ function generateStructuralUnits(
   const templateSetupLines: string[] = []
 
   if (structuralMarkerIds.size > 0) {
-    declLines.push('let __doc__;', FIND_HELPER, '')
+    declLines.push('let __doc__;', FIND_HELPER, FIND_RANGE_HELPER, '')
   }
 
   // M5.5: ネストしたユニットの <template> はcomponent instanceに1つ置いて
@@ -561,7 +572,7 @@ function generateConditionalUpdate(
     `      if (${handleVar}) { ${handleVar}.el.remove(); ${handleVar} = null; }`,
     `      ${stateVar} = __target__;`,
     ...branchCreateLines,
-    `      if (${handleVar}) { const __el__ = ${elExpr}; if (__el__) __el__.appendChild(${handleVar}.el); }`,
+    `      if (${handleVar}) { const __range__ = ${elExpr}; const __parent__ = __range__?.end.parentNode; if (__parent__) __parent__.insertBefore(${handleVar}.el, __range__.end); }`,
   ]
   if (dispatchUpdate) {
     lines.push(
@@ -604,7 +615,12 @@ export function generateModule({
 }: GenerateModuleInput): string {
   const moduleLines: string[] = []
   const instanceLines: string[] = []
-  const runtimeImports = ['mount as __mount__', 'hydrate as __hydrate__']
+  const hasStructuralUnits = markers.some(
+    (marker) => marker.kind === 'list' || marker.kind === 'conditional',
+  )
+  const runtimeImports = hasStructuralUnits
+    ? ['mountWithRanges as __mount__', 'hydrateWithRanges as __hydrate__']
+    : ['mount as __mount__', 'hydrate as __hydrate__']
   if (actions.some((a) => a.resultRendered)) {
     runtimeImports.push('normalizeUseActionResult as __normalizeUseActionResult__')
   }
@@ -636,18 +652,27 @@ export function generateModule({
   if (emittedFns.length > 0) instanceLines.push('')
   instanceLines.push(`const __INITIAL_HTML__ = ${JSON.stringify(initialHtml)};`, '')
 
-  // 検証用の期待マーカー ID(トップレベルマーカー全部+ハンドラのみの
-  // マーカー)。factory 内部のローカルマーカーは <template> 由来で欠落
-  // し得ないため対象外。検証ループはランタイム側(ADR-0004: 出力の膨張を
-  // 最小化)。
+  // 検証用の期待マーカー ID(実要素を指すトップレベルマーカー+ハンドラの
+  // マーカー)。構造ユニットは要素ではなくコメント範囲なので、別の
+  // __RANGE_IDS__ として検証する。factory内部のローカルマーカーは
+  // <template>由来で欠落し得ないため対象外。
+  const structuralMarkerIds = markers
+    .filter(
+      (m): m is ListMarkerOutput | ConditionalMarkerOutput =>
+        m.kind === 'list' || m.kind === 'conditional',
+    )
+    .map((m) => m.id)
   const markerIds = [
     ...new Set<string>([
-      ...markers.map((m) => m.id),
+      ...markers.filter((m) => m.kind !== 'list' && m.kind !== 'conditional').map((m) => m.id),
       ...handlers.map((h) => h.markerId),
       ...attrBindings.map((b) => b.markerId),
     ]),
   ]
   instanceLines.push(`const __MARKER_IDS__ = ${JSON.stringify(markerIds)};`, '')
+  if (structuralMarkerIds.length > 0) {
+    instanceLines.push(`const __RANGE_IDS__ = ${JSON.stringify(structuralMarkerIds)};`, '')
+  }
 
   const { declLines, templateSetupLines, signalsNeedingInitialCall } = generateStructuralUnits(
     markers,
@@ -772,12 +797,15 @@ export function generateModule({
 
   instanceLines.push(
     'let __markers__;',
+    ...(structuralMarkerIds.length > 0 ? ['let __ranges__;'] : []),
     'let __container__;',
     'let __mounted__ = false;',
     'let __unmounted__ = false;',
     'function mount(container) {',
     '  if (__mounted__ || __unmounted__) throw new Error("component instance can only be mounted or hydrated once");',
-    '  ({ markers: __markers__ } = __mount__(container, __INITIAL_HTML__, __MARKER_IDS__));',
+    structuralMarkerIds.length > 0
+      ? '  ({ markers: __markers__, ranges: __ranges__ } = __mount__(container, __INITIAL_HTML__, __MARKER_IDS__, __RANGE_IDS__));'
+      : '  ({ markers: __markers__ } = __mount__(container, __INITIAL_HTML__, __MARKER_IDS__));',
     '  __container__ = container;',
     '  __mounted__ = true;',
     ...docSetupLines,
@@ -788,7 +816,9 @@ export function generateModule({
     '',
     'function hydrateComponentInstance(container) {',
     '  if (__mounted__ || __unmounted__) throw new Error("component instance can only be mounted or hydrated once");',
-    '  ({ markers: __markers__ } = __hydrate__(container, __MARKER_IDS__));',
+    structuralMarkerIds.length > 0
+      ? '  ({ markers: __markers__, ranges: __ranges__ } = __hydrate__(container, __MARKER_IDS__, __RANGE_IDS__));'
+      : '  ({ markers: __markers__ } = __hydrate__(container, __MARKER_IDS__));',
     '  __container__ = container;',
     '  __mounted__ = true;',
     ...docSetupLines,
@@ -809,6 +839,9 @@ export function generateModule({
     '  __container__ = null;',
     '  if (__markers__) __markers__.clear();',
     '  __markers__ = undefined;',
+    ...(structuralMarkerIds.length > 0
+      ? ['  if (__ranges__) __ranges__.clear();', '  __ranges__ = undefined;']
+      : []),
     ...documentCleanupLines,
     ...templateCleanupLines,
     ...destroyErrorThrow,
@@ -851,14 +884,14 @@ export function generateModule({
         `  { const __el = __markers__.get(${JSON.stringify(mId)}); if (__el) { __el.textContent = \`${innerTemplateSource(marker.contentParts)}\`; } }`,
       )
     } else if (marker.kind === 'list') {
-      lines.push(...generateListUpdate(marker, `__markers__.get(${JSON.stringify(marker.id)})`))
+      lines.push(...generateListUpdate(marker, `__ranges__.get(${JSON.stringify(marker.id)})`))
     } else if (marker.kind === 'action') {
       lines.push(`  if (__use_update_${mId}__) __use_update_${mId}__();`)
     } else {
       lines.push(
         ...generateConditionalUpdate(
           marker,
-          `__markers__.get(${JSON.stringify(marker.id)})`,
+          `__ranges__.get(${JSON.stringify(marker.id)})`,
           condDispatchesUpdate(marker, false),
         ),
       )

@@ -28,6 +28,16 @@ export interface ListItemHandle<T = unknown> {
   update?(next: T): void
 }
 
+// Structural units own the sibling range between these comments. Keeping the
+// anchors as a pair (rather than a wrapper element) lets generated JSX retain
+// its authored DOM shape while List/conditional updates stay local to one
+// unit. The comments are also present in statically baked HTML, so hydration
+// can recover the same range without rebuilding the tree.
+export interface DomRange {
+  readonly start: Comment
+  readonly end: Comment
+}
+
 // `use=` action の返り値。関数形式は既存の「リアクティブ update closure」
 // と完全に同じ意味を持ち、object 形式では unmount 専用の destroy を追加できる。
 export type UseActionUpdate = () => void
@@ -179,7 +189,7 @@ export function updateListItem<T>(
 // 末尾から insertBefore() することで順序が変わっていない要素には DOM 操作を発生させない。
 export function reconcileList<T>(
   runtime: ListRuntime<T>,
-  container: Element | undefined,
+  container: Element | DomRange | undefined,
   values: readonly T[],
   keyOf: (value: T) => unknown,
   create: (value: T, state: ListItemState) => ListItemHandle<T>,
@@ -221,14 +231,21 @@ export function reconcileList<T>(
   }
 
   if (!container) return
+  const parent = isDomRange(container) ? container.start.parentNode : container
+  if (!parent) return
+  const boundary = isDomRange(container) ? container.end : null
   let anchor: ChildNode | null = null
   for (let i = ordered.length - 1; i >= 0; i--) {
     const el = ordered[i]!.handle.el
-    if (el.parentNode !== container || el.nextSibling !== anchor) {
-      container.insertBefore(el, anchor)
+    if (el.parentNode !== parent || el.nextSibling !== (anchor ?? boundary)) {
+      parent.insertBefore(el, anchor ?? boundary)
     }
     anchor = el
   }
+}
+
+function isDomRange(value: Element | DomRange): value is DomRange {
+  return !('nodeType' in value)
 }
 
 export const registry = new Map<DeclId, { kind: DeclKind }>()
@@ -321,8 +338,62 @@ export function mount(
   return hydrate(container, expectedIds)
 }
 
+// Structural modules opt into the range-aware entry points explicitly. Keeping
+// the old mount/hydrate path separate means a component without List or
+// conditional output does not pull the comment-anchor scanner into its bundle.
+export function hydrateWithRanges(
+  container: Element,
+  expectedIds?: readonly string[],
+  expectedRangeIds?: readonly string[],
+): { markers: Map<string, Element>; ranges: Map<string, DomRange> } {
+  const { markers } = hydrate(container, expectedIds)
+  const ranges = new Map<string, DomRange>()
+  if (expectedRangeIds) collectRanges(container, ranges)
+  if (expectedRangeIds) {
+    const missing = expectedRangeIds.filter((id) => !ranges.has(id))
+    if (missing.length > 0) {
+      throw new Error(
+        `hydrate: missing range anchor(s): ${missing.join(', ')} — initial HTML does not match compiled output`,
+      )
+    }
+  }
+  return { markers, ranges }
+}
+
+export function mountWithRanges(
+  container: Element,
+  html: string,
+  expectedIds?: readonly string[],
+  expectedRangeIds?: readonly string[],
+): { markers: Map<string, Element>; ranges: Map<string, DomRange> } {
+  container.innerHTML = html
+  return hydrateWithRanges(container, expectedIds, expectedRangeIds)
+}
+
 function collectMarkers(root: Element, markers: Map<string, Element>): void {
   const id = root.getAttribute('data-iris-id')
   if (id) markers.set(id, root)
   for (const child of root.children) collectMarkers(child, markers)
+}
+
+function collectRanges(root: Element, ranges: Map<string, DomRange>): void {
+  const starts = new Map<string, Comment>()
+  const visit = (node: Node): void => {
+    for (let child = node.firstChild; child; child = child.nextSibling) {
+      if (child.nodeType === 8) {
+        const value = (child as Comment).data
+        if (value.startsWith('irisout:start:')) {
+          starts.set(value.slice('irisout:start:'.length), child as Comment)
+        } else if (value.startsWith('irisout:end:')) {
+          const id = value.slice('irisout:end:'.length)
+          const start = starts.get(id)
+          if (start && start.parentNode === child.parentNode) {
+            ranges.set(id, { start, end: child as Comment })
+          }
+        }
+      }
+      visit(child)
+    }
+  }
+  visit(root)
 }

@@ -33,6 +33,15 @@ listenerの解除はaction作者の`destroy`責務であり、unit内`use=`・�
 引き続きscope limit。counter generated bundleの固定費は実測5.33xとなったため、golden
 size budgetを5.5xへ更新した。
 
+## 現在地(2026-09-05・構造ユニットのDOM範囲所有)
+
+List/conditionalは親要素を更新対象にせず、初期HTMLへ開始・終了コメントアンカーを
+出力する。mount/hydrateはアンカー対を専用Mapへ収集し、Listのkeyed reconcileと
+conditionalのbranch着脱はその範囲の親ノードと終了アンカーの直前だけを操作する。
+そのため静的兄弟要素と複数の構造ユニットを同じ親へ配置できる。構造ユニットを
+使わない生成物は従来のmount/hydrate経路を使い、アンカー走査と範囲ヘルパーを出力
+しない。unmountは範囲Map、List/conditional参照、component-owned DOMを解放する。
+
 ## 現在地(2026-09-04・List最小ランタイム第1段階)
 
 CONCEPT.v3への移行に伴い、List更新を共有最小ランタイムへ切り出した
@@ -128,8 +137,8 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
 `dynamic-attribute-bindings`、UNRESOLVED 02/03 解消)。式コンテナ値の host
 属性を受理し、`checked`/`value` はプロパティ反映・他は setAttribute。
 ユニット内の属性式はテキストと同じ scope limit(追跡 signal 参照は拒否)。
-あわせて、構造ユニットを唯一の子に持つ要素のハンドラが黙って捨てられる
-計画外バグを発見・修正(ユニットのマーカー id へ配線)。
+あわせて、構造ユニットと同じ親要素のハンドラが黙って捨てられる計画外バグを
+発見・修正(親要素専用のマーカー id へ配線)。
 
 2026-07-19: ハンドラ/action 本体からの動きゾーン関数呼び出しの追跡を実装
 (ADR-0013、change `cross-function-handler-writes`、ROADMAP 論点0 解消)。
@@ -187,9 +196,9 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
   拒否する:
   - 2階層以上のネスト(ネストした構造ユニットの内側に、さらに別の構造
     ユニットがある場合)。
-  - リスト/条件分岐の式コンテナが親要素の唯一の子でない場合(兄弟要素との
-    混在)。コメントアンカー機構を持たないための単純化。ネストした構造
-    ユニットにも同様に適用される。
+  - 構造ユニットの3階層以上のネスト。開始・終了アンカーによるDOM範囲所有で
+    親要素の静的兄弟・複数ユニットとの混在は許可されるが、factoryの入れ子は
+    現状1階層まで。
   - リストアイテム本体・条件分岐ブランチ本体の中のテキストで**ルート**
     signal/derivedを直接参照すること(item要素のフィールド参照は対象外 ―
     trackされないので素通りする)。**同一ユニット直下のローカルsignal**

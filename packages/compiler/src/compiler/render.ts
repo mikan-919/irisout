@@ -617,70 +617,83 @@ function renderElement(
   const children = elementPath.get('children') as NodePath<JSXChild>[]
 
   // M5: リスト(`.map()`)・条件分岐(三項/`&&`)の構造ユニット検出。
-  // ADR-0005「1階層のみ」に合わせ、対象の式コンテナが親の非空白な唯一の
-  // 子である場合に限って受理する(design.md: sole-child 制約)。
-  const nonWhitespace = children.filter(
-    (c) => !(c.isJSXText() && cleanJSXText(c.node.value) === ''),
-  )
-  const soleExprChild =
-    nonWhitespace.length === 1 && nonWhitespace[0]!.isJSXExpressionContainer()
-      ? nonWhitespace[0]
-      : null
-  const soleKind = soleExprChild
-    ? classifyStructuralExpr(
-        soleExprChild.get('expression') as NodePath<t.Expression | t.JSXEmptyExpression>,
-      )
-    : null
-
-  if (soleKind) {
-    // M5.5: 1階層のネスト(深さ2)までは既存のfactory生成を再帰適用する
-    // (design.md Decision 3)。深さ3以降のみ scope limit で拒否する。
-    const unitDepth = opts.unitDepth ?? 0
-    if (unitDepth >= 2) {
-      throw new Error(
-        'compile: nested structural unit exceeds 1 level of nesting is not supported yet (scope limit)',
-      )
-    }
-    const exprPath = soleExprChild!.get('expression') as NodePath<t.Expression>
-    const markerId =
-      soleKind === 'list'
-        ? renderListUnit(
-            ctx,
-            exprPath as NodePath<t.CallExpression>,
-            instanceId,
-            handlerFns,
-            unitDepth + 1,
-          )
-        : renderConditionalUnit(ctx, exprPath, instanceId, handlerFns, unitDepth + 1)
-    if (actionAttr) registerAction(ctx, markerId, actionAttr, instanceId)
-    // ユニットホスト要素のハンドラ/動的属性はユニットのマーカー id へ相乗り
-    // する(従来ハンドラは黙って捨てられていた — silent drop 修正、
-    // change dynamic-attribute-bindings design D5)。
-    for (const h of handlerAttrs) {
-      ctx.handlers.push({ markerId, ...h })
-    }
-    attachAttrBindings(markerId)
-    return `<${tagName}${attrs}${dynBake} data-iris-id="${markerId}"></${tagName}>`
-  }
-
-  // sole child ではない位置にリスト/条件分岐の式コンテナが混ざっている場合
-  // (兄弟要素との共存): 本changeではコメントアンカー機構を持たないため
-  // scope limit で拒否する(design.md: 1階層のみのシンプルな実装として、
-  // 専用のラッパー要素の唯一の子にすることを要求する)。
-  const hasStructuralAmongMultiple = children.some(
+  // 構造ユニットは親要素そのものを更新対象にせず、親の子ノード列に開始・
+  // 終了コメントアンカーを置いて自身のDOM範囲だけを所有する。これにより
+  // 静的な兄弟要素や複数の構造ユニットを同じ親へ配置できる。
+  const structuralChildren = children.filter(
     (c) =>
       c.isJSXExpressionContainer() &&
       classifyStructuralExpr(
         c.get('expression') as NodePath<t.Expression | t.JSXEmptyExpression>,
       ) !== null,
   )
-  if (hasStructuralAmongMultiple) {
-    throw new Error(
-      'compile: list/conditional rendering must be the sole child of its parent element (scope limit)',
-    )
+
+  if (structuralChildren.length > 0) {
+    const unitDepth = opts.unitDepth ?? 0
+    let inner = ''
+    for (const child of children) {
+      if (child.isJSXText()) {
+        inner += escapeTemplateText(cleanJSXText(child.node.value))
+        continue
+      }
+      if (child.isJSXElement()) {
+        inner += renderElement(ctx, child, instanceId, handlerFns, {
+          unitDepth: opts.unitDepth,
+        })
+        continue
+      }
+      if (!child.isJSXExpressionContainer()) {
+        throw new Error('compile: unsupported JSX child (scope limit)')
+      }
+      const exprPath = child.get('expression') as NodePath<t.Expression | t.JSXEmptyExpression>
+      if (exprPath.isJSXEmptyExpression()) continue
+      const kind = classifyStructuralExpr(exprPath)
+      if (!kind) {
+        throw new Error(
+          'compile: mixing structural rendering with a reactive text expression is not supported yet (scope limit)',
+        )
+      }
+      // M5.5: 1階層のネスト(深さ2)までは既存のfactory生成を再帰適用する。
+      // 深さ3以降のみ scope limit で拒否する。
+      if (unitDepth >= 2) {
+        throw new Error(
+          'compile: nested structural unit exceeds 1 level of nesting is not supported yet (scope limit)',
+        )
+      }
+      const markerId =
+        kind === 'list'
+          ? renderListUnit(
+              ctx,
+              exprPath as NodePath<t.CallExpression>,
+              instanceId,
+              handlerFns,
+              unitDepth + 1,
+            )
+          : renderConditionalUnit(ctx, exprPath, instanceId, handlerFns, unitDepth + 1)
+      // Structural units are represented by comments in the initial HTML. The
+      // runtime discovers the matching pair during mount and hydrate and all
+      // subsequent operations are confined to the nodes between these comments.
+      inner += `<!--irisout:start:${markerId}--><!--irisout:end:${markerId}-->`
+    }
+
+    if (handlerAttrs.length === 0 && !actionAttr && dynAttrs.length === 0) {
+      return `<${tagName}${attrs}${dynBake}>${inner}</${tagName}>`
+    }
+    // 構造ユニットと同じ親要素にハンドラ/action/動的属性がある場合は、
+    // 構造ユニットとは別にホスト要素自身のマーカーを発行する。これで
+    // 構造範囲のアンカーIDと要素マーカーIDを混同しない。
+    const markerId = nextMarkerId(ctx)
+    for (const h of handlerAttrs) {
+      ctx.handlers.push({ markerId, ...h })
+    }
+    if (actionAttr) registerAction(ctx, markerId, actionAttr, instanceId)
+    attachAttrBindings(markerId)
+    return `<${tagName}${attrs}${dynBake} data-iris-id="${markerId}">${inner}</${tagName}>`
   }
 
-  const hasDirectExpr = children.some((c) => c.isJSXExpressionContainer())
+  const hasDirectExpr = children.some(
+    (c) => c.isJSXExpressionContainer() && !c.get('expression').isJSXEmptyExpression(),
+  )
 
   if (!hasDirectExpr) {
     let inner = ''
@@ -690,6 +703,8 @@ function renderElement(
         inner += renderElement(ctx, child, instanceId, handlerFns, {
           unitDepth: opts.unitDepth,
         })
+      else if (child.isJSXExpressionContainer() && child.get('expression').isJSXEmptyExpression())
+        continue
       else throw new Error('compile: unsupported JSX child (scope limit)')
     }
     if (handlerAttrs.length === 0 && !actionAttr && dynAttrs.length === 0) {

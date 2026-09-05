@@ -437,18 +437,71 @@ export function App() {
     expect(() => compile(source)).toThrow(/referencing a tracked signal.*scope limit/)
   })
 
-  it('rejects list/conditional rendering mixed with sibling children', () => {
+  it('owns only its range when static siblings share the same parent', async () => {
     const source = `
 export function App() {
-  const items = signal([]);
+  const items = signal([{ id: 1, text: 'a' }]);
+  const show = signal(true);
   render(
     <div>
       <span>a</span>
-      {items().map((item) => <li key={item.id}>{item.id}</li>)}
+      {items().map((item) => <li key={item.id}>{item.text}</li>)}
+      {show() && <strong>b</strong>}
+      <span>c</span>
+      <button onClick={() => show(!show())}>toggle</button>
     </div>
   );
 }
 `
-    expect(() => compile(source)).toThrow(/sole child.*scope limit/)
+    const { code, initialHtml } = compile(source)
+    expect(initialHtml).toContain('<!--irisout:start:')
+    expect(initialHtml).not.toContain('<ul data-iris-id')
+    const mod = await loadGenerated(code)
+    const container = createContainer()
+    ;(mod.mountComponent as (c: Element) => void)(container)
+
+    const div = container.querySelector('div')!
+    expect(Array.from(div.children).map((el) => el.tagName)).toEqual([
+      'SPAN',
+      'LI',
+      'STRONG',
+      'SPAN',
+      'BUTTON',
+    ])
+    expect(div.querySelector('li')?.textContent).toBe('a')
+    dispatchClick(container, div.querySelector('button'))
+    expect(div.querySelector('strong')).toBeNull()
+    expect(Array.from(div.children).map((el) => el.tagName)).toEqual([
+      'SPAN',
+      'LI',
+      'SPAN',
+      'BUTTON',
+    ])
+  })
+
+  it('recovers structural ranges during hydrate and clears them on unmount', async () => {
+    const source = `
+export function App() {
+  const show = signal(true);
+  render(
+    <div>
+      <span>before</span>
+      {show() && <p>shown</p>}
+      <span>after</span>
+      <button onClick={() => show(!show())}>toggle</button>
+    </div>
+  );
+}
+`
+    const { code, initialHtml } = compile(source)
+    const mod = await loadGenerated(code)
+    const container = createContainer()
+    container.innerHTML = initialHtml
+    const instance = (mod.hydrateComponent as (c: Element) => { unmount(): void })(container)
+    expect(container.querySelector('p')?.textContent).toBe('shown')
+    dispatchClick(container, container.querySelector('button'))
+    expect(container.querySelector('p')).toBeNull()
+    instance.unmount()
+    expect(container.childNodes).toHaveLength(0)
   })
 })
