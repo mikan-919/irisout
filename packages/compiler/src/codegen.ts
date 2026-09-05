@@ -14,10 +14,10 @@
 // 一度 update_<name>() を呼んで populate する)、item/branch 内のローカル
 // marker は __markers__ に登録せず、factory のクロージャに閉じ込める。
 //
-// M5.5: 1階層ネストした構造ユニットは、同じ factory 生成規則を外側 factory の
-// クロージャ内へ再帰適用する(<template> だけは静的なので module スコープで
-// 共有)。ネストしたユニットの依存は render.ts が外側マーカーへ合流済みなので、
-// update_<signal>() → 外側 update → handle.update() の順で内側へ更新が届く。
+// M5.5: ネストした構造ユニットは、同じ factory 生成規則を外側 factory の
+// クロージャ内へ深さ制限なしで再帰適用する(<template> だけは静的なので
+// module スコープで共有)。root依存は外側markerへ合流し、局所依存は所有者
+// factoryのupdateへ直接接続する。
 //
 // ADR-0015: Listのkey照合・DOM順序は最小ランタイムへ委譲し、item factoryは
 // binding IDごとの前回値を使って変化した実DOMだけを更新する。
@@ -46,15 +46,14 @@ export interface HandlerOutput {
   updateBatchNeedsCollection: boolean
   /** ADR-0009: 第1仮引数(イベントオブジェクト)の authored 名。なければ null。 */
   param: string | null
-  /** same-file-component-composition: このユニット自身のローカルsignalへ
-   * 書き込む場合、既存のroot更新呼び出しに加えてこのユニットの
-   * factoryが持つ`update()`クロージャも呼ぶ(design.md D5)。 */
-  callLocalUpdate: boolean
+  /** 同じ構造単位または祖先の局所signalへ書き込む場合に呼ぶ更新の
+   * 字句スコープ位置。0はこのbody、1以降は祖先bodyを示す。 */
+  localUpdateLevels: number[]
 }
 
 // M5: StructuralUnitBody(state.ts)のハンドラを HandlerDecl から
 // HandlerOutput へ変換したもの。それ以外のフィールドは同じ形。
-// M5.5: 1階層ネストした構造ユニットも localMarkers に含まれる。
+// M5.5: ネストした構造ユニットも localMarkers に含まれる。
 export interface StructuralUnitBodyOutput {
   template: string
   localMarkers: (TextMarker | ListMarkerOutput | ConditionalMarkerOutput)[]
@@ -146,22 +145,31 @@ const FIND_RANGE_HELPER = `function __findRange__(root, id) { let start = null; 
 // `update()`は itemParam != null の factory では item 引数を要求する
 // (`function update(__next__) { <itemParam> = __next__; ... }`) ―
 // 引数無しで呼ぶと item が undefined で上書きされる(design.md D5)。
-function renderHandlerCall(h: HandlerOutput, itemParam: string | null, prelude = ''): string {
+function renderHandlerCall(
+  h: HandlerOutput,
+  itemParam: string | null,
+  prelude = '',
+  localUpdateExprs: (string | null)[] = [],
+): string {
   const updateCalls = h.updateBatchName
     ? `${h.updateBatchName}();`
     : h.updateNames.map((name) => `update_${name}();`).join(' ')
-  // same-file-component-composition: このユニット自身のローカルsignalへの
-  // 書き込みは、モジュールscopeのupdate_*ではなくこのfactory自身の
-  // `update()`クロージャを呼ぶ(design.md D5、bare識別子 ― 同一ユニット
-  // 直下限定なので関数宣言の巻き上げにより参照は曖昧にならない)。
-  const localUpdateCall = h.callLocalUpdate ? `update(${itemParam ?? ''});` : ''
+  const localUpdateCalls = [
+    ...new Set(
+      h.localUpdateLevels
+        .map((level) => localUpdateExprs[level])
+        .filter((expr): expr is string => expr != null),
+    ),
+  ]
+    .map((expr) => `${expr};`)
+    .join(' ')
   const body = `${prelude}${h.rendered}`
   const scopedBody = h.updateBatchNeedsCollection
     ? `__update_batch_depth__++; try { ${body} } finally { __update_batch_depth__--; }`
     : body
   // ADR-0009 D4: 第1引数があるハンドラのみ authored 名を束縛する。
   const params = h.param ? `${h.param}, ...__args` : '...__args'
-  return `(${params}) => { ${scopedBody}; ${updateCalls}${localUpdateCall ? ` ${localUpdateCall}` : ''} }`
+  return `(${params}) => { ${scopedBody}; ${updateCalls}${localUpdateCalls ? ` ${localUpdateCalls}` : ''} }`
 }
 
 // ADR-0012 決定2: 動的属性1個ぶんの設定文。boolProp/prop はプロパティ代入、
@@ -213,10 +221,9 @@ function condDispatchesUpdate(marker: ConditionalMarkerOutput, inItemScope: bool
 }
 
 // factory 関数本体:テンプレートのクローン取得・ローカル marker の解決・
-// ハンドラ登録・(item がある場合のみ)update() クロージャをまとめて1関数に
-// する(ADR-0005 決定2)。item がない(条件分岐ブランチ)場合、ローカル
-// marker の内容は一度だけ設定する ― 分岐内で追跡 signal を参照することは
-// render.ts 側の scope limit で既に禁止しているので、以後の再計算は要らない。
+// ハンドラ登録・必要なupdate() クロージャをまとめて1関数にする(ADR-0005
+// 決定2)。itemがない条件分岐branchでも、祖先itemのitem値に依存するmarkerは
+// instance専有binding cacheを使って再計算する。
 //
 // M5.5: ネストした構造ユニットがある場合、その keyed Map・状態変数・factory
 // 関数をこの factory のクロージャ内に入れ子で生成する(specs「ネストした
@@ -230,10 +237,24 @@ function generateFactory(
   itemParam: string | null,
   body: StructuralUnitBodyOutput,
   inItemScope: boolean,
+  ancestorUpdateExprs: (string | null)[] = [],
 ): string[] {
   const texts = bodyTexts(body)
   const units = bodyUnits(body)
   const childScope = inItemScope || itemParam != null
+  const refreshTexts = (itemParam != null || inItemScope) && texts.length > 0
+  const refreshAttrs = (itemParam != null || inItemScope) && body.localAttrBindings.length > 0
+  const hasLocalSelfUpdate = body.localHandlers.some((h) => h.localUpdateLevels.includes(0))
+  const needsUpdate =
+    itemParam != null || refreshTexts || refreshAttrs || units.length > 0 || hasLocalSelfUpdate
+  const updateName = `${factoryName}update__`
+  const bindingStateExpr = itemParam != null ? '__item__' : '__unit_state__'
+  const selfUpdateExpr = needsUpdate
+    ? itemParam
+      ? `${updateName}(${itemParam})`
+      : `${updateName}()`
+    : null
+  const localUpdateExprs = [selfUpdateExpr, ...ancestorUpdateExprs]
 
   // 通常のList itemは、行ごとのupdateクロージャではなくデータhandleを返す。
   // update関数はfactoryと同じスコープに1個だけ生成し、runtimeが
@@ -241,12 +262,11 @@ function generateFactory(
   // まだ外側のlexical scopeを必要とするため、下の汎用factory経路を使う。
   if (itemParam != null && units.length === 0 && body.localDecls.length === 0) {
     const lines: string[] = []
-    const updateName = `${factoryName}update__`
     const attrs = body.localAttrBindings
-    const foundIds = new Set(body.localMarkers.map((m) => m.id))
     const refIds = new Set<string>([
       ...body.localMarkers.map((m) => m.id),
       ...attrs.map((b) => b.markerId),
+      ...body.localHandlers.map((h) => h.markerId),
     ])
 
     lines.push(`function ${updateName}(__handle__, __next__) {`)
@@ -272,13 +292,8 @@ function generateFactory(
     lines.push(`function ${factoryName}(${itemParam}, __item__) {`)
     lines.push(`  const __node__ = ${templateVar}.content.cloneNode(true);`)
     lines.push('  const __el__ = __node__.firstElementChild;')
-    for (const m of body.localMarkers) {
-      lines.push(`  const __${m.id}__ = __find__(__el__, ${JSON.stringify(m.id)});`)
-    }
-    for (const id of new Set(attrs.map((b) => b.markerId))) {
-      if (!foundIds.has(id)) {
-        lines.push(`  const __${id}__ = __find__(__el__, ${JSON.stringify(id)});`)
-      }
+    for (const id of refIds) {
+      lines.push(`  const __${id}__ = __find__(__el__, ${JSON.stringify(id)});`)
     }
     const refs = [...refIds].map((id) => `${id}: __${id}__`).join(', ')
     lines.push(
@@ -286,7 +301,7 @@ function generateFactory(
     )
     for (const h of body.localHandlers) {
       lines.push(
-        `  __find__(__el__, ${JSON.stringify(h.markerId)}).addEventListener(${JSON.stringify(h.eventName)}, ${renderHandlerCall(h, itemParam, `${itemParam} = __handle__.value; `)});`,
+        `  __${h.markerId}__.addEventListener(${JSON.stringify(h.eventName)}, ${renderHandlerCall(h, itemParam, `${itemParam} = __handle__.value; `, [null, ...ancestorUpdateExprs])});`,
       )
     }
     lines.push(`  ${updateName}(__handle__, ${itemParam});`)
@@ -300,6 +315,12 @@ function generateFactory(
   lines.push(`function ${factoryName}(${params}) {`)
   lines.push(`  const __node__ = ${templateVar}.content.cloneNode(true);`)
   lines.push('  const __el__ = __node__.firstElementChild;')
+  if (itemParam == null && (refreshTexts || refreshAttrs)) {
+    // 構造単位のfactory instanceごとにbinding cacheを持つ。分岐を再生成した
+    // とき、祖先Listのcacheを共有すると同じ値を再設定せずtemplateの初期文字列
+    // が残るため、DOM instanceの寿命とcacheの寿命を一致させる。
+    lines.push('  const __unit_state__ = { bindings: new Map() };')
+  }
   // same-file-component-composition: このユニットへインライン化された
   // コンポーネントのローカルsignal(CONTEXT.md)。module scopeへは出さず、
   // このfactoryインスタンス専有のクロージャ変数として宣言する(design D5)。
@@ -317,7 +338,11 @@ function generateFactory(
   // 別途確保する(text マーカーと同居する場合は重複させない)。
   const attrs = body.localAttrBindings
   const foundIds = new Set(body.localMarkers.map((m) => m.id))
-  for (const id of new Set(attrs.map((b) => b.markerId))) {
+  const elementRefIds = new Set([
+    ...attrs.map((b) => b.markerId),
+    ...body.localHandlers.map((h) => h.markerId),
+  ])
+  for (const id of elementRefIds) {
     if (!foundIds.has(id)) {
       lines.push(`  const __${id}__ = __find__(__el__, ${JSON.stringify(id)});`)
     }
@@ -335,6 +360,7 @@ function generateFactory(
           u.itemParam,
           u.body,
           childScope,
+          localUpdateExprs,
         ).map((l) => `  ${l}`),
       )
     } else {
@@ -348,6 +374,7 @@ function generateFactory(
             null,
             branch.body,
             childScope,
+            localUpdateExprs,
           ).map((l) => `  ${l}`),
         )
       })
@@ -355,16 +382,13 @@ function generateFactory(
   }
   for (const h of body.localHandlers) {
     lines.push(
-      `  __find__(__el__, ${JSON.stringify(h.markerId)}).addEventListener(${JSON.stringify(h.eventName)}, ${renderHandlerCall(h, itemParam)});`,
+      `  __${h.markerId}__.addEventListener(${JSON.stringify(h.eventName)}, ${renderHandlerCall(h, itemParam, '', localUpdateExprs)});`,
     )
   }
   // テキスト/属性の再設定が要るのは item 仮引数(自身または外側)を参照
   // しうる場合のみ。それ以外は静的なので一度だけ設定する(属性の初期値は
   // テンプレートに焼き込まれないため、この設定行が初期値を兼ねる —
   // ADR-0012 決定3)。
-  const refreshTexts = (itemParam != null || inItemScope) && texts.length > 0
-  const refreshAttrs = (itemParam != null || inItemScope) && attrs.length > 0
-  const needsUpdate = itemParam != null || refreshTexts || refreshAttrs || units.length > 0
   if (!refreshTexts) {
     for (const m of texts) {
       lines.push(`  __${m.id}__.textContent = \`${innerTemplateSource(m.contentParts)}\`;`)
@@ -376,14 +400,14 @@ function generateFactory(
     }
   }
   if (needsUpdate) {
-    lines.push(`  function update(${itemParam ? '__next__' : ''}) {`)
+    lines.push(`  function ${updateName}(${itemParam ? '__next__' : ''}) {`)
     if (itemParam) lines.push(`    ${itemParam} = __next__;`)
     if (refreshTexts) {
       for (const m of texts) {
         const valueVar = `__value_${m.id}__`
         lines.push(
           `    const ${valueVar} = \`${innerTemplateSource(m.contentParts)}\`;`,
-          `    if (__updateListBinding__(__item__, ${JSON.stringify(m.id)}, ${valueVar})) __${m.id}__.textContent = ${valueVar};`,
+          `    if (__updateListBinding__(${bindingStateExpr}, ${JSON.stringify(m.id)}, ${valueVar})) __${m.id}__.textContent = ${valueVar};`,
         )
       }
     }
@@ -393,7 +417,7 @@ function generateFactory(
         const bindingId = `${b.markerId}:${b.name}`
         lines.push(
           `    const ${valueVar} = ${b.rendered};`,
-          `    if (__updateListBinding__(__item__, ${JSON.stringify(bindingId)}, ${valueVar})) ${renderAttrSet(`__${b.markerId}__`, { ...b, rendered: valueVar })}`,
+          `    if (__updateListBinding__(${bindingStateExpr}, ${JSON.stringify(bindingId)}, ${valueVar})) ${renderAttrSet(`__${b.markerId}__`, { ...b, rendered: valueVar })}`,
         )
       })
     }
@@ -411,8 +435,8 @@ function generateFactory(
       }
     }
     lines.push('  }')
-    lines.push(`  update(${itemParam ?? ''});`)
-    lines.push('  return { el: __el__, update };')
+    lines.push(`  ${updateName}(${itemParam ?? ''});`)
+    lines.push(`  return { el: __el__, update: ${updateName} };`)
   } else {
     lines.push('  return { el: __el__ };')
   }

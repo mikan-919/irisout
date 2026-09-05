@@ -1,7 +1,6 @@
-// 実Chromiumで、List itemごとの直接addEventListenerと親要素へのイベント委譲を
-// bubblingするclick相当の同一fixtureで比較するrunner。attach/mount/dispatchと
-// CDP強制GC後のretained JS heapを方式別・サイズ別に中央値で出力し、結果末尾に
-// 再利用可能なJSONも出す。native currentTargetや他eventの互換性は判断しない。
+// 実Chromiumで、リスト項目ごとの直接リスナーと親要素へのイベント委譲を
+// 複数イベントの同一fixtureで比較するrunner。attach/mount/dispatchとCDP強制GC後の
+// retained JS heapを方式別・サイズ別に中央値で出力し、意味論の差もJSONへ残す。
 
 import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
@@ -17,7 +16,7 @@ const SIZES = (process.env.IRISOUT_BENCH_LISTENER_SIZES ?? '100,1000,10000')
 const REPEATS = Number(process.env.IRISOUT_BENCH_LISTENER_REPEATS ?? 7)
 const HEAP_REPEATS = Number(process.env.IRISOUT_BENCH_LISTENER_HEAP_REPEATS ?? 3)
 const DISPATCH_ROUNDS = Number(process.env.IRISOUT_BENCH_LISTENER_DISPATCH_ROUNDS ?? 1)
-const STRATEGIES = ['direct', 'delegated'] as const
+const STRATEGIES = ['direct', 'delegated', 'capture', 'adapter'] as const
 const METRICS = ['mount', 'attach', 'dispatch'] as const
 
 type Strategy = (typeof STRATEGIES)[number]
@@ -26,6 +25,7 @@ type Metric = (typeof METRICS)[number]
 interface TimingResult {
   elapsedMs: number
   itemCount: number
+  listenerCount: number
   firstId: number | null
   middleId: number | null
   lastId: number | null
@@ -34,6 +34,11 @@ interface TimingResult {
 interface DispatchResult extends TimingResult {
   eventCount: number
   handledCount: number
+  handledByEvent: Record<string, number>
+  currentTargetMatches: number
+  nativeEventIdentityMatches: number
+  targetMatches: number
+  phaseCounts: Record<string, Record<string, number>>
   identityChecksum: number
 }
 
@@ -91,10 +96,6 @@ function median(values: number[]): number {
   return sorted[Math.floor(sorted.length / 2)]!
 }
 
-function ratio(numerator: number, denominator: number): string {
-  return denominator > 0 ? `${(numerator / denominator).toFixed(2)}x` : 'n/a'
-}
-
 async function createPage(strategy: Strategy): Promise<Page> {
   const page = await browser.newPage()
   await page.setContent('<!doctype html><meta charset="utf-8"><body></body>')
@@ -115,6 +116,7 @@ function assertStable<T extends TimingResult>(
     !runs.every(
       (run) =>
         run.itemCount === reference.itemCount &&
+        run.listenerCount === reference.listenerCount &&
         run.firstId === reference.firstId &&
         run.middleId === reference.middleId &&
         run.lastId === reference.lastId,
@@ -154,6 +156,11 @@ async function measure(
         (run) =>
           run.eventCount === reference.eventCount &&
           run.handledCount === reference.handledCount &&
+          JSON.stringify(run.handledByEvent) === JSON.stringify(reference.handledByEvent) &&
+          run.currentTargetMatches === reference.currentTargetMatches &&
+          run.nativeEventIdentityMatches === reference.nativeEventIdentityMatches &&
+          run.targetMatches === reference.targetMatches &&
+          JSON.stringify(run.phaseCounts) === JSON.stringify(reference.phaseCounts) &&
           run.identityChecksum === reference.identityChecksum,
       )
     ) {
@@ -296,34 +303,35 @@ try {
         measured[strategy] = await measure(strategy, metric, size)
       }
       const direct = measured.direct
-      const delegated = measured.delegated
-      if (
-        direct.itemCount !== delegated.itemCount ||
-        direct.firstId !== delegated.firstId ||
-        direct.middleId !== delegated.middleId ||
-        direct.lastId !== delegated.lastId
-      ) {
+      if (!STRATEGIES.every((candidate) => measured[candidate].itemCount === direct.itemCount)) {
         throw new Error(`Strategies disagree on fixture: ${metric}/N=${size}`)
       }
       if (metric === 'dispatch') {
-        const directDispatch = direct as DispatchResult
-        const delegatedDispatch = delegated as DispatchResult
-        if (
-          directDispatch.eventCount !== delegatedDispatch.eventCount ||
-          directDispatch.handledCount !== delegatedDispatch.handledCount ||
-          directDispatch.identityChecksum !== delegatedDispatch.identityChecksum
-        ) {
-          throw new Error(`Strategies disagree on event semantics: N=${size}`)
-        }
+        const dispatch = Object.fromEntries(
+          STRATEGIES.map((candidate) => {
+            const result = measured[candidate] as DispatchResult
+            return [
+              candidate,
+              {
+                handled: result.handledByEvent,
+                currentTargetMatches: result.currentTargetMatches,
+                nativeEventIdentityMatches: result.nativeEventIdentityMatches,
+                targetMatches: result.targetMatches,
+                phaseCounts: result.phaseCounts,
+              },
+            ]
+          }),
+        )
+        console.log(`semantics ${JSON.stringify(dispatch)}`)
       }
       results[size][metric] = measured
-      console.log(
-        metric.padEnd(12),
-        `direct/delegated ${direct.elapsedMs.toFixed(3)}/${delegated.elapsedMs.toFixed(3)}ms`.padEnd(
-          48,
-        ),
-        `D/G ${ratio(direct.elapsedMs, delegated.elapsedMs)}`,
-      )
+      const timings = STRATEGIES.map(
+        (candidate) => `${candidate}=${measured[candidate].elapsedMs.toFixed(3)}ms`,
+      ).join(' ')
+      const listeners = STRATEGIES.map(
+        (candidate) => `${candidate}=${measured[candidate].listenerCount}`,
+      ).join(' ')
+      console.log(metric.padEnd(12), timings, `listeners ${listeners}`)
     }
 
     const measuredHeap = {} as Record<Strategy, HeapResult>
@@ -331,8 +339,9 @@ try {
     heap[size] = measuredHeap
     console.log(
       'heap'.padEnd(12),
-      `direct/delegated ${measuredHeap.direct.retainedJsHeapBytes}/${measuredHeap.delegated.retainedJsHeapBytes} bytes`,
-      `D/G ${ratio(measuredHeap.direct.retainedJsHeapBytes, measuredHeap.delegated.retainedJsHeapBytes)}`,
+      STRATEGIES.map(
+        (strategy) => `${strategy}=${measuredHeap[strategy].retainedJsHeapBytes} bytes`,
+      ).join(' '),
     )
   }
 

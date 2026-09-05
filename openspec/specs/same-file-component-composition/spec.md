@@ -132,14 +132,16 @@ props識別子を生成コードに残してはならない(SHALL)。
 - **THEN** 1つのアイテムで`editing`を書き換えても、他のアイテムの
   `editing`状態には一切影響しない(JSクロージャによるインスタンス分離)
 
-### Requirement: 同一ボディ直下のローカルマーカーのローカルsignal依存を許可
+### Requirement: 構造ユニットのローカルsignal依存と所有者更新
 コンパイラは、構造ユニット本体に**直接**含まれるローカルマーカー(テキスト・
-属性バインディング)が、**同一ユニット内で宣言されたローカルsignal/
-derived**に依存することを許可しなければならない(SHALL)。この場合、
-そのユニットの既存の`update()`関数(M5、item仮引数を持つ場合に生成される)
-がそのローカルマーカーを更新しなければならない(SHALL)。ルートスコープの
-signal、または別ユニット・祖先ユニットで宣言されたローカルsignalへの依存は、
-従来どおり`scope limit`で拒否しなければならない(SHALL)。
+属性バインディング)が、そのユニットまたは祖先ユニットで宣言されたローカル
+signal/derivedに依存することを許可しなければならない(SHALL)。ネストした
+構造ユニットの条件式・配列式・ハンドラが同じ局所signalを参照または書き込む
+場合も許可しなければならない(SHALL)。生成コードは、局所signalを宣言した
+factoryの更新処理へ接続し、局所signalのDeclIdをrootの依存表へ漏らしては
+ならない(SHALL NOT)。ルートsignalの直接テキスト/属性依存、または字句的に
+参照できない別unitのローカルsignal依存は`scope limit`で拒否しなければ
+ならない(SHALL)。
 
 #### Scenario: ローカルsignalに依存する動的属性バインディングが動く
 - **WHEN** リストアイテム内の`TodoItem`インライン化が`editing`ローカル
@@ -149,25 +151,36 @@ signal、または別ユニット・祖先ユニットで宣言されたロー�
   実行すると`editing`を書き換えるローカルハンドラの発火後にそのアイテムの
   class属性だけが切り替わる
 
+#### Scenario: TodoItemの自然な編集条件が動く
+- **WHEN** リストitemへ展開された`TodoItem`が`const editing = signal(false)`を
+  持ち、`editing() ? <input onBlur={() => editing(false)} /> :
+  <span onDblClick={() => editing(true)} />`を含む
+- **THEN** コンパイラはネストした条件分岐をitem factory内へ生成し、spanの
+  dblclickとinputのblurが同じitemの`editing`を更新し、input/spanを切り替える
+
+#### Scenario: 祖先ローカルsignalを使うネストunitが動く
+- **WHEN** itemのローカルsignalが内側条件分岐の条件式、内側リストの配列式、
+  または内側handlerの書き込み先になる
+- **THEN** コンパイラはscope limitエラーを出さず、祖先factoryの更新から
+  内側unitの条件分岐・List・binding更新へ接続する
+
 #### Scenario: ルートsignalへの依存は引き続き拒否
 - **WHEN** リストアイテム本体内のテキストマーカーがルートスコープの
   signal/derivedを直接参照する(インライン化を経由しない従来通りの形)
 - **THEN** コンパイラは`(scope limit)`を含むcompile errorで拒否する
   (本changeで導入する許可の対象外)
 
-### Requirement: ネストした構造ユニットの祖先ローカルsignal依存を明示的に拒否
-コンパイラは、ネストした構造ユニット(list/conditional)の依存
-(`nestedDeps`)に祖先ユニットのローカルsignal/derivedが含まれる場合、
-既存の依存合流(バブリング)には乗せず、`(scope limit)`を含む
-compile errorで拒否しなければならない(SHALL)。ローカルsignalの
-DeclIdをグローバルな依存解決(`signalToMarkers`)へ漏らしてはならない
-(SHALL NOT)。
+### Requirement: 字句スコープ外のローカルsignal依存を拒否
+コンパイラは、構造ユニットから参照できない別unitのローカルsignal/derivedを
+ネストした構造ユニットの依存へ含めてはならず、`(scope limit)`を含むcompile
+errorで拒否しなければならない(SHALL)。局所signalのDeclIdをグローバルな
+依存解決(`signalToMarkers`)へ漏らしてはならない(SHALL NOT)。
 
-#### Scenario: ネストした条件分岐が祖先のローカルsignalに依存する場合は拒否
-- **WHEN** リストアイテム内のローカルsignal`editing`に、そのアイテム内に
-  ネストした条件分岐(`editing() ? <input/> : <span>`)が依存している
-- **THEN** コンパイラは`(scope limit)`を含むcompile errorで拒否し、
-  モジュールスコープに存在しない変数を参照する壊れたコードを生成しない
+#### Scenario: 字句スコープ外のローカルsignalは拒否
+- **WHEN** ある構造ユニットの内側unitが、兄弟unitなど参照できない別unitの
+  ローカルsignalに依存している
+- **THEN** コンパイラは`(scope limit)`を含むcompile errorで拒否し、モジュール
+  スコープに存在しない変数を参照するコードを生成しない
 
 ### Requirement: children/slotの明示的な拒否
 コンパイラは、コンポーネント参照JSX要素が子要素を持つ場合

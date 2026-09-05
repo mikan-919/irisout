@@ -42,6 +42,20 @@ conditionalのbranch着脱はその範囲の親ノードと終了アンカーの
 使わない生成物は従来のmount/hydrate経路を使い、アンカー走査と範囲ヘルパーを出力
 しない。unmountは範囲Map、List/conditional参照、component-owned DOMを解放する。
 
+## 現在地(2026-09-05・再帰的構造ユニットとauthoring coverage)
+
+構造ユニットは深さを固定値で制限せず、親factoryのクロージャ内へ再帰的に生成する。
+各unit instanceがDOM範囲、ローカル状態、binding cache、Listのkeyed Map、更新処理を
+所有する。ネストした条件式・配列式・handlerが現在または祖先unitのローカルsignalを
+使う場合は、所有者factoryのupdateへ接続する。branchを再生成するときはunit専用の
+binding cacheを新しく作るため、祖先itemのcacheがtemplate初期値を残すことはない。
+
+`apps/examples/todomvc.jsx`は`TodoItem`の`editing() ? <input /> : <span />`を使う
+自然なJSXへ変更した。`apps/examples/notes.jsx`はTodoMVCとは別のauthoring coverage
+fixtureで、form、tabs、local state、条件分岐、入れ子List、同一ファイルcomponentを
+含む。`packages/compiler/test/authoring-coverage.test.ts`がcompile、mount、event、
+DOM結果を独立して確認する。
+
 ## 現在地(2026-09-05・コンパイラ生成TodoMVC性能計測)
 
 `apps/examples/todomvc.jsx`の現行コンパイラ生成物、`apps/examples/todomvc.handwritten.js`
@@ -50,6 +64,10 @@ conditionalのbranch着脱はその範囲の親ノードと終了アンカーの
 更新、MutationObserverによるDOM変更、JavaScriptヒープ、生成コードの計数を記録した。
 手書き基準はコンパイラ生成物ではない。結果と条件は
 `packages/bench/todomvc-compiler.results.md`に固定した。
+
+item factoryのmarker参照はイベント配線で再検索せず、factoryの保存済み参照を使う。
+生成コードではfactory marker検索5個とイベント登録5個が対応し、初期mount中の
+`querySelector`は`2N`、実リスナーは自然な条件分岐の初期branchで`3N+4`だった。
 
 ## 現在地(2026-09-05・同一ファイルpropsの式置換、ADR-0023)
 
@@ -91,12 +109,12 @@ keyed collection APIを追加した(ADR-0019)。`collection(initial, keyOf)`は
 `collection.update()`のkeyed direct通知は維持し、別rootと共有markerを持つbatch内だけ
 instance専有の深さカウンタでdirect通知を遅延する。ローカルsignalのfactory
 `update()`、Listのkey照合/順序調整、公開batch APIやmicrotask schedulerは変更しない。
-イベント委譲は実Chromiumの速度・retained JS heap・bundle比較を、bubblingする
-click相当のfixtureで完了した(ADR-0021)。item identity帳簿込みでも有望な候補だが、
-native `event.currentTarget`互換と`blur`等non-bubbling eventの意味同等性が未解決の
-ため、全eventのproduction既定方式とcompiler/runtime実装は保留している。次は
-実生成に近い複数event fixtureとdirect/capture/proxy等の比較である。collection構造
-操作APIは引き続き未着手である。
+イベント配線は実Chromiumで`direct`、`delegated`、`capture`、`adapter`を、
+`click`、`change`、`input`、`keydown`、`dblclick`、`blur`のfixtureで比較した
+(ADR-0021)。delegated/capture/adapterはリスナー数とJavaScriptヒープで有利だったが、
+delegatedは`blur`を処理できず、captureは`currentTarget`と段階を変え、adapterは
+event objectの同一性を失った。native eventの意味を保つためproduction既定はdirectを
+維持する。collection構造操作APIは引き続き未着手である。
 
 ## 現在地(2026-07-21・型検査基盤)
 
@@ -134,8 +152,8 @@ scope limit判定を代替しない(例: リストアイテム内の`use=`は型
 前提で動く。propsはshorthand分割代入のみ対応するコンパイル時識別子
 置換(実行時オブジェクトなし)。リストアイテムへインライン化された
 コンポーネントの変数ゾーンは「ローカルsignal」(factory クロージャ専有、
-module scopeに一切出ない)になり、同一ユニット直下のテキスト/属性
-バインディングのみそこへの依存を許可する(下記制約参照)。名前衝突は
+module scopeに一切出ない)になり、同一unitと祖先unitのテキスト/属性・
+構造unit・handlerからの依存を所有者factoryへ接続する(下記制約参照)。名前衝突は
 検出時のみ対応(signal/derived宣言名・動きゾーン関数名とも、衝突した側を
 コンポーネント名で接頭辞化してリネームする)。
 
@@ -175,19 +193,19 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
 
 ## マイルストーン表
 
-| M      | 内容                                                                                        | 状態     | 備考                                                                                                                                                                                                                             |
-| ------ | ------------------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| M1     | スキャフォールド、signal/derived、テキストマーカー                                          | **DONE** | `0155e85`                                                                                                                                                                                                                        |
-| M2     | イベントハンドラ、書き込みトリガー更新                                                      | **DONE** | `810bc83`→`645a820`                                                                                                                                                                                                              |
-| M3     | ブラウザビルドターゲット(hydrate/mount分割 + `apps/examples/vite.config.ts`)                | **DONE** | `a2905c8`、Vite+移行後はADR-0016のbuild経路                                                                                                                                                                                      |
-| M4     | 静的host要素属性                                                                            | **DONE** | `9829f88`、change `m4-static-host-attributes`                                                                                                                                                                                    |
-| M4.5   | authoring APIゾーン化(ADR-0008)                                                             | **DONE** | change `authoring-api-zones`。render()マーカー・識別子参照ハンドラ・ゾーン配置強制                                                                                                                                               |
-| M5     | list/conditional factory closures、1階層のみ(ADR-0005の新実装)                              | **DONE** | change `m5-list-conditional-factory-closures`。ネストした構造ユニット(06/07)は据え置き                                                                                                                                           |
-| M5.5   | ネストした構造ユニット(条件分岐の中のリスト/リストアイテムの中の条件分岐、UNRESOLVED-06/07) | **DONE** | change `m5-5-nested-structural-units`。1階層ネストのみ、2階層以上は引き続きscope limit                                                                                                                                           |
-| `use=` | top-level要素へのaction接続(ADR-0011)                                                       | **DONE** | `use-action-impl` + ADR-0022。関数updateと`{ update?, destroy? }`、component `unmount()`を実装。ユニット内`use=`は下記制約                                                                                                       |
-| M6     | 全マイルストーン横断のno-wrapper検証                                                        | **DONE** | change `m6-no-wrapper-verification`。全機能同居フィクスチャで no-wrapper・import面・実DOM動作を固定(`test/no-wrapper.test.ts`)。サイズ予算係数はADR-0022のlifecycle固定費を含む5.5x(実測5.33x)。締め直しはminify最適化時に再検討 |
-| 合成   | 同一ファイル内の複数コンポーネント合成(ADR-0014)                                            | **DONE** | change `same-file-component-composition`。コンパイル時ASTインライン化、root scope + list itemのみ、children/slot・再帰・複数ファイルは未対応のまま(下記制約参照)                                                                 |
-| Batch  | 同期スコープ内の共有marker更新(ADR-0020)                                                    | **DONE** | 複数root write時だけ専用batchを生成。公開batch API・scheduler・collection構造操作・イベント委譲は対象外                                                                                                                          |
+| M      | 内容                                                                         | 状態     | 備考                                                                                                                                                                                                                             |
+| ------ | ---------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M1     | スキャフォールド、signal/derived、テキストマーカー                           | **DONE** | `0155e85`                                                                                                                                                                                                                        |
+| M2     | イベントハンドラ、書き込みトリガー更新                                       | **DONE** | `810bc83`→`645a820`                                                                                                                                                                                                              |
+| M3     | ブラウザビルドターゲット(hydrate/mount分割 + `apps/examples/vite.config.ts`) | **DONE** | `a2905c8`、Vite+移行後はADR-0016のbuild経路                                                                                                                                                                                      |
+| M4     | 静的host要素属性                                                             | **DONE** | `9829f88`、change `m4-static-host-attributes`                                                                                                                                                                                    |
+| M4.5   | authoring APIゾーン化(ADR-0008)                                              | **DONE** | change `authoring-api-zones`。render()マーカー・識別子参照ハンドラ・ゾーン配置強制                                                                                                                                               |
+| M5     | list/conditional factory closures、1階層のみ(ADR-0005の新実装)               | **DONE** | change `m5-list-conditional-factory-closures`。ネストした構造ユニット(06/07)は据え置き                                                                                                                                           |
+| M5.5   | ネストした構造ユニット(条件分岐の中のリスト/リストアイテムの中の条件分岐)    | **DONE** | change `recursive-structural-authoring`。任意の深さ、unitごとの状態/cache、祖先local signalの更新接続                                                                                                                            |
+| `use=` | top-level要素へのaction接続(ADR-0011)                                        | **DONE** | `use-action-impl` + ADR-0022。関数updateと`{ update?, destroy? }`、component `unmount()`を実装。ユニット内`use=`は下記制約                                                                                                       |
+| M6     | 全マイルストーン横断のno-wrapper検証                                         | **DONE** | change `m6-no-wrapper-verification`。全機能同居フィクスチャで no-wrapper・import面・実DOM動作を固定(`test/no-wrapper.test.ts`)。サイズ予算係数はADR-0022のlifecycle固定費を含む5.5x(実測5.33x)。締め直しはminify最適化時に再検討 |
+| 合成   | 同一ファイル内の複数コンポーネント合成(ADR-0014)                             | **DONE** | change `same-file-component-composition`。コンパイル時ASTインライン化、root scope + list itemのみ、children/slot・再帰・複数ファイルは未対応のまま(下記制約参照)                                                                 |
+| Batch  | 同期スコープ内の共有marker更新(ADR-0020)                                     | **DONE** | 複数root write時だけ専用batchを生成。公開batch API・scheduler・collection構造操作は対象外。イベント配線はADR-0021でdirectを採用                                                                                                  |
 
 ## 既知の制約(現時点のcodegenの限界)
 
@@ -209,32 +227,28 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
   `dynamic-attribute-bindings`)で実装済み。attribute/property の使い分けは
   固定表(`checked` = booleanプロパティ、`value` = 文字列プロパティ、他は
   `setAttribute`)。ユニット内の属性式が**ルート**signalを参照するのは
-  テキストと同じく `scope limit`。**同一ユニット直下で宣言されたローカル
-  signal**(下記「同一ファイル内コンポーネント合成」参照)への依存のみ
-  ADR-0014(change `same-file-component-composition`)で許可した
-  (UNRESOLVED-04解消)。
-- **リスト(`.map()`)・条件分岐(三項/`&&`)はM5+M5.5で実装済み**
-  (change `m5-list-conditional-factory-closures` /
-  `m5-5-nested-structural-units`)。ネストは1階層まで(リストアイテム内の
-  条件分岐/条件分岐ブランチ内のリスト)。以下は明示的な scope limitで
-  拒否する:
-  - 2階層以上のネスト(ネストした構造ユニットの内側に、さらに別の構造
-    ユニットがある場合)。
-  - 構造ユニットの3階層以上のネスト。開始・終了アンカーによるDOM範囲所有で
-    親要素の静的兄弟・複数ユニットとの混在は許可されるが、factoryの入れ子は
-    現状1階層まで。
-  - リストアイテム本体・条件分岐ブランチ本体の中のテキストで**ルート**
-    signal/derivedを直接参照すること(item要素のフィールド参照は対象外 ―
-    trackされないので素通りする)。**同一ユニット直下のローカルsignal**
-    への依存はADR-0014で許可(上記参照)。ネストした構造ユニットの条件式・
-    配列式はルートsignal依存の制限対象外(依存は外側マーカーへバブル
-    アップし、正しく更新が届く)。ただしネストした構造ユニットが
-    **祖先ユニットのローカルsignal**に依存することは、ローカルsignalの
-    declIdがグローバルなsignalToMarkersへ漏れて壊れたコードを生成する
-    ため明示的に拒否する(ADR-0014。旧UNRESOLVED-07の編集モードspan/input
-    入れ替えのような形が該当するが、現行fixtureはclass切り替えで回避している)。
-    ハンドラ内でのsignal読み書きも
-    ルートsignal制限の対象外(通常のハンドラと同じ仕組みで動く)。
+  テキストと同じく `scope limit`。同一unitまたは祖先unitで宣言された
+  local signalへの依存は`recursive-structural-authoring`で許可し、所有者
+  factoryのupdateへ接続する(UNRESOLVED-04解消)。
+- **リスト(`.map()`)・条件分岐(三項/`&&`)は再帰的に実装済み**
+  (change `recursive-structural-authoring`)。構造unitは任意の深さでfactoryへ
+  展開され、各instanceがDOM範囲、local state、binding cache、Listのkeyed Map、
+  update処理を所有する。現在または祖先unitのlocal signalを条件式・配列式・
+  handler・bindingから使う場合は、所有者factoryのupdateへ接続する。
+  - リストアイテム本体・条件分岐ブランチ本体の直接テキスト/属性で**ルート**
+    signal/derivedを参照することは`scope limit`。item要素のフィールド参照は
+    追跡対象外なので素通りする。ネストunitの条件式・配列式でroot signalを
+    参照する依存は外側markerへ合流する。
+  - 字句スコープ外の別unit local signalをネストunitが参照する場合は、
+    `compile: ... (scope limit)`で拒否する。local DeclIdをrootの
+    `signalToMarkers`へ漏らさない。
+  - `.map()`のコールバックのブロック本体(`=> { ... }`)は、
+    「signal()/derived()宣言 + 最終return」の形のみ受理する。それ以外の文を
+    含むブロック本体は引き続き`scope limit`。
+  - リストアイテムに`key`属性がない場合、または`key`が追跡対象signalを参照する
+    場合は`scope limit`。
+  - `.map()`コールバックの通常のブロック本体は、上記の局所宣言形式以外は
+    対応しない。
   - `.map()`のコールバックのブロック本体(`=> { ... }`)は、
     「signal()/derived()宣言 + 最終return」の形(ADR-0014のローカル
     signal宣言)のみ受理する。それ以外の文を含むブロック本体は引き続き

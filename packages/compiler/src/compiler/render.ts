@@ -536,10 +536,10 @@ function registerAction(
 interface RenderElementOpts {
   /** M5: この要素直下の `key` 属性を host 属性として出力しない(リストアイテムの root)。 */
   skipAttrName?: string
-  /** M5.5: いま歩いている位置を囲む構造ユニット本体の数(トップレベル=0)。
-   * 深さ2(1階層ネスト)までの構造ユニットを受理し、深さ3以降は scope limit
-   * で拒否する(design.md Decision 3: カウンタ1つで無制限再帰を防ぐ)。 */
-  unitDepth?: number
+  /** 構造ユニットのテンプレート内を歩いているか。 */
+  insideUnit?: boolean
+  /** この位置から参照できる構造ユニットの局所宣言。 */
+  localDeclIds?: Set<DeclId>
 }
 
 function renderElement(
@@ -567,10 +567,10 @@ function renderElement(
     handlerFns,
     opts.skipAttrName,
   )
-  const elementUnitDepth = opts.unitDepth ?? 0
+  const insideUnit = opts.insideUnit ?? false
   // ADR-0011 design.md Decision 3: 返り値クロージャの動的レジストリが要るため、
   // リストアイテム/条件分岐ブランチの中の `use=` は対象外のまま。
-  if (actionAttr && elementUnitDepth > 0) {
+  if (actionAttr && insideUnit) {
     throw new Error(
       'compile: use= inside list/conditional units is not supported yet (scope limit)',
     )
@@ -584,16 +584,15 @@ function renderElement(
     name: d.name,
     ...analyzeExpr(ctx, d.exprPath, instanceId),
   }))
-  const dynBake =
-    elementUnitDepth === 0
-      ? dynAttrs
-          .map((a) =>
-            attrBindingKind(a.name) === 'boolProp'
-              ? `\${(${a.sourceRendered}) ? " ${a.name}" : ""}`
-              : ` ${a.name}="\${__escAttr__(${a.sourceRendered})}"`,
-          )
-          .join('')
-      : ''
+  const dynBake = !insideUnit
+    ? dynAttrs
+        .map((a) =>
+          attrBindingKind(a.name) === 'boolProp'
+            ? `\${(${a.sourceRendered}) ? " ${a.name}" : ""}`
+            : ` ${a.name}="\${__escAttr__(${a.sourceRendered})}"`,
+        )
+        .join('')
+    : ''
   // 要素のマーカー id に相乗りさせて登録する(text/handler と同じ前例)。
   // トップレベルでは deps を markerDeps へ合流させ update_<name>() の対象に
   // する。ユニット内は renderStructuralUnitBody の splice が回収し、deps は
@@ -606,7 +605,7 @@ function renderElement(
         rendered: a.rendered,
         deps: a.deps,
       })
-      if (elementUnitDepth === 0) {
+      if (!insideUnit) {
         const set = ctx.markerDeps.get(markerId) ?? new Set<DeclId>()
         for (const d of a.deps) set.add(d)
         ctx.markerDeps.set(markerId, set)
@@ -629,7 +628,6 @@ function renderElement(
   )
 
   if (structuralChildren.length > 0) {
-    const unitDepth = opts.unitDepth ?? 0
     let inner = ''
     for (const child of children) {
       if (child.isJSXText()) {
@@ -638,7 +636,8 @@ function renderElement(
       }
       if (child.isJSXElement()) {
         inner += renderElement(ctx, child, instanceId, handlerFns, {
-          unitDepth: opts.unitDepth,
+          insideUnit,
+          localDeclIds: opts.localDeclIds,
         })
         continue
       }
@@ -653,13 +652,6 @@ function renderElement(
           'compile: mixing structural rendering with a reactive text expression is not supported yet (scope limit)',
         )
       }
-      // M5.5: 1階層のネスト(深さ2)までは既存のfactory生成を再帰適用する。
-      // 深さ3以降のみ scope limit で拒否する。
-      if (unitDepth >= 2) {
-        throw new Error(
-          'compile: nested structural unit exceeds 1 level of nesting is not supported yet (scope limit)',
-        )
-      }
       const markerId =
         kind === 'list'
           ? renderListUnit(
@@ -667,9 +659,9 @@ function renderElement(
               exprPath as NodePath<t.CallExpression>,
               instanceId,
               handlerFns,
-              unitDepth + 1,
+              opts.localDeclIds,
             )
-          : renderConditionalUnit(ctx, exprPath, instanceId, handlerFns, unitDepth + 1)
+          : renderConditionalUnit(ctx, exprPath, instanceId, handlerFns, opts.localDeclIds)
       // Structural units are represented by comments in the initial HTML. The
       // runtime discovers the matching pair during mount and hydrate and all
       // subsequent operations are confined to the nodes between these comments.
@@ -701,7 +693,8 @@ function renderElement(
       if (child.isJSXText()) inner += escapeTemplateText(cleanJSXText(child.node.value))
       else if (child.isJSXElement())
         inner += renderElement(ctx, child, instanceId, handlerFns, {
-          unitDepth: opts.unitDepth,
+          insideUnit,
+          localDeclIds: opts.localDeclIds,
         })
       else if (child.isJSXExpressionContainer() && child.get('expression').isJSXEmptyExpression())
         continue
@@ -861,26 +854,28 @@ function renderStructuralUnitBody(
   elementPath: NodePath<t.JSXElement>,
   instanceId: number,
   handlerFns: HandlerFns,
-  unitDepth: number,
   skipAttrName?: string,
   localDeclStmts: NodePath<t.VariableDeclaration>[] = [],
+  ancestorLocalDeclIds: Set<DeclId> = new Set(),
 ): { body: StructuralUnitBody; nestedDeps: Set<DeclId> } {
   // same-file-component-composition (design.md D5/D6): このユニット直下の
   // ローカルsignal/derived宣言を先に処理する。以後のテキスト/属性の
-  // scope limit判定は「このユニット自身が宣言したローカルsignalかどうか」
-  // だけを基準にする ― 祖先ユニットのローカルsignalは対象に含まれない
-  // (bodyLocalDeclIds はこの呼び出し1回ぶんの宣言だけを持つ)。
+  // scope limit判定は、このユニット自身と祖先ユニットが宣言した
+  // ローカルsignalだけを基準にする。構造単位は生成されたfactoryの
+  // クロージャなので、祖先の局所変数は字句的に参照できる。
   const localDecls = localDeclStmts.map((stmt) =>
     processLocalDeclarationStatement(ctx, stmt, instanceId),
   )
   const bodyLocalDeclIds = new Set(localDecls.map((d) => d.id))
+  const accessibleLocalDeclIds = new Set([...ancestorLocalDeclIds, ...bodyLocalDeclIds])
 
   const markersBefore = ctx.markers.length
   const handlersBefore = ctx.handlers.length
   const attrsBefore = ctx.attrBindings.length
   const template = renderElement(ctx, elementPath, instanceId, handlerFns, {
     skipAttrName,
-    unitDepth,
+    insideUnit: true,
+    localDeclIds: accessibleLocalDeclIds,
   })
   const localMarkers = ctx.markers.splice(markersBefore) as (
     | TextMarker
@@ -889,12 +884,11 @@ function renderStructuralUnitBody(
   )[]
   const localHandlers = ctx.handlers.splice(handlersBefore)
   // ADR-0012 決定5: ユニット内の属性式が追跡signalを参照するのは、依存先が
-  // 全てこのユニット自身のローカルsignalである場合に限り許可する
-  // (same-file-component-composition design D6)。ルートsignal・祖先
-  // ユニットのローカルsignalへの依存は従来どおり拒否する。
+  // 現在または祖先のローカルsignalである場合に限り許可する。ルートsignalや
+  // 別の構造単位のローカルsignalは、字句的な所有範囲の外なので拒否する。
   const localAttrBindings = ctx.attrBindings.splice(attrsBefore)
   for (const b of localAttrBindings) {
-    const leaksBeyondThisUnit = [...b.deps].some((d) => !bodyLocalDeclIds.has(d))
+    const leaksBeyondThisUnit = [...b.deps].some((d) => !accessibleLocalDeclIds.has(d))
     if (leaksBeyondThisUnit) {
       throw new Error(
         'compile: attribute binding referencing a tracked signal inside a list item or conditional branch is not supported yet (scope limit)',
@@ -906,7 +900,9 @@ function renderStructuralUnitBody(
     const deps = ctx.markerDeps.get(m.id)
     ctx.markerDeps.delete(m.id)
     if (m.kind === 'text') {
-      const leaksBeyondThisUnit = deps ? [...deps].some((d) => !bodyLocalDeclIds.has(d)) : false
+      const leaksBeyondThisUnit = deps
+        ? [...deps].some((d) => !accessibleLocalDeclIds.has(d))
+        : false
       if (leaksBeyondThisUnit) {
         throw new Error(
           'compile: referencing a tracked signal inside a list item or conditional branch is not supported yet (scope limit)',
@@ -914,17 +910,16 @@ function renderStructuralUnitBody(
       }
     } else {
       // ネストした構造ユニット自身の依存(さらに内側からバブル済みの分を
-      // 含む)。ローカルsignalへの依存は、グローバルなsignalToMarkersへ
-      // 漏れてモジュールスコープに存在しない変数を参照する壊れたコードに
-      // なるため、合流させず明示的に拒否する(design.md D6、UNRESOLVED-07
-      // 相当のネストは本changeでも未解決のまま)。
+      // 含む)。祖先を含む局所signalはグローバルなsignalToMarkersへ合流
+      // させない。生成された外側factoryの更新が、このunit instanceの
+      // handle.update()を通じて内側へ届く。
       for (const d of deps ?? []) {
-        if (ctx.localDeclIds.has(d)) {
+        if (ctx.localDeclIds.has(d) && !accessibleLocalDeclIds.has(d)) {
           throw new Error(
-            'compile: a nested structural unit depending on a local signal is not supported yet (scope limit)',
+            'compile: a nested structural unit depends on a local signal outside its lexical scope (scope limit)',
           )
         }
-        nestedDeps.add(d)
+        if (!accessibleLocalDeclIds.has(d)) nestedDeps.add(d)
       }
     }
   }
@@ -949,7 +944,7 @@ function renderListUnit(
   exprPath: NodePath<t.CallExpression>,
   instanceId: number,
   handlerFns: HandlerFns,
-  unitDepth: number,
+  ancestorLocalDeclIds: Set<DeclId> = new Set(),
 ): MarkerId {
   const callee = exprPath.get('callee') as NodePath<t.MemberExpression>
   const arrayObjPath = callee.get('object') as NodePath<t.Expression>
@@ -993,9 +988,9 @@ function renderListUnit(
     itemPath,
     instanceId,
     handlerFns,
-    unitDepth,
     'key',
     localDeclStmts,
+    ancestorLocalDeclIds,
   )
   // M5.5: ネストしたユニットの依存はこのリストマーカーの依存に合流させる。
   // 該当 signal の update_* がリストの keyed diff を再実行し、既存アイテムの
@@ -1024,7 +1019,7 @@ function renderConditionalUnit(
   exprPath: NodePath<t.Expression>,
   instanceId: number,
   handlerFns: HandlerFns,
-  unitDepth: number,
+  ancestorLocalDeclIds: Set<DeclId> = new Set(),
 ): MarkerId {
   let testPath: NodePath<t.Expression>
   let branchPaths: (NodePath<t.Node> | null)[]
@@ -1051,7 +1046,9 @@ function renderConditionalUnit(
       branchPath,
       instanceId,
       handlerFns,
-      unitDepth,
+      undefined,
+      [],
+      ancestorLocalDeclIds,
     )
     // M5.5: ネストしたユニットの依存を条件分岐マーカーの依存へ合流させる
     // (選択が変わらなくても handle.update() で内側を更新するため)。

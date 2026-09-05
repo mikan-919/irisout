@@ -237,14 +237,15 @@ export function compile(source: string): CompileResult {
   // M5: リスト/条件分岐のローカルハンドラ(StructuralUnitBody.localHandlers)
   // も同じ変換が要るので、ctx.handlers 直下・構造ユニット内の両方に使う
   // 共通ヘルパーにする。
-  // same-file-component-composition: ユニット直下のローカルハンドラのうち、
-  // このユニット自身のローカルsignalへ書き込むものは、既存のroot更新呼び出し
-  // に加えて、このユニットのfactoryが
-  // 既に持つ`update()`クロージャも呼ぶ(design.md D5 ― 新しいupdate関数は
-  // 作らず、M5が生成する既存のupdate()を再利用する)。ルートハンドラには
-  // ローカルsignalの概念が無いため localDeclIds は省略可能。
-  const convertHandler = (h: HandlerDecl, localDeclIds?: Set<DeclId>): HandlerOutput => {
+  // same-file-component-composition: ローカルハンドラが書き込む局所signalの
+  // 所有bodyを、現在bodyから数えた字句スコープ位置で記録する。生成側は
+  // 同じfactoryまたは祖先factoryのupdateへ直接つなぐため、ローカルsignalが
+  // module scopeのsignalToMarkersへ混ざらない。
+  const convertHandler = (h: HandlerDecl, localScopes: Set<DeclId>[] = []): HandlerOutput => {
     const plan = resolveUpdatePlan(h.writeDeclIds, h.directCollectionWriteDeclIds)
+    const localUpdateLevels = localScopes.flatMap((scope, level) =>
+      [...h.writeDeclIds].some((id) => scope.has(id)) ? [level] : [],
+    )
     return {
       markerId: h.markerId,
       eventName: h.eventName,
@@ -253,9 +254,7 @@ export function compile(source: string): CompileResult {
       updateNames: plan.updateNames,
       updateBatchName: plan.updateBatchName,
       updateBatchNeedsCollection: plan.needsCollectionBatch,
-      callLocalUpdate: localDeclIds
-        ? [...h.writeDeclIds].some((id) => localDeclIds.has(id))
-        : false,
+      localUpdateLevels,
     }
   }
   const handlerOutputs = ctx.handlers.map((h) => convertHandler(h))
@@ -264,6 +263,7 @@ export function compile(source: string): CompileResult {
   // ローカルハンドラにも同じ変換が要るため、body と marker で相互再帰する。
   const convertUnitMarker = (
     m: ListMarker | ConditionalMarker,
+    ancestorLocalScopes: Set<DeclId>[] = [],
   ): ListMarkerOutput | ConditionalMarkerOutput =>
     m.kind === 'list'
       ? {
@@ -271,20 +271,26 @@ export function compile(source: string): CompileResult {
           collectionOutputName: m.collectionDeclId
             ? ctx.declOutputName.get(m.collectionDeclId)!
             : null,
-          body: convertBody(m.body),
+          body: convertBody(m.body, ancestorLocalScopes),
         }
       : {
           ...m,
           branches: m.branches.map((b) => ({
-            body: b.body ? convertBody(b.body) : null,
+            body: b.body ? convertBody(b.body, ancestorLocalScopes) : null,
           })),
         }
-  const convertBody = (body: StructuralUnitBody): StructuralUnitBodyOutput => {
+  const convertBody = (
+    body: StructuralUnitBody,
+    ancestorLocalScopes: Set<DeclId>[] = [],
+  ): StructuralUnitBodyOutput => {
     const localDeclIds = new Set(body.localDecls.map((d) => d.id))
+    const localScopes = [localDeclIds, ...ancestorLocalScopes]
     return {
       template: body.template,
-      localMarkers: body.localMarkers.map((m) => (m.kind === 'text' ? m : convertUnitMarker(m))),
-      localHandlers: body.localHandlers.map((h) => convertHandler(h, localDeclIds)),
+      localMarkers: body.localMarkers.map((m) =>
+        m.kind === 'text' ? m : convertUnitMarker(m, localScopes),
+      ),
+      localHandlers: body.localHandlers.map((h) => convertHandler(h, localScopes)),
       localAttrBindings: body.localAttrBindings,
       localDecls: body.localDecls,
     }

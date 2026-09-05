@@ -1,17 +1,13 @@
 // 構造ユニットの実DOM回帰検証にも使うTodoMVC入力。手書きの比較出力は
 // apps/examples/todomvc.handwritten.js を参照。
 //
-// 実装済み: 1階層のリスト・条件分岐(M5)、1階層のネストした構造ユニット
+// 実装済み: リスト・条件分岐(M5)、任意の深さの構造ユニット
 // (M5.5、change `m5-5-nested-structural-units`)、top-levelの`use=`属性
 // (ADR-0011、change `use-action-impl`)、同一ファイル内の複数コンポーネント
 // 合成・ローカルsignal(ADR-0014、change `same-file-component-composition`)。
 //
 // 構造ユニットは親要素の兄弟と共存できるコメント範囲として生成される。
-// TodoAppの条件分岐→リストはこの範囲を使う。編集モードのUIは、span/input
-// のDOM入れ替えではなく、実物のTodoMVCと同じCSSクラストグル方式
-// (`<li class={editing() ? 'editing' : ...}>`)にしている ― これはTodoItemの
-// ローカルsignal`editing`への同一ユニット直下の依存として書け、追加の
-// 入れ子構造ユニットを必要としない。
+// TodoAppの条件分岐→リストとTodoItemのローカル編集条件はこの範囲を使う。
 
 export function TodoApp() {
   // ── 変数ゾーン: const のみ(signal/derived) ──
@@ -73,19 +69,12 @@ export function TodoApp() {
 
   // ── 動きゾーン: function宣言とhooksのみ ──
 
-  // UNRESOLVED(01): `use=`属性の設計はADR-0011で決定済み(ref primitiveは
-  // 作らず、要素はaction関数の引数としてのみ到着する)。用途はマウント時の
-  // フォーカスのみ(値の読み取り・クリアはイベント引数側 e.target 経由に
-  // 寄せる、下のhandleInputKeyDown参照)。コンパイラ実装は別change。
+  // `use=`の引数はマウント時の入力要素で、フォーカスに使う。
   function setupNewTodoInput(input) {
     input.focus()
   }
 
-  // UNRESOLVED(09): e.target.value が効くにはe.targetがHTMLInputElement
-  // だと分かっている必要がある。イベントオブジェクトの型付け(addEventListener
-  // ネイティブの生の`Event`型のままか、要素種別に応じて絞り込むか)は
-  // Plan 004(イベント引数)側の未規定点。ここではJSの動的型付けに乗って
-  // 素朴にe.target.valueへアクセスする。
+  // イベント引数のtargetはブラウザの入力要素を指す。
   function handleInputKeyDown(e) {
     if (e.key !== 'Enter') return
     const text = e.target.value.trim()
@@ -114,16 +103,8 @@ export function TodoApp() {
   }
 }
 
-// same-file-component-composition(ADR-0014)で切り出したリストアイテムの
-// コンポーネント。当時のUNRESOLVED-04(アイテムごとのローカル編集状態)は、
-// コンポーネント全体で1つのsignalを使い回す`editingId`ハックではなく、
-// このコンポーネント自身の変数ゾーンに`editing`ローカルsignalを持たせる
-// ことで解消する ― `TodoApp`の`.map()`アイテム位置へインライン化されると
-// factoryクロージャ専有のローカル状態になり(CONTEXT.md「ローカルsignal」)、
-// アイテムごとに自動的に独立する。呼び出し箇所の`<TodoItem key={todo.id}
-// .../>`のkeyはlintのuseJsxKeyInIterable対応のみが目的で、コンパイラは
-// 展開後にこのコンポーネント自身が持つ`<li key={todo.id}>`のkeyだけを見る
-// (propとしては受け取らない)。
+// same-file-component-composition(ADR-0014)で切り出したリストアイテム。
+// `editing`はfactoryクロージャ専有の局所状態になり、アイテムごとに独立する。
 function TodoItem({ todo, onToggle, onCommitEdit, onRemove }) {
   const editing = signal(false)
 
@@ -131,28 +112,18 @@ function TodoItem({ todo, onToggle, onCommitEdit, onRemove }) {
     <li key={todo.id} class={`${todo.completed ? 'completed' : ''} ${editing() ? 'editing' : ''}`}>
       <input type="checkbox" checked={todo.completed} onChange={onToggle} />
       {/* biome-ignore lint/a11y/noStaticElementInteractions: フィクスチャなのでa11y対応はスコープ外 */}
-      <span onDblClick={() => editing(true)}>{todo.text}</span>
-      {/* UNRESOLVED(08): 編集中テキストの下書き保持先は未規定のまま。
-          ここではinput要素自身のvalueをsource of truthとし、確定は
-          Enterでe.target.value経由に寄せる。編集開始時のtodo.textの
-          プリフィルはADR-0012のvalueプロパティバインディングで書ける。
-          UNRESOLVED(07、編集モードのspan/input DOM入れ替え)は未解決の
-          まま ― このフィクスチャではspan/input両方を常にDOMへ出し、
-          実物のTodoMVCと同じCSSクラストグル(上のclass属性)で表示を
-          切り替えることで07を必要としない形にしている。
-          `onCommitEdit`をこのコンポーネント自身の文でラップせず
-          `onKeyDown={onCommitEdit}`のまま素通しにしているのは、
-          コンポーネント合成の実装上の制約(props置換は識別子参照全体を
-          呼び出し元の式で置き換える方式のため、置換対象がハンドラ属性値
-          そのものである場合は正しく動くが、このコンポーネント側で
-          `(e) => { onCommitEdit(...); ...; }`のように追加の文で包むと、
-          置換後の呼び出し式がソース位置ベースの書き換え検出に乗らず
-          置換が反映されない、実装前調査で確認した既知の制約)。
-          「Enterキーのときだけ」の判定は呼び出し元(TodoApp)の引数式
-          `(e) => e.key === 'Enter' && commitEdit(...)`側に持たせ、
-          編集モードの終了はこのコンポーネント自身の`onBlur`(propを
-          経由しない、ローカルなだけの書き込み)に委ねている。 */}
-      <input value={todo.text} onKeyDown={onCommitEdit} onBlur={() => editing(false)} />
+      {editing() ? (
+        <input
+          value={todo.text}
+          onKeyDown={(e) => {
+            onCommitEdit(e)
+            if ('key' in e && typeof e.key === 'string' && e.key === 'Enter') editing(false)
+          }}
+          onBlur={() => editing(false)}
+        />
+      ) : (
+        <span onDblClick={() => editing(true)}>{todo.text}</span>
+      )}
       <button type="button" onClick={onRemove}>
         x
       </button>

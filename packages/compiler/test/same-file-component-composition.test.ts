@@ -99,7 +99,7 @@ export function App() {
     expect([...lis2].map((li) => li.className)).toEqual(['editing', ''])
   })
 
-  it('ネストした構造ユニットが祖先のローカルsignalに依存する場合は拒否する', () => {
+  it('ネストした条件分岐が祖先のローカルsignalを読み書きできる', async () => {
     const source = `
 export function App() {
   const todos = signal([{ id: 1, text: 'a' }]);
@@ -109,7 +109,12 @@ export function App() {
         const editing = signal(false);
         return (
           <li key={todo.id}>
-            {editing() ? <input /> : <span>{todo.text}</span>}
+            {editing() ? (
+              <input class="edit-input" onBlur={() => editing(false)} />
+            ) : (
+              <span>{todo.text}</span>
+            )}
+            <button class="edit" onClick={() => editing(true)}>e</button>
           </li>
         );
       })}
@@ -117,9 +122,19 @@ export function App() {
   );
 }
 `
-    expect(() => compile(source)).toThrow(
-      /nested structural unit depending on a local signal.*scope limit/,
-    )
+    const { code } = compile(source)
+    const container = await mount(code)
+    const li = container.querySelector('li')!
+    expect(li.querySelector('span')?.textContent).toBe('a')
+    expect(li.querySelector('.edit-input')).toBeNull()
+
+    dispatch(container, li.querySelector('.edit'), 'click')
+    expect(li.querySelector('.edit-input')).not.toBeNull()
+    expect(li.querySelector('span')).toBeNull()
+
+    dispatch(container, li.querySelector('.edit-input'), 'blur')
+    expect(li.querySelector('.edit-input')).toBeNull()
+    expect(li.querySelector('span')?.textContent).toBe('a')
   })
 
   it('ルートsignalへの依存は引き続きscope limitで拒否する(回帰確認)', () => {

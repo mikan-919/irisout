@@ -259,11 +259,11 @@ export function App() {
   })
 })
 
-// M5.5(change `m5-5-nested-structural-units`): 1階層ネストした構造ユニット。
-// specs「ネストした構造ユニットのスコープ制限 / factory生成 / ライフサイクル」
+// change `recursive-structural-authoring`: 構造単位を任意の深さで入れ子にする。
+// specs「ネストした構造ユニットのfactory生成 / ライフサイクル」
 // と「配列脱落とフィルタ除外の区別」の境界条件 Scenario に対応する。
-describe('M5.5: nested structural units (1 level)', () => {
-  it('compiles and renders a list nested inside a conditional branch (UNRESOLVED-06)', async () => {
+describe('M5.5: nested structural units', () => {
+  it('compiles and renders a list nested inside a conditional branch', async () => {
     const source = `
 export function App() {
   const items = signal([{ id: 1, text: 'a' }]);
@@ -302,7 +302,7 @@ export function App() {
     expect(container.querySelectorAll('li').length).toBe(2)
   })
 
-  it('compiles and renders a conditional nested inside a list item (UNRESOLVED-07)', async () => {
+  it('compiles and renders a conditional nested inside a list item', async () => {
     const source = `
 export function App() {
   const items = signal([
@@ -392,26 +392,38 @@ export function App() {
     expect(remountedLi).not.toBe(originalLi as Element)
   })
 
-  it('rejects a structural unit nested 2 levels deep (scope limit)', () => {
+  it('compiles and renders structural units nested more than 1 level', async () => {
     const source = `
 export function App() {
   const items = signal([{ id: 1, ok: true, xs: [1] }]);
   render(
-    <ul>
-      {items().map((item) => (
-        <li key={item.id}>
-          <div>
-            {item.ok && (
-              <ol>{item.xs.map((x) => <li key={x}>{x}</li>)}</ol>
-            )}
-          </div>
-        </li>
-      ))}
-    </ul>
+    <div>
+      <ul>
+        {items().map((item) => (
+          <li key={item.id}>
+            <div>
+              {item.ok && (
+                <ol>{item.xs.map((x) => <li key={x}>{x}</li>)}</ol>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+      <button class="toggle" onClick={() => items(items().map((item) => ({ ...item, ok: !item.ok })))}>toggle</button>
+    </div>
   );
 }
 `
-    expect(() => compile(source)).toThrow(/exceeds 1 level of nesting.*scope limit/)
+    const { code } = compile(source)
+    const mod = await loadGenerated(code)
+    const container = createContainer()
+    ;(mod.mountComponent as (c: Element) => void)(container)
+
+    expect(container.querySelector('ol > li')?.textContent).toBe('1')
+    dispatchClick(container, container.querySelector('.toggle'))
+    expect(container.querySelector('ol')).toBeNull()
+    dispatchClick(container, container.querySelector('.toggle'))
+    expect(container.querySelector('ol > li')?.textContent).toBe('1')
   })
 })
 

@@ -407,7 +407,7 @@ function collectCodeMetrics(
     generatedItemFindCalls: countMatches(code, /__find__\(__el__,/g),
     generatedItemListenerRegistrations: countMatches(
       code,
-      /__find__\(__el__,[^\n]+?\)\.addEventListener/g,
+      /__m[A-Za-z0-9_$]+__\.addEventListener/g,
     ),
     generatedTopLevelListenerRegistrations: countMatches(
       code,
@@ -419,7 +419,7 @@ function collectCodeMetrics(
       code,
       /todos\.filter\(\(t\) => !t\.completed\)\.length/g,
     ),
-    generatedListBindingExpressions: countMatches(code, /__updateListBinding__\(__item__/g),
+    generatedListBindingExpressions: countMatches(code, /__updateListBinding__\(/g),
     generatedRangeSearchDefinitions: countMatches(code, /function __findRange__\(/g),
     generatedRangeSearchCalls: Math.max(0, countMatches(code, /__findRange__\(/g) - 1),
     generatedRuntimeHelpers: generatedRuntimeHelpers(code),

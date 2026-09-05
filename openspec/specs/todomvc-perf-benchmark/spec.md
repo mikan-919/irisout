@@ -4,8 +4,9 @@
 
 ADR-0005(keyed reuseのMapの帳簿コストはReact Fiberと同種)という見立てを、
 `apps/examples/todomvc.handwritten.js`(M5 codegenの目標出力の上限値)と同等機能の
-React版TodoMVCの実測比較で検証する(change `perf-bench-todomvc-vs-react`)。
-結果は`packages/bench/todomvc-vs-react.results.md`にまとめ、M5.5以降の設計
+React版TodoMVC、現行compiler生成版TodoMVCの実測比較で検証する(change
+`perf-bench-todomvc-vs-react`)。結果は
+`packages/bench/todomvc-compiler.results.md`にまとめ、M5.5以降の設計
 判断材料とする。本capabilityはベンチマークハーネス・レポートのみを対象とし、
 コンパイラ本体(`packages/compiler/`)は対象外。
 
@@ -44,6 +45,17 @@ React版TodoMVCの実測比較で検証する(change `perf-bench-todomvc-vs-reac
   N=10,000以上で現実的な時間(数十分以上)を要すると判明する
 - **THEN** そのシナリオはより小さいNの実測値に留め、大きいNについては
   レポート内でO(N^2)を仮定した外挿値として明記する
+
+### Requirement: 生成物のmarker lookupとlistener計数
+ベンチマークハーネスは、compiler生成版について、生成コード内のfactory marker
+検索数とlistener登録数、およびmount中の実`querySelector`・listener操作数を
+記録しなければならない(SHALL)。同じmarkerをbinding解決とイベント配線で再検索
+していないことを、コード計数または生成コードの検査で確認できなければならない。
+
+#### Scenario: item marker参照の再利用
+- **WHEN** List item factoryがmarkerを解決してイベントリスナーを登録する
+- **THEN** factoryは各markerを一度だけ解決し、イベント登録は保存済み参照を使う。
+  レポートにはmarker検索数、listener登録数、mount中の実検索数を記録する
 
 ### Requirement: 計測結果のレポート出力
 ベンチマークハーネスは、実行結果を`packages/bench/`配下に人間が読めるレポートとして

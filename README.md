@@ -76,7 +76,7 @@ TodoMVC 相当のシナリオ(mount / filter / add / remove、N=100〜100,000)�
 keyed再利用による手書き基準は全シナリオ・全 N で React (`useState` のみ、
 非最適化) より高速でした(1.1〜4 倍、中心は 1.4〜1.8 倍)。これはM5の
 生成物を評価する基準fixtureの比較であり、現行compilerが生成したproduction
-bundleそのものの比較ではありません。詳細な方法論と表は
+生成物そのものの比較ではありません。初期計測の方法論と表は
 [`packages/bench/todomvc-vs-react.results.md`](./packages/bench/todomvc-vs-react.results.md)
 にあります。
 
@@ -95,7 +95,7 @@ TypeScript 実装は M1〜M6(全マイルストーン横断の no-wrapper 検証
 
 対応済み: signal / derived、keyed collectionの1件直接更新、テキスト・属性の
 動的バインディング、イベントハンドラ、`.map()` によるリスト(keyed reuse)、
-条件分岐(1階層ネストまで)、`use=` action(top-level 要素)、ハンドラ/action
+任意の深さの条件分岐・構造unit、`use=` action(top-level 要素)、ハンドラ/action
 からの動きゾーン関数呼び出しの追跡(ADR-0013)、複数root writeで共有markerを
 一度だけ反映する同期更新batch(ADR-0020)、component instanceの
 `unmount()`と`use=` actionの`{ update?, destroy? }` cleanup(ADR-0022)。

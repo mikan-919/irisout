@@ -100,7 +100,11 @@ module scopeには一切出ない(`CONTEXT.md`「ローカルsignal」)。JSの
 この仕組みにより、`TodoItem`に`const editing = signal(false)`を持たせ、
 当時のUNRESOLVED-04だった`editingId`ハック(コンポーネント全体で1つのsignalを
 使い回す「同時1件編集」依存の暫定策)を、アイテムごとに独立した本来の
-ローカル状態へ置き換えられる。
+ローカル状態へ置き換えられる。さらに`recursive-structural-authoring`
+(2026-09-05)で、同じitem内のnested conditional/Listがこのlocal signalを
+読む場合も、local signalのDeclIdをglobal依存表へ漏らさず、宣言factoryの
+updateへ接続する形で許可した。直接のテキスト・属性がroot signalを読む制限と、
+字句スコープ外localの拒否は残る。
 
 ### 7. スコープ外(scope limitで拒否)
 

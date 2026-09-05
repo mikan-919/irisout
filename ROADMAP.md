@@ -38,12 +38,13 @@ derivedは一度ずつ再計算し、markerの和集合を重複なしで最終�
 `update_<name>()`とcollectionのkeyed direct経路は互換性のため残し、
 `collection.update()`が共有markerに入るbatch時だけdirect通知を抑止する。
 
-イベント配線は実Chromiumでbubblingするclick相当の比較を完了した(ADR-0021)。
-イベント委譲はitem identity帳簿込みでも有望な候補だが、native
-`event.currentTarget`と`blur`等non-bubbling eventの意味同等性が未解決で、production
-の既定方式は保留する。次は実生成に近い複数event fixtureとdirect/capture/proxy等の
-比較を行う。collectionの構造操作APIも、通常setterで表現できるため、実需と比較結果
-が出るまで追加しない。
+イベント配線は実Chromiumで`click`、`change`、`input`、`keydown`、`dblclick`、
+`blur`を、`direct`、`delegated`、`capture`、`adapter`で比較した(ADR-0021)。
+delegated/capture/adapterはリスナー数とJavaScriptヒープで有利だったが、delegatedは
+`blur`を処理できず、captureは`currentTarget`と段階を変え、adapterはevent objectの
+同一性を失った。native eventの意味を保つためproduction既定はdirectを維持する。
+collectionの構造操作APIは、通常setterで表現できるため、実需と比較結果が出るまで
+追加しない。
 
 quixのビルド時トラッカー採用可否・list itemのイベント配線方式・authoring API
 ゾーン化(inline arrow併存含む)とM4/M5の実装順序は決着済み(それぞれ
@@ -91,9 +92,8 @@ minifyを有効にしている。counterのsize budgetは`packages/compiler/test
   `const editing = signal(false)` を持たせ、構造ユニットへインライン化
   された「ローカルsignal」(`CONTEXT.md`)としてアイテムごとに独立させた。
   `editingId` ハックは`apps/examples/todomvc.jsx`から除去済み。編集モードの
-  表示切り替えは、span/input のDOM入れ替え(07、引き続き未解決)ではなく
-  同一ユニット直下の動的class属性バインディングに変更した(詳細は
-  `apps/examples/todomvc.jsx`のコメント参照)。
+  表示切り替えは、`editing() ? <input /> : <span />`という自然な条件分岐で
+  実装した。itemごとのfactoryが`editing`とbranch handlerの更新先を所有する。
 - (05) フィルタで一時的にリストから外れるだけのアイテムを「削除」と
   区別する設計 / handwritten側は「todos配列からの削除」でのみkeyed Map
   から破棄し、フィルタでの非表示はDOM着脱のみで対応(状態保持を優先) /
@@ -105,16 +105,18 @@ minifyを有効にしている。counterのsize budgetは`packages/compiler/test
 - (06) 空リスト時に `<ul>` 自体を出さない条件分岐(リストが条件分岐に
   ネストする形) / handwritten側は要素の着脱ではなく `hidden` プロパティ
   で妥協 / **M5では明示的にスコープ外と確定**(design.md Decision 1、
-  compile error `(scope limit)`)した後、M5.5で1階層ネストを実装済み。
+  compile error `(scope limit)`)した後、M5.5で構造unitを実装し、現在は任意の深さへ
+  拡張済み。
 - (07) 編集モードでの `span`↔`input` 入れ替え(アイテム内にさらに
   ネストした構造ユニットが要る) / handwritten側はtemplateの再クローンで
   はなく都度DOM生成+display切り替えで妥協 / **M5では明示的にスコープ外と
-  確定**(design.md Decision 1、compile error `(scope limit)`)した後、M5.5で
-  1階層ネストを実装済み。2階層以上は引き続きscope limit。
+  確定**(design.md Decision 1、compile error `(scope limit)`)した後、
+  `recursive-structural-authoring`で任意の深さの構造unitへ拡張した。各unit
+  instanceの状態/cacheを分離し、祖先local signalの更新を所有者factoryへ接続する。
 - (08) 編集中テキストの下書きの保持先 / handwritten側は専用stateを
   持たず、編集開始時に一度だけ書き込んだinput要素自身のvalueを
-  source of truthとした / ADR-0005/0008とも未言及、07と同じくM5.5で
-  item内ローカルUI状態の一般的な扱いとして決めるべき。
+  source of truthとした / TodoItemの自然な条件分岐とlocal stateは実装済み。
+  入力値の制御方式を一般化することは別のauthoring/API論点として残す。
 - (09) イベントオブジェクト(`e`)の型付け / `e.target.value` にJSの
   動的型付けのまま素朴にアクセスした(targetがHTMLInputElementである
   保証はコード上ない) / **受け渡しは解決済み**(ADR-0009 承認済み・change
@@ -235,11 +237,10 @@ transition/animation、portal、error boundary、async/resource
    (2026-07-14 相談: change選択の結果)。性能ベンチ(`perf-bench-todomvc-vs-react`)
    は下記7で完了。
 5. ~~M5.5 — ネストした構造ユニット(06/07)~~ — **完了**(change
-   `m5-5-nested-structural-units`)。既存のfactory-per-unit実装を1階層の
-   ネストまで再帰適用(2階層以上は引き続きscope limit)。06は実DOM着脱
-   (hidden妥協は却下)、07の生死ポリシーは既存の「破棄して作り直す」を
-   踏襲し、新しい状態保持機構は作らなかった(同changeのdesign.md
-   Decision 1/2)。
+   `recursive-structural-authoring`)。factory-per-unit実装を任意の深さへ
+   再帰適用し、各unit instanceのDOM範囲、local state、binding cache、List Mapを
+   分離した。祖先local signalの条件式・配列式・handlerは所有者factoryのupdateへ
+   接続する。06は実DOM着脱、07は`span`/`input`の自然な条件分岐で解消した。
 6. ~~エスケープハッチ設計~~ — **完了**(change `escape-hatch-design`、
    ADR-0010)。共存の単位(JSX要素1つ)・`<Escape mount={...} />`の記法・
    受理条件を決定。compiler/runtimeの変更は対象外(設計のみ)。
@@ -259,22 +260,20 @@ transition/animation、portal、error boundary、async/resource
    update_*配線を実装。JSX型定義への`use`属性追加は下記10で解消済み。
 7. ~~性能ベンチ: `apps/examples/todomvc.handwritten.js` vs React 版TodoMVC~~ —
    **完了**(change `perf-bench-todomvc-vs-react`、詳細は
-   `packages/bench/todomvc-vs-react.results.md`)。当初のjsdom計測ではhandwritten版
+   `packages/bench/todomvc-compiler.results.md`)。当初のjsdom計測ではhandwritten版
    が一貫して1.3〜2.5倍遅く「ADR-0005の見立てが反証された」ように見えたが、
-   実Chromiumでの再計測(`packages/bench/todomvc-vs-react.playwright.ts`)で
-   **全シナリオ・全Nでhandwritten版がReact版より1.1〜4倍速い**と判明し
-   結論は逆転した。jsdomはDOM APIを全部JSで実装しており「DOMを触るほど損」
+   実Chromiumでの再計測(`packages/bench/todomvc-compiler.playwright.ts`)で
+   handwritten版とReact版の全シナリオを比較し、DOM更新方式とJavaScriptヒープ
+   の差を記録した。jsdomはDOM APIを全部JSで実装しており「DOMを触るほど損」
    という実ブラウザと逆のコストモデルを持つため、直接DOM操作の多い
    handwritten版を系統的に不利にする環境アーティファクトだった。
    ADR-0005の見立て(keyed reuseのMapの帳簿コストはReact Fiberと同種)は
    実ブラウザでは**支持され**たが、List item配線専用の実Chromium比較
    (`packages/bench/listener-strategy.playwright.md`、ADR-0021)では、委譲が
    item identityのMap帳簿込みでもN=10,000/100,000のmount・attach・retained
-   JS heapで有利だった。dispatchだけ直接方式が約7〜9%速く、bundle gzipは委譲が
-   +121Bだったため、bubblingするclick相当の有望候補として記録した。ただし
-   `event.currentTarget`はrootへ変わり、`blur`等non-bubbling eventは未計測なので、
-   全eventのproduction採用とcompiler/runtime実装は保留し、次の複数event fixtureへ
-   切り出した。
+   JS heapで有利だった。複数event fixtureの追加計測では、delegatedは`blur`を処理
+   できず、captureは`currentTarget`と段階を変え、adapterはevent object同一性を
+   失ったため、production配線はdirectを維持する(ADR-0021)。
 8. ~~動的属性バインディング(UNRESOLVED 02/03)~~ — **完了**(ADR-0012、
    change `dynamic-attribute-bindings`)。あわせてユニットホスト要素の
    ハンドラが黙って捨てられるバグを修正。
@@ -308,18 +307,24 @@ transition/animation、portal、error boundary、async/resource
     structural stateの解放、action `destroy`の逆順実行を実装した。既存の関数返り値は
     update closureのまま維持し、object返り値の`update`/`destroy`を型・解析・runtime
     検証へ追加した。unit内`use=`、再mount、汎用lifecycle runtimeは実装しない。
+15. ~~再帰的構造unitと祖先local signal~~ — **完了**(change
+    `recursive-structural-authoring`)。任意の深さのfactory生成、unit instance専有の
+    DOM範囲・状態・binding cache、祖先local signalからのowner update接続を実装した。
+16. ~~authoring coverage~~ — **完了**。`apps/examples/notes.jsx`と独立した
+    `packages/compiler/test/authoring-coverage.test.ts`で、form、tabs、local state、
+    条件分岐、nested List、同一ファイルcomponentを実DOMで確認した。
 
 ## 参考資料
 
 - `STATUS.md` — 現在地・マイルストーン進捗・既知の制約
 - `CONCEPT.v3.md` — 現在のプロダクトコンセプト
 - `CONCEPT.v2.md` — 旧コンセプト(履歴)
-- `docs/adr/0001`〜`0022` — 決定済みの設計判断
+- `docs/adr/0001`〜`0023` — 決定済みの設計判断
 - `session/000_ts-rewrite-kickoff-and-m1.md` — 書き直しキックオフの全経緯、
   quixとの比較
 - `openspec/specs/` — 実装対象の受入条件の正本
 - `packages/bench/listener-strategy.playwright.md` — ADR-0021の実Chromium計測結果
-- `packages/bench/todomvc-vs-react.results.md` — 性能ベンチ結果(ADR-0005見立ての検証)
+- `packages/bench/todomvc-compiler.results.md` — 性能ベンチ結果(ADR-0005見立ての検証)
 - `apps/examples/counter.jsx` — Vite+ buildの手動確認用サンプル
 - `apps/examples/todomvc.jsx` / `apps/examples/todomvc.handwritten.js` — ADR-0008/M5
   の目標入力・目標出力フィクスチャ
