@@ -63,4 +63,6 @@ throw new Error('compile: <何が> is not supported yet (scope limit)')
 
 - ステータスの変化(マイルストーン完了・制約発見)→ `STATUS.md` を即時更新。
 - 設計判断(採用も却下も)→ `docs/adr/` に残す。
+- 受入条件・仕様の変更→ `openspec/specs/` と対応する
+  `openspec/changes/` を揃える。完了したchangeはarchiveへ移す。
 - 相対日付を書かない(「先週」ではなく `2026-07-05`)。

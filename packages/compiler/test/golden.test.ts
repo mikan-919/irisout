@@ -6,7 +6,7 @@ import path from 'node:path'
 import { compile } from '../src/compiler.js'
 
 // 生成コードの「形」と「サイズ」の退行を検出する観測専用スイート
-// (openspec: golden-output-snapshot-tests)。プロダクトコード(src/**)は
+// (openspec: generated-output-regression-tests)。プロダクトコード(packages/**)は
 // 一切変更しない ― 出力の形が気に入らなくてもそのまま記録する。
 //
 // ■ スナップショット更新の運用規則
@@ -132,7 +132,7 @@ describe('golden: 手書き基準に対するサイズ予算', () => {
     // 3x を超えたため 4x へ引き上げ(loud-hydration-mismatch の spec delta 参照。
     // 生成コード側の肥大化ではない)。
     // 2026-09-04: ADR-0018のcomponent instance factoryという意図した固定費で
-    // 4.38xになったため、直近の余白だけを持つ4.5xへ更新した。
+    // 4.38xになったため、予算を更新した。
     // 2026-09-05: ADR-0022のexplicit unmount/lifecycle固定費を含む実測で
     // 5.33xとなったため、直近の余白だけを持つ5.5xへ更新した。
     console.log(

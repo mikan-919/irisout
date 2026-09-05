@@ -17,7 +17,7 @@ inline arrow ハンドラから動きゾーンの補助関数を呼ぶと
 
 前提となる現状の構造:
 
-- `resolveHandlerBody`(`src/compiler/render.ts`)が inline arrow と
+- `resolveHandlerBody`(`packages/compiler/src/compiler/render.ts`)が inline arrow と
   識別子参照を同じ `HandlerBody` 形に正規化しており、解析経路はすでに
   1本。差は「呼び出しを追わない」ことだけ。
 - 動きゾーンの function 宣言は出力に関数として存在しない。識別子参照

@@ -4,14 +4,14 @@
 
 決定済み・**実装済み**(change `authoring-api-zones`)。render()マーカー・
 識別子参照ハンドラの巻き上げfunction宣言への解決・ゾーン配置強制を実装。
-ハンドラ本体は単一式に限り、複数文本体・イベント引数は ADR-0009 に分離。
+ハンドラ本体の文列・イベント引数は ADR-0009 で拡張済み。
 
 ## コンテキスト
 
 2026-07-05のgrillingで、authoring APIに対する2つの不満が出た:
 
-1. **リアクティブな記述(イベントハンドラ等)をまとめたい**。現行のinline
-   arrow限定(`src/compiler/render.ts`のscope limit)ではJSXのあちこちに
+1. **リアクティブな記述(イベントハンドラ等)をまとめたい**。当時のinline
+   arrow限定(`packages/compiler/src/compiler/render.ts`のscope limit)ではJSXのあちこちに
    動きが散らばる。
 2. **暗黙書き込みが気持ち悪い**。Reactの`ref`のように「宣言した箱に
    フレームワークが裏から値を入れる」構造を authored code に持ち込みたくない
@@ -77,8 +77,8 @@ function Component() {
   function宣言に限る。
 - `render()`は値を返さない「ここがUI宣言」というマーカー。`signal()`と同じ
   ビルド時に消える宣言イディオム(ADR-0006)。
-- **コンポーネントはJSXをreturnしない**。現行`compileComponent`の
-  「単一の`return <JSXElement>`」前提(`src/compiler/render.ts:305-328`)を
+- **コンポーネントはJSXをreturnしない**。当時の`compileComponent`の
+  「単一の`return <JSXElement>`」前提(`packages/compiler/src/compiler/render.ts`)を
   覆す変更。
 - 配置規則(変数ゾーンはrenderより前、function宣言・hooksはrenderより後)は
   コンパイラのscope limitとして強制する。違反は静かに通さずcompile error
@@ -97,14 +97,15 @@ function Component() {
   追加はこの原則の適用。
 - ADR-0006: `render()`は`signal()`/`derived()`と同列の「ビルド時に消える
   宣言マーカー」。
-- ADR-0002/現行scope limit: 「handlerはinline arrowのみ」という制限は
-  この決定で緩和される(inline arrowは引き続き許容、識別子参照+巻き上げ
-  function宣言が追加)。
+- ADR-0002/当時のscope limit: 「handlerはinline arrowのみ」という制限は
+  この決定とADR-0009で緩和された(inline arrowは引き続き許容、識別子参照+
+  巻き上げfunction宣言と限定された文列が追加)。
 
 ## 未決定事項(後続で詰める)
 
 - **ref**(`ref={...}`)の設計、特に条件分岐(`&&`)配下で要素が存在しない
-  ときのハンドルの挙動。条件分岐レンダリング自体がM5未実装のため、
-  **M5の設計が形になってから**別途判断する。
+  ときのハンドルの挙動。条件分岐レンダリング自体は実装済みだが、
+  unit内actionと同様に動的な要素レジストリはscope limitであり、
+  **実需が出てから**別途判断する。
 
 (実装順序は M4 → 本ADR → M5 で決定済み、ROADMAP参照)

@@ -9,7 +9,7 @@ runtimeを変更しない。
 ## コンテキスト
 
 ADR-0005は、keyed reuseしたList itemへ直接`addEventListener`を貼る方式を採用した。
-当時の`bench/listener-strategy.ts`はjsdom上の比較で、attach以外は直接方式と委譲方式が
+当時の`packages/bench/listener-strategy.ts`はjsdom上の比較で、attach以外は直接方式と委譲方式が
 ほぼ互角に見えた。TodoMVCの実Chromium再計測でjsdomと速度結論が逆転したため、
 イベント配線も実ブラウザで比較する必要があった。特に、委譲方式は`event.target`から
 item identityとhandler semanticsを引く帳簿コストを持つので、親リスナー1個だけの

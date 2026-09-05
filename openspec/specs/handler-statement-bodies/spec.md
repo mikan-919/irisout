@@ -29,7 +29,7 @@ function 宣言の本体)を単一の式文だけでなく、限定された4文
 #### Scenario: 4文種すべてを含む本体がコンパイルできる
 - **WHEN** ハンドラ本体が「裸の `return` を持つ `IfStatement`(ガード)→
   `const` ローカル宣言 → `IfStatement` → 追跡 signal への書き込み式文」の
-  順で4文種すべてを含む(`examples/todomvc.jsx` の `handleInputKeyDown` 相当)
+  順で4文種すべてを含む(`apps/examples/todomvc.jsx` の `handleInputKeyDown` 相当)
 - **THEN** コンパイラは compile error を出さずに完了する
 
 #### Scenario: inline arrow のブロック本体も同じ解析を通る

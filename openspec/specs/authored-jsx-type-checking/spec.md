@@ -2,29 +2,29 @@
 
 ## Purpose
 
-authored `.jsx`(`examples/counter.jsx`・`examples/todomvc.jsx`)向けの
+authored `.jsx`(`apps/examples/counter.jsx`・`apps/examples/todomvc.jsx`)向けの
 静的型検査基盤(ROADMAP次のアクション10、change
 `jsx-type-checking-foundation`)を規定する。`types/jsx.d.ts`のグローバル
 `JSX`namespace・`signal`/`derived`/`render`のグローバル関数シグネチャと、
-examples専用の`examples/tsconfig.json`(ルートの`tsconfig.json`とは独立)
+examples専用の`apps/examples/tsconfig.json`(ルートの`tsconfig.json`とは独立)
 で構成される。型はあくまで静的検査用であり、コンパイラ
-(`src/compiler/*`)の実行時受理/拒否ロジック(scope limit)には一切
+(`packages/compiler/src/compiler/*`)の実行時受理/拒否ロジック(scope limit)には一切
 影響しない。属性名レベルの厳密なホワイトリスト化・コンポーネントprops
 の厳密な型推論は対象外(必要最小限の`any`/`unknown`ベースに留める)。
 
 ## Requirements
 
 ### Requirement: authored .jsx が tsc の型検査対象に含まれる
-`examples/tsconfig.json`(examples専用の独立したTSプロジェクト。
-ルートの`tsconfig.json`は変更しない)は`examples/**/*.jsx`を型検査対象
+`apps/examples/tsconfig.json`(examples専用の独立したTSプロジェクト。
+ルートの`tsconfig.json`は変更しない)は`apps/examples/**/*.jsx`を型検査対象
 として含む SHALL。`allowJs`・`checkJs`・`jsx: "preserve"`が有効で
-なければならない(MUST)。`bun run typecheck`は、ルートプロジェクトに
-加えて`examples/tsconfig.json`に対しても`tsc --noEmit`を実行し、
+なければならない(MUST)。`bun run typecheck:tsc`は、ルートプロジェクトに
+加えて`apps/examples/tsconfig.json`に対しても`tsc --noEmit`を実行し、
 型エラーがあれば非ゼロ終了しなければならない(MUST)。
 
 #### Scenario: 既存の authored .jsx が型エラーなく通る
-- **WHEN** `bun run typecheck`を実行する
-- **THEN** `examples/counter.jsx`・`examples/todomvc.jsx`のいずれについても
+- **WHEN** `bun run typecheck:tsc`を実行する
+- **THEN** `apps/examples/counter.jsx`・`apps/examples/todomvc.jsx`のいずれについても
   型エラーが報告されない
 
 #### Scenario: 存在しないグローバル関数を呼ぶと型エラーになる
@@ -78,9 +78,9 @@ action接続)・`onXxx`パターンのイベントハンドラ属性・`children
 
 #### Scenario: use 属性が型付けされる
 - **WHEN** `<input use={(el) => { /* ... */ }}>`のように要素を受け取る
-  関数、または要素を受け取り関数を返す関数(再描画クロージャ)を`use`へ
-  渡す
-- **THEN** どちらの形も型エラーにならない
+  関数、要素を受け取り引数なしの再描画関数を返す関数、または
+  `{ update?, destroy? }`を返す関数を`use`へ渡す
+- **THEN** いずれの形も型エラーにならない
 
 ### Requirement: 型検査は実行時 scope limit の代替ではない
 `types/jsx.d.ts`が特定の構文(例: リストアイテム内の`use=`)を型上

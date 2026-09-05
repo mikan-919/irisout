@@ -1,22 +1,21 @@
 // このファイルは現行コンパイラではコンパイルできない仕様フィクスチャであり、
 // ADR-0008(ゾーン構造のauthoring API)以降の実装マイルストーンの目標入力
-// である。手書きの目標出力は examples/todomvc.handwritten.js を参照。
+// である。手書きの目標出力は apps/examples/todomvc.handwritten.js を参照。
 //
-// 実装済み: 1階層のリスト・条件分岐(M5)、ネストした構造ユニット =
-// UNRESOLVED-06/07(M5.5、change `m5-5-nested-structural-units`)、
-// `use=`属性 = UNRESOLVED-01(ADR-0011、change `use-action-impl`)、
-// 同一ファイル内の複数コンポーネント合成・ローカルsignal = UNRESOLVED-04
-// (ADR-0014、change `same-file-component-composition`)。
+// 実装済み: 1階層のリスト・条件分岐(M5)、1階層のネストした構造ユニット
+// (M5.5、change `m5-5-nested-structural-units`)、top-levelの`use=`属性
+// (ADR-0011、change `use-action-impl`)、同一ファイル内の複数コンポーネント
+// 合成・ローカルsignal(ADR-0014、change `same-file-component-composition`)。
 //
-// このフィクスチャ全体のコンパイルを今も妨げているのは同一ファイル内合成と
-// 無関係な既存のscope limit: `{visibleTodos().length > 0 && (<ul>...)}`が
+// このフィクスチャ全体のコンパイルを今も妨げているのは既存のscope limit:
+// `{visibleTodos().length > 0 && (<ul>...)}`が
 // `<div class='todoapp'>`のsole childでないこと(M5のsole-child制約)、
 // および外側の条件分岐 > リスト > (ネストしていた)条件分岐という3階層の
-// 入れ子がM5.5の「1階層まで」を超えること。編集モードのUIも、span/input
-// のDOM入れ替え(UNRESOLVED-07、未解決のまま)ではなく、実物のTodoMVCと
+// 入れ子がM5.5の「1階層まで」を超えること。編集モードのUIは、span/input
+// のDOM入れ替えではなく、実物のTodoMVCと
 // 同じCSSクラストグル方式(`<li class={editing() ? 'editing' : ...}>`)に
 // している ― これは`TodoItem`のローカルsignal`editing`への同一ユニット
-// 直下の依存(動的class属性バインディング)として書け、07の入れ子構造
+// 直下の依存(動的class属性バインディング)として書け、追加の入れ子構造
 // ユニットを必要としない。
 
 export function TodoApp() {
@@ -121,7 +120,7 @@ export function TodoApp() {
 }
 
 // same-file-component-composition(ADR-0014)で切り出したリストアイテムの
-// コンポーネント。UNRESOLVED-04(アイテムごとのローカル編集状態)は、
+// コンポーネント。当時のUNRESOLVED-04(アイテムごとのローカル編集状態)は、
 // コンポーネント全体で1つのsignalを使い回す`editingId`ハックではなく、
 // このコンポーネント自身の変数ゾーンに`editing`ローカルsignalを持たせる
 // ことで解消する ― `TodoApp`の`.map()`アイテム位置へインライン化されると

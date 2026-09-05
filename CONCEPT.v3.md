@@ -71,8 +71,11 @@ irisout は React の代替ではありません。
 
 ## ランタイムの境界
 
-irisout はランタイムの存在を禁止しません。Listや条件分岐、ライフサイクルなど、
-実行時にしか決まらない構造を正しく効率的に扱うための小さなコードを許容します。
+irisout はランタイムの存在を禁止しません。Listや条件分岐、component instanceの
+lifecycleなど、実行時にしか決まらない構造を正しく効率的に扱うための小さなコードを
+許容します。汎用lifecycle runtimeを暗黙に常駐させるのではなく、生成された
+component instanceが明示的な`unmount()`を持ち、top-level `use=` actionが
+`destroy`を明示した場合だけそのcleanupを保持します。
 
 一方、次のようなアプリケーション全体を支配する汎用実行基盤は前提にしません。
 
@@ -114,8 +117,9 @@ irisout は compiler-first なシステムです。
 
 - ListのkeyとDOMノードの対応、再利用、移動、削除
 - 条件分岐など動的構造の生存期間
+- component instanceのmount/hydrate/unmountと、top-level `use=` actionの明示的なdestroy
 - 実測で有利かつnative eventの意味同等性を確認した更新のバッチやイベント委譲
-- 将来必要になった場合のcleanupなど、実行時にしか完結できない処理
+- その他、コンパイル時には完結できない処理(ただし汎用lifecycle/effect runtimeは含めない)
 
 責務は固定ではありません。同じ仕事を専用コードとして生成する場合と共有
 ヘルパーへ任せる場合を比較し、より小さく速く単純な方を選びます。

@@ -1,7 +1,9 @@
 # dynamic-attribute-bindings Specification
 
 ## Purpose
-TBD - created by archiving change dynamic-attribute-bindings. Update Purpose after archive.
+JSXの式コンテナ属性を、初期HTMLへの安全な焼き込みと、signal/derivedの
+依存更新に対するpropertyまたはattribute反映へ変換する。静的属性・
+List/conditional factory・no-wrapper出力との境界をADR-0012に従って固定する。
 ## Requirements
 ### Requirement: 式コンテナ属性値の受理と初期焼き込み
 コンパイラは、host 要素の JSX 属性値が `JSXExpressionContainer` である場合
@@ -65,4 +67,3 @@ presence)、`value` は文字列プロパティ代入、それ以外は
 - **WHEN** 動的属性を含むソースを `compile()` する
 - **THEN** 生成 `code` に `signal(`/`derived(` は現れず、属性更新は
   `update_<name>()` 内の代入または `setAttribute` である
-

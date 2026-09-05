@@ -1,8 +1,8 @@
 // ADR-0005(factory-per-unitクロージャ)に従って人間が書いた、
-// examples/todomvc.jsx の「あるべき」コンパイル後の姿(手書き試作)。
+// apps/examples/todomvc.jsx の「あるべき」コンパイル後の姿(手書き試作)。
 // M5 codegenの目標出力であり、このファイル自体はコンパイラの出力ではない。
-// ランタイム(src/runtime.tsのmount/hydrate)は使わず、素のDOM APIのみで
-// 書く(生成コードの現在の形はsrc/codegen.ts:67-79参照)。
+// ランタイム(packages/runtime/src/index.tsのmount/hydrate)は使わず、素のDOM APIのみで
+// 書く(生成コードの現在の形はpackages/compiler/src/codegen.ts参照)。
 //
 // mountComponent()は本来アプリ起動時に1度だけ呼ばれる前提(ADR-0005)だが、
 // テスト(test/todomvc-handwritten.test.ts)から複数回呼ばれるため、
@@ -21,7 +21,7 @@ let itemTemplate
 // 外れているだけのアイテムもここには残り続ける(下のupdate_todos内の注記参照)。
 let itemHandles
 
-// initialTodosは省略可(省略時は既存の固定2件)。bench/todomvc-vs-react.ts
+// initialTodosは省略可(省略時は既存の固定2件)。packages/bench/todomvc-vs-react.ts
 // がN件の初期マウントを計測するために追加した唯一の変更点で、keyed reuse
 // の仕組み自体(update_todos/createTodoItem)には手を入れていない。
 const defaultTodos = [
@@ -104,7 +104,7 @@ function update_todos() {
   // ここでは「todos配列からの削除」でのみhandleを破棄し、フィルタでの
   // 非表示はDOMからの着脱のみで対応する(状態保持を優先する回避策)。
   //
-  // 除去判定は src/codegen.ts の generateListUpdate() と同じ __seen__ Set
+  // 除去判定は packages/compiler/src/codegen.ts の generateListUpdate() と同じ __seen__ Set
   // パターンを使う(以前は`todos.some()`でO(N)走査 x Mapエントリ数でO(N^2)
   // になっていたが、実際のcodegen出力とずれていたfixtureのバグだった)。
   const seen = new Set()

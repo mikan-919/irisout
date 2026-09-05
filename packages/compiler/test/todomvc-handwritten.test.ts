@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vite-plus/test'
-// examples/ は tsconfig.json の include 対象外(スコープ外)で型定義もない
+// apps/examples/ は tsconfig.json の include 対象外(スコープ外)で型定義もない
 // プレーンJSなので、このimport自体がTS7016を出す。tsconfigは変更できない
 // ため、ここだけ抑制する。
-// @ts-expect-error: examples/ 配下は型チェック対象外(tsconfig.jsonはスコープ外)
+// @ts-expect-error: apps/examples/ 配下は型チェック対象外(tsconfig.jsonはスコープ外)
 import { mountComponent } from '../../../apps/examples/todomvc.handwritten.js'
 import { createContainer } from './helpers.js'
 
-// examples/todomvc.handwritten.js(ADR-0005の手書き目標出力)が実際に
-// jsdom上で動くことを固定するスモークテスト。plan 002 ステップ3。
+// apps/examples/todomvc.handwritten.js(ADR-0005の手書き目標出力)が実際に
+// jsdom上で動くことを固定するスモークテスト。
 
 function windowOf(container: Element) {
   return (container.ownerDocument as unknown as { defaultView: typeof window }).defaultView
@@ -31,7 +31,7 @@ function itemByText(container: Element, text: string): Element {
   return li
 }
 
-describe('examples/todomvc.handwritten.js smoke test', () => {
+describe('apps/examples/todomvc.handwritten.js smoke test', () => {
   it('renders the initial todos as <li> on mount', () => {
     const container = createContainer()
     mountComponent(container)

@@ -2,11 +2,12 @@
 
 TypeScript書き直し(`session/000_ts-rewrite-kickoff-and-m1.md`参照)で
 次に決めるべきこと・次のアクションをまとめたもの。個別の実装手順は
-`plans/`(実行可能なplanのみ)に、設計判断そのものは`docs/adr/`に置く。この
+`openspec/changes/`に、受入条件の正本は`openspec/specs/`に、設計判断そのものは
+`docs/adr/`に置く。この
 ファイルは「次に何を、どういう順番でやるか」の地図。現在地・マイルストーン
 進捗・既知の制約などの実装ステータスは`STATUS.md`を参照。
 
-## 設計判断待ち(次のplanを書く前に決めること)
+## 設計判断待ち(次のchangeを書く前に決めること)
 
 ### v3: 最小ランタイムとList更新粒度(2026-09-04 方針変更)
 
@@ -57,13 +58,13 @@ ADR-0007、ADR-0005の追記、ADR-0008+下記「次のアクション」を参�
 素通し、ローカル解決だが動きゾーン関数でないものは scope limit(詳細は
 STATUS.md 既知の制約)。
 
-`scripts/build.ts`はminify未対応(ADR-0003で明示的に先送り)。counter
-フィクスチャで手動計測: 995B→389B(約61%削減、`bun build --minify`)。
-本番ビルドの話が優先度に上がったら着手、今は不要。
+現行のexample buildは`apps/examples/vite.config.ts`へ統合され、production buildで
+minifyを有効にしている。counterのsize budgetは`packages/compiler/test/golden.test.ts`
+が同じVite+ build経路を測定し、component lifecycle固定費を含む5.5xを上限にする。
 
-### 2. TodoMVC フィクスチャで発見した未規定API(plan 002, 2026-07-05)
+### 2. TodoMVC フィクスチャで発見した未規定API(初期fixture, 2026-07-05)
 
-`examples/todomvc.jsx` / `examples/todomvc.handwritten.js` の
+`apps/examples/todomvc.jsx` / `apps/examples/todomvc.handwritten.js` の
 `UNRESOLVED(nn)` コメントに対応。各項目は「何が未規定か / フィクスチャで
 仮定した暫定構文 / どの ADR・マイルストーンで決めるべきか」の3点で書く。
 
@@ -72,7 +73,8 @@ STATUS.md 既知の制約)。
   change `use-action-impl`)**: Svelte Action風の `use={fn}` を採用・
   実装し、ref primitiveは作らない(要素アクセスは use / `e`+プラット
   フォーム走査 / 返り値クロージャの3チャネル)。top-level要素のみで、
-  ユニット内`use=`とJSX型定義は別change待ち(STATUS.md参照)。
+  ユニット内`use=`は引き続きscope limit。JSX型定義はchange
+  `jsx-type-checking-foundation`で解消済み(STATUS.md参照)。
 - (02) 完了トグルに応じた動的 class 付与(`class={cond ? 'a' : ''}`)の
   生成先 / authored 側はJSXの三項式をそのまま書いた / **解消済み
   (ADR-0012、change `dynamic-attribute-bindings`)**: setAttribute 反映の
@@ -88,10 +90,10 @@ STATUS.md 既知の制約)。
   2026-07-21)**: `TodoItem` コンポーネントの変数ゾーンに
   `const editing = signal(false)` を持たせ、構造ユニットへインライン化
   された「ローカルsignal」(`CONTEXT.md`)としてアイテムごとに独立させた。
-  `editingId` ハックは`examples/todomvc.jsx`から除去済み。編集モードの
+  `editingId` ハックは`apps/examples/todomvc.jsx`から除去済み。編集モードの
   表示切り替えは、span/input のDOM入れ替え(07、引き続き未解決)ではなく
   同一ユニット直下の動的class属性バインディングに変更した(詳細は
-  `examples/todomvc.jsx`のコメント参照)。
+  `apps/examples/todomvc.jsx`のコメント参照)。
 - (05) フィルタで一時的にリストから外れるだけのアイテムを「削除」と
   区別する設計 / handwritten側は「todos配列からの削除」でのみkeyed Map
   から破棄し、フィルタでの非表示はDOM着脱のみで対応(状態保持を優先) /
@@ -103,12 +105,12 @@ STATUS.md 既知の制約)。
 - (06) 空リスト時に `<ul>` 自体を出さない条件分岐(リストが条件分岐に
   ネストする形) / handwritten側は要素の着脱ではなく `hidden` プロパティ
   で妥協 / **M5では明示的にスコープ外と確定**(design.md Decision 1、
-  compile error `(scope limit)`)。M5.5で扱いを決める。
+  compile error `(scope limit)`)した後、M5.5で1階層ネストを実装済み。
 - (07) 編集モードでの `span`↔`input` 入れ替え(アイテム内にさらに
   ネストした構造ユニットが要る) / handwritten側はtemplateの再クローンで
   はなく都度DOM生成+display切り替えで妥協 / **M5では明示的にスコープ外と
-  確定**(design.md Decision 1、compile error `(scope limit)`)。M5.5の
-  スコープ拡張時に決めるべき。
+  確定**(design.md Decision 1、compile error `(scope limit)`)した後、M5.5で
+  1階層ネストを実装済み。2階層以上は引き続きscope limit。
 - (08) 編集中テキストの下書きの保持先 / handwritten側は専用stateを
   持たず、編集開始時に一度だけ書き込んだinput要素自身のvalueを
   source of truthとした / ADR-0005/0008とも未言及、07と同じくM5.5で
@@ -137,13 +139,14 @@ M5 単体ではなく **M5+`use=`** と置き直す(2026-07-14 相談)。
 ADR-0001の未決定事項(「複数コンポーネント境界のインライン化」「ビルド時
 実行のサンドボックス／副作用の扱い」)がM6完了後もそのまま残っている。
 CONCEPT.v3.mdはコンポーネント境界を可能な限りビルド後に消すことを
-設計原則にしているが、現状の実装は以下の理由でこれに到達していない:
+設計原則にしているが、現状の実装は同一ファイル内の合成までに限られ、
+複数ファイル側では以下が残る:
 
 - `<Component/>`のようなJSXタグ参照そのものが
   `compile: component references (<${tagName}/>) are not supported yet
-(scope limit)`で拒否されていた(`src/compiler/render.ts`)問題は、
+(scope limit)`で拒否されていた(`packages/compiler/src/compiler/render.ts`)問題は、
   **同一ファイル内に限り解消・実装済み**(下記参照)。
-- `compile(source: string)`(`src/compiler.ts:137`)は単一文字列を1回だけ
+- `compile(source: string)`(`packages/compiler/src/compiler.ts`)は単一文字列を1回だけ
   受け取るシグネチャで、モジュール解決の余地がない。加えて Program 直下は
   関数宣言のみ許可(change `scope-limit-coverage`、STATUS.md既知の制約)の
   ため、`import`文自体が現状scope limitで拒否される ― 複数ファイルは
@@ -153,7 +156,7 @@ CONCEPT.v3.mdはコンポーネント境界を可能な限りビルド後に消�
 `same-file-component-composition`、2026-07-21)**: `TodoApp`→`TodoItem`
 (構造ユニットの中身の切り出し)を具体的な検証対象に、呼び出し箇所ごとの
 コンパイル時ASTインライン化(render-tree走査より前の独立前処理パス
-`src/compiler/inline-components.ts`)・propsはshorthand分割代入のみの
+`packages/compiler/src/compiler/inline-components.ts`)・propsはshorthand分割代入のみの
 純粋な置換(ランタイムprimitiveなし)・名前衝突は検出時のみ対応
 (signal/derived宣言名・動きゾーン関数名とも、衝突した側をコンポーネント名
 で接頭辞化してリネーム)を実装した。
@@ -174,8 +177,8 @@ STATUS.md参照。
 
 複数ファイル対応(上記1・2)は、実需(具体的にどんなアプリを組みたいか)
 が出ない限り今それだけで進める理由は薄い。ADR-0014(同一ファイル内合成)
-の実装が完了したので、次に触るとすれば下記「次のアクション」9番
-(型検査基盤)になる。
+の実装が完了した。次に触る候補は、上記v3節の複数event fixtureと、複数ファイル化の
+具体的な実需である。
 
 ### 5. 基本機能セット(Svelte/Solid水準)のギャップ一覧(2026-07-21 提起、未着手)
 
@@ -239,7 +242,7 @@ transition/animation、portal、error boundary、async/resource
    Decision 1/2)。
 6. ~~エスケープハッチ設計~~ — **完了**(change `escape-hatch-design`、
    ADR-0010)。共存の単位(JSX要素1つ)・`<Escape mount={...} />`の記法・
-   受理条件を決定。`src/`の変更は対象外(設計のみ)。
+   受理条件を決定。compiler/runtimeの変更は対象外(設計のみ)。
    6a. ~~エスケープハッチ実装~~ — **棚上げ**(2026-07-14)。実装change起票
    直後に「ルート要素に`use=`すれば足りるのでは」の指摘で再検討し、
    `use=`+グローバル委譲を公式な逃げ道として実装を見送った(ADR-0010
@@ -248,17 +251,17 @@ transition/animation、portal、error boundary、async/resource
    authoring API統治原則(穴のない宣言・プレースホルダーの向き・位置的
    リアクティビティ)を明文化し、`use={fn}`属性を要素へのaction接続手段
    として採用、ref primitiveは作らないことを決定した(UNRESOLVED(01)
-   解消)。`src/`の変更は対象外。
+   解消)。compiler/runtimeの変更は対象外。
    6c. ~~`use=`属性実装~~ — **完了**(change `use-action-impl`)。
-   `src/compiler/render.ts`の`use`属性解析・識別子解決、
-   `src/compiler/analyze.ts`のネストした関数への再帰書き換え・返り値
-   クロージャの依存解析、`src/codegen.ts`のmount時呼び出し・
-   update_*配線を実装。JSX型定義への`use`属性追加は下記9へ切り出した。
-7. ~~性能ベンチ: `examples/todomvc.handwritten.js` vs React 版TodoMVC~~ —
+   `packages/compiler/src/compiler/render.ts`の`use`属性解析・識別子解決、
+   `packages/compiler/src/compiler/analyze.ts`のネストした関数への再帰書き換え・返り値
+   クロージャの依存解析、`packages/compiler/src/codegen.ts`のmount時呼び出し・
+   update_*配線を実装。JSX型定義への`use`属性追加は下記10で解消済み。
+7. ~~性能ベンチ: `apps/examples/todomvc.handwritten.js` vs React 版TodoMVC~~ —
    **完了**(change `perf-bench-todomvc-vs-react`、詳細は
-   `bench/todomvc-vs-react.results.md`)。当初のjsdom計測ではhandwritten版
+   `packages/bench/todomvc-vs-react.results.md`)。当初のjsdom計測ではhandwritten版
    が一貫して1.3〜2.5倍遅く「ADR-0005の見立てが反証された」ように見えたが、
-   実Chromiumでの再計測(`bench/todomvc-vs-react.playwright.ts`)で
+   実Chromiumでの再計測(`packages/bench/todomvc-vs-react.playwright.ts`)で
    **全シナリオ・全Nでhandwritten版がReact版より1.1〜4倍速い**と判明し
    結論は逆転した。jsdomはDOM APIを全部JSで実装しており「DOMを触るほど損」
    という実ブラウザと逆のコストモデルを持つため、直接DOM操作の多い
@@ -279,13 +282,13 @@ transition/animation、portal、error boundary、async/resource
    **完了**(change `same-file-component-composition`)。コンパイル時
    ASTインライン化(root scope + list itemのみ)・shorthand propsの
    コンパイル時識別子置換・ローカルsignal(構造ユニット専有の変数ゾーン)
-   を実装し、`examples/todomvc.jsx`の`TodoApp`から`TodoItem`を切り出した。
+   を実装し、`apps/examples/todomvc.jsx`の`TodoApp`から`TodoItem`を切り出した。
    children/slot・自己/相互再帰参照・複数ファイルは引き続きscope limit
    (詳細はSTATUS.md既知の制約参照)。
 10. ~~authored `.jsx` の型検査基盤~~ — **完了**(change
     `jsx-type-checking-foundation`)。`types/jsx.d.ts`(グローバル`JSX`
     namespace・`signal`/`derived`/`render`のシグネチャ)+
-    `examples/tsconfig.json`(examples専用、ルートtsconfigとは分離)を実装。
+    `apps/examples/tsconfig.json`(examples専用、ルートtsconfigとは分離)を実装。
     先送りされていた`use=`のJSX型定義(ADR-0011 design.md Decision 6)も
     あわせて解消した。属性名レベルの厳密化・コンポーネントprops型の
     厳密な推論は引き続き未対応(詳細はSTATUS.md既知の制約参照)。
@@ -311,12 +314,12 @@ transition/animation、portal、error boundary、async/resource
 - `STATUS.md` — 現在地・マイルストーン進捗・既知の制約
 - `CONCEPT.v3.md` — 現在のプロダクトコンセプト
 - `CONCEPT.v2.md` — 旧コンセプト(履歴)
-- `docs/adr/0001`〜`0008` — 決定済みの設計判断
+- `docs/adr/0001`〜`0022` — 決定済みの設計判断
 - `session/000_ts-rewrite-kickoff-and-m1.md` — 書き直しキックオフの全経緯、
   quixとの比較
-- `plans/001-browser-build-target.md` — 直近実行したplan(M3)
+- `openspec/specs/` — 実装対象の受入条件の正本
 - `packages/bench/listener-strategy.playwright.md` — ADR-0021の実Chromium計測結果
-- `bench/todomvc-vs-react.results.md` — 性能ベンチ結果(ADR-0005見立ての検証)
-- `examples/counter.jsx` — `scripts/build.ts`の手動確認用サンプル
-- `examples/todomvc.jsx` / `examples/todomvc.handwritten.js` — ADR-0008/M5
-  の目標入力・目標出力フィクスチャ(plan 002)
+- `packages/bench/todomvc-vs-react.results.md` — 性能ベンチ結果(ADR-0005見立ての検証)
+- `apps/examples/counter.jsx` — Vite+ buildの手動確認用サンプル
+- `apps/examples/todomvc.jsx` / `apps/examples/todomvc.handwritten.js` — ADR-0008/M5
+  の目標入力・目標出力フィクスチャ

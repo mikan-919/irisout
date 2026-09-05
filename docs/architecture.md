@@ -109,8 +109,9 @@ triage手続きで捌く — コンパイラの受理条件自体を場当たり
 2. 判断が固まったら `docs/adr/NNNN-<slug>.md` を書く。ステータス
    (決定済み/却下)・コンテキスト・決定・検討した代替案を残す。
    却下した案も ADR にする(例: ADR-0007)。
-3. 実装単位に切れたら `plans/` に実行可能な計画を書き、`plans/README.md` の
-   索引(実行順・依存・ステータス表)に行を足す。完了したら索引を DONE に更新。
+3. 実装単位に切れたら `openspec/changes/<name>/` にproposal/design/tasksを
+   書き、受入条件を `openspec/specs/` の正本へ反映する。OpenSpecのCLIを使う
+   場合は `bunx @fission-ai/openspec` を使い、完了後はchangeをarchiveする。
 4. マイルストーン完了・計画外の制約発見時は `STATUS.md` を更新する。
 
 ## legacy/ について

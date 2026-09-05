@@ -1,8 +1,8 @@
 {
   // authored .jsx 専用の型検査基盤(ROADMAP次のアクション10、
-  // openspec/changes/jsx-type-checking-foundation/design.md参照)。
+  // openspec/specs/authored-jsx-type-checking/spec.md参照)。
   // ルートの tsconfig.json とは独立させている ― allowJs/checkJs を
-  // ルートへ足すと examples/*.handwritten.js
+  // ルートへ足すと apps/examples/*.handwritten.js
   // (test/todomvc-handwritten.test.ts からimportされる比較用の手書きJS、
   // 型検査の対象外)まで検査対象になり、既存の @ts-expect-error が
   // 無効化されて壊れる。strict は意図的に off ― authored .jsx は

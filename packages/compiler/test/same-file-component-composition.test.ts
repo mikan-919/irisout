@@ -263,12 +263,12 @@ function TodoItem({ todo, onToggle }) {
     ])
   })
 
-  it('examples/todomvc.jsxのTodoItem相当: propが直接ハンドラ参照のまま素通しされ、コミット+編集終了+削除が動く', async () => {
-    // examples/todomvc.jsx のTodoItemと同じ構造(propをこのコンポーネント
+  it('apps/examples/todomvc.jsxのTodoItem相当: propが直接ハンドラ参照のまま素通しされ、コミット+編集終了+削除が動く', async () => {
+    // apps/examples/todomvc.jsx のTodoItemと同じ構造(propをこのコンポーネント
     // 自身の文で包まず、ハンドラ属性値としてそのまま素通しする形)。
     // `(e) => { onCommitEdit(...); ...; }`のように追加の文で包むと
     // 置換後の呼び出しがソース位置ベースの書き換え検出に乗らない
-    // (実装前調査で確認した既知の制約、examples/todomvc.jsx参照)。
+    // (実装前調査で確認した既知の制約、apps/examples/todomvc.jsx参照)。
     const source = `
 export function TodoApp() {
   const todos = signal([{ id: 1, text: 'a', completed: false }]);

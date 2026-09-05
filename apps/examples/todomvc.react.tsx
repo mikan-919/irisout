@@ -1,6 +1,6 @@
-// examples/todomvc.handwritten.js と同一機能(追加・完了トグル・削除・
+// apps/examples/todomvc.handwritten.js と同一機能(追加・完了トグル・削除・
 // フィルタ切り替え・編集)を持つ、素朴な標準React実装。
-// bench/todomvc-vs-react.ts から比較対象としてマウントされる。
+// packages/bench/todomvc-vs-react.ts から比較対象としてマウントされる。
 // key付きリスト・useStateのみを使い、意図的な最適化・劣化は行わない。
 
 import { useState } from 'react'

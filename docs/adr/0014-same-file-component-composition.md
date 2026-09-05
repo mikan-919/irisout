@@ -7,21 +7,21 @@
 
 ## コンテキスト
 
-現状、`<Component/>`のようなJSXタグ参照は同一ファイル内であっても
+実装前は、`<Component/>`のようなJSXタグ参照は同一ファイル内であっても
 `compile: component references (<${tagName}/>) are not supported yet
-(scope limit)`で拒否される(`src/compiler/render.ts:446`)。CONCEPT.v2.md
-は「コンポーネント」「props」を irisout の責務として明言しているが、
-現状の実装は到達していない。
+(scope limit)`で拒否されていた(`packages/compiler/src/compiler/render.ts`)。
+CONCEPT.v3.mdは「コンポーネント」「props」をirisoutの責務として明言しており、
+このADRで同一ファイル内の範囲を実装した。
 
 ROADMAP §4は「複数コンポーネント合成・複数ファイル・ビルド時実行の切り分
 け」を一括りの論点として提起していたが、grillingの結果、**同一ファイル内
 の合成は複数ファイル対応と切り離して先に決められる**ことが分かった
 (`findRootComponent()`は既に「他から一度もJSXタグ参照されない関数」を
 rootとして正しく選び出しており、`TodoItem`のような子コンポーネントは
-自動的にroot候補から除外される ― `src/compiler.ts:94-116`。変更が要るのは
+自動的にroot候補から除外される ― `packages/compiler/src/compiler.ts`。変更が要るのは
 `compileComponent`が`<TodoItem/>`に到達した時点の拒否ロジックだけ)。
 
-具体的な検証対象は `examples/todomvc.jsx` の `TodoApp` → `TodoItem`
+具体的な検証対象は `apps/examples/todomvc.jsx` の `TodoApp` → `TodoItem`
 分割。これにより ROADMAP §2 UNRESOLVED-04(アイテムごとの編集状態を
 表す暫定策 ― コンポーネント全体で1つの`editingId` signalを使い回す
 「同時1件編集」依存のハック)も同時に解消する。
@@ -51,8 +51,8 @@ ASTを展開する形でコンパイルする。`TodoItem`はビルド時にも�
 `compileComponent`(既存のrender-tree走査、M1〜M6)より**前**に、
 コンポーネント参照を解決・展開する前処理を追加する。既存の走査自体は
 コンポーネントという概念を知らないままでよい。理由:
-- `key`属性は「`.map()`直下の一番外側のJSX要素」を前提にしている
-  (`render.ts:758`)。前処理パスなら展開後にちょうど元の要素(`<li>`)が
+- `key`属性は「`.map()`直下の一番外側のJSX要素」を前提にしている。前処理パスなら
+  展開後にちょうど元の要素(`<li>`)が
   その位置に来るため、M5/M5.5側は無変更で済む。
 - ADR-0013(動きゾーン関数への呼び出し追跡)がそのまま使える ―
   `TodoItem`内の`onClick={() => onToggle(todo.id)}`は、propsの識別子
@@ -98,7 +98,7 @@ module scopeには一切出ない(`CONTEXT.md`「ローカルsignal」)。JSの
 対象にもならない。
 
 この仕組みにより、`TodoItem`に`const editing = signal(false)`を持たせ、
-UNRESOLVED-04の`editingId`ハック(コンポーネント全体で1つのsignalを
+当時のUNRESOLVED-04だった`editingId`ハック(コンポーネント全体で1つのsignalを
 使い回す「同時1件編集」依存の暫定策)を、アイテムごとに独立した本来の
 ローカル状態へ置き換えられる。
 

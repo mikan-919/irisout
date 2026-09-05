@@ -7,8 +7,8 @@ import { JSDOM } from 'jsdom'
 import { compile } from '../src/compiler.js'
 import { createContainer, loadGenerated } from './helpers.js'
 
-// plans/001-browser-build-target.md: ブラウザに届くのは静的 HTML と
-// hydrate 用の app.js だけであるべき、という CONCEPT.v2.md の主張を検証する。
+// openspec/specs/generated-output-regression-tests/spec.md: ブラウザに届くのは
+// 静的 HTML とhydrate用のapp.jsだけであるべき、というCONCEPT.v3.mdの主張を検証する。
 const COUNTER_SOURCE = `
 export function Counter() {
   const count = signal(0);

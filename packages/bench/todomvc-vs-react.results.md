@@ -1,6 +1,6 @@
 # todomvc-vs-react ベンチマーク結果
 
-change: `perf-bench-todomvc-vs-react`。実行: `bun run bench/todomvc-vs-react.ts`
+change: `perf-bench-todomvc-vs-react`。実行: `bun run bench`
 (要 `NODE_ENV=production` — react-dom を production ビルドで動かすため。
 未指定でも動くがReact側のdev checkのぶん遅くなる)。
 
@@ -12,11 +12,11 @@ change: `perf-bench-todomvc-vs-react`。実行: `bun run bench/todomvc-vs-react.
 
 ## 方法(jsdom)
 
-- `examples/todomvc.handwritten.js`(ADR-0005 keyed reuse の手書き目標出力、
-  M5 codegenの上限値)と `examples/todomvc.react.tsx`(標準的なkey付きReact
+- `apps/examples/todomvc.handwritten.js`(ADR-0005 keyed reuse の手書き目標出力、
+  M5 codegenの上限値)と `apps/examples/todomvc.react.tsx`(標準的なkey付きReact
   実装、`useState`のみ・非最適化)を、同一シナリオ・同一Nでjsdom上に
   マウントして比較した。
-- `bench/listener-strategy.ts`と同じ割り切り: jsdom上の相対比較であり、
+- `packages/bench/listener-strategy.ts`と同じ割り切り: jsdom上の相対比較であり、
   実ブラウザの絶対値ではない。
 - Reactは`root.render()`・各イベントdispatchのたびに`flushSync`で
   同期コミットさせている。これをしないとReactの自動バッチングにより
@@ -28,9 +28,9 @@ change: `perf-bench-todomvc-vs-react`。実行: `bun run bench/todomvc-vs-react.
 
 ### fixtureの修正
 
-`examples/todomvc.handwritten.js`の`update_todos()`にあった除去判定
+`apps/examples/todomvc.handwritten.js`の`update_todos()`にあった除去判定
 (`todos.some((t) => t.id === id)`)はO(N)走査をMapエントリ数ぶん繰り返す
-O(N^2)実装で、実際の`src/codegen.ts`の`generateListUpdate()`が使う
+O(N^2)実装で、実際の`packages/compiler/src/codegen.ts`の`generateListUpdate()`が使う
 `__seen__` Set方式(O(N))とずれていた古いバグだった。今回この
 コミットで`__seen__` Setに揃えて修正した(挙動は変わらず、除去判定の
 計算量のみO(N)に改善)。この修正がないとN=100,000での初期マウント
@@ -91,7 +91,7 @@ N=100→1,000(10倍)でhandwrittenは93.3倍、reactは69.9倍に増加してお
 
 ## メモリ(参考値)
 
-`--smol`なし・`global.gc`未公開のため`bench/listener-strategy.ts`と同様
+`--smol`なし・`global.gc`未公開のため`packages/bench/listener-strategy.ts`と同様
 ノイズが大きい目安値。N=100,000でhandwrittenのヒープ増分(約785MB)が
 reactの増分(約428MB)より大きい点は気になるが、GCタイミングに強く
 左右されるため断定はできない(`bun --expose-gc`での再計測が今後の課題)。
@@ -113,7 +113,7 @@ Mapの帳簿コスト自体よりも、`createTodoItem()`がアイテムごと�
 - addEventListenerのハンドラ3個)生成している点が効いている可能性が
   高い。React側は単一の委譲リスナー(合成イベント)とフックベースの
   再描画で、アイテムごとの個別リスナー登録・専用クロージャ生成を
-  そもそも行わない。この非対称性は`bench/listener-strategy.ts`が既に
+  そもそも行わない。この非対称性は`packages/bench/listener-strategy.ts`が既に
   示していた「直接addEventListenerは委譲よりアタッチコストで不利」
   という結果と整合する。
 
@@ -135,7 +135,7 @@ Mapの帳簿コスト自体よりも、`createTodoItem()`がアイテムごと�
 
 ## 実ブラウザ(Chromium)での再計測(2026-07-14)
 
-実行: `bun bench/todomvc-vs-react.playwright.ts`
+実行: `bun run bench:browser`
 (要 `bunx playwright install chromium`)。
 
 ### jsdom計測の方法論的問題
@@ -158,7 +158,7 @@ Mapの帳簿コスト自体よりも、`createTodoItem()`がアイテムごと�
 ### 方法
 
 - シナリオ・fixture・`flushSync`・`.click()`の扱いはjsdom版と同一。
-  シナリオ本体(`bench/browser-driver.ts`)とfixture・Reactを`Bun.build`で
+  シナリオ本体(`packages/bench/browser-driver.ts`)とfixture・Reactを`Bun.build`で
   1本のESMバンドルにしてページへ注入し(`NODE_ENV=production`はdefineで
   焼き込み)、計測はすべて**ページ内**の`performance.now()`で行う
   (Node側で計るとCDP往復(1操作あたり数ms)を測ることになるため)。

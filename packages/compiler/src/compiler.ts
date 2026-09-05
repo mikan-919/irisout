@@ -7,13 +7,13 @@
 //   2. トップレベルのコンポーネント関数をすべて列挙し、他から JSX タグとして
 //      一度も参照されないものをルートとする(スコープ:ルートはちょうど1つ、
 //      子コンポーネント参照そのものは M1 では scope-limit error)。
-//   3. ルートの render ツリーを深さ優先で辿る(src/compiler/render.ts)。
+//   3. ルートの render ツリーを深さ優先で辿る(packages/compiler/src/compiler/render.ts)。
 //   4. フラット化・計装済みスクリプトを Node 上で1回実行し、(a) タグ付けした
 //      呼び出しサイトが本当に signal/derived であることを確認し(ADR-0001 #3)、
 //      (b) 実際の初期 HTML をタダで得る。ビルド時実行だけは本物の signal/
 //      derived アクセサを使う - 出力コード自体がプレーン変数になるのとは
 //      別の関心事(ADR-0006)。
-//   5. 依存グラフ(marker -> signal、derived 経由、src/compiler/decl-graph.ts)
+//   5. 依存グラフ(marker -> signal、derived 経由、packages/compiler/src/compiler/decl-graph.ts)
 //      を構築し、ルート signal ごとに専用の update_<name> 関数を生成する。
 
 import { parse } from '@babel/parser'

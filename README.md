@@ -72,10 +72,13 @@ innerHTML は一切書かない)が生成されます。既定のList playground
 ## ベンチマーク
 
 TodoMVC 相当のシナリオ(mount / filter / add / remove、N=100〜100,000)を
-実 Chromium 上で計測した結果、`.map()` から生成した keyed 更新コードは
-全シナリオ・全 N で React (`useState` のみ、非最適化) より高速でした
-(1.1〜4 倍、中心は 1.4〜1.8 倍)。詳細な方法論と表は
-[`bench/todomvc-vs-react.results.md`](./bench/todomvc-vs-react.results.md) にあります。
+実 Chromium 上で計測した結果、`apps/examples/todomvc.handwritten.js` の
+keyed再利用による手書き基準は全シナリオ・全 N で React (`useState` のみ、
+非最適化) より高速でした(1.1〜4 倍、中心は 1.4〜1.8 倍)。これはM5の
+生成物を評価する基準fixtureの比較であり、現行compilerが生成したproduction
+bundleそのものの比較ではありません。詳細な方法論と表は
+[`packages/bench/todomvc-vs-react.results.md`](./packages/bench/todomvc-vs-react.results.md)
+にあります。
 
 ## 現在のステータス
 
@@ -111,6 +114,7 @@ timer・subscription・外部 listenerなどactionが確保したresourceは、o
 | [`STATUS.md`](./STATUS.md)                       | 実装ステータス・既知の制約         |
 | [`ROADMAP.md`](./ROADMAP.md)                     | 設計判断待ちの論点・次のアクション |
 | [`docs/adr/`](./docs/adr/)                       | 決定済みの設計判断(却下案も含む)   |
+| [`openspec/specs/`](./openspec/specs/)           | 実装対象の受入条件・仕様           |
 
 ## プロジェクト構成
 

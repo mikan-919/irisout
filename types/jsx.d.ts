@@ -12,7 +12,7 @@
 // (M4静的host属性・ADR-0012動的host属性はchecked/valueの特別扱い以外
 // 任意の属性名をsetAttributeへ通す)ため、型を先に厳しくすると
 // aria-*/data-* のような正当な属性を誤検出してしまう。
-// 詳細は openspec/changes/jsx-type-checking-foundation/design.md 参照。
+// 詳細は openspec/specs/authored-jsx-type-checking/spec.md 参照。
 //
 // 重要: 型が通ることと実行時に compile() が受理することは別軸のまま。
 // 型はコンパイラの scope limit 判定を代替しない(例: リストアイテム内の

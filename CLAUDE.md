@@ -16,4 +16,6 @@ The session directory contains a history of your previous actions; if necessary,
 - `ROADMAP.md` — 前向きな計画(設計判断待ちの論点・次のアクション)のみ。
   ステータス情報を書き足さない。
 - `docs/adr/` — 決定済みの設計判断(却下した案も含む)。
-- `plans/` — 実行可能な個別実装計画。
+- `openspec/specs/` — 実装済み・実装対象の受入条件を置く正本。
+- `openspec/changes/` — 仕様変更のproposal/design/tasks。CLIを使う場合は
+  `bunx @fission-ai/openspec`を使い、完了したchangeは`archive/`へ移す。

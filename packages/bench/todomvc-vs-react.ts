@@ -1,17 +1,17 @@
 #!/usr/bin/env bun
-// examples/todomvc.handwritten.js (ADR-0005 keyed reuse, M5の目標出力) vs
-// 同等機能のReact版TodoMVC(examples/todomvc.react.tsx)で、同一シナリオの
+// apps/examples/todomvc.handwritten.js (ADR-0005 keyed reuse, M5の目標出力) vs
+// 同等機能のReact版TodoMVC(apps/examples/todomvc.react.tsx)で、同一シナリオの
 // 処理時間を比較するベンチマーク。ADR-0005の見立て(keyed reuseのMapの
 // 帳簿コストはReact Fiberと同種のコスト)を実測で検証する。
 //
-// 実行: bun run bench/todomvc-vs-react.ts
+// 実行: bun run bench
 //
-// 注意: bench/listener-strategy.tsと同じ割り切りで、jsdom上の相対比較に
+// 注意: packages/bench/listener-strategy.tsと同じ割り切りで、jsdom上の相対比較に
 // 留める(実ブラウザの絶対値ではない)。「完了トグル」シナリオは1件ずつ
 // state配列を丸ごと複製して再描画する実装のため、handwritten・React
 // いずれもO(N)(1回の更新)×N回 = O(N^2)になる。TOGGLE_SIZESで実測した
 // 傾向から、N=10,000/100,000は現実的な時間で終わらないため計測対象から
-// 外し、結果レポート側で外挿する(詳細はbench/todomvc-vs-react.results.md)。
+// 外し、結果レポート側で外挿する(詳細はpackages/bench/todomvc-vs-react.results.md)。
 
 process.env.NODE_ENV = 'production' // devビルドの警告チェックコストを除く
 

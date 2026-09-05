@@ -1,5 +1,5 @@
 // テンプレートリテラルのソース文字列を組み立てるヘルパー群。
-// コンパイラの render ウォークと最終 codegen (src/codegen.ts) の両方から使う。
+// コンパイラの render ウォークと最終 codegen (packages/compiler/src/codegen.ts) の両方から使う。
 
 import type { ContentPart } from './compiler/state.ts'
 

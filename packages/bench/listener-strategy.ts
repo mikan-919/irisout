@@ -3,7 +3,7 @@
 // vs 1つの委譲リスナー (親要素で拾って event.target を見る) の、
 // アタッチコストと dispatch コストを N 個の要素で比較するベンチマーク。
 //
-// 実行: bun run bench/listener-strategy.ts
+// 実行: bun run bench:listener-strategy
 //
 // 注意: jsdom 上の歴史的な相対比較。実ブラウザの採否は
 // listener-strategy.playwright.tsのChromium計測を使う。N=100000は数秒かかることがある。

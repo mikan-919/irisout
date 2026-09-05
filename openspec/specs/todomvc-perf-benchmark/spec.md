@@ -3,16 +3,16 @@
 ## Purpose
 
 ADR-0005(keyed reuseのMapの帳簿コストはReact Fiberと同種)という見立てを、
-`examples/todomvc.handwritten.js`(M5 codegenの目標出力の上限値)と同等機能の
+`apps/examples/todomvc.handwritten.js`(M5 codegenの目標出力の上限値)と同等機能の
 React版TodoMVCの実測比較で検証する(change `perf-bench-todomvc-vs-react`)。
-結果は`bench/todomvc-vs-react.results.md`にまとめ、M5.5以降の設計判断材料と
-する。本capabilityはベンチマークハーネス・レポートのみを対象とし、
-コンパイラ本体(`src/`)は対象外。
+結果は`packages/bench/todomvc-vs-react.results.md`にまとめ、M5.5以降の設計
+判断材料とする。本capabilityはベンチマークハーネス・レポートのみを対象とし、
+コンパイラ本体(`packages/compiler/`)は対象外。
 
 ## Requirements
 
 ### Requirement: handwritten版とReact版の同一シナリオ計測
-ベンチマークハーネスは、`examples/todomvc.handwritten.js`とReact版TodoMVC
+ベンチマークハーネスは、`apps/examples/todomvc.handwritten.js`とReact版TodoMVC
 実装に対して、同一の操作シナリオ(初期マウント・全アイテム完了トグル・
 フィルタ切り替え・アイテム追加・アイテム削除)を同じデータサイズNで実行し、
 両者の処理時間を計測しなければならない(SHALL)。
@@ -46,12 +46,12 @@ React版TodoMVCの実測比較で検証する(change `perf-bench-todomvc-vs-reac
   レポート内でO(N^2)を仮定した外挿値として明記する
 
 ### Requirement: 計測結果のレポート出力
-ベンチマークハーネスは、実行結果を`bench/`配下に人間が読めるレポートとして
+ベンチマークハーネスは、実行結果を`packages/bench/`配下に人間が読めるレポートとして
 残さなければならない(SHALL)。レポートにはADR-0005の見立て
 (keyed reuseのMapの帳簿コストはReact Fiberと同種)に対する結論を含める。
 
 #### Scenario: レポートへの結論記載
 - **WHEN** 全シナリオ・全Nの計測が完了する
-- **THEN** `bench/`配下のレポートに、各シナリオでのhandwritten版とReact版の
+- **THEN** `packages/bench/`配下のレポートに、各シナリオでのhandwritten版とReact版の
   比較結果、およびADR-0005見立てへの結論(裏付けられた/反証された)が
   記載される

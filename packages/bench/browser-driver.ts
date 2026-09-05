@@ -1,5 +1,5 @@
-// bench/todomvc-vs-react.playwright.ts が Bun.build でバンドルし、実Chromium
-// のページ内に注入するベンチ本体。シナリオ定義は bench/todomvc-vs-react.ts
+// packages/bench/todomvc-vs-react.playwright.ts が Bun.build でバンドルし、実Chromium
+// のページ内に注入するベンチ本体。シナリオ定義は packages/bench/todomvc-vs-react.ts
 // (jsdom版)と同一(mount / filterSwitch / addOne / removeOne / toggleAll)。
 // 計測はすべてページ内の performance.now() で行い、CDPの往復レイテンシを
 // 一切含めない(Node側で計測すると1操作あたり数msの通信時間が乗り、DOM処理

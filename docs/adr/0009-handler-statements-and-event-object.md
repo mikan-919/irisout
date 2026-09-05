@@ -5,19 +5,19 @@
 **承認済み** — 推奨案(質問1〜5)をそのまま採用し、change
 `adr-0009-handler-statements` で実装した。設計レベルの追加決定
 (`IfStatement` 枝の再帰検証、書き込み後 `return` の拒否)は
-`openspec/changes/adr-0009-handler-statements/design.md` の D2/D3 を参照。
+`openspec/changes/archive/2026-07-14-adr-0009-handler-statements/design.md` の D2/D3 を参照。
 
 ## コンテキスト
 
 決定済み ADR-0008(ゾーン API)は、ハンドラを `render()` 文より後ろの
 **function 宣言(ブロック本体)**で書くと決めた。その ADR 自身が挙げる例
-そのものが、現行コンパイラでは通らない:
+そのものが、当時のコンパイラでは通らなかった:
 
 ```jsx
 function handleCountUp() { state(state() + 1) }   // ADR-0008 の決定例
 ```
 
-`src/compiler/render.ts` はハンドラを **単一式の inline arrow** に限定して
+当時の `packages/compiler/src/compiler/render.ts` はハンドラを **単一式の inline arrow** に限定して
 おり、ブロック本体と引数を明示的な scope limit として拒否する:
 
 - 引数拒否 — `render.ts:239-245`:
@@ -27,7 +27,7 @@ function handleCountUp() { state(state() + 1) }   // ADR-0008 の決定例
   `if (bodyPath.isBlockStatement()) throw ... "body must be a single
   expression, not a block (scope limit)"`
 
-解析側 `src/compiler/analyze.ts` の `analyzeHandlerExpr`(`analyze.ts:141-207`)
+当時の解析側 `packages/compiler/src/compiler/analyze.ts` の `analyzeHandlerExpr`
 は **単一式**を前提に、追跡対象識別子への「引数1個の呼び出し」
 (`count(count() + 1)`)を書き込みとして検出し、`callee+開き括弧` と
 `閉じ括弧` の2つの edit で `count = count + 1` へ書き換える。識別子解決は
@@ -36,7 +36,7 @@ function handleCountUp() { state(state() + 1) }   // ADR-0008 の決定例
 `ctx.declIdByKey`(= top-level の `signal()`/`derived()` 宣言集合)にある
 ときだけ追跡対象と見なす。
 
-配線側 `src/codegen.ts:55` のハンドララッパーは **既に可変長引数**を受けて
+配線側 `packages/compiler/src/codegen.ts` のハンドララッパーは **既に可変長引数**を受けて
 いる:
 
 ```js
@@ -76,10 +76,10 @@ factory handlerを検証している(これらのhelper dispatchはtarget要素�
 | `onDblClick` | `dblclick` | bubbling |
 | `onBlur` | `blur` | non-bubbling (`focusout`とは別event) |
 
-### この ADR が答えるべき具体的入力(`examples/todomvc.jsx`)
+### この ADR が答えるべき具体的入力(`apps/examples/todomvc.jsx`)
 
 - **UNRESOLVED(09)** — イベントオブジェクト `e` の型付け
-  (`examples/todomvc.jsx:107-118`)。`handleInputKeyDown(e)` は
+  (`apps/examples/todomvc.jsx`)。`handleInputKeyDown(e)` は
   `e.target.value` へ素朴にアクセスする。この1関数だけで、本 ADR が扱う
   4種の文がすべて現れる:
 
@@ -94,12 +94,13 @@ function handleInputKeyDown(e) {
 ```
 
 - 他のハンドラ(`toggleTodo(id)` / `removeTodo(id)` / `setFilter(next)` /
-  `startEditing(id)`, `todomvc.jsx:120-136`)は、いずれも **function 引数
+  `startEditing(id)`, `apps/examples/todomvc.jsx`)は、いずれも **function 引数
   (`id` / `next`)を本体で参照する**単一式ハンドラで、引数の scope 解決が
   必須であることを裏づける。
 
-**この ADR は設計スパイクであり、成果物はこのドラフトのみ。`src/**`・
-`test/**` の実装は本 ADR の承認後、別の変更で行う。**
+**この ADR は当時の設計スパイクを記録したもの。実装は
+`packages/compiler/src/**`・`packages/compiler/test/**` に完了しており、現在の受入条件は
+`openspec/specs/handler-statement-bodies/spec.md` が正本である。**
 
 ## 検証(スクラッチ実験、非コミット)
 

@@ -1,15 +1,15 @@
 #!/usr/bin/env bun
 
-// bench/todomvc-vs-react.ts(jsdom版)と同一シナリオを実Chromium上で計測
+// packages/bench/todomvc-vs-react.ts(jsdom版)と同一シナリオを実Chromium上で計測
 // する。jsdomはDOM APIを全部遅いJSで実装しているため「DOMを触るほど損」
 // という実ブラウザと逆のコストモデルを持ち、直接DOM操作の多いhandwritten版
 // を系統的に不利にする。実ブラウザでの再計測がこのスクリプトの目的。
 //
-// 実行: bun bench/todomvc-vs-react.playwright.ts
+// 実行: bun run bench:browser
 // (要: bunx playwright install chromium)
 //
 // 方法:
-// - fixture(handwritten / React)とシナリオ本体(bench/browser-driver.ts)
+// - fixture(handwritten / React)とシナリオ本体(packages/bench/browser-driver.ts)
 //   を Bun.build で1本のESMバンドルにし、addScriptTagでページに注入する。
 //   NODE_ENV=production は define で焼き込む(react-dom を productionビルド
 //   で動かすため)。

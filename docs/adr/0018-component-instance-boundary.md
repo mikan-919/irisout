@@ -55,7 +55,7 @@ lexical scopeを保持する必要があるため、現時点では従来のhand
 - component-owned DOMとtop-level listenerを明示的に解放でき、`use=`の外部 resourceは
   ADR-0022の`{ destroy }`で確実に解除できる。
 - counter production bundleはexplicit lifecycle固定費を含む手書き比5.33xとなり、サイズ予算を
-  4.5xから5.5xへ更新した。
+  5.5xへ更新した。
 - 1つの`createComponent()`を複数回mountする使い方は保証しない。1 instanceは1 rootを所有する。
 
 ## 対象外

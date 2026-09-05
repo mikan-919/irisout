@@ -1,7 +1,10 @@
 # no-wrapper-cross-verification Specification
 
 ## Purpose
-TBD - created by archiving change m6-no-wrapper-verification. Update Purpose after archive.
+全機能を同居させた代表fixtureで、生成コードからsignal/derivedのruntime
+wrapperとbuild-time専用シンボルが消えていること、必要な最小runtime helper
+だけがimportされること、生成モジュールの実DOM更新が横断的に動くことを
+毎回検証する(ADR-0006、M6 no-wrapper verification)。
 ## Requirements
 ### Requirement: 全機能横断フィクスチャの no-wrapper 検証
 テストスイートは、全マイルストーン機能(signal / derived / テキスト
@@ -16,15 +19,17 @@ TBD - created by archiving change m6-no-wrapper-verification. Update Purpose aft
 - **THEN** 生成 `code` は部分文字列 `signal(` と `derived(` を含まない
 
 ### Requirement: runtime import 面の検証
-テストスイートは、生成コードの import 文が runtime からの
-`mount`/`hydrate` のみ(1行)であることを検証しなければならない(SHALL)。
-ビルド時専用シンボル(`signal`/`derived`/`registry`)は生成コードから参照
-されてはならない。
+テストスイートは、生成コードのruntime import文が1行で、常に
+`mount`/`hydrate`を含み、fixtureが使う機能に必要なhelperだけを追加することを
+検証しなければならない(SHALL)。List/actionを使う場合の専用helperも許可するが、
+ビルド時専用シンボル(`signal`/`derived`/`registry`)は生成コードから参照されて
+はならない。
 
-#### Scenario: import は mount/hydrate のみ
+#### Scenario: import は必要なruntime helperのみ
 - **WHEN** 全機能フィクスチャを `compile()` する
-- **THEN** 生成 `code` の import 文はちょうど1つで、import する名前は
-  `mount` と `hydrate` のみである
+- **THEN** 生成 `code` の import 文はちょうど1つで、`mount`/`hydrate`と
+  使用機能に必要なruntime helperだけをimportし、`signal`/`derived`/
+  `registry`はimportしない
 
 ### Requirement: 全機能フィクスチャの実 DOM 動作検証
 テストスイートは、全機能フィクスチャの生成モジュールを実 DOM(jsdom)へ
@@ -37,4 +42,3 @@ mount し、イベント駆動の更新(ハンドラ書き込み → derived 再
   イベントを発火する
 - **THEN** 依存するテキストマーカー・リスト・条件分岐・action クロージャの
   すべてに更新が反映される
-

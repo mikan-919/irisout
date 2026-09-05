@@ -70,11 +70,11 @@ native `event.currentTarget`互換と`blur`等non-bubbling eventの意味同等�
 authored `.jsx` の型検査基盤を実装(change `jsx-type-checking-foundation`、
 ROADMAP 次のアクション10)。`types/jsx.d.ts`でグローバル`JSX`namespace
 (`Element`・`IntrinsicElements`・`IntrinsicAttributes`)と`signal`/
-`derived`/`render`のグローバル関数シグネチャを宣言し、`examples/`配下
-専用の`examples/tsconfig.json`(`allowJs`+`checkJs`+`jsx: "preserve"`、
-`types: []`)で`examples/*.jsx`を型検査対象にした。ルートの`tsconfig.json`
+`derived`/`render`のグローバル関数シグネチャを宣言し、`apps/examples/`配下
+専用の`apps/examples/tsconfig.json`(`allowJs`+`checkJs`+`jsx: "preserve"`、
+`types: []`)で`apps/examples/*.jsx`を型検査対象にした。ルートの`tsconfig.json`
 は無変更 ― `allowJs`/`checkJs`をルートへ足すと
-`examples/todomvc.handwritten.js`(`test/todomvc-handwritten.test.ts`が
+`apps/examples/todomvc.handwritten.js`(`packages/compiler/test/todomvc-handwritten.test.ts`が
 importする比較用の手書きJS、型検査対象外)まで巻き込まれ、既存の
 `@ts-expect-error`抑制が壊れるため、examples専用の別プロジェクトに
 切り出した。あわせて`node_modules/@types/react`が自動包含され`JSX`
@@ -84,7 +84,7 @@ namespaceを上書きする踏み台バグを`types: []`で踏みつぶした(�
 
 属性名は意図的に緩い(共通属性`key`/`use`/`onXxx`/`children`のみ明示し、
 他は`string`キーで許容 ― コンパイラ自身が host 属性名をホワイトリスト化
-していないため)。`examples/tsconfig.json`は`strict: false`(authored
+していないため)。`apps/examples/tsconfig.json`は`strict: false`(authored
 `.jsx`は型注釈を書けない素のJS構文なので、strictを掛けるとハンドラ引数の
 ほぼ全てが implicit any でエラーになり実用にならない)。型が通ることと
 実行時に`compile()`が受理することは別軸のまま ― 型はコンパイラの
@@ -96,7 +96,7 @@ scope limit判定を代替しない(例: リストアイテム内の`use=`は型
 同一ファイル内の複数コンポーネント合成を実装(ADR-0014、change
 `same-file-component-composition`、ROADMAP §4・UNRESOLVED-04 解消)。
 `<Component/>`参照を`findRootComponent`より前の独立した前処理パス
-(`src/compiler/inline-components.ts`)でコンパイル時ASTインライン化する
+(`packages/compiler/src/compiler/inline-components.ts`)でコンパイル時ASTインライン化する
 ― `compileComponent`/`renderElement`は無変更のまま単一コンポーネント
 前提で動く。propsはshorthand分割代入のみ対応するコンパイル時識別子
 置換(実行時オブジェクトなし)。リストアイテムへインライン化された
@@ -145,8 +145,8 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
 | M      | 内容                                                                                        | 状態     | 備考                                                                                                                                                                                                                             |
 | ------ | ------------------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | M1     | スキャフォールド、signal/derived、テキストマーカー                                          | **DONE** | `0155e85`                                                                                                                                                                                                                        |
-| M2     | イベントハンドラ、書き込みトリガー更新                                                      | **DONE** | `810bc83`→`645a820`、plan 005                                                                                                                                                                                                    |
-| M3     | ブラウザビルドターゲット(hydrate/mount分割 + `scripts/build.ts`)                            | **DONE** | `a2905c8`、plan 001                                                                                                                                                                                                              |
+| M2     | イベントハンドラ、書き込みトリガー更新                                                      | **DONE** | `810bc83`→`645a820`                                                                                                                                                                                                              |
+| M3     | ブラウザビルドターゲット(hydrate/mount分割 + `apps/examples/vite.config.ts`)                | **DONE** | `a2905c8`、Vite+移行後はADR-0016のbuild経路                                                                                                                                                                                      |
 | M4     | 静的host要素属性                                                                            | **DONE** | `9829f88`、change `m4-static-host-attributes`                                                                                                                                                                                    |
 | M4.5   | authoring APIゾーン化(ADR-0008)                                                             | **DONE** | change `authoring-api-zones`。render()マーカー・識別子参照ハンドラ・ゾーン配置強制                                                                                                                                               |
 | M5     | list/conditional factory closures、1階層のみ(ADR-0005の新実装)                              | **DONE** | change `m5-list-conditional-factory-closures`。ネストした構造ユニット(06/07)は据え置き                                                                                                                                           |
@@ -160,7 +160,7 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
 
 - **ルートコンポーネントは1つだけ**: `compile()`は「他から一度も参照
   されないトップレベル関数」がちょうど1つであることを要求し、そうで
-  なければcompile error(`src/compiler.ts`のscope limit)。
+  なければcompile error(`packages/compiler/src/compiler.ts`のscope limit)。
 - **トップレベルは関数宣言のみ**(2026-07-18、change `scope-limit-coverage`):
   Program 直下は関数宣言(`export` 付き含む)以外(import・トップレベル
   `const`・副作用式等)を `scope limit` で一律拒否する。現状の実装では
@@ -198,8 +198,9 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
     アップし、正しく更新が届く)。ただしネストした構造ユニットが
     **祖先ユニットのローカルsignal**に依存することは、ローカルsignalの
     declIdがグローバルなsignalToMarkersへ漏れて壊れたコードを生成する
-    ため明示的に拒否する(ADR-0014、UNRESOLVED-07の編集モードspan/input
-    入れ替えが該当、引き続き未解決)。ハンドラ内でのsignal読み書きも
+    ため明示的に拒否する(ADR-0014。旧UNRESOLVED-07の編集モードspan/input
+    入れ替えのような形が該当するが、現行fixtureはclass切り替えで回避している)。
+    ハンドラ内でのsignal読み書きも
     ルートsignal制限の対象外(通常のハンドラと同じ仕組みで動く)。
   - `.map()`のコールバックのブロック本体(`=> { ... }`)は、
     「signal()/derived()宣言 + 最終return」の形(ADR-0014のローカル
@@ -250,7 +251,7 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
   - action本体のconcise arrow(単一式)にネストしたリスナー等がある場合、
     その内部の書き込みに対する`update_*`挿入位置は本体全体の実行時点に
     まとまる(リスナー発火時ではない)。ブロック本体は正しく分離される
-    (`src/compiler/analyze.ts`の`analyzeActionExprScope`コメント参照)。
+    (`packages/compiler/src/compiler/analyze.ts`の`analyzeActionExprScope`コメント参照)。
 - **同一ファイル内コンポーネント合成(ADR-0014、change
   `same-file-component-composition`)は同一ファイル・root scopeと
   list itemへのインライン化のみ実装済み**。以下は明示的な scope limit・
@@ -275,7 +276,7 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
     名前の実引数をメンバー式内で参照する)は、置換後の内容がソース位置
     ベースの書き換え検出(`analyze.ts`のidentifier-visitベースのedit機構)
     に乗らず、呼び出し先の古いソーステキストが出力に残ってしまう
-    (実装前調査で確認)。`src/compiler/inline-components.ts`の
+    (実装前調査で確認)。`packages/compiler/src/compiler/inline-components.ts`の
     `assertSafeToSubstitute`が安全でない組み合わせを検出し
     `compile: ... is referenced inside a larger expression ... (scope
 limit)`で明示的に拒否する(黙って壊れたコードを出さない)。値なしの

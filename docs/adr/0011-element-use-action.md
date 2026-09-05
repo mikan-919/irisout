@@ -2,9 +2,10 @@
 
 ## ステータス
 
-**決定済み・実装済み**(change `use-action-impl`)。属性名`use`の確定・
-返り値クロージャの初期実行タイミングの裁定は、下記「未決定事項」ではなく
-実装change `use-action-impl` の design.md Decision 1/2 を参照。
+**決定済み・実装済み**(change `use-action-impl`、lifecycle拡張はADR-0022)。
+属性名`use`の確定・返り値クロージャの初期実行タイミングの裁定は、下記
+「未決定事項」ではなく、`openspec/specs/element-use-action/spec.md`と
+アーカイブ済みchange `2026-07-15-use-action-impl`のdesign.md Decision 1/2を参照。
 
 ## コンテキスト
 
@@ -166,8 +167,8 @@ UNRESOLVED(06)/(07)は正当なUXだが書けない=コンパイラの穴)。両
   - YES → 車輪の再発明。アンチパターンとして記録。
   - NO → 本物の新種。新チャネル設計のトリガー。
 
-仮説そのもののCONCEPT.v2.mdへの昇格の要否はユーザー判断待ち(下記
-未決定事項参照)。
+仮説の詳細な定理化をCONCEPT.v3.mdへどこまで取り込むかはユーザー判断待ち
+(下記未決定事項参照)。
 
 ### 検討した代替案と却下理由
 
@@ -221,7 +222,7 @@ UNRESOLVED(06)/(07)は正当なUXだが書けない=コンパイラの穴)。両
   実例」がトリガー条件。
 - **unit 内action lifecycle**: `.map()` item / conditional branch の `use=` と
   action registry は、代表的な実需が出るまで scope limit のままにする。
-- **CONCEPT.v2.mdへの3原則・仮説(「書きづらいものは設計が間違っている」
+- **CONCEPT.v3.mdへの3原則・仮説(「書きづらいものは設計が間違っている」
   の極限定理)の昇格の要否**: ユーザー判断待ち。
 
 ## 実装への引き継ぎメモ
@@ -229,16 +230,16 @@ UNRESOLVED(06)/(07)は正当なUXだが書けない=コンパイラの穴)。両
 本ADRの設計決定は change `use-action-impl` で実装済み(下記3箇所)。
 JSX型定義(`JSX.IntrinsicElements`の`use`宣言)は同changeのdesign.md
 Decision 6で明示的にスコープ外とし、別changeへ先送りした
-(authored `.jsx`の型検査基盤自体が未整備のため)。この先送りは change
+(当時はauthored `.jsx`の型検査基盤が未整備だったため)。この先送りは change
 `jsx-type-checking-foundation`(2026-07-21)で解消済み ―
 `types/jsx.d.ts`の`JSX.IntrinsicElements`共通属性に`use`を型付けした。
 
-- `src/compiler/render.ts`: `use`属性の解析・識別子参照ルールの解決
+- `packages/compiler/src/compiler/render.ts`: `use`属性の解析・識別子参照ルールの解決
   (ADR-0008のハンドラ配線ルールの転用)。トップレベル要素のみ受理し、
   リストアイテム/条件分岐ブランチ内は scope limit で拒否(design.md
   Decision 3)。
-- `src/compiler/analyze.ts`: action本体のネストした関数への再帰書き換え、
+- `packages/compiler/src/compiler/analyze.ts`: action本体のネストした関数への再帰書き換え、
   関数返り値または`{ update?, destroy? }`返り値の解析。
-- `src/codegen.ts`: mount/hydrate時の`use`関数呼び出し・update初期実行・依存
+- `packages/compiler/src/codegen.ts`: mount/hydrate時の`use`関数呼び出し・update初期実行・依存
   配線、instance `unmount()`のlistener除去・DOM/structural state解放・destroy逆順実行。
 - `packages/runtime/src/index.ts`: action返り値の runtime shape 検証。
