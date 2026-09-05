@@ -23,6 +23,20 @@ Web Components化・hyperscript風authoring API・リストアイテムの状態
 - **`onMount`/`onLeave`フックを保留**: 何も使っていない機構は、定義上「書かれていないのに存在する」もの。
 - **単一式内でのsignal呼び出し書き換えは許可、ブロック文全体の代入スキャンは将来課題として保留**: 前者はソースが既に完全に表現している情報(閉じた1つの式)を並べ替えるだけで実行内容は変わらない。後者も原理的にはこの原則に反しないが、正しさを保証するための静的解析コスト(複合代入・分割代入・配列変更メソッド等、JS代入文法の全網羅)が今のスコープを大きく超える。
 
+### イベント配線への適用(2026-09-05)
+
+native eventを受け取るハンドラでは、`event.target`、`event.currentTarget`、
+イベントのbubbling/capture、event objectのidentityもソースから観測できる意味の
+一部である。従って、itemごとの直接listenerを親要素の委譲listenerへ置き換える
+最適化は、DOM更新が同じというだけでは意味保存とみなさない。委譲側の
+`currentTarget`は親へ変わり、`blur`のようなnon-bubbling eventは通常のbubble委譲
+では届かないため、これらを保存する具体設計と代表fixtureの検証が必要になる。
+
+2026-09-05の`packages/bench/listener-strategy.playwright.ts`は、子`span`をtargetに
+したbubbling `click`とitem identity帳簿だけを比較し、native `currentTarget`互換を
+解決していない。この範囲では委譲を有望な候補と記録できるが、全イベントのproduction
+採用を決める根拠にはしない(ADR-0021)。
+
 ## 未決定事項(後続で詰める)
 
 - `signal()`/`derived()`をソースの記述からも完全に除去する(Svelte的な、代入箇所の静的検出への移行)方向性は、この原則には反しない。ただし全代入形式を静的に正しく網羅する必要があり、今回のスコープでは着手しない。将来取り組む際は、この原則を判断基準として使うこと。

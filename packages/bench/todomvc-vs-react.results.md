@@ -213,8 +213,12 @@ jsdom計測の同じ列は0.32〜0.71xだった — 全面逆転。)
   **支持された**。実ブラウザでは同種どころか一貫して安い。
 - jsdom計測が疑わせた「アイテムごとの直接`addEventListener`×3・
   クロージャ×5生成が効いている」は、実ブラウザでは支配的でなかった。
-  **委譲方式への変更に性能上の動機はない**(メモリ面の比較は未計測の
-  まま残る)。
+  ただしこれはTodoMVC全体の比較であり、イベント方式そのものの採否は別fixture
+  (`packages/bench/listener-strategy.playwright.md`)で測る。2026-09-05のList専用
+  Chromium計測では、委譲がitem identityの帳簿込みでmount/attach/retained JS heapに
+  有利、dispatchは直接方式が約7〜9%速かったため、bubblingするclick相当の有望候補
+  としてADR-0021へ記録した。ただし`event.currentTarget`互換と`blur`等non-bubbling
+  eventは未評価で、全eventのproduction既定方式は保留している。
 - 本ベンチが測るのは同期JS時間(スタイル・レイアウト・ペイントは両実装
   とも計測区間外)。両実装が最終的に作るDOMはほぼ同一なので、この比較
   には影響しない。

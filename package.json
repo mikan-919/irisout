@@ -20,6 +20,7 @@
     "bench": "vp run @irisout/bench#bench",
     "bench:browser": "vp run @irisout/bench#bench:browser",
     "bench:list-runtime": "vp run @irisout/bench#bench:list-runtime",
+    "bench:listener-strategy": "vp run @irisout/bench#bench:listener-strategy",
     "prepare": "husky"
   },
   "devDependencies": {

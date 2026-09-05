@@ -2,7 +2,8 @@
 
 ## ステータス
 
-決定済み(設計方針。実装は未着手 ― 後続の実装計画で扱う)
+決定済み(設計方針。factory-per-unit自体の方針は有効。イベント委譲は
+ADR-0021でclick相当だけを評価し、production配線の採否は保留)
 
 ## コンテキスト
 
@@ -47,15 +48,24 @@ factory関数が生成する状態・リスナーは、そのインスタンス�
 - リストアイテム内に**さらにネストした構造ユニット**(アイテムの中に条件分岐やリストがある場合)を持つケース。まずは1階層のみ。
 - Web Components化は完全に却下 ― 再検討する場合は、Safari互換性とDOMツリー透明性という2つの具体的な破綻が解消されない限り再浮上させないこと。
 
-## 追記: 直接addEventListener方式の実測による裏付け(2026-07-05)
+## 追記: 直接addEventListener方式のjsdom実測(2026-07-05、履歴)
 
 `bench/listener-strategy.ts`でN=100〜100,000(jsdom上)を計測した結果、
 attachコストはNに比例して直接方式が不利になる一方、dispatchコストは
 両者ほぼ互角(ボトルネックはイベント生成+DOM traversalで、リスナー数
 ではない)。つまり直接方式が実際に払う代償は初回大量レンダリング時の
-attachコストだけで、クリックのたびのコストではない。上記の決定(直接
-`addEventListener`)を維持する。1コンポーネントあたり1万件を大きく超える
-list規模が実要件として出てきた場合のみ、委譲方式への改訂を再検討する。
+attachコストだけで、クリックのたびのコストではない。この時点では上記の決定
+(直接`addEventListener`)を維持し、1コンポーネントあたり1万件を大きく超える
+list規模が実要件として出てきた場合のみ、委譲方式への改訂を再検討することにした。
+
+このjsdom結果は旧来の相対比較であり、実ChromiumのList item専用fixtureでは
+click相当の数値が更新された。2026-09-05の測定では、委譲がitem identityのMap帳簿を
+含めてもN=10,000/100,000のmount・attach・retained JS heapで有利だった(詳細は
+`packages/bench/listener-strategy.playwright.md`)。dispatchは直接方式が約7〜9%
+速くbundle gzipも直接方式が121B小さい。しかしfixtureはbubblingするclickだけで、
+委譲側の`event.currentTarget`はrootになり、`blur`等のnon-bubbling eventも未評価で
+ある。従ってADR-0021は委譲をclick相当の有望な候補と記録するに留め、productionの
+既定方式は、currentTarget互換と複数イベントを含む代表fixtureまで保留する。
 
 ## 未決定事項(後続で詰める)
 

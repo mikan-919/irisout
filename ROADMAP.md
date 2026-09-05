@@ -31,8 +31,12 @@ derivedは一度ずつ再計算し、markerの和集合を重複なしで最終�
 `update_<name>()`とcollectionのkeyed direct経路は互換性のため残し、
 `collection.update()`が共有markerに入るbatch時だけdirect通知を抑止する。
 
-残るruntime判断はイベント委譲、およびcollectionの構造操作API。
-構造操作は通常setterで表現できるため、実需と比較結果が出るまで追加しない。
+イベント配線は実Chromiumでbubblingするclick相当の比較を完了した(ADR-0021)。
+イベント委譲はitem identity帳簿込みでも有望な候補だが、native
+`event.currentTarget`と`blur`等non-bubbling eventの意味同等性が未解決で、production
+の既定方式は保留する。次は実生成に近い複数event fixtureとdirect/capture/proxy等の
+比較を行う。collectionの構造操作APIも、通常setterで表現できるため、実需と比較結果
+が出るまで追加しない。
 
 quixのビルド時トラッカー採用可否・list itemのイベント配線方式・authoring API
 ゾーン化(inline arrow併存含む)とM4/M5の実装順序は決着済み(それぞれ
@@ -254,8 +258,14 @@ transition/animation、portal、error boundary、async/resource
    という実ブラウザと逆のコストモデルを持つため、直接DOM操作の多い
    handwritten版を系統的に不利にする環境アーティファクトだった。
    ADR-0005の見立て(keyed reuseのMapの帳簿コストはReact Fiberと同種)は
-   実ブラウザでは**支持され**、アイテムごとの直接リスナーを委譲方式へ
-   変える性能上の動機は消えた(メモリ面の比較のみ未計測のまま残る)。
+   実ブラウザでは**支持され**たが、List item配線専用の実Chromium比較
+   (`packages/bench/listener-strategy.playwright.md`、ADR-0021)では、委譲が
+   item identityのMap帳簿込みでもN=10,000/100,000のmount・attach・retained
+   JS heapで有利だった。dispatchだけ直接方式が約7〜9%速く、bundle gzipは委譲が
+   +121Bだったため、bubblingするclick相当の有望候補として記録した。ただし
+   `event.currentTarget`はrootへ変わり、`blur`等non-bubbling eventは未計測なので、
+   全eventのproduction採用とcompiler/runtime実装は保留し、次の複数event fixtureへ
+   切り出した。
 8. ~~動的属性バインディング(UNRESOLVED 02/03)~~ — **完了**(ADR-0012、
    change `dynamic-attribute-bindings`)。あわせてユニットホスト要素の
    ハンドラが黙って捨てられるバグを修正。
@@ -293,7 +303,7 @@ transition/animation、portal、error boundary、async/resource
 - `session/000_ts-rewrite-kickoff-and-m1.md` — 書き直しキックオフの全経緯、
   quixとの比較
 - `plans/001-browser-build-target.md` — 直近実行したplan(M3)
-- `bench/listener-strategy.ts` — M5のイベント配線方式の判断材料
+- `packages/bench/listener-strategy.playwright.md` — ADR-0021の実Chromium計測結果
 - `bench/todomvc-vs-react.results.md` — 性能ベンチ結果(ADR-0005見立ての検証)
 - `examples/counter.jsx` — `scripts/build.ts`の手動確認用サンプル
 - `examples/todomvc.jsx` / `examples/todomvc.handwritten.js` — ADR-0008/M5

@@ -46,6 +46,36 @@ const __handler_${markerId}_${eventName} = (...__args) => { ${rendered}; ${updat
 つまりイベントオブジェクトは DOM リスナから配線上ラッパーまで届いており、
 欠落は **解析側だけ**(引数の受け入れと本体内での参照解決)にある。
 
+### 現行のnative event semantics
+
+実装後の`render.ts`は`on[A-Z]...`属性の先頭2文字を除き、残りを
+`toLowerCase()`してnative event名へ渡す。現行fixture/テストで確認できる対応は
+`onClick`→`click`、`onChange`→`change`、`onInput`→`input`、
+`onKeyDown`→`keydown`、`onDblClick`→`dblclick`、`onBlur`→`blur`である。
+`codegen.ts`はroot handler・List item factory handler・conditional factory handler
+のすべてで、optionsなしの`addEventListener(eventName, wrapper)`を生成する。
+
+そのためhandlerの第1引数は、コンパイラ独自のイベントではなくブラウザが渡す
+native event objectそのものである。`event.target`は元の発火元、
+`event.currentTarget`は直接listenerを登録したhost/item elementであり、
+`click`・`change`・`input`・`keydown`・`dblclick`のbubbling挙動や、
+`blur`が通常bubbleしないことをcodegenが変換しない。現行のList/conditional系
+testsはitem内のclick、dblclick、change、keydownを直接hostへdispatchし、
+same-file component composition testはList item内のblurも直接hostへdispatchして
+factory handlerを検証している(これらのhelper dispatchはtarget要素へ直接届かせる
+ため、bubbling経路自体は検証しない)。TodoMVC fixtureもList itemの`onChange`、
+`onDblClick`、`onKeyDown`、`onBlur`を含み、`e.target.value`を観測する。
+これらのnative semanticsを親委譲で再現する設計は未決定である。
+
+| authored属性 | native event | 通常の伝播 |
+| --- | --- | --- |
+| `onClick` | `click` | bubbling |
+| `onChange` | `change` | bubbling |
+| `onInput` | `input` | bubbling |
+| `onKeyDown` | `keydown` | bubbling |
+| `onDblClick` | `dblclick` | bubbling |
+| `onBlur` | `blur` | non-bubbling (`focusout`とは別event) |
+
 ### この ADR が答えるべき具体的入力(`examples/todomvc.jsx`)
 
 - **UNRESOLVED(09)** — イベントオブジェクト `e` の型付け

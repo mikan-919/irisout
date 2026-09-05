@@ -44,7 +44,12 @@ keyed collection APIを追加した(ADR-0019)。`collection(initial, keyOf)`は
 `collection.update()`のkeyed direct通知は維持し、別rootと共有markerを持つbatch内だけ
 instance専有の深さカウンタでdirect通知を遅延する。ローカルsignalのfactory
 `update()`、Listのkey照合/順序調整、公開batch APIやmicrotask schedulerは変更しない。
-イベント委譲とcollection構造操作APIは引き続き未着手である。
+イベント委譲は実Chromiumの速度・retained JS heap・bundle比較を、bubblingする
+click相当のfixtureで完了した(ADR-0021)。item identity帳簿込みでも有望な候補だが、
+native `event.currentTarget`互換と`blur`等non-bubbling eventの意味同等性が未解決の
+ため、全eventのproduction既定方式とcompiler/runtime実装は保留している。次は
+実生成に近い複数event fixtureとdirect/capture/proxy等の比較である。collection構造
+操作APIは引き続き未着手である。
 
 ## 現在地(2026-07-21・型検査基盤)
 

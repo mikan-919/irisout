@@ -6,7 +6,8 @@
   "scripts": {
     "bench": "tsx todomvc-vs-react.ts",
     "bench:browser": "tsx todomvc-vs-react.playwright.ts",
-    "bench:list-runtime": "tsx list-runtime.playwright.ts"
+    "bench:list-runtime": "tsx list-runtime.playwright.ts",
+    "bench:listener-strategy": "tsx listener-strategy.playwright.ts"
   },
   "dependencies": {
     "@irisout/examples": "workspace:*",

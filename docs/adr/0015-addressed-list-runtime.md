@@ -63,7 +63,8 @@ helperを追加する。
 
 - 配列操作の記録や変更itemの直接通知によるkey全走査の省略(ADR-0017へ移管)
 - microtask単位の更新バッチ
-- イベント委譲
+- List itemイベント委譲(専用のclick相当比較はADR-0021へ移管。native event semanticsを
+  含むproduction採否は未決定)
 - binding IDの整数packing
 - 仮想DOM、Fiber、汎用スケジューラ
 

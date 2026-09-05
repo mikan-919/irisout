@@ -2,7 +2,8 @@
 
 ## ステータス
 
-決定済み(常在ホスト要素のみ。条件分岐ブランチ・リストアイテム内は先送り)
+決定済み(常在ホスト要素、およびM5/M5.5のfactory-per-unit内。イベント委譲は
+ADR-0021でclick相当だけを測定し、production採用は保留)
 
 ## コンテキスト
 
@@ -16,6 +17,11 @@ CONCEPT.v2.md はハンドラ(ハンドラ)を「実行時発見」の対象と�
 実行されない(イベントコールバックだからである)。JSX 属性として静的に
 現れる以上、これは静的解析の領域であり、CONCEPT.v2.md の想定を実装の実態に
 合わせて修正する必要がある。
+
+なお、下記の初期スコープ制限に書かれた「リスト/条件分岐を更新時に
+`innerHTML`で再生成する」前提は、M5/M5.5(ADR-0005)のfactory-per-unit実装で
+更新済みである。現在はkeyed reuse中のitem/branch DOMと直接listenerを保持するが、
+イベント委譲を採用したわけではない。
 
 ## 決定
 
@@ -59,6 +65,13 @@ CONCEPT.v2.md はハンドラ(ハンドラ)を「実行時発見」の対象と�
 巻き上げられるため定義順は問題にならない - `__handler_*` はマウント後に
 しか*呼ばれない*ので、参照時点で `update_*` は既に存在する。
 
+配線は標準の`addEventListener(eventName, handler)`を使い、capture/passive/once
+などのoptionsは渡さない。したがってnative eventはブラウザからそのままhandlerへ
+届き、`event.target`は発火元、`event.currentTarget`はそのlistenerを登録した
+要素になる。現在の実装では、rootのhandlerもfactory内のList item/conditional
+handlerもこの直接配線であり、委譲によるcurrentTargetの変更やevent objectの
+proxy化は行っていない。
+
 ラップ方式は「ユーザーの式を呼んでから、そのあとで update を呼ぶ」
 という最も単純な形にした(rendered テキストを再パースして本体を書き換える
 のではなく、呼び出し結果をそのまま使う)。この結果、ハンドラが実際には
@@ -77,32 +90,25 @@ CONCEPT.v2.md はハンドラ(ハンドラ)を「実行時発見」の対象と�
 
 ## スコープ制限(この回で対応しないこと)
 
-- **条件分岐ブランチ内のハンドラ**:ブランチは条件が変わるたびに
-  `insertAfter`/`remove` で丸ごと作り直される(ADR-0001 参照)ため、
-  一度貼った `addEventListener` は消える。`renderBranch` 配下では
-  `inStructural=true` を伝播させ、ハンドラが見つかった時点で
-  `compile: event handler "..." inside a conditional branch is not
-  supported yet (scope limit)` を投げる。
-- **リストアイテムテンプレート内のハンドラ**:アイテムは更新のたびに
-  `innerHTML` で丸ごと再描画される(`src/codegen.js` の list marker 更新
-  ロジック参照)ため、同じ理由で listener が失われる。
-  `renderItemTemplate`(`src/classify.js`)は `key` 以外の属性を黙って
-  無視するため、`onClick` 等を静かに握りつぶさないよう、コンパイラ側
-  (`renderList`)で `renderItemTemplate` を呼ぶ前に `on[A-Z]` 属性を
-  明示的に検出してスコープ制限エラーを投げる。
+- **条件分岐ブランチ内・リストアイテム内のハンドラ**: M5/M5.5で
+  `<template>`+`cloneNode(true)`とfactory-per-unitを導入したため、対応する
+  handlerは各factory内の要素へ直接`addEventListener`できる。keyed reuse中は
+  同じDOM/handlerを保持し、keyが脱落したときはDOMとhandleを破棄する。2階層を
+  超える構造ユニット、`use=`の構造ユニット内利用など、別途STATUS.mdに記す
+  scope limitは残る。
+- **イベント委譲**: ADR-0021で実Chromiumのclick相当fixtureを測定したが、
+  全イベントへのproduction採用は本ADRの決定に含めない。`blur`のような
+  non-bubbling eventや`event.currentTarget`を観測するhandlerの意味を保つ
+  具体設計が必要である。
 - **非ハンドラのホスト属性**(`class`, `value` など):今回のスコープ外。
   引き続き無視する。
 
 ## 未決定事項(後続で詰める)
 
-- 条件分岐ブランチ・リストアイテム内のハンドラをどう配線し直すか。
-  ブランチ/アイテムが再生成されるたびに `addEventListener` を再実行する
-  素朴な方式もあるが、頻繁な差し替えでは listener の張り直しコストが
-  積み重なる。より筋が良さそうなのはコンテナレベルのイベント委任
-  (`container.addEventListener('click', (e) => { ... })` で
-  `e.target.closest('[data-iris-id]')` から対象マーカーを引く方式)で、
-  再マウント時の再配線が不要になる。条件分岐/リストのハンドラ対応に
-  着手する際は、まずこの委任方式を検討すること。
+- 実生成に近いfixtureで`click`/`change`/`input`/`keydown`/`dblclick`/
+  `blur`を比較し、bubbling/capture/direct配線とitem identity帳簿の組み合わせを
+  決める。`event.currentTarget`を直接要素と同じに保てるproxy/adapterの是非も、
+  native event identityやreadonly性を壊さないかを含めて検証する。
 - ハンドラが実際に値を変えなかった場合でも `update_*` が走る
   「correct-but-wasteful」な挙動を、将来的に値の変化を見て skip する
   最適化に寄せるべきか。現状はテキストマーカー更新が冪等なので実害はない。

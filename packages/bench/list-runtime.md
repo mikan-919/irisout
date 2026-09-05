@@ -91,7 +91,8 @@ reconcileを使うため、addressedから一貫した速度・mutation・heap�
 
 - 現行の配列setterから変更item IDを通知するauthoring/runtime API
 - microtask更新バッチ
-- イベント委譲
+- List itemイベント委譲(専用fixtureは`listener-strategy.playwright.md`で測定済み。
+  bubblingするclick相当以外のproduction採否はADR-0021で保留)
 - DOM native memoryとbrowser process全体のRSS
 
 retained JS heapは実行間の揺れがあるため絶対値ではなく、同一実行内の方式間比較に使う。

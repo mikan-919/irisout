@@ -5,9 +5,8 @@
 //
 // 実行: bun run bench/listener-strategy.ts
 //
-// 注意: jsdom 上の相対比較。実ブラウザの絶対値そのものではないが、
-// 「直接方式が委譲方式に対してどれだけ不利になるか」という傾向は
-// 読み取れるはず。N=100000 は数秒かかることがある。
+// 注意: jsdom 上の歴史的な相対比較。実ブラウザの採否は
+// listener-strategy.playwright.tsのChromium計測を使う。N=100000は数秒かかることがある。
 
 import { JSDOM } from 'jsdom'
 
