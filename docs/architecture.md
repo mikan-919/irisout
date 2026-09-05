@@ -19,7 +19,11 @@
 
 ## コンパイルパイプライン
 
-エントリは `packages/compiler/src/compiler.ts` の `compile(source)`。処理は6段:
+入口は `packages/compiler/src/compiler.ts` の `compile(source)` または
+`compileProject(entryPath)`である。`compile(source)`は単一sourceをそのまま6段で処理する。
+`compileProject(entryPath)`は最初に`module-linker.ts`で相対moduleを検査・解決・ASTリンクし、
+リンク済みsourceを同じ6段へ渡す。module-linkerは各fileを実行せず、build-time executionの
+単位を一つに保つ。
 
 ```
 source (.jsx)
@@ -49,6 +53,17 @@ generateModule()             ── 6. 依存グラフから ES モジュール�
 { code, initialHtml, ... }
 ```
 
+`compileProject(entryPath)`の追加段は次の通りである。
+
+```
+entryPath (.js/.jsx)
+  │ module-linker: 相対import解決、依存順、cycle/import/export検証、binding名変更
+  ▼
+linked source + module-scope補助宣言
+  │
+  └── 上のparseからgenerateModuleまでの処理
+```
+
 `compileComponent()`(4)が受理しないパターンに当たると、常に
 `compile:`+`(scope limit)`エラーで拒否する(ADR-0004の裏面、
 「安全に拒否する」)。この拒否からの公式な逃げ道は`use=`アクション
@@ -63,6 +78,7 @@ triage手続きで捌く — コンパイラの受理条件自体を場当たり
 | ファイル                                              | 責務                                                                                                                                                                                                |
 | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `packages/compiler/src/compiler.ts`                   | パイプライン全体の統括。ルート特定、ビルド時実行、discovery 検証                                                                                                                                    |
+| `packages/compiler/src/compiler/module-linker.ts`     | `compileProject()`の相対`.js`/`.jsx`解決、依存順、静的import/export検証、cycle検出、AST binding名変更、補助宣言抽出                                                                                 |
 | `packages/compiler/src/compiler/inline-components.ts` | 同一ファイル内`<Component/>`参照のコンパイル時ASTインライン化(ADR-0014)。findRootComponent()より前に完結する独立した前処理パス                                                                      |
 | `packages/compiler/src/compiler/state.ts`             | `compile()` 全体で共有するミュータブル状態 `CompilerState`(ctx)と ID 型                                                                                                                             |
 | `packages/compiler/src/compiler/render.ts`            | JSX ツリーの走査。宣言・マーカー・ハンドラを ctx に積み、HTML テンプレートソースを組み立てる                                                                                                        |
@@ -72,7 +88,7 @@ triage手続きで捌く — コンパイラの受理条件自体を場当たり
 | `packages/compiler/src/codegen.ts`                    | 最終 codegen。文字列組み立てのみ、AST もコンパイラ状態も触らない                                                                                                                                    |
 | `packages/runtime/src/index.ts`                       | 2つの顔を持つ: signal/derived は**ビルド時専用**。mount/hydrate、`use=`返り値のshape検証、List使用時だけimportされるkey照合・binding値キャッシュは**ブラウザ出荷用**の最小ランタイム(ADR-0015/0022) |
 | `packages/compiler/src/template.ts`                   | テンプレートリテラル組み立てヘルパー(render と codegen の共有部)                                                                                                                                    |
-| `apps/examples/vite.config.ts`                        | .jsx → `dist/index.html`(焼き込み済み HTML)+ `dist/app.js`(hydrate のみ)                                                                                                                            |
+| `apps/examples/vite.config.ts`                        | entry path → `compileProject()` → `dist/index.html`(焼き込み済み HTML)+ `dist/app.js`(hydrate のみ)                                                                                                 |
 
 ## 重要な概念
 
@@ -112,6 +128,10 @@ triage手続きで捌く — コンパイラの受理条件自体を場当たり
 - **List更新アドレス**(ADR-0015): コンパイル時のList marker ID、key式のitem ID、
   item内marker由来のbinding IDを分離して保持する。共有ランタイムはkey照合と
   DOM順序、生成factoryはbinding単位の直接DOM更新を担当する。
+- **module境界**(ADR-0024): `compileProject()`は相対`.js`/`.jsx`の静的named/default
+  importだけをAST bindingへ解決する。componentはinline pathへ入り、通常のfunctionと
+  `const`だけが補助宣言としてmodule scopeに残る。外部module、dynamic import、re-export、
+  cycle、module scope stateは`compile:`エラーで拒否する。
 
 ## 設計変更の進め方
 

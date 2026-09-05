@@ -137,58 +137,30 @@ minifyを有効にしている。counterのsize budgetは`packages/compiler/test
 不透明属性を第一候補に再設計)。「使ってもらえる閾値」は
 M5 単体ではなく **M5+`use=`** と置き直す(2026-07-14 相談)。
 
-### 4. 複数コンポーネント合成・複数ファイル・ビルド時実行の切り分け(2026-07-21 提起)
+### 4. 複数コンポーネント合成・複数ファイル・ビルド時実行の切り分け(完了: 2026-09-05)
 
-ADR-0001の未決定事項(「複数コンポーネント境界のインライン化」「ビルド時
-実行のサンドボックス／副作用の扱い」)がM6完了後もそのまま残っている。
-CONCEPT.v3.mdはコンポーネント境界を可能な限りビルド後に消すことを
-設計原則にしているが、現状の実装は同一ファイル内の合成までに限られ、
-複数ファイル側では以下が残る:
+同一ファイルの合成はADR-0014で決定・実装済みであり、複数ファイルの境界はADR-0024で
+決定・実装済みである。`compileProject(entryPath)`が入口から相対`./`/`../`の静的
+named/default importを辿り、`.js`/`.jsx`を依存順にASTリンクしてから既存のcompile
+pipelineへ渡す。各fileを個別に`new Function()`せず、build-time executionはリンク済み
+programを一回だけ実行する。
 
-- `<Component/>`のようなJSXタグ参照そのものが
-  `compile: component references (<${tagName}/>) are not supported yet
-(scope limit)`で拒否されていた(`packages/compiler/src/compiler/render.ts`)問題は、
-  **同一ファイル内に限り解消・実装済み**(下記参照)。
-- `compile(source: string)`(`packages/compiler/src/compiler.ts`)は単一文字列を1回だけ
-  受け取るシグネチャで、モジュール解決の余地がない。加えて Program 直下は
-  関数宣言のみ許可(change `scope-limit-coverage`、STATUS.md既知の制約)の
-  ため、`import`文自体が現状scope limitで拒否される ― 複数ファイルは
-  「未実装」以前に「入力として受け付けない」段階。
+`render(<JSX>)`を持つfunctionはコンパイル時にinline化し、component functionとprops
+objectを生成しない。componentでないfunctionと初期化済み単純`const`は補助宣言として
+生成moduleのmodule scopeへ一度だけ出す。補助宣言はcomponentのstateを書き換えない純粋な
+処理に限る。
 
-**同一ファイル内の合成は解消済み・実装済み(ADR-0014、change
-`same-file-component-composition`、2026-07-21)**: `TodoApp`→`TodoItem`
-(構造ユニットの中身の切り出し)を具体的な検証対象に、呼び出し箇所ごとの
-コンパイル時ASTインライン化(render-tree走査より前の独立前処理パス
-`packages/compiler/src/compiler/inline-components.ts`)・propsはshorthand分割代入のみの
-純粋な置換(ランタイムprimitiveなし)・名前衝突は検出時のみ対応
-(signal/derived宣言名・動きゾーン関数名とも、衝突した側をコンポーネント名
-で接頭辞化してリネーム)を実装した。
-children/slot・自己/相互再帰参照はscope limitで拒否。詳細な制約は
-STATUS.md参照。
-
-以下は**複数ファイル**側のみ残る問い(同一ファイル内合成の実装とは
-独立に検討してよい ― ADR-0014「検討した代替案」参照):
-
-1. **複数ファイルにまたがる場合のビルド時実行の単位** ― ファイルごとに
-   `new Function()`するのか、依存グラフ構築前にモジュールをフラット化して
-   1回で実行するのか。ADR-0001未決定の「サンドボックス／副作用の扱い」は
-   ファイル数が増えるほど無視できなくなる(build-time実行が複数ファイルの
-   副作用順序に依存し始める)。
-2. **モジュール解決の範囲** ― 相対import限定か、`node_modules`越しの
-   コンポーネント共有(パッケージ化)まで見るか。CONCEPT.v3.mdの射程を
-   超える可能性があるので、まずCONCEPT側の確認が要る。
-
-複数ファイル対応(上記1・2)は、実需(具体的にどんなアプリを組みたいか)
-が出ない限り今それだけで進める理由は薄い。ADR-0014(同一ファイル内合成)
-の実装が完了した。次に触る候補は、上記v3節の複数event fixtureと、複数ファイル化の
-具体的な実需である。
+module scopeのstate、副作用文、`let`/`var`、分割代入、外部specifier、未解決path、
+namespace/side-effect/dynamic import、re-export、循環依存は`compile:`エラーで拒否する。
+`compile(source)`は単一source APIとして保持し、module解決を行わない。fixtureと受入条件は
+`apps/examples/multi-file/`、`packages/compiler/test/multi-file-module-composition.test.ts`、
+`openspec/specs/multi-file-module-composition/spec.md`にある。
 
 ### 5. 基本機能セット(Svelte/Solid水準)のギャップ一覧(2026-07-21 提起、未着手)
 
 「Reactほどではなく、Svelte/Solidぐらいの水準で実用に使われるための
 最低限セット」を軸に現状を棚卸しした。§4(props・複数コンポーネント・
-複数ファイル)は同一ファイル内合成がADR-0014で決定済みなので、それが
-実装された**後**にも残る/別軸のギャップだけをここに積む。設計判断は
+複数ファイル)の実装後にも残る/別軸のギャップだけをここに積む。設計判断は
 まだしていない。
 
 - **context(ツリー越しの暗黙DI)**: ROADMAP・ADR・STATUSのどこにも記述が
@@ -284,7 +256,7 @@ transition/animation、portal、error boundary、async/resource
    ASTインライン化(root scope + list itemのみ)・shorthand propsの
    コンパイル時識別子置換・ローカルsignal(構造ユニット専有の変数ゾーン)
    を実装し、`apps/examples/todomvc.jsx`の`TodoApp`から`TodoItem`を切り出した。
-   children/slot・自己/相互再帰参照・複数ファイルは引き続きscope limit
+   children/slot・自己/相互再帰参照は引き続きscope limit
    (詳細はSTATUS.md既知の制約参照)。
 10. ~~authored `.jsx` の型検査基盤~~ — **完了**(change
     `jsx-type-checking-foundation`)。`types/jsx.d.ts`(グローバル`JSX`
@@ -322,12 +294,24 @@ transition/animation、portal、error boundary、async/resource
     branch切替・祖先unit破棄・root unmountのdestroy、初期化失敗と破棄例外の回収を
     実装・検証した。
 
+18. 次の一般用途対応は次の順番で検討する。大きな実装には着手しない。
+    1. **優先度P1: 要素に紐付かない`onMount`/`effect`とcleanup**。データ取得、
+       timer、WebSocketなどをDOM actionだけでなく処理単位で扱うために必要である。
+       `use=`の`destroy`との責務分離、SSRなしのbuild-time実行との境界を先に決める。
+    2. **優先度P1: context**。複数ファイルcomponentはpropsで接続できるが、深い
+       component treeの共有依存はprops drillingになる。module scope stateを導入する
+       前に、instance単位の所有権とcleanupを決める必要がある。
+    3. **優先度P2: component propsとhandlerの型検査**。現行の`types/jsx.d.ts`は
+       intrinsic要素と共通属性を検査するが、componentごとのprops型・イベント対象の
+       絞り込みは弱い。module分割後の名前間違いとprops形状をbuild前に検出するために
+       必要である。
+
 ## 参考資料
 
 - `STATUS.md` — 現在地・マイルストーン進捗・既知の制約
 - `CONCEPT.v3.md` — 現在のプロダクトコンセプト
 - `CONCEPT.v2.md` — 旧コンセプト(履歴)
-- `docs/adr/0001`〜`0023` — 決定済みの設計判断
+- `docs/adr/0001`〜`0024` — 決定済みの設計判断
 - `session/000_ts-rewrite-kickoff-and-m1.md` — 書き直しキックオフの全経緯、
   quixとの比較
 - `openspec/specs/` — 実装対象の受入条件の正本

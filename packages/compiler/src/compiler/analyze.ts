@@ -170,6 +170,7 @@ function tryHandleTrackedCallee(
   const name = idPath.node.name
   const binding = idPath.scope.getBinding(name)
   if (!binding) return // グローバル → 素通し(従来どおり)
+  if (ctx.supportNames.has(name)) return // linked moduleの補助関数/const
   const fn = ctx.movementFns.get(name)
   if (!fn || binding.path.node !== fn.node) {
     throw new Error(

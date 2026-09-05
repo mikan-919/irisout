@@ -49,13 +49,22 @@ function cloneWithPositions<T extends t.Node>(node: T): T {
 // ルート探索とインライン化パスの両方が使う共有ロジック(task 1.1)。
 export function collectTopLevelComponents(
   ast: t.File,
+  renderOnly = false,
 ): Map<string, NodePath<t.FunctionDeclaration>> {
   const componentsByName = new Map<string, NodePath<t.FunctionDeclaration>>()
   traverse(ast, {
     FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
       if (
         (path.parentPath.isProgram() || path.parentPath.isExportNamedDeclaration()) &&
-        path.node.id
+        path.node.id &&
+        (!renderOnly ||
+          path.node.body.body.some(
+            (statement) =>
+              statement.type === 'ExpressionStatement' &&
+              statement.expression.type === 'CallExpression' &&
+              statement.expression.callee.type === 'Identifier' &&
+              statement.expression.callee.name === 'render',
+          ))
       ) {
         componentsByName.set(path.node.id.name, path)
       }
@@ -466,7 +475,7 @@ export function inlineComponents(
   ast: t.File,
   transformedNodes: Set<t.Node> = new Set(),
 ): Set<t.Node> {
-  const componentsByName = collectTopLevelComponents(ast)
+  const componentsByName = collectTopLevelComponents(ast, true)
   const referencedNames = findReferencedComponentNames(componentsByName)
 
   for (const [name, path] of componentsByName) {

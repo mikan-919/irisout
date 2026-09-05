@@ -184,6 +184,11 @@ export interface TrackedFn {
 export interface CompilerState {
   source: string
 
+  // compileProject()でリンクされたmoduleの通常関数・const名。handler/action
+  // 内の呼び出しはmovement-zone関数の追跡対象ではなく、生成moduleの補助宣言へ
+  // 解決する。compile(source)では空集合。
+  supportNames: Set<string>
+
   // same-file-component-composition: props置換・AST生成・識別子変更を受けた
   // ノード。analyze.tsはこの集合を見て、該当する式を元ソースのstart/endから
   // 切り出さずASTコード生成へ切り替える。
@@ -232,9 +237,11 @@ export interface CompilerState {
 export function createCompilerState(
   source: string,
   transformedNodes: Set<t.Node> = new Set(),
+  supportNames: Set<string> = new Set(),
 ): CompilerState {
   return {
     source,
+    supportNames,
     transformedNodes,
     declIdByKey: new Map(),
     declKind: new Map(),

@@ -42,7 +42,7 @@ export default defineConfig({
         },
       },
       {
-        files: ['apps/examples/*.jsx'],
+        files: ['apps/examples/*.jsx', 'apps/examples/**/*.jsx'],
         rules: {
           'typescript/no-useless-default-assignment': 'off',
         },

@@ -1,8 +1,8 @@
 // authored JSXをirisout compilerで処理し、初期HTMLとhydrate専用モジュールを
-// Viteの標準ビルドへ渡す。アプリ側はcompiler/runtimeの内部配置を知らない。
-import { readFileSync } from 'node:fs'
+// Viteの標準ビルドへ渡す。module graphの読込はcompilerへ委譲し、アプリ側は
+// compiler/runtimeの内部配置を知らない。
 import path from 'node:path'
-import { compile } from '@irisout/compiler'
+import { compileProject } from '@irisout/compiler'
 import { defineConfig } from 'vite-plus'
 
 const virtualEntry = 'virtual:irisout-entry'
@@ -10,7 +10,7 @@ const resolvedEntry = `\0${virtualEntry}`
 
 export default defineConfig(() => {
   const input = path.resolve(process.env.IRISOUT_ENTRY ?? 'list.jsx')
-  const { code, initialHtml } = compile(readFileSync(input, 'utf8'))
+  const { code, initialHtml } = compileProject(input)
 
   return {
     plugins: [

@@ -41,6 +41,7 @@ import type {
   StructuralUnitBody,
 } from './compiler/state.ts'
 import { createCompilerState } from './compiler/state.ts'
+import { linkProject } from './compiler/module-linker.ts'
 import { collection, derived, registry, signal } from '@irisout/runtime'
 
 export interface CompileResult {
@@ -56,10 +57,17 @@ export interface CompileResult {
 // 捨てられ、参照時に生 ReferenceError になる)ため、一律拒否が正直な挙動。
 // 将来トップレベル定数等を受理するときは、ここを明示的な設計判断として
 // 緩める(scope-limit-coverage design D2)。
-function assertTopLevelShape(program: t.Program): void {
+function assertTopLevelShape(program: t.Program, allowModuleSupport = false): void {
   for (const stmt of program.body) {
     const inner = stmt.type === 'ExportNamedDeclaration' ? stmt.declaration : stmt
-    if (inner?.type !== 'FunctionDeclaration') {
+    const isSupportConst =
+      allowModuleSupport &&
+      inner?.type === 'VariableDeclaration' &&
+      inner.kind === 'const' &&
+      inner.declarations.every(
+        (declaration) => declaration.id.type === 'Identifier' && declaration.init != null,
+      )
+    if (inner?.type !== 'FunctionDeclaration' && !isSupportConst) {
       throw new Error('compile: only top-level function declarations are supported (scope limit)')
     }
   }
@@ -70,8 +78,11 @@ function assertTopLevelShape(program: t.Program): void {
 // この時点ではinlineComponentsが既に子コンポーネントの参照を展開・元宣言を
 // 除去済みなので、この関数はコンポーネント合成という概念を知らないまま
 // 単一コンポーネント想定で動く(ADR-0014コンテキスト参照)。
-function findRootComponent(ast: ReturnType<typeof parse>): NodePath<t.FunctionDeclaration> {
-  const componentsByName = collectTopLevelComponents(ast)
+function findRootComponent(
+  ast: ReturnType<typeof parse>,
+  renderOnly = false,
+): NodePath<t.FunctionDeclaration> {
+  const componentsByName = collectTopLevelComponents(ast, renderOnly)
   if (componentsByName.size === 0) throw new Error('compile: no component function found')
 
   const referenced = new Set<string>()
@@ -115,21 +126,28 @@ function buildSignalToMarkers(
   return signalToMarkers
 }
 
-export function compile(source: string): CompileResult {
+interface CompileOptions {
+  allowModuleSupport?: boolean
+  supportStatements?: string[]
+  supportNames?: Set<string>
+}
+
+function compileSource(source: string, options: CompileOptions = {}): CompileResult {
   registry.clear()
 
   const ast = parse(source, {
     sourceType: 'module',
     plugins: ['typescript', 'jsx'],
   })
-  assertTopLevelShape(ast.program)
+  assertTopLevelShape(ast.program, options.allowModuleSupport)
   // same-file-component-composition (ADR-0014, design.md D1): 同一ファイル内
   // の<Component/>参照をfindRootComponentより前にASTインライン化する。以後の
   // パイプラインはコンポーネント合成という概念を一切知らないまま動く。
   const transformedNodes = new Set<t.Node>()
   inlineComponents(ast, transformedNodes)
-  const ctx = createCompilerState(source, transformedNodes)
-  const rootPath = findRootComponent(ast)
+  const ctx = createCompilerState(source, transformedNodes, options.supportNames)
+  for (const supportName of options.supportNames ?? []) ctx.usedOutputNames.add(supportName)
+  const rootPath = findRootComponent(ast, options.allowModuleSupport === true)
 
   const out = {
     declStatements: [] as string[],
@@ -343,6 +361,7 @@ export function compile(source: string): CompileResult {
 
   // --- ビルド時実行:discovery の確認 + 実際の初期 HTML の取得 ---
   const instrumentedBody = [
+    ...(options.supportStatements ?? []),
     ...out.instrumentedDeclStatements,
     `return \`${rootHtmlSource}\`;`,
   ].join('\n')
@@ -404,6 +423,7 @@ export function compile(source: string): CompileResult {
   }))
 
   const code = generateModule({
+    supportStatements: options.supportStatements ?? [],
     declStatements: out.declStatements,
     markers: markerOutputs,
     signalToMarkers,
@@ -426,4 +446,20 @@ export function compile(source: string): CompileResult {
     signalToMarkers,
     declName: ctx.declOutputName,
   }
+}
+
+export function compile(source: string): CompileResult {
+  return compileSource(source)
+}
+
+// Node側のbuild入口。module graphの読込はここで行い、既存compile(source)の
+// 単一文字列APIとsource-onlyテストを変更しない。Vite pluginはentry pathだけを
+// 渡し、リンク済みsourceや補助宣言を直接扱わない。
+export function compileProject(entryPath: string): CompileResult {
+  const linked = linkProject(entryPath)
+  return compileSource(linked.source, {
+    allowModuleSupport: true,
+    supportStatements: linked.supportStatements,
+    supportNames: linked.supportNames,
+  })
 }

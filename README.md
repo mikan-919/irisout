@@ -69,6 +69,18 @@ vp build
 innerHTML は一切書かない)が生成されます。既定のList playgroundでは、itemの
 追加・1件更新・並べ替え・削除とkeyed DOM再利用を試せます。
 
+入口を分割したfixtureは次でビルドできます。
+
+```bash
+cd apps/examples
+IRISOUT_ENTRY=multi-file/App.jsx vp build
+```
+
+`compileProject(entryPath)`は相対`.js`/`.jsx`の静的importを依存順にリンクし、
+componentをコンパイル時にインライン化します。通常の補助関数と`const`は生成moduleへ
+残ります。外部module、dynamic import、re-export、循環依存、module scopeのstateは
+受理しません。`compile(source)`は単一文字列APIとして残ります。
+
 ## ベンチマーク
 
 TodoMVC 相当のシナリオ(mount / filter / add / remove、N=100〜100,000)を
@@ -98,7 +110,8 @@ TypeScript 実装は M1〜M6(全マイルストーン横断の no-wrapper 検証
 任意の深さの条件分岐・構造unit、`use=` action(top-level要素・list item・branch)、ハンドラ/action
 からの動きゾーン関数呼び出しの追跡(ADR-0013)、複数root writeで共有markerを
 一度だけ反映する同期更新batch(ADR-0020)、component instanceの
-`unmount()`と`use=` actionの`{ update?, destroy? }` cleanup(ADR-0022)。
+`unmount()`と`use=` actionの`{ update?, destroy? }` cleanup(ADR-0022)、相対moduleの
+複数ファイル合成(ADR-0024)。
 
 `mountComponent(container)` / `hydrateComponent(container)` は instance を返します。
 instanceは一度だけmount/hydrateでき、`unmount()`はidempotentです。既存の
@@ -108,7 +121,8 @@ timer・subscription・外部 listenerなどactionが確保したresourceは、o
 instanceが所有し、keyed reorderでは再初期化せず、item削除・branch切替・祖先unit破棄・
 root `unmount()`でdestroyします。再mountはscope limit/非対応です。
 
-既知の制約(ルートコンポーネントは1つのみ、複数ファイル合成未対応、など)は [`STATUS.md`](./STATUS.md) に一覧があります。
+既知の制約(ルートコンポーネントは1つのみ、children/slot未対応、module解決は相対
+importのみ、など)は [`STATUS.md`](./STATUS.md) に一覧があります。
 まだ実験的なコンパイラであり、実プロダクトでの採用は制約を理解した上で
 検討してください。
 
@@ -133,6 +147,7 @@ packages/
   bench/             # Reactとの性能比較ベンチマーク
 apps/
   examples/          # Vite+でdev/buildできるサンプルと比較用fixture
+    multi-file/      # 相対module分割のfixture
 vite.config.ts       # format・lint・typecheck・test・workspace共通設定
 legacy/              # 旧JS実装(参照専用、メンテナンスしない)
 ```

@@ -115,6 +115,8 @@ export interface ActionOutput {
 }
 
 export interface GenerateModuleInput {
+  /** compileProject()でリンクされた通常の関数/const。runtimeへは出さず、module scopeへ一度だけ出す。 */
+  supportStatements: string[]
   declStatements: string[]
   markers: MarkerOutput[]
   signalToMarkers: Map<DeclId, Set<MarkerId>>
@@ -1001,6 +1003,7 @@ function renderActionCall(
 }
 
 export function generateModule({
+  supportStatements,
   declStatements,
   markers,
   signalToMarkers,
@@ -1051,6 +1054,7 @@ export function generateModule({
     }
   }
   moduleLines.push(`import { ${runtimeImports.join(', ')} } from '@irisout/runtime';`, '')
+  if (supportStatements.length > 0) moduleLines.push(...supportStatements, '')
   instanceLines.push(...declStatements, '')
   // cross-function-handler-writes design D4: 追跡された動きゾーン関数をauthored
   // 名のままinstanceスコープへemitする(update_*()は本体に入れない — D3)。

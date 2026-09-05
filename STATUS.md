@@ -89,6 +89,26 @@ item factoryのmarker参照はイベント配線で再検索せず、factoryの�
 呼び出し先の古いソース文字列を切り出さない。props参照の「より大きな式」に
 対する制約は削除した。
 
+## 現在地(2026-09-05・相対moduleの複数ファイル合成、ADR-0024)
+
+`compileProject(entryPath)`を追加し、入口から相対`./`/`../`で辿れる`.js`/`.jsx`
+moduleを依存順にASTリンクする。named importとdefault import、二段以上の相対importを
+受理する。`render(<JSX>)`を持つfunctionは既存のコンパイル時インライン化へ渡し、通常の
+functionと初期化済み単純`const`は生成moduleのmodule scopeへ補助宣言として一度だけ出す。
+component function、props object、component runtimeは生成しない。
+
+`compile(source)`は単一文字列APIとして維持し、importは受理しない。`compileProject`の
+module scopeではstate、副作用文、`let`/`var`、分割代入、外部specifier、未解決path、
+namespace/side-effect import、dynamic import、re-export、循環依存を`compile:`エラーで
+拒否する。補助宣言はsignal/derived/collectionを呼ばない通常の処理に限る。背景は
+`docs/adr/0024-multi-file-module-composition.md`、受入条件は
+`openspec/specs/multi-file-module-composition/spec.md`に記録した。
+
+`apps/examples/multi-file/`は入口、部品、補助関数、定数を分けたfixtureである。
+`packages/compiler/test/multi-file-module-composition.test.ts`は初期HTML、mount、hydrate、
+局所signal、条件分岐、List、props、イベント後DOM、Vite build、未対応module構文を実 DOM
+で確認する。
+
 ## 現在地(2026-09-04・List最小ランタイム第1段階)
 
 CONCEPT.v3への移行に伴い、List更新を共有最小ランタイムへ切り出した
@@ -209,7 +229,8 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
 | M5.5   | ネストした構造ユニット(条件分岐の中のリスト/リストアイテムの中の条件分岐)    | **DONE** | change `recursive-structural-authoring`。任意の深さ、unitごとの状態/cache、祖先local signalの更新接続                                                                                                                            |
 | `use=` | 要素へのaction接続(ADR-0011)                                                 | **DONE** | `use-action-impl` + `structural-unit-use-actions` + ADR-0022。top-level、list item、conditional branchをfactory単位で初期化・更新・破棄。関数updateと`{ update?, destroy? }`、component `unmount()`を実装                        |
 | M6     | 全マイルストーン横断のno-wrapper検証                                         | **DONE** | change `m6-no-wrapper-verification`。全機能同居フィクスチャで no-wrapper・import面・実DOM動作を固定(`test/no-wrapper.test.ts`)。サイズ予算係数はADR-0022のlifecycle固定費を含む5.5x(実測5.33x)。締め直しはminify最適化時に再検討 |
-| 合成   | 同一ファイル内の複数コンポーネント合成(ADR-0014)                             | **DONE** | change `same-file-component-composition`。コンパイル時ASTインライン化、root scope + list itemのみ、children/slot・再帰・複数ファイルは未対応のまま(下記制約参照)                                                                 |
+| 合成   | 同一ファイル内の複数コンポーネント合成(ADR-0014)                             | **DONE** | change `same-file-component-composition`。コンパイル時ASTインライン化、root scope + list itemのみ、children/slot・再帰は未対応(下記制約参照)                                                                                     |
+| 分割   | 相対moduleの複数ファイル合成(ADR-0024)                                       | **DONE** | `compileProject(entryPath)`、AST bindingリンク、依存順、静的import検証、Vite fixtureを実装。外部module・dynamic import・cycle・re-exportは対象外                                                                                 |
 | Batch  | 同期スコープ内の共有marker更新(ADR-0020)                                     | **DONE** | 複数root write時だけ専用batchを生成。公開batch API・scheduler・collection構造操作は対象外。イベント配線はADR-0021でdirectを採用                                                                                                  |
 
 ## 既知の制約(現時点のcodegenの限界)
@@ -217,12 +238,16 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
 - **ルートコンポーネントは1つだけ**: `compile()`は「他から一度も参照
   されないトップレベル関数」がちょうど1つであることを要求し、そうで
   なければcompile error(`packages/compiler/src/compiler.ts`のscope limit)。
-- **トップレベルは関数宣言のみ**(2026-07-18、change `scope-limit-coverage`):
-  Program 直下は関数宣言(`export` 付き含む)以外(import・トップレベル
-  `const`・副作用式等)を `scope limit` で一律拒否する。現状の実装では
-  出力に反映されず黙って捨てられるため、拒否が正直な挙動。分割代入宣言子
-  (`const [a] = signal(0)` 等)も同様に拒否。ビルド時実行の例外は
-  `compile: build-time execution failed:`(`cause` 付き)に包まれる。
+- **`compile(source)`のトップレベルは関数宣言のみ**(2026-07-18、change
+  `scope-limit-coverage`): Program直下は関数宣言(`export`付き含む)以外(import・
+  トップレベル`const`・副作用式等)を`scope limit`で拒否する。`const [a] = signal(0)`
+  のような分割代入宣言子も拒否する。ビルド時実行の例外は
+  `compile: build-time execution failed:`(`cause`付き)に包まれる。
+- **`compileProject(entryPath)`のmodule境界**(ADR-0024): 相対`.js`/`.jsx`の静的
+  named/default importだけを解決する。module直下で許可するのはimport、function宣言、
+  初期化済み単純`const`とそれらのexportだけである。module scopeのstate、副作用文、
+  `let`/`var`、分割代入、外部specifier、未解決path、namespace/side-effect/dynamic import、
+  re-export、循環依存は`compile:`エラーで拒否する。
 - **複数インスタンスは対応済み**(ADR-0018): 同じ生成moduleを複数containerへ
   mount/hydrateした場合と、stateを持つ同じ子componentをroot内で複数回使う場合の
   どちらもstate・marker・handler・構造ユニット状態が独立する。1つの
@@ -291,16 +316,16 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
   - reactive paramsは未実装。actionの引数をsignal更新で再評価せず、必要なら別の実需と
     代表fixtureで判断する。
   - 1要素への複数actionは未実装。`use`属性は一要素一つのままとする。
-  - 汎用`onMount`/`onDestroy`/effect runtime、context、複数ファイルcomponent importは
-    未実装。component instanceのcleanupとunit action lifecycleは解消済み。
+  - 汎用`onMount`/`onDestroy`/effect runtime、contextは未実装。component instanceの
+    cleanupとunit action lifecycleは解消済み。
   - action本体のconcise arrow(単一式)にネストしたリスナー等がある場合、
     その内部の書き込みに対する`update_*`挿入位置は本体全体の実行時点に
     まとまる(リスナー発火時ではない)。ブロック本体は正しく分離される
     (`packages/compiler/src/compiler/analyze.ts`の`analyzeActionExprScope`コメント参照)。
-- **同一ファイル内コンポーネント合成(ADR-0014、change
-  `same-file-component-composition`)は同一ファイル・root scopeと
-  list itemへのインライン化のみ実装済み**。以下は明示的な scope limit・
-  別changeへの先送り:
+- **コンポーネント合成はコンパイル時に消える**(ADR-0014、ADR-0024)。同一ファイルの
+  合成はroot scopeとlist itemへインライン化し、別ファイルの合成は
+  `compileProject(entryPath)`が相対moduleをリンクして同じ経路へ渡す。以下は明示的な
+  scope limit・別changeへの先送り:
   - `<Component>children</Component>`(children/slot)は`scope limit`。
     実需が出るまで対応しない(ADR-0014決定7)。
   - 自己/相互再帰参照(`function A() { render(<A/>) }`等)は
@@ -322,3 +347,5 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
     関数名は、呼び出し元の既存識別子と衝突する場合のみ、衝突した側を
     コンポーネント名で接頭辞化してリネームする(例: `TodoItem_count`,
     `TodoItem_inc`)。衝突しない場合はauthored名のまま出力する。
+  - `compileProject`のmodule helperは純粋な補助処理を前提にする。module scopeの
+    stateは共有storeとして扱わず、componentのstateは入口側へ置いてpropsで渡す。
