@@ -27,8 +27,8 @@ derivedに専用の値保持、購読registry、schedulerを加えると、signa
 - 共有derivedは読み取り専用とする。生成コードの値を書き換えるinstance専有の再計算代入は
   持たせず、引数付き呼び出しは`compile:`エラーで拒否する。
 - 参照されない共有derivedと、そのderivedからしか到達しない共有signalは出力しない。
-  collection共有、永続化、request単位SSR分離、非同期scheduler、汎用store registryは
-  この契約に含めない。
+  永続化、request単位SSR分離、非同期scheduler、汎用store registryはこの契約に含めない。
+  collection共有はADR-0039で別契約として定める。
 
 ## 検討した代替案
 
@@ -44,5 +44,5 @@ derivedに専用の値保持、購読registry、schedulerを加えると、signa
 module共有derivedの式は、shared signalのsetter後に各instanceのmarker更新で再評価される。
 shared signalへ依存しないderivedは、初期HTMLの生成時と各component instanceの初期化時に
 読み取られるが、更新通知元を持たない。derivedの値を明示的に保持するcacheはないため、
-getterの副作用や非同期schedulerを意味論へ追加しない。SSRのrequest単位分離、永続化、
-collection共有は未決定である。
+getterの副作用や非同期schedulerを意味論へ追加しない。SSRのrequest単位分離と永続化は別契約であり、
+collection共有はADR-0039で定める。

@@ -1,8 +1,8 @@
 # module-shared-state Specification
 
 ## Purpose
-`compileProject`のリンク済みmoduleに限定した直接signalとderivedを、component runtimeや
-汎用storeなしで共有する。参照された共有stateだけが生成moduleへ出力される。
+`compileProject`のリンク済みmoduleに限定した直接signal、derived、collectionを、component
+runtimeや汎用storeなしで共有する。参照された共有stateだけが生成moduleへ出力される。
 
 ## Requirements
 
@@ -55,13 +55,43 @@ per-request state boundary.
 - **THEN** the generated module contains neither that derived function nor its unused shared-state
   dependencies
 
+### Requirement: module shared collection
+
+`compileProject(entryPath)` SHALL accept a module-scope direct
+`const name = collection(initial, keyOf)` declaration as one collection accessor shared by every
+generated component instance. A referenced collection SHALL be emitted once at generated-module
+scope with its key selector. Replacement calls and `update(key, updater)` calls SHALL synchronously
+notify each mounted instance, while keyed List runtime state SHALL remain instance-scoped.
+
+#### Scenario: instances share and update a module collection
+
+- **WHEN** two generated component instances read an imported module collection and one instance
+  replaces the collection or updates one keyed item
+- **THEN** both mounted instances reflect the new collection through their own List update paths
+
+#### Scenario: unmount removes a shared collection subscriber
+
+- **WHEN** one of two instances is unmounted and the other updates the shared module collection
+- **THEN** only the mounted instance is updated and the unmounted instance receives no callback
+
+#### Scenario: module collection keeps its key identity
+
+- **WHEN** a List reads a module shared collection with an item key different from the collection
+  key selector
+- **THEN** the generated runtime fails with the existing collection identity error
+
+#### Scenario: unused module collection has no output
+
+- **WHEN** a linked module declares a collection that no compiled expression reads or writes
+- **THEN** the generated module contains neither the shared collection helper nor that collection
+
 ### Requirement: bounded module state
 
-The compiler SHALL keep `compile(source)` unchanged and SHALL reject module-scope `collection()`
-declarations with a `compile:` scope-limit error. It SHALL not add persistence, request-local SSR
+The compiler SHALL keep `compile(source)` unchanged and SHALL accept module-scope collection only in
+the direct two-argument form described above. It SHALL not add persistence, request-local SSR
 isolation, implicit asynchronous scheduling, or a generic store registry.
 
-#### Scenario: unsupported module collection is rejected
+#### Scenario: unsupported module collection shape is rejected
 
-- **WHEN** a linked module declares a module-scope `collection()`
+- **WHEN** a linked module declares a module-scope collection with a non-concise key selector
 - **THEN** `compileProject` fails with a cause-specific `compile:` error and emits no module

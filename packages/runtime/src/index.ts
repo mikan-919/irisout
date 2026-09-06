@@ -470,6 +470,7 @@ export interface CollectionAccessor<T, K> {
   (): readonly T[]
   (next: readonly T[]): readonly T[]
   update(key: K, updater: (current: T) => T): T
+  readonly keyOf: (value: T) => K
 }
 
 export function collection<T, K>(
@@ -483,6 +484,7 @@ export function collection<T, K>(
     values = Array.from(args[0]!)
     return values
   }) as CollectionAccessor<T, K>
+  Object.defineProperty(accessor, 'keyOf', { value: keyOf })
   accessor.update = (key, updater) => {
     const index = values.findIndex((value) => Object.is(keyOf(value), key))
     if (index < 0) throw new Error(`collection.update: unknown key ${String(key)}`)
@@ -497,6 +499,46 @@ export function collection<T, K>(
     return next
   }
   if (declId) registry.set(declId, { kind: 'collection' })
+  return accessor
+}
+
+// compileProjectのmodule scopeで使う共有collection。値とkey indexは生成moduleの
+// module scopeに一つだけ置き、各component instanceのupdate関数へ同期通知する。
+// Listのkeyed DOM状態はinstanceごとに残し、collection accessorだけを共有する。
+export interface SharedCollection<T, K> extends CollectionAccessor<T, K> {
+  subscribe(listener: () => void): () => void
+}
+
+export function sharedCollection<T, K>(
+  initial: readonly T[],
+  keyOf: (value: T) => K,
+): SharedCollection<T, K> {
+  const state = createCollectionState(initial, keyOf)
+  const listeners = new Set<() => void>()
+  const notify = (): void => {
+    for (const listener of Array.from(listeners)) listener()
+  }
+  const accessor = ((...args: [] | [readonly T[]]): readonly T[] => {
+    if (args.length === 0) return state.values
+    const values = replaceCollection(state, args[0]!)
+    notify()
+    return values
+  }) as SharedCollection<T, K>
+  Object.defineProperty(accessor, 'keyOf', { value: keyOf })
+  accessor.update = (key, updater) => {
+    const next = updateCollectionItem(state, key, updater)
+    notify()
+    return next
+  }
+  accessor.subscribe = (listener: () => void): (() => void) => {
+    listeners.add(listener)
+    let active = true
+    return () => {
+      if (!active) return
+      active = false
+      listeners.delete(listener)
+    }
+  }
   return accessor
 }
 

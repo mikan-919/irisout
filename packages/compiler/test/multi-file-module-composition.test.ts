@@ -184,6 +184,39 @@ describe('compileProject: static multi-file module composition', () => {
     secondInstance.unmount()
   })
 
+  it('shares a module collection across component instances and unsubscribes on unmount', async () => {
+    const entry = writeProject({
+      'main.jsx': `import { items } from './state.js'; export function App() { render(<div><button class="update" onClick={update}>update</button><button class="replace" onClick={replace}>replace</button><p>{items().map((item) => item.text).join(',')}</p><ul>{items().map((item) => <li key={item.id}>{item.text}</li>)}</ul></div>); function update() { items.update(1, (item) => ({ ...item, text: item.text + '!' })); } function replace() { items([...items(), { id: 3, text: 'c' }]); } }`,
+      'state.js': `export const items = collection([{ id: 1, text: 'a' }, { id: 2, text: 'b' }], (item) => item.id);`,
+    })
+    const { code } = compileProject(entry)
+    expect(code).toContain('sharedCollection as __sharedCollection__')
+    expect(code).toContain('.subscribe(update_IrisM0_items)')
+    expect(code).toContain('IrisM0_items.keyOf')
+    expect(code).not.toContain('__createCollectionState__')
+
+    const mod = await loadGenerated(code)
+    const first = createContainer()
+    const second = createContainer()
+    const firstInstance = (mod.mountComponent as (container: Element) => { unmount(): void })(first)
+    const secondInstance = (mod.mountComponent as (container: Element) => { unmount(): void })(
+      second,
+    )
+    expect(first.textContent).toBe('updatereplacea,bab')
+    expect(second.textContent).toBe('updatereplacea,bab')
+
+    const EventCtor = first.ownerDocument.defaultView!.Event
+    first.querySelector('.update')!.dispatchEvent(new EventCtor('click', { bubbles: true }))
+    expect(first.textContent).toBe('updatereplacea!,ba!b')
+    expect(second.textContent).toBe('updatereplacea!,ba!b')
+
+    firstInstance.unmount()
+    second.querySelector('.replace')!.dispatchEvent(new EventCtor('click', { bubbles: true }))
+    expect(first.textContent).toBe('')
+    expect(second.textContent).toBe('updatereplacea!,b,ca!bc')
+    secondInstance.unmount()
+  })
+
   it('omits an unused module derived chain and its shared dependencies', () => {
     const entry = writeProject({
       'main.jsx': `import { unused } from './state.js'; export function App() { render(<span>ready</span>); }`,
@@ -294,7 +327,7 @@ describe('compileProject: module boundary errors', () => {
     expect(() => compileProject(unresolved)).toThrow(/cannot resolve relative import.*scope limit/)
 
     const moduleState = writeProject({
-      'main.jsx': `const items = collection([], (item) => item.id); export function App() { render(<div />) }`,
+      'main.jsx': `const items = collection([], (item) => { return item.id }); export function App() { render(<div />) }`,
     })
     expect(() => compileProject(moduleState)).toThrow(
       /cannot declare module-scope collection.*scope limit/,

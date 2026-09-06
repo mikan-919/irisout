@@ -1,5 +1,5 @@
 // マイルストーン1のコンパイラ:式の依存解析、単一コンポーネント、
-// signal/derived から専用 update_* への codegen(docs/adr/0001-first-milestone.md)。
+// signal/derived/collection から専用 update_* への codegen(docs/adr/0001-first-milestone.md)。
 // 出力はプレーン変数を使う(ADR-0006、legacy との最大の差分)。
 //
 // パイプライン:
@@ -159,7 +159,7 @@ function collectSharedDeclarations(
   const pending: {
     path: NodePath<t.VariableDeclarator>
     id: DeclId
-    kind: 'signal' | 'derived'
+    kind: 'signal' | 'derived' | 'collection'
     outputName: string
   }[] = []
 
@@ -180,12 +180,11 @@ function collectSharedDeclarations(
       const init = path.node.init
       if (init?.type !== 'CallExpression' || init.callee.type !== 'Identifier') return
       const kind =
-        init.callee.name === 'signal' || init.callee.name === 'derived' ? init.callee.name : null
-      if (init.callee.name === 'collection') {
-        throw new Error(
-          'compile: module-scope collection() shared state is not supported yet (scope limit)',
-        )
-      }
+        init.callee.name === 'signal' ||
+        init.callee.name === 'derived' ||
+        init.callee.name === 'collection'
+          ? init.callee.name
+          : null
       if (!kind) return
 
       if (kind === 'signal') {
@@ -193,13 +192,27 @@ function collectSharedDeclarations(
           throw new Error('compile: module-scope signal() takes exactly one argument')
         }
       } else if (
-        init.arguments.length !== 1 ||
-        init.arguments[0]?.type !== 'ArrowFunctionExpression' ||
-        init.arguments[0].params.length !== 0 ||
-        init.arguments[0].body.type === 'BlockStatement'
+        kind === 'derived' &&
+        (init.arguments.length !== 1 ||
+          init.arguments[0]?.type !== 'ArrowFunctionExpression' ||
+          init.arguments[0].params.length !== 0 ||
+          init.arguments[0].body.type === 'BlockStatement')
       ) {
         throw new Error(
           'compile: module-scope derived() must be called with a zero-arg concise arrow function `() => expr` (scope limit)',
+        )
+      } else if (
+        kind === 'collection' &&
+        (init.arguments.length !== 2 ||
+          init.arguments[0]?.type === 'SpreadElement' ||
+          init.arguments[1]?.type === 'SpreadElement' ||
+          init.arguments[1]?.type !== 'ArrowFunctionExpression' ||
+          init.arguments[1].params.length !== 1 ||
+          init.arguments[1].params[0]?.type !== 'Identifier' ||
+          init.arguments[1].body.type === 'BlockStatement')
+      ) {
+        throw new Error(
+          'compile: module-scope collection() key selector must be a one-argument concise arrow function `(item) => key` (scope limit)',
         )
       }
 
@@ -229,6 +242,23 @@ function collectSharedDeclarations(
         outputName: declaration.outputName,
         rendered: sourceRendered,
         sourceRendered,
+      })
+      continue
+    }
+
+    if (declaration.kind === 'collection') {
+      const initialPath = argPath
+      const keyPath = args[1]!
+      const initial = analyzeExpr(ctx, initialPath, 0)
+      const key = analyzeExpr(ctx, keyPath, 0)
+      ctx.sharedDecls.push({
+        id: declaration.id,
+        kind: declaration.kind,
+        outputName: declaration.outputName,
+        rendered: initial.rendered,
+        sourceRendered: initial.sourceRendered,
+        keyRendered: key.rendered,
+        keySourceRendered: key.sourceRendered,
       })
       continue
     }
@@ -599,6 +629,7 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
           collectionOutputName: m.collectionDeclId
             ? ctx.declOutputName.get(m.collectionDeclId)!
             : null,
+          collectionShared: m.collectionDeclId ? ctx.sharedDeclIds.has(m.collectionDeclId) : false,
           body: convertBody(m.body, ancestorLocalScopes),
         }
       : {
@@ -655,11 +686,15 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
   // --- ビルド時実行:discovery の確認 + 実際の初期 HTML の取得 ---
   const instrumentedBody = [
     ...(options.supportStatements ?? []),
-    ...ctx.sharedDecls.map((decl) =>
-      decl.kind === 'signal'
-        ? `const ${decl.outputName} = signal(${decl.sourceRendered}, ${JSON.stringify(decl.id)});`
-        : `const ${decl.outputName} = derived(${decl.sourceRendered}, ${JSON.stringify(decl.id)});`,
-    ),
+    ...ctx.sharedDecls.map((decl) => {
+      if (decl.kind === 'signal') {
+        return `const ${decl.outputName} = signal(${decl.sourceRendered}, ${JSON.stringify(decl.id)});`
+      }
+      if (decl.kind === 'derived') {
+        return `const ${decl.outputName} = derived(${decl.sourceRendered}, ${JSON.stringify(decl.id)});`
+      }
+      return `const ${decl.outputName} = collection(${decl.sourceRendered}, ${decl.keySourceRendered}, ${JSON.stringify(decl.id)});`
+    }),
     ...out.instrumentedDeclStatements,
     `return \`${rootHtmlSource}\`;`,
   ].join('\n')
@@ -730,8 +765,18 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
     sharedDerivedStatements: ctx.sharedDecls
       .filter((decl) => decl.kind === 'derived' && ctx.usedSharedDeclIds.has(decl.id))
       .map((decl) => `const ${decl.outputName} = ${decl.rendered};`),
+    sharedCollectionStatements: ctx.sharedDecls
+      .filter((decl) => decl.kind === 'collection' && ctx.usedSharedDeclIds.has(decl.id))
+      .map(
+        (decl) =>
+          `const ${decl.outputName} = __sharedCollection__(${decl.rendered}, ${decl.keyRendered});`,
+      ),
     sharedSignalNames: [...signalToMarkers.keys()]
       .filter((id) => ctx.sharedDeclIds.has(id) && ctx.declKind.get(id) === 'signal')
+      .map((id) => ctx.declOutputName.get(id)!)
+      .filter((name): name is string => name != null),
+    sharedCollectionNames: [...signalToMarkers.keys()]
+      .filter((id) => ctx.sharedDeclIds.has(id) && ctx.declKind.get(id) === 'collection')
       .map((id) => ctx.declOutputName.get(id)!)
       .filter((name): name is string => name != null),
     sharedDerivedIds: new Set(

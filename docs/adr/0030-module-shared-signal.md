@@ -22,9 +22,9 @@ module外の手書きruntimeへ逃がさずに表現できなかった。一方�
 - 共有signalのread/writeは生成後も`name()`/`name(next)`として残す。これにより全instanceが
   同じcellを読み、DOM更新は既存の専用依存経路へ接続される。
 - 共有signalを使わない生成物には、共有helper import、宣言、購読slotを出力しない。
-- module scopeの`collection`、永続化、request単位SSR分離、非同期scheduler、汎用store
-  registryは対象外とする。module共有derivedは、derived専用のcacheやschedulerを持たない
-  別契約としてADR-0037で定める。
+- module scopeのcollectionはADR-0039、永続化とrequest単位SSR分離は別契約とする。非同期
+  scheduler、汎用store registryは対象外とする。module共有derivedは、derived専用のcacheや
+  schedulerを持たない別契約としてADR-0037で定める。
 
 ## 検討した代替案
 
@@ -40,6 +40,6 @@ module外の手書きruntimeへ逃がさずに表現できなかった。一方�
 二つ以上のcomponent instanceが同じmodule signalを読み、どれかのinstanceのsetterで全ての
 mounted instanceを更新できる。unmount済みinstanceは購読解除される。module共有signalの
 初期値はbuild-timeと生成moduleで同じ式を一度ずつ評価するため、初期値は副作用を持たない
-式に限る。複雑なstore、module共有collection、request単位の分離は別契約である。
-module共有derivedの直接形はADR-0037で追加したが、collection共有とrequest単位の分離は
-引き続き対象外である。
+式に限る。複雑なstore、request単位の分離は別契約である。
+module共有derivedの直接形はADR-0037、module共有collectionの直接形はADR-0039で追加した。
+request単位の分離はADR-0038で現行版の対象外と定めた。

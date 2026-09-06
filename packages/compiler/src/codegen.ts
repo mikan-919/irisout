@@ -84,6 +84,7 @@ export interface ListMarkerOutput {
   keyRendered: string
   collectionDeclId: DeclId | null
   collectionOutputName: string | null
+  collectionShared: boolean
   body: StructuralUnitBodyOutput
 }
 
@@ -157,7 +158,10 @@ export interface GenerateModuleInput {
   sharedStatements: string[]
   /** compileProjectの使用済みmodule共有derivedをmodule scopeへ置く。 */
   sharedDerivedStatements: string[]
+  /** compileProjectの使用済みmodule共有collectionをmodule scopeへ置く。 */
+  sharedCollectionStatements: string[]
   sharedSignalNames: string[]
+  sharedCollectionNames: string[]
   /** 共有derivedはinstance専有の再計算代入を持たない。 */
   sharedDerivedIds: Set<DeclId>
   declStatements: string[]
@@ -1078,8 +1082,13 @@ function generateListUpdate(
     : hasLifecycle
       ? `, (__handle__, __next__) => __handle__.update?.(__next__, ${effectTriggerExpr}, ${effectForceExpr})`
       : ''
-  const keyOf = marker.collectionOutputName
-    ? `(${marker.itemParam}) => { const __key__ = ${marker.keyRendered}; if (!Object.is(__collection_${marker.collectionOutputName}__.keyOf(${marker.itemParam}), __key__)) throw new Error("collection List key does not match collection identity"); return __key__; }`
+  const collectionRef = marker.collectionShared
+    ? marker.collectionOutputName
+    : marker.collectionOutputName
+      ? `__collection_${marker.collectionOutputName}__`
+      : null
+  const keyOf = collectionRef
+    ? `(${marker.itemParam}) => { const __key__ = ${marker.keyRendered}; if (!Object.is(${collectionRef}.keyOf(${marker.itemParam}), __key__)) throw new Error("collection List key does not match collection identity"); return __key__; }`
     : `(${marker.itemParam}) => ${marker.keyRendered}`
   return [
     hasLifecycle
@@ -1267,7 +1276,9 @@ export function generateModule({
   externalImports,
   sharedStatements,
   sharedDerivedStatements,
+  sharedCollectionStatements,
   sharedSignalNames,
+  sharedCollectionNames,
   sharedDerivedIds,
   declStatements,
   markers,
@@ -1324,11 +1335,15 @@ export function generateModule({
     }
   }
   if (sharedStatements.length > 0) runtimeImports.push('sharedSignal as __sharedSignal__')
+  if (sharedCollectionStatements.length > 0) {
+    runtimeImports.push('sharedCollection as __sharedCollection__')
+  }
   if (externalImports.length > 0) moduleLines.push(...externalImports, '')
   moduleLines.push(`import { ${runtimeImports.join(', ')} } from '@irisout/runtime';`, '')
   if (supportStatements.length > 0) moduleLines.push(...supportStatements, '')
   if (sharedStatements.length > 0) moduleLines.push(...sharedStatements, '')
   if (sharedDerivedStatements.length > 0) moduleLines.push(...sharedDerivedStatements, '')
+  if (sharedCollectionStatements.length > 0) moduleLines.push(...sharedCollectionStatements, '')
   instanceLines.push(...declStatements, '')
   // cross-function-handler-writes design D4: 追跡された動きゾーン関数をauthored
   // 名のままinstanceスコープへemitする(update_*()は本体に入れない — D3)。
@@ -1390,7 +1405,8 @@ export function generateModule({
     .filter((line): line is string => line !== null)
   if (effectCleanupDeclLines.length > 0) instanceLines.push(...effectCleanupDeclLines, '')
 
-  const sharedUnsubscribeDeclLines = sharedSignalNames.map(
+  const sharedSubscriptionNames = [...sharedSignalNames, ...sharedCollectionNames]
+  const sharedUnsubscribeDeclLines = sharedSubscriptionNames.map(
     (_name, index) => `let __shared_unsubscribe_${index}__;`,
   )
   if (sharedUnsubscribeDeclLines.length > 0) instanceLines.push(...sharedUnsubscribeDeclLines, '')
@@ -1417,7 +1433,7 @@ export function generateModule({
     (h) =>
       `  __markers__.get(${JSON.stringify(h.markerId)})?.addEventListener(${JSON.stringify(h.eventName)}, __handler_${h.markerId}_${h.eventName});`,
   )
-  const sharedSubscribeLines = sharedSignalNames.map(
+  const sharedSubscribeLines = sharedSubscriptionNames.map(
     (name, index) => `  __shared_unsubscribe_${index}__ = ${name}.subscribe(update_${name});`,
   )
 
@@ -1610,7 +1626,7 @@ export function generateModule({
     '  __mounted__ = false;',
     ...(effects.length > 0 ? ['  __initializing__ = false;'] : []),
     ...handlerRemoveLines,
-    ...sharedSignalNames.map(
+    ...sharedSubscriptionNames.map(
       (_name, index) =>
         `  if (__shared_unsubscribe_${index}__) { const __unsubscribe__ = __shared_unsubscribe_${index}__; __shared_unsubscribe_${index}__ = null; __unsubscribe__(); }`,
     ),

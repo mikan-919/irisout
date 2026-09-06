@@ -1318,12 +1318,14 @@ function renderListUnit(
   const arrayObjPath = callee.get('object') as NodePath<t.Expression>
   const { deps, rendered: arrayRendered } = analyzeExpr(ctx, arrayObjPath, instanceId)
   const directDep = deps.size === 1 ? [...deps][0]! : null
-  const collectionDeclId =
-    directDep &&
+  const isDirectCollectionRead =
+    directDep != null &&
     ctx.declKind.get(directDep) === 'collection' &&
-    arrayRendered === ctx.declOutputName.get(directDep)
-      ? directDep
-      : null
+    (arrayRendered === ctx.declOutputName.get(directDep) ||
+      (ctx.sharedDeclIds.has(directDep) &&
+        arrayObjPath.isCallExpression() &&
+        arrayObjPath.node.arguments.length === 0))
+  const collectionDeclId = isDirectCollectionRead ? directDep : null
 
   const arrowPath = exprPath.get('arguments.0') as NodePath<t.ArrowFunctionExpression>
   const itemParam = (arrowPath.get('params.0') as NodePath<t.Identifier>).node.name

@@ -212,17 +212,21 @@ export interface ContextValue {
   deps: Set<DeclId>
 }
 
-// compileProjectのmodule先頭に置く共有signal/derived。生成moduleのmodule
-// scopeへ一度だけ出力する。shared signalだけがcomponent instanceの購読対象で、
-// shared derivedはそのsignalを読む読み取り専用関数として共有する。
+// compileProjectのmodule先頭に置く共有signal/derived/collection。生成moduleのmodule
+// scopeへ一度だけ出力する。shared signal/collectionだけがcomponent instanceの購読対象で、
+// shared derivedはそのsignal/collectionを読む読み取り専用関数として共有する。
 export interface SharedDecl {
   id: DeclId
-  kind: 'signal' | 'derived'
+  kind: 'signal' | 'derived' | 'collection'
   outputName: string
-  /** signalの初期値、またはderivedの関数式。 */
+  /** signal/collectionの初期値、またはderivedの関数式。 */
   rendered: string
   /** build時実行向けの初期値、またはderivedの関数式。 */
   sourceRendered: string
+  /** collectionのkey selector。collection以外では未設定。 */
+  keyRendered?: string
+  /** build時実行向けcollectionのkey selector。collection以外では未設定。 */
+  keySourceRendered?: string
 }
 
 // cross-function-handler-writes: ハンドラ/action から追跡対象として呼ばれた

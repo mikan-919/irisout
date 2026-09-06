@@ -50,8 +50,8 @@ render(<Card />)
   signalを読む場合はscope limitで拒否する。
 - context APIを使わないcomponentにはcontext宣言、Map、runtime importを出力しない。
 - 構造unitの動的provider treeはADR-0028の境界で実装済みである。非同期contextはADR-0029、
-  module共有signal/derivedはADR-0030/0037で別の最小契約を定める。runtime component object間の
-  provider伝播、非同期providerの解決、module共有collectionは引き続き対象外とする。
+  module共有signal/derived/collectionはADR-0030/0037/0039で別の最小契約を定める。runtime
+  component object間のprovider伝播、非同期providerの解決は引き続き対象外とする。
 
 ## 検討した代替案
 

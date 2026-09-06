@@ -112,6 +112,7 @@ Worker入口を読み込みます。配信先に接頭辞がある場合は`IRIS
 主な対応機能は次のとおりです。
 
 - `signal`と`derived`
+- `collection`によるキー付きリスト
 - テキストと属性の更新
 - イベント処理
 - キー付きリストと条件分岐
@@ -119,6 +120,10 @@ Worker入口を読み込みます。配信先に接頭辞がある場合は`IRIS
 - `use=`によるDOM操作と破棄処理
 - `onMount`、`effect`、コンテキスト
 - コンポーネントのマウント、初期HTMLの引き継ぎ、破棄
+
+`compileProject()`では、直接のmodule共有`signal`、`derived`、`collection`を受理します。
+共有collectionの配列は複数のcomponent instanceで共有され、ListのDOM状態はinstanceごとに
+保持されます。module共有stateのrequest単位SSR分離と永続化は対応範囲に含めません。
 
 ルートコンポーネントは1個、コンパイラが解析するモジュールは相対`.js`と`.jsx`、
 子要素の受け渡しは未対応です。外部moduleとViteの資源importは生成moduleへ渡します。

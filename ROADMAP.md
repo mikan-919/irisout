@@ -112,7 +112,7 @@ irisoutの到達基準は、入力、解析処理の呼び出し、状態管理�
 
 ### 今回は先に広げない範囲
 
-childrenによる共通パネル、SVG、双方向入力の省略記法、モジュール共有collectionは、
+childrenによる共通パネル、SVG、双方向入力の省略記法は、
 代表アプリで必要になった例から再検討する。PDF抽出、サーバーでの要求ごとのHTML生成、
 画面遷移の基盤、汎用の非同期実行基盤、学習済みモデルの導入は初期版の必須条件にしない。
 注: SVGは図形を要素として記述する形式であり、初期版の地図はHTML要素で構成できる。
@@ -271,17 +271,17 @@ programを一回だけ実行する。
 `render(<JSX>)`を持つfunctionはコンパイル時にinline化し、component functionとprops
 objectを生成しない。componentでないfunctionと初期化済み単純`const`は補助宣言として
 生成moduleのmodule scopeへ一度だけ出す。直接`const name = signal(initial)`はADR-0030の
-共有signal、直接`const name = derived(() => expression)`はADR-0037の共有derivedとして
-参照時だけ出力する。その他の補助宣言はcomponentのstateを書き換えない
-純粋な処理に限る。
+共有signal、直接`const name = derived(() => expression)`はADR-0037の共有derived、直接
+`const name = collection(initial, keyOf)`はADR-0039の共有collectionとして参照時だけ出力する。
+その他の補助宣言はcomponentのstateを書き換えない純粋な処理に限る。
 
-module scopeの直接signal/derived以外のstate、副作用文、`let`/`var`、分割代入、外部specifier、未解決path、
+module scopeの直接signal/derived/collection以外のstate、副作用文、`let`/`var`、分割代入、外部specifier、未解決path、
 namespace/side-effect/dynamic import、re-export、循環依存は`compile:`エラーで拒否する。
 `compile(source)`は単一source APIとして保持し、module解決を行わない。fixtureと受入条件は
 `apps/examples/multi-file/`、`packages/compiler/test/multi-file-module-composition.test.ts`、
 `openspec/specs/multi-file-module-composition/spec.md`にある。
 
-### 5. 基本機能セット(Svelte/Solid水準)のギャップ一覧(2026-07-21 提起、未着手)
+### 5. 基本機能セット(Svelte/Solid水準)のギャップ一覧(2026-07-21 提起、実装状況反映済み)
 
 「Reactほどではなく、Svelte/Solidぐらいの水準で実用に使われるための
 最低限セット」を軸に現状を棚卸しした。§4(props・複数コンポーネント・
@@ -298,11 +298,11 @@ namespace/side-effect/dynamic import、re-export、循環依存は`compile:`エ�
 - **effect(DOM以外への副作用)**: ルートcomponentと構造unit・inline子componentの`effect`は
   ADR-0026で実装済み。effect本体から追跡signalへ書き込む再入、非同期schedulerは対象外で、
   実需が出た時点で別契約を定める。
-- **モジュールスコープの共有state(Svelteのstore相当)**: ADR-0030/0037で直接の
-  `const name = signal(initial)`と`const name = derived(() => expression)`を
-  `compileProject`のmodule共有stateとして実装済み。参照された生成物だけが出力され、
-  signalだけがinstance購読を持つ。module共有collection、永続化、request単位SSR分離、
-  汎用storeは対象外。
+- **モジュールスコープの共有state(Svelteのstore相当)**: ADR-0030/0037/0039で直接の
+  `const name = signal(initial)`、`const name = derived(() => expression)`、
+  `const name = collection(initial, keyOf)`を`compileProject`のmodule共有stateとして実装済み。
+  参照された生成物だけが出力され、signal/collectionがinstance購読を持つ。collectionのList
+  DOM状態はinstanceごとに保持する。永続化、request単位SSR分離、汎用storeは対象外。
 - **`bind:value`的な双方向バインディング糖衣**: ADR-0012は一方向の
   property反映のみを規定しており、双方向バインディングは
   value属性+`onInput`ハンドラの手書き配線が必要(手書き相当のまま)。
@@ -421,15 +421,17 @@ transition/animation、portal、error boundary、async/resource
        `packages/compiler/types/jsx.d.ts`へ追加した。型検査専用fixtureで成功・失敗の両方を固定した。
     2. ~~**module共有stateの派生値とSSR境界**~~ — **完了**(ADR-0037/0038)。module共有signalの
        既存通知経路を使う読み取り専用関数として実装し、共有derivedのcache・schedulerを
-       追加しない。SSRはclient buildと要求ごとのサーバー生成を分け、module共有collectionと
-       永続化は別契約へ分ける。
+       追加しない。SSRはclient buildと要求ごとのサーバー生成を分け、永続化は別契約へ分ける。
+    3. ~~**module共有collection**~~ — **完了**(ADR-0039)。collection accessorとkey selectorを
+       module scopeへ一度だけ出力し、各instanceのList更新経路へ同期通知する。List DOM状態は
+       instanceごとに保持し、永続化とrequest単位SSR分離は別契約へ分ける。
 
 ## 参考資料
 
 - `STATUS.md` — 現在地・マイルストーン進捗・既知の制約
 - `CONCEPT.v3.md` — 現在のプロダクトコンセプト
 - `CONCEPT.v2.md` — 旧コンセプト(履歴)
-- `docs/adr/0001`〜`0038` — 決定済みの設計判断
+- `docs/adr/0001`〜`0039` — 決定済みの設計判断
 - `session/000_ts-rewrite-kickoff-and-m1.md` — 書き直しキックオフの全経緯、
   quixとの比較
 - `openspec/specs/` — 実装対象の受入条件の正本

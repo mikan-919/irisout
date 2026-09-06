@@ -1,0 +1,3 @@
+# module-shared-collection
+
+compileProjectでトップレベルcollectionをmodule共有stateとして受理する。

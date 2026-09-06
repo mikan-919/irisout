@@ -26,10 +26,11 @@ helperを通常のimportで使えない。examplesのVite pluginも一つのフ�
    compile-time AST inlineを再利用する。
 4. componentでないトップレベルfunctionと単純な`const`は、補助宣言として生成
    moduleのmodule scopeへ出す。同じ宣言をbuild-time executionにも一度だけ渡す。直接の
-   `const name = signal(initial)`と`const name = derived(() => expression)`は、ADR-0030/0037の
-   module共有stateとして別の生成境界へ渡す。
+   `const name = signal(initial)`、`const name = derived(() => expression)`、
+   `const name = collection(initial, keyOf)`は、ADR-0030/0037/0039のmodule共有stateとして
+   別の生成境界へ渡す。
 5. 各moduleを個別に実行せず、リンク済みprogramを一回のbuild-time executionで処理する。
-   module直下の直接`signal()`/`derived()`はADR-0030/0037に従い受理し、`collection()`と
+   module直下の直接`signal()`/`derived()`/`collection()`はADR-0030/0037/0039に従い受理し、
    副作用式は受理しない。
 6. 外部specifier、dynamic/namespace/side-effect import、re-export、未解決path、
    循環依存、未対応のmodule文は`compile:`で明示的に拒否する。node_modules、package
