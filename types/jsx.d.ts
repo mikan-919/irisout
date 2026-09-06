@@ -64,7 +64,11 @@ declare function effect(callback: () => void | (() => void)): void
 interface IrisContext<T> {
   readonly __irisoutContextType?: T
 }
+interface IrisAsyncContext<T> extends IrisContext<PromiseLike<T>> {}
 declare function createContext<T>(defaultValue: T): IrisContext<T>
+// 非同期contextはPromiseLike<T>を値として静的置換する。compilerはawait、Suspense、
+// schedulerを暗黙に追加せず、解決後の処理はauthorがthen/await可能な動きゾーンで行う。
+declare function createAsyncContext<T>(defaultValue: PromiseLike<T>): IrisAsyncContext<T>
 declare function provideContext<T>(context: IrisContext<T>, value: T): void
 declare function useContext<T>(context: IrisContext<T>): T
 

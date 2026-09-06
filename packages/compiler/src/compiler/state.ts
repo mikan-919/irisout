@@ -193,6 +193,8 @@ export interface EffectDecl {
 
 export interface ContextDecl {
   id: ContextId
+  /** createAsyncContext()の値を扱うcontextか。runtime awaitは生成しない。 */
+  async: boolean
   /** createContext()のdefaultValue。build時と生成時で同じ式を使う。 */
   defaultRendered: string
   defaultSourceRendered: string

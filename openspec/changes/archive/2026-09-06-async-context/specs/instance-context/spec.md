@@ -1,11 +1,4 @@
-# instance-context Specification
-
-## Purpose
-コンパイル時にinlineされるcomponent treeへ、runtimeの共有状態を追加せずinstance単位の
-context値を接続する。provider値とconsumerの依存をrootまたはstructural factoryの既存更新
-経路へ合流させ、未使用時の生成物を増やさない。
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: instance-scoped context
 
@@ -34,16 +27,6 @@ avoid adding a runtime context object or shared mutable module state.
 - **WHEN** an effect calls `.then()` on `useContext(AsyncKey)`
 - **THEN** the generated effect uses the statically resolved PromiseLike provider value without
   an implicit await or scheduler
-
-#### Scenario: no context output
-
-- **WHEN** a component does not author a context key, provider, or consumer
-- **THEN** generated output contains no context runtime machinery
-
-### Requirement: generated output boundary
-
-The compiler SHALL omit context-specific generated declarations and runtime imports when no context
-API is authored.
 
 #### Scenario: no context output
 

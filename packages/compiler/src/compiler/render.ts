@@ -87,7 +87,9 @@ function resolveContextProviderExpression(
   }
   const key = resolveContextId(ctx, args[0] as NodePath<t.Expression>)
   if (!key) {
-    throw new Error('compile: provideContext() key must be a createContext() binding (scope limit)')
+    throw new Error(
+      'compile: provideContext() key must be a createContext()/createAsyncContext() binding (scope limit)',
+    )
   }
   return { key, valuePath: args[1] as NodePath<t.Expression> }
 }

@@ -80,7 +80,7 @@ function assertTopLevelShape(program: t.Program, allowModuleSupport = false): vo
           declaration.id.type === 'Identifier' &&
           init?.type === 'CallExpression' &&
           init.callee.type === 'Identifier' &&
-          init.callee.name === 'createContext' &&
+          (init.callee.name === 'createContext' || init.callee.name === 'createAsyncContext') &&
           init.arguments.length === 1 &&
           init.arguments[0]?.type !== 'SpreadElement'
         )
@@ -91,11 +91,12 @@ function assertTopLevelShape(program: t.Program, allowModuleSupport = false): vo
         (declaration) =>
           declaration.init?.type === 'CallExpression' &&
           declaration.init.callee.type === 'Identifier' &&
-          declaration.init.callee.name === 'createContext',
+          (declaration.init.callee.name === 'createContext' ||
+            declaration.init.callee.name === 'createAsyncContext'),
       )
     if (hasContextCall && !isContextConst) {
       throw new Error(
-        'compile: createContext() declarations require one default value and simple names (scope limit)',
+        'compile: context declarations require one default value and simple names (scope limit)',
       )
     }
     if (inner?.type !== 'FunctionDeclaration' && !isSupportConst && !isContextConst) {
@@ -118,7 +119,8 @@ function collectContextDeclarations(
         declarator.id.type !== 'Identifier' ||
         declarator.init?.type !== 'CallExpression' ||
         declarator.init.callee.type !== 'Identifier' ||
-        declarator.init.callee.name !== 'createContext' ||
+        (declarator.init.callee.name !== 'createContext' &&
+          declarator.init.callee.name !== 'createAsyncContext') ||
         declarator.init.arguments.length !== 1 ||
         declarator.init.arguments[0]?.type === 'SpreadElement'
       ) {
@@ -129,7 +131,12 @@ function collectContextDeclarations(
       if (start == null || !arg || arg.start == null || arg.end == null) continue
       const id = toContextId(`context_${start}_${declarator.id.name}`)
       const defaultSourceRendered = source.slice(arg.start, arg.end)
-      ctx.contexts.set(id, { id, defaultRendered: defaultSourceRendered, defaultSourceRendered })
+      ctx.contexts.set(id, {
+        id,
+        async: declarator.init.callee.name === 'createAsyncContext',
+        defaultRendered: defaultSourceRendered,
+        defaultSourceRendered,
+      })
       ctx.contextIdByKey.set(`${start}:${declarator.id.name}`, id)
     }
   }

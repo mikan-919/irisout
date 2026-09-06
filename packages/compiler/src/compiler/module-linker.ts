@@ -298,7 +298,7 @@ function isContextDeclarator(declarator: t.VariableDeclarator): boolean {
     declarator.id.type === 'Identifier' &&
     init?.type === 'CallExpression' &&
     init.callee.type === 'Identifier' &&
-    init.callee.name === 'createContext' &&
+    (init.callee.name === 'createContext' || init.callee.name === 'createAsyncContext') &&
     init.arguments.length === 1 &&
     init.arguments[0]?.type !== 'SpreadElement'
   )

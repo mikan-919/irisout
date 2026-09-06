@@ -99,6 +99,18 @@ describe('compileProject: static multi-file module composition', () => {
     expect(code).not.toContain('provideContext')
   })
 
+  it('keeps an async context key compile-time-only across modules', () => {
+    const entry = writeProject({
+      'main.jsx': `import Child from './Child.jsx'; import { Request } from './context.js'; export function App() { provideContext(Request, Promise.resolve('dark')); render(<div><Child /></div>); }`,
+      'Child.jsx': `import { Request } from './context.js'; export default function Child() { render(<span>{String(useContext(Request))}</span>); }`,
+      'context.js': `export const Request = createAsyncContext(Promise.resolve('light'));`,
+    })
+    const { code } = compileProject(entry)
+    expect(code).not.toContain('createAsyncContext')
+    expect(code).not.toContain('useContext')
+    expect(code).not.toContain('provideContext')
+  })
+
   it('keeps compile(source) as the single-file API', () => {
     expect(() =>
       compile(`import { helper } from './helper.js'; export function App() { render(<div />) }`),

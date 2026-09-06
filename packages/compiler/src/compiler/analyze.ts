@@ -475,7 +475,9 @@ function contextValueForCall(
   }
   const contextId = resolveContextId(ctx, args[0] as NodePath<t.Expression>)
   if (!contextId) {
-    throw new Error('compile: useContext() key must be a createContext() binding (scope limit)')
+    throw new Error(
+      'compile: useContext() key must be a createContext()/createAsyncContext() binding (scope limit)',
+    )
   }
   const provided = ctx.contextValues.get(contextId)
   if (provided) return provided
