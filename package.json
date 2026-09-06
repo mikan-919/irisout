@@ -26,6 +26,7 @@
     "test": "vp test --run",
     "bench": "vp run @irisout/bench#bench",
     "bench:browser": "vp run @irisout/bench#bench:browser",
+    "bench:heatmap": "vp run @irisout/bench#bench:heatmap",
     "bench:todomvc-compiler": "vp run @irisout/bench#bench:todomvc-compiler",
     "bench:list-runtime": "vp run @irisout/bench#bench:list-runtime",
     "bench:listener-strategy": "vp run @irisout/bench#bench:listener-strategy",

@@ -38,9 +38,9 @@
 tree-shakingへ渡せる。CSS、辞書URL、Worker、WebAssemblyは開発と本番で同じ入口を使い、
 接頭辞付き本番buildでも資源URLが書き換わる。
 
-`apps/examples/heatmap.jsx`は初期HTML生成後に`fetch()`、Suzumeの生成、Workerの生成を
-実行し、componentのunmount時にSuzumeとWorkerを破棄する。本文の連続解析と古い結果の
-破棄はまだアプリの契約へ入れていない。
+`apps/examples/heatmap.jsx`は初期HTML生成後に辞書URLを取得し、Workerへ初期化要求を送る。
+SuzumeとWebAssemblyの生成はWorker内で行い、componentのunmount時に購読解除とWorker終了を
+行う。本文の連続解析と古い結果の破棄はADR-0035で追加した。
 
 ## 検証
 
@@ -49,3 +49,5 @@ tree-shakingへ渡せる。CSS、辞書URL、Worker、WebAssemblyは開発と本
 - `packages/compiler/test/heatmap.test.ts`で代表アプリのDOM操作と、`/heatmap/`接頭辞の
   本番buildにおけるJS、CSS、WebAssembly、Worker資源を確認した。
 - `bun run check`、`bun run test`、`IRISOUT_ENTRY=heatmap.jsx bun run build`を実行した。
+- Worker内解析、要求競合、文字確定、破棄処理、実Chromiumの性能測定はADR-0035と
+  `packages/bench/heatmap.results.md`へ記録した。

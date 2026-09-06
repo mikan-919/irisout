@@ -1,5 +1,3 @@
-import { Suzume } from '@libraz/suzume'
-import suzumeWasmUrl from '@libraz/suzume/wasm?url'
 import analysisDictionaryUrl from './heatmap-dictionary.json?url'
 import HeatmapWorker from './heatmap.worker.js?worker'
 import './heatmap.css'
@@ -63,7 +61,7 @@ export function HeatmapApp() {
       <p class="selection">
         選択中: {selectedParagraph() ? `第${selectedParagraph().id}段落` : 'なし'}
       </p>
-      <p class="analysis-status">
+      <p class="analysis-status" aria-live="polite">
         {analysisStatus()} / 単語数 {tokenCount()}
       </p>
 
@@ -88,7 +86,13 @@ export function HeatmapApp() {
       <section class="paragraph-list">
         <h2>段落一覧</h2>
         {scores().map((paragraph) => (
-          <ParagraphRow key={paragraph.id} paragraph={paragraph} selectedId={selectedId} />
+          <ParagraphRow
+            key={paragraph.id}
+            paragraph={paragraph}
+            paragraphCount={scores().length}
+            metric={metric()}
+            selectedId={selectedId}
+          />
         ))}
       </section>
 
@@ -103,45 +107,104 @@ export function HeatmapApp() {
   )
 
   onMount(() => {
-    let analyzer
-    let worker
+    const worker = new HeatmapWorker()
     let disposed = false
+    let workerReady = false
+    let composing = false
+    let requestId = 0
+    let latestRequestId = 0
+    const onWorkerMessage = (event) => {
+      if (!disposed) {
+        if (event.data?.type === 'ready') {
+          workerReady = true
+          analysisStatus('解析準備完了')
+          const nextRequestId = ++requestId
+          latestRequestId = nextRequestId
+          analysisStatus('解析中')
+          worker.postMessage({ type: 'analyze', requestId: nextRequestId, source: source() })
+        } else if (event.data?.type === 'result' && event.data.requestId === latestRequestId) {
+          tokenCount(event.data.tokenCount)
+          analysisStatus(`解析完了 (${event.data.elapsedMs.toFixed(2)}ms)`)
+        } else if (
+          event.data?.type === 'error' &&
+          (event.data.requestId == null || event.data.requestId === latestRequestId)
+        ) {
+          analysisStatus('解析に失敗')
+        }
+      }
+    }
+    const onWorkerError = () => {
+      if (!disposed) analysisStatus('解析に失敗')
+    }
+    const textarea = globalThis.document?.querySelector('.heatmap-app textarea')
+    const onInput = () => {
+      if (composing || !workerReady) return
+      const nextRequestId = ++requestId
+      latestRequestId = nextRequestId
+      analysisStatus('解析中')
+      worker.postMessage({ type: 'analyze', requestId: nextRequestId, source: source() })
+    }
+    const onCompositionStart = () => {
+      composing = true
+    }
+    const onCompositionEnd = () => {
+      composing = false
+      if (!workerReady) return
+      const nextRequestId = ++requestId
+      latestRequestId = nextRequestId
+      analysisStatus('解析中')
+      worker.postMessage({ type: 'analyze', requestId: nextRequestId, source: source() })
+    }
+    worker.addEventListener('message', onWorkerMessage)
+    worker.addEventListener('error', onWorkerError)
+    textarea?.addEventListener('input', onInput)
+    textarea?.addEventListener('compositionstart', onCompositionStart)
+    textarea?.addEventListener('compositionend', onCompositionEnd)
     fetch(analysisDictionaryUrl)
       .then((response) => response.json())
       .then((dictionary) => {
         if (disposed) return
-        return Suzume.create({ wasmPath: suzumeWasmUrl }).then((nextAnalyzer) => {
-          if (disposed) {
-            nextAnalyzer.destroy()
-            return
-          }
-          analyzer = nextAnalyzer
-          worker = new HeatmapWorker()
-          worker.postMessage({ type: 'dictionary', terms: dictionary.terms })
-          analysisStatus('解析準備完了')
-          tokenCount(analyzer.analyze(source()).length)
-        })
+        worker.postMessage({ type: 'initialize', terms: dictionary.terms })
       })
       .catch(() => {
         if (!disposed) analysisStatus('解析資源の読み込みに失敗')
       })
     return () => {
       disposed = true
-      analyzer?.destroy()
-      worker?.terminate()
+      worker.removeEventListener('message', onWorkerMessage)
+      worker.removeEventListener('error', onWorkerError)
+      textarea?.removeEventListener('input', onInput)
+      textarea?.removeEventListener('compositionstart', onCompositionStart)
+      textarea?.removeEventListener('compositionend', onCompositionEnd)
+      worker.postMessage({ type: 'dispose' })
+      worker.terminate()
     }
   })
 }
 
-function ParagraphRow({ paragraph, selectedId }) {
+function ParagraphRow({ paragraph, paragraphCount, metric, selectedId }) {
   render(
     <article
       key={paragraph.id}
       id={`paragraph-${paragraph.id}`}
       class={selectedId() === paragraph.id ? 'selected' : ''}
+      tabIndex="0"
+      aria-selected={selectedId() === paragraph.id ? 'true' : 'false'}
+      onKeyDown={(event) => {
+        if (event.key === 'ArrowDown' || event.key === 'ArrowRight') {
+          event.preventDefault()
+          if (paragraph.id < paragraphCount) selectedId(paragraph.id + 1)
+        } else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') {
+          event.preventDefault()
+          if (paragraph.id > 1) selectedId(paragraph.id - 1)
+        }
+      }}
     >
       <h3>第{paragraph.id}段落</h3>
       <p>{paragraph.text}</p>
+      <p class="paragraph-score">
+        {metric === 'length' ? '文字数' : '数値の割合'}: {paragraph.score}
+      </p>
       <button type="button" onClick={() => selectedId(paragraph.id)}>
         この段落を選ぶ
       </button>

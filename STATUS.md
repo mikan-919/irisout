@@ -273,6 +273,7 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
 | Context   | instance単位context(ADR-0027)                                                  | **DONE** | `createContext`/`provideContext`/`useContext`を静的置換。root・list item・conditional branchの所有単位へ接続し、未使用時の生成物は増やさない                                                                                     |
 | Heatmap 3 | 同期解析の派生値連鎖・構造unitのroot依存・条件分岐内の状態付き子部品(ADR-0033) | **DONE** | `apps/examples/heatmap.jsx`、回帰試験を追加                                                                                                                                                                                      |
 | Heatmap 4 | 外部解析依存、CSS・辞書URL・Worker資源のVite境界(ADR-0034)                     | **DONE** | `@libraz/suzume`、接頭辞付き本番build、未使用外部binding除外を確認                                                                                                                                                               |
+| Heatmap 5 | Worker解析、連続入力、文字確定、キーボード移動、性能測定(ADR-0035)             | **DONE** | 300段落・24,790文字の実Chromium測定、対応範囲と完了基準を`packages/bench/heatmap.results.md`へ記録                                                                                                                               |
 
 ## 既知の制約(現時点のcodegenの限界)
 
@@ -299,7 +300,21 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
 しない。使用される外部bindingだけを出力し、CSS、`?url`、`?worker`の資源は依存一覧へ加える。
 `@libraz/suzume`、WebAssembly URL、用語辞書URL、Worker入口、CSSをヒートマップ例へ接続し、
 ブラウザ専用の初期化と破棄を`onMount()`とcleanupへ置いた。通常buildと`/heatmap/`接頭辞
-付きbuildで資源URLを確認した。Workerによる本文解析、連続入力、古い結果の破棄は第5段階へ残す。
+付きbuildで資源URLを確認した。Workerによる本文解析、連続入力、古い結果の破棄は第5段階で実装した。
+
+## 第5段階の実装結果(2026-09-06)
+
+`apps/examples/heatmap.worker.js`でSuzumeとWebAssemblyを生成し、本文を要求番号付きで解析する。
+画面側は最新要求だけを採用し、Workerと処理の失敗を表示する。`compositionstart`から
+`compositionend`までは要求を送らず、確定後に一度だけ解析する。unmount時はイベント購読を外し、
+破棄要求を送り、Workerを終了する。
+
+各段落に指標値を文字で表示し、`aria-live`、`tabIndex`、`aria-selected`、上下左右の矢印キーを
+追加した。`packages/bench/heatmap.playwright.ts`で本番生成物を実Chromiumへ読み込み、3、30、
+100、300段落を計測した。最大の300段落・24,790文字ではWorker解析829.8ms、入力から表示850.8ms、
+表示更新の差分21.0ms、ページ側JavaScriptヒープ増分432,568B、キーボード応答0.4msだった。
+対応範囲は300段落・25,000文字、入力から表示1,000ms、表示更新の差分100ms、ページ側ヒープ32MiB、
+キーボード応答16msを完了基準とする。詳細は`packages/bench/heatmap.results.md`とADR-0035へ記録した。
 
 - **ルートコンポーネントは1つだけ**: `compile()`は「他から一度も参照
   されないトップレベル関数」がちょうど1つであることを要求し、そうで

@@ -131,6 +131,10 @@ Worker入口を読み込みます。配信先に接頭辞がある場合は`IRIS
 [`packages/bench/todomvc-compiler.results.md`](./packages/bench/todomvc-compiler.results.md)
 にあります。手書き実装の値をirisoutの生成性能として扱っていません。
 
+ヒートマップのWorker解析は`bun run bench:heatmap`で実Chromiumへ接続して測定できます。
+段落数ごとの解析時間、表示までの時間、ページ側JavaScriptヒープ、キーボード操作の結果は
+[`packages/bench/heatmap.results.md`](./packages/bench/heatmap.results.md)にあります。
+
 ## 開発
 
 ```bash
