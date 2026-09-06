@@ -153,6 +153,49 @@ describe('compileProject: static multi-file module composition', () => {
     secondInstance.unmount()
   })
 
+  it('shares a module derived value and recomputes it through the shared signal', async () => {
+    const entry = writeProject({
+      'main.jsx': `import { count, quadrupled } from './state.js'; export function App() { render(<div><button onClick={increment}>inc</button><span>{quadrupled()}</span></div>); function increment() { count(count() + 1); } }`,
+      'state.js': `export const quadrupled = derived(() => doubled() * 2); export const count = signal(0); export const doubled = derived(() => count() * 2);`,
+    })
+    const { code, initialHtml } = compileProject(entry)
+    expect(initialHtml).toContain('<span data-iris-id="m1">0</span>')
+    expect(code).toContain('const IrisM0_quadrupled = () => IrisM0_doubled() * 2;')
+    expect(code).toContain('const IrisM0_doubled = () => IrisM0_count() * 2;')
+    expect(code).not.toMatch(/\n\s+IrisM0_(doubled|quadrupled) =/)
+    expect(code).toContain('sharedSignal as __sharedSignal__')
+
+    const mod = await loadGenerated(code)
+    const first = createContainer()
+    const second = createContainer()
+    const firstInstance = (mod.mountComponent as (container: Element) => { unmount(): void })(first)
+    const secondInstance = (mod.mountComponent as (container: Element) => { unmount(): void })(
+      second,
+    )
+    expect(first.textContent).toBe('inc0')
+    expect(second.textContent).toBe('inc0')
+
+    const EventCtor = first.ownerDocument.defaultView!.Event
+    first.querySelector('button')!.dispatchEvent(new EventCtor('click', { bubbles: true }))
+    expect(first.textContent).toBe('inc4')
+    expect(second.textContent).toBe('inc4')
+
+    firstInstance.unmount()
+    secondInstance.unmount()
+  })
+
+  it('omits an unused module derived chain and its shared dependencies', () => {
+    const entry = writeProject({
+      'main.jsx': `import { unused } from './state.js'; export function App() { render(<span>ready</span>); }`,
+      'state.js': `export const count = signal(0); export const unused = derived(() => count() + 1);`,
+    })
+    const { code, initialHtml } = compileProject(entry)
+    expect(initialHtml).toBe('<span>ready</span>')
+    expect(code).not.toContain('sharedSignal')
+    expect(code).not.toContain('IrisM0_count')
+    expect(code).not.toContain('IrisM0_unused')
+  })
+
   it('omits runtime output for an unused module signal', () => {
     const entry = writeProject({
       'main.jsx': `import { unused } from './state.js'; export function App() { render(<span>ready</span>); }`,
@@ -251,9 +294,19 @@ describe('compileProject: module boundary errors', () => {
     expect(() => compileProject(unresolved)).toThrow(/cannot resolve relative import.*scope limit/)
 
     const moduleState = writeProject({
-      'main.jsx': `const count = derived(() => 0); export function App() { render(<div />) }`,
+      'main.jsx': `const items = collection([], (item) => item.id); export function App() { render(<div />) }`,
     })
-    expect(() => compileProject(moduleState)).toThrow(/module-scope derived.*scope limit/)
+    expect(() => compileProject(moduleState)).toThrow(
+      /cannot declare module-scope collection.*scope limit/,
+    )
+
+    const readOnlyDerived = writeProject({
+      'main.jsx': `import { doubled } from './state.js'; export function App() { render(<button onClick={() => doubled(1)}>{doubled()}</button>) }`,
+      'state.js': `export const doubled = derived(() => 0);`,
+    })
+    expect(() => compileProject(readOnlyDerived)).toThrow(
+      /module shared derived.*read-only.*scope limit/,
+    )
 
     const topLevelStatement = writeProject({
       'main.jsx': `console.log('not allowed'); export function App() { render(<div />) }`,

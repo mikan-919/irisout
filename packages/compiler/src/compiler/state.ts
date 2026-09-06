@@ -212,13 +212,16 @@ export interface ContextValue {
   deps: Set<DeclId>
 }
 
-// compileProjectのmodule先頭に置く共有signal。生成moduleのmodule scopeへ
-// 一度だけ出力し、各component instanceは必要な場合だけ購読する。
+// compileProjectのmodule先頭に置く共有signal/derived。生成moduleのmodule
+// scopeへ一度だけ出力する。shared signalだけがcomponent instanceの購読対象で、
+// shared derivedはそのsignalを読む読み取り専用関数として共有する。
 export interface SharedDecl {
   id: DeclId
-  kind: 'signal'
+  kind: 'signal' | 'derived'
   outputName: string
+  /** signalの初期値、またはderivedの関数式。 */
   rendered: string
+  /** build時実行向けの初期値、またはderivedの関数式。 */
   sourceRendered: string
 }
 
@@ -302,7 +305,7 @@ export interface CompilerState {
   // 壊れたコードになる)。
   localDeclIds: Set<DeclId>
 
-  /** compileProjectで収集したmodule共有signal。 */
+  /** compileProjectで収集したmodule共有signal/derived。 */
   sharedDecls: SharedDecl[]
   sharedDeclIdByBindingKey: Map<string, DeclId>
   sharedDeclIds: Set<DeclId>

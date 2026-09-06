@@ -24,8 +24,8 @@ Web Components化・hyperscript風authoring API・リストアイテムの状態
 - **instance contextを静的置換で扱う**(ADR-0027): `createContext`/`provideContext`/`useContext`を
   使ったときだけprovider値と依存を生成コードへ接続し、未使用時のMapやregistryを出力しない。
   構造unitの動的provider treeとPromiseLikeのasync contextは各ADRの静的境界で扱い、runtime
-  registryは追加しない。module共有stateもADR-0030の直接signalに限定し、未使用時のhelperを
-  出力しない。
+  registryは追加しない。module共有stateもADR-0030/0037の直接signal/derivedに限定し、
+  未使用時のhelperを出力しない。
 - **明示的なcomponent `unmount()`はこの保留と別物**: 呼び出し側が取得した
   `createComponent()`/`mountComponent()` instanceへ明示的に要求した場合だけ、所有DOMと
   generated listenerを解放する。`use=`が`{ destroy }`を返した場合のdestroyも、actionが

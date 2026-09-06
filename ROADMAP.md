@@ -152,7 +152,7 @@ instance単位のcontextもADR-0027で実装済みである。トップレベル
 provider、JSX式のconsumerをコンパイル時に静的置換し、root・list item・conditional branchの
 所有instanceへ依存を接続する。汎用context runtime・Mapは出力しない。構造unitの動的provider
 treeと非同期contextは静的置換として実装済みで、runtime provider伝播・非同期schedulerは
-対象外とする。module共有signalはADR-0030の直接形だけを実装する。
+対象外とする。module共有signalはADR-0030、module共有derivedはADR-0037の直接形だけを実装する。
 
 **第2段階実装済み(ADR-0020)**: 同一ハンドラ/action/追跡関数のwrite setに複数root
 があり、同じmarkerへ依存する場合だけ、コンパイル時に専用同期batchを生成する。
@@ -270,10 +270,11 @@ programを一回だけ実行する。
 `render(<JSX>)`を持つfunctionはコンパイル時にinline化し、component functionとprops
 objectを生成しない。componentでないfunctionと初期化済み単純`const`は補助宣言として
 生成moduleのmodule scopeへ一度だけ出す。直接`const name = signal(initial)`はADR-0030の
-共有signalとして参照時だけ出力する。その他の補助宣言はcomponentのstateを書き換えない
+共有signal、直接`const name = derived(() => expression)`はADR-0037の共有derivedとして
+参照時だけ出力する。その他の補助宣言はcomponentのstateを書き換えない
 純粋な処理に限る。
 
-module scopeの直接signal以外のstate、副作用文、`let`/`var`、分割代入、外部specifier、未解決path、
+module scopeの直接signal/derived以外のstate、副作用文、`let`/`var`、分割代入、外部specifier、未解決path、
 namespace/side-effect/dynamic import、re-export、循環依存は`compile:`エラーで拒否する。
 `compile(source)`は単一source APIとして保持し、module解決を行わない。fixtureと受入条件は
 `apps/examples/multi-file/`、`packages/compiler/test/multi-file-module-composition.test.ts`、
@@ -296,10 +297,11 @@ namespace/side-effect/dynamic import、re-export、循環依存は`compile:`エ�
 - **effect(DOM以外への副作用)**: ルートcomponentと構造unit・inline子componentの`effect`は
   ADR-0026で実装済み。effect本体から追跡signalへ書き込む再入、非同期schedulerは対象外で、
   実需が出た時点で別契約を定める。
-- **モジュールスコープの共有state(Svelteのstore相当)**: ADR-0030で直接の
-  `const name = signal(initial)`を`compileProject`のmodule共有signalとして実装済み。
-  参照された生成物だけが専用helperとinstance購読を持つ。module共有derived/collection、
-  永続化、request単位SSR分離、汎用storeは対象外。
+- **モジュールスコープの共有state(Svelteのstore相当)**: ADR-0030/0037で直接の
+  `const name = signal(initial)`と`const name = derived(() => expression)`を
+  `compileProject`のmodule共有stateとして実装済み。参照された生成物だけが出力され、
+  signalだけがinstance購読を持つ。module共有collection、永続化、request単位SSR分離、
+  汎用storeは対象外。
 - **`bind:value`的な双方向バインディング糖衣**: ADR-0012は一方向の
   property反映のみを規定しており、双方向バインディングは
   value属性+`onInput`ハンドラの手書き配線が必要(手書き相当のまま)。
@@ -416,8 +418,10 @@ transition/animation、portal、error boundary、async/resource
        `component-props-handler-type-checking`)。JSDocで宣言したcomponent propsを
        同一ファイルと相対importで検査し、6イベントの型と要素別`currentTarget`を
        `packages/compiler/types/jsx.d.ts`へ追加した。型検査専用fixtureで成功・失敗の両方を固定した。
-    2. **保留: module共有stateの派生値とSSR境界**。直接signalの実需をfixtureで
-       確認し、derived/collection、request単位分離、永続化を同時に決めずに別契約へ分ける。
+    2. ~~**module共有stateの派生値**~~ — **完了**(ADR-0037)。module共有signalの
+       既存通知経路を使う読み取り専用関数として実装し、共有derivedのcache・schedulerを
+       追加しない。**保留: module共有collectionとSSR境界**。request単位分離、永続化、
+       collection共有は別契約へ分ける。
 
 ## 参考資料
 

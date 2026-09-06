@@ -155,7 +155,11 @@ export interface GenerateModuleInput {
   externalImports: string[]
   /** compileProjectの使用済みmodule共有signalをmodule scopeへ置く。 */
   sharedStatements: string[]
+  /** compileProjectの使用済みmodule共有derivedをmodule scopeへ置く。 */
+  sharedDerivedStatements: string[]
   sharedSignalNames: string[]
+  /** 共有derivedはinstance専有の再計算代入を持たない。 */
+  sharedDerivedIds: Set<DeclId>
   declStatements: string[]
   markers: MarkerOutput[]
   signalToMarkers: Map<DeclId, Set<MarkerId>>
@@ -1262,7 +1266,9 @@ export function generateModule({
   supportStatements,
   externalImports,
   sharedStatements,
+  sharedDerivedStatements,
   sharedSignalNames,
+  sharedDerivedIds,
   declStatements,
   markers,
   signalToMarkers,
@@ -1322,6 +1328,7 @@ export function generateModule({
   moduleLines.push(`import { ${runtimeImports.join(', ')} } from '@irisout/runtime';`, '')
   if (supportStatements.length > 0) moduleLines.push(...supportStatements, '')
   if (sharedStatements.length > 0) moduleLines.push(...sharedStatements, '')
+  if (sharedDerivedStatements.length > 0) moduleLines.push(...sharedDerivedStatements, '')
   instanceLines.push(...declStatements, '')
   // cross-function-handler-writes design D4: 追跡された動きゾーン関数をauthored
   // 名のままinstanceスコープへemitする(update_*()は本体に入れない — D3)。
@@ -1759,6 +1766,7 @@ export function generateModule({
     instanceLines.push(`function update_${name}() {`)
     instanceLines.push('  if (!__mounted__ || __unmounted__) return;')
     for (const derivedId of signalToDerivedRecomputes.get(signalId) ?? []) {
+      if (sharedDerivedIds.has(derivedId)) continue
       instanceLines.push(`  ${declOutputName.get(derivedId)} = ${derivedRecompute.get(derivedId)};`)
     }
     if (hasStructuralEffects) {
@@ -1788,6 +1796,7 @@ export function generateModule({
     instanceLines.push(`function ${batch.name}() {`)
     instanceLines.push('  if (!__mounted__ || __unmounted__) return;')
     for (const derivedId of derivedIds) {
+      if (sharedDerivedIds.has(derivedId)) continue
       instanceLines.push(`  ${declOutputName.get(derivedId)} = ${derivedRecompute.get(derivedId)};`)
     }
     if (hasStructuralEffects) {
@@ -1824,6 +1833,7 @@ export function generateModule({
     )
     const directUpdateLines: string[] = []
     for (const derivedId of signalToDerivedRecomputes.get(collectionId) ?? []) {
+      if (sharedDerivedIds.has(derivedId)) continue
       directUpdateLines.push(
         `  ${declOutputName.get(derivedId)} = ${derivedRecompute.get(derivedId)};`,
       )

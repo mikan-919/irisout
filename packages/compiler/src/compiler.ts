@@ -18,6 +18,7 @@
 
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
+import traverseImport from '@babel/traverse'
 import { parse } from '@babel/parser'
 import type { NodePath } from '@babel/traverse'
 import type * as t from '@babel/types'
@@ -34,6 +35,7 @@ import type {
   UpdateBatchOutput,
 } from './codegen.ts'
 import { generateModule } from './codegen.ts'
+import { analyzeExpr } from './compiler/analyze.ts'
 import { assertAcyclicDerivedGraph, resolveToSignals } from './compiler/decl-graph.ts'
 import { collectTopLevelComponents, inlineComponents } from './compiler/inline-components.ts'
 import { compileComponent } from './compiler/render.ts'
@@ -51,6 +53,9 @@ import { linkProject } from './compiler/module-linker.ts'
 import { withCompileDiagnostic } from './diagnostics.ts'
 export { CompileDiagnostic } from './diagnostics.ts'
 import { collection, derived, registry, signal } from '@irisout/runtime'
+
+const traverse =
+  (traverseImport as unknown as { default?: typeof traverseImport }).default ?? traverseImport
 
 export interface CompileResult {
   code: string
@@ -146,67 +151,120 @@ function collectContextDeclarations(
   }
 }
 
-function collectSharedSignalDeclarations(
+function collectSharedDeclarations(
   ast: ReturnType<typeof parse>,
   source: string,
   ctx: ReturnType<typeof createCompilerState>,
 ): void {
   const pending: {
+    path: NodePath<t.VariableDeclarator>
     id: DeclId
-    name: string
-    start: number
-    argStart: number
-    argEnd: number
+    kind: 'signal' | 'derived'
+    outputName: string
   }[] = []
-  for (const statement of ast.program.body) {
-    if (statement.type !== 'VariableDeclaration' || statement.kind !== 'const') continue
-    for (const declarator of statement.declarations) {
-      const init = declarator.init
-      if (
-        declarator.id.type !== 'Identifier' ||
-        init?.type !== 'CallExpression' ||
-        init.callee.type !== 'Identifier'
-      ) {
-        continue
+
+  // 先に全shared bindingを登録する。これにより、derivedが後ろにある別の
+  // shared signal/derivedを参照しても、本文解析時にbindingを解決できる。
+  traverse(ast, {
+    VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
+      const declarationPath = path.parentPath
+      const containerPath = declarationPath?.parentPath
+      const isTopLevel =
+        declarationPath?.isVariableDeclaration() === true &&
+        (containerPath?.isProgram() === true ||
+          (containerPath?.isExportNamedDeclaration() === true &&
+            containerPath.parentPath?.isProgram() === true))
+      if (!isTopLevel || !declarationPath.isVariableDeclaration()) return
+      if (path.node.id.type !== 'Identifier' || declarationPath.node.kind !== 'const') return
+
+      const init = path.node.init
+      if (init?.type !== 'CallExpression' || init.callee.type !== 'Identifier') return
+      const kind =
+        init.callee.name === 'signal' || init.callee.name === 'derived' ? init.callee.name : null
+      if (init.callee.name === 'collection') {
+        throw new Error(
+          'compile: module-scope collection() shared state is not supported yet (scope limit)',
+        )
       }
-      if (init.callee.name !== 'signal') {
-        if (init.callee.name === 'derived' || init.callee.name === 'collection') {
-          throw new Error(
-            `compile: module-scope ${init.callee.name}() shared state is not supported yet (scope limit)`,
-          )
+      if (!kind) return
+
+      if (kind === 'signal') {
+        if (init.arguments.length !== 1 || init.arguments[0]?.type === 'SpreadElement') {
+          throw new Error('compile: module-scope signal() takes exactly one argument')
         }
-        continue
+      } else if (
+        init.arguments.length !== 1 ||
+        init.arguments[0]?.type !== 'ArrowFunctionExpression' ||
+        init.arguments[0].params.length !== 0 ||
+        init.arguments[0].body.type === 'BlockStatement'
+      ) {
+        throw new Error(
+          'compile: module-scope derived() must be called with a zero-arg concise arrow function `() => expr` (scope limit)',
+        )
       }
-      if (init.arguments.length !== 1 || init.arguments[0]?.type === 'SpreadElement') {
-        throw new Error('compile: module-scope signal() takes exactly one argument')
-      }
-      const start = declarator.start
-      const arg = init.arguments[0]
-      if (start == null || !arg || arg.start == null || arg.end == null) continue
-      const id = toDeclId(`shared_${start}_${declarator.id.name}`)
-      const outputName = assignOutputName(ctx, declarator.id.name, id)
-      ctx.declKind.set(id, 'signal')
+
+      const start = path.node.start
+      if (start == null) return
+      const id = toDeclId(`shared_${start}_${path.node.id.name}`)
+      const outputName = assignOutputName(ctx, path.node.id.name, id)
+      ctx.declKind.set(id, kind)
       ctx.sharedDeclIds.add(id)
-      ctx.sharedDeclIdByBindingKey.set(`${start}:${declarator.id.name}`, id)
-      pending.push({
-        id,
-        name: outputName,
-        start,
-        argStart: arg.start,
-        argEnd: arg.end,
-      })
-    }
-  }
+      ctx.sharedDeclIdByBindingKey.set(`${start}:${path.node.id.name}`, id)
+      pending.push({ path, id, kind, outputName })
+    },
+  })
+
   for (const declaration of pending) {
-    const sourceRendered = source.slice(declaration.argStart, declaration.argEnd)
+    const initPath = declaration.path.get('init') as NodePath<t.CallExpression>
+    const args = initPath.get('arguments') as NodePath<t.Expression>[]
+    const argPath = args[0]!
+    if (declaration.kind === 'signal') {
+      const start = argPath.node.start
+      const end = argPath.node.end
+      if (start == null || end == null) continue
+      const sourceRendered = source.slice(start, end)
+      ctx.sharedDecls.push({
+        id: declaration.id,
+        kind: declaration.kind,
+        outputName: declaration.outputName,
+        rendered: sourceRendered,
+        sourceRendered,
+      })
+      continue
+    }
+
+    const arrowPath = argPath as NodePath<t.ArrowFunctionExpression>
+    const bodyPath = arrowPath.get('body') as NodePath<t.Expression>
+    const arrowStart = arrowPath.node.start
+    const bodyStart = bodyPath.node.start
+    if (arrowStart == null || bodyStart == null) continue
+    const arrowPrefix = source.slice(arrowStart, bodyStart)
+    const analyzed = analyzeExpr(ctx, bodyPath, 0)
+    ctx.derivedDeps.set(declaration.id, analyzed.deps)
+    ctx.derivedRecompute.set(declaration.id, analyzed.rendered)
     ctx.sharedDecls.push({
       id: declaration.id,
-      kind: 'signal',
-      outputName: declaration.name,
-      rendered: sourceRendered,
-      sourceRendered,
+      kind: declaration.kind,
+      outputName: declaration.outputName,
+      rendered: `${arrowPrefix}${analyzed.rendered}`,
+      sourceRendered: `${arrowPrefix}${analyzed.sourceRendered}`,
     })
   }
+  // derived本文の解析は依存グラフを作るためにshared bindingを訪問するが、
+  // その時点ではrootから参照されたか決まっていない。出力対象の判定は
+  // component解析後に、使用されたderivedから依存先を辿って行う。
+  ctx.usedSharedDeclIds.clear()
+}
+
+function markUsedSharedDependencies(ctx: ReturnType<typeof createCompilerState>): void {
+  const visited = new Set<DeclId>()
+  const visit = (id: DeclId): void => {
+    if (visited.has(id)) return
+    visited.add(id)
+    if (ctx.sharedDeclIds.has(id)) ctx.usedSharedDeclIds.add(id)
+    for (const dependency of ctx.derivedDeps.get(id) ?? []) visit(dependency)
+  }
+  for (const id of ctx.usedSharedDeclIds) visit(id)
 }
 
 // トップレベルのコンポーネントをすべて列挙し、誰からも参照されない唯一の
@@ -296,7 +354,7 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
   const ctx = createCompilerState(source, transformedNodes, options.supportNames)
   collectContextDeclarations(ast, source, ctx)
   for (const supportName of options.supportNames ?? []) ctx.usedOutputNames.add(supportName)
-  if (options.allowModuleSupport) collectSharedSignalDeclarations(ast, source, ctx)
+  if (options.allowModuleSupport) collectSharedDeclarations(ast, source, ctx)
   const rootPath = findRootComponent(ast, options.allowModuleSupport === true)
 
   const out = {
@@ -306,6 +364,7 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
   const rootHtmlSource = compileComponent(ctx, rootPath, ctx.instanceCounter++, out)
 
   assertAcyclicDerivedGraph(ctx)
+  markUsedSharedDependencies(ctx)
   const signalToMarkers = buildSignalToMarkers(ctx)
 
   // 同じ同期スコープで複数 root signal が書き込まれる場合でも、依存 marker
@@ -596,9 +655,10 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
   // --- ビルド時実行:discovery の確認 + 実際の初期 HTML の取得 ---
   const instrumentedBody = [
     ...(options.supportStatements ?? []),
-    ...ctx.sharedDecls.map(
-      (decl) =>
-        `const ${decl.outputName} = signal(${decl.sourceRendered}, ${JSON.stringify(decl.id)});`,
+    ...ctx.sharedDecls.map((decl) =>
+      decl.kind === 'signal'
+        ? `const ${decl.outputName} = signal(${decl.sourceRendered}, ${JSON.stringify(decl.id)});`
+        : `const ${decl.outputName} = derived(${decl.sourceRendered}, ${JSON.stringify(decl.id)});`,
     ),
     ...out.instrumentedDeclStatements,
     `return \`${rootHtmlSource}\`;`,
@@ -665,12 +725,18 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
     supportStatements: options.supportStatements ?? [],
     externalImports: options.externalImports ?? [],
     sharedStatements: ctx.sharedDecls
-      .filter((decl) => ctx.usedSharedDeclIds.has(decl.id))
+      .filter((decl) => decl.kind === 'signal' && ctx.usedSharedDeclIds.has(decl.id))
       .map((decl) => `const ${decl.outputName} = __sharedSignal__(${decl.rendered});`),
+    sharedDerivedStatements: ctx.sharedDecls
+      .filter((decl) => decl.kind === 'derived' && ctx.usedSharedDeclIds.has(decl.id))
+      .map((decl) => `const ${decl.outputName} = ${decl.rendered};`),
     sharedSignalNames: [...signalToMarkers.keys()]
-      .filter((id) => ctx.sharedDeclIds.has(id))
+      .filter((id) => ctx.sharedDeclIds.has(id) && ctx.declKind.get(id) === 'signal')
       .map((id) => ctx.declOutputName.get(id)!)
       .filter((name): name is string => name != null),
+    sharedDerivedIds: new Set(
+      [...ctx.sharedDeclIds].filter((id) => ctx.declKind.get(id) === 'derived'),
+    ),
     declStatements: out.declStatements,
     markers: markerOutputs,
     signalToMarkers,

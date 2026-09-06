@@ -154,9 +154,11 @@ triage手続きで捌く — コンパイラの受理条件自体を場当たり
   DOM順序、生成factoryはbinding単位の直接DOM更新を担当する。
 - **module境界**(ADR-0024/0030): `compileProject()`は相対`.js`/`.jsx`の静的named/default
   importだけをAST bindingへ解決する。componentはinline pathへ入り、通常のfunctionと
-  `const`だけが補助宣言としてmodule scopeに残る。直接`const name = signal(initial)`は
-  参照時だけ専用shared signalとして出力し、外部module、dynamic import、re-export、cycle、
-  `derived`/`collection`を含むその他のmodule scope stateは`compile:`エラーで拒否する。
+  `const`だけが補助宣言としてmodule scopeに残る。直接`const name = signal(initial)`と
+  `const name = derived(() => expression)`は、参照時だけ専用shared stateとして出力する。
+  外部module、dynamic import、re-export、cycle、`collection`を含むその他のmodule scope
+  stateは`compile:`エラーで拒否する。shared signalはinstance更新を購読し、shared derivedは
+  その関数を読む既存の依存経路へ接続する(ADR-0030/0037)。
 
 ## 設計変更の進め方
 

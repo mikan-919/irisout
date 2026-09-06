@@ -326,6 +326,11 @@ function analyzeHandlerStatementsCore(
     const memberCall = parent?.isMemberExpression() ? parent.parentPath : null
     if (ctx.sharedDeclIds.has(id)) {
       if (parent?.isCallExpression() && parent.node.callee === idPath.node) {
+        if (ctx.declKind.get(id) === 'derived' && parent.node.arguments.length > 0) {
+          throw new Error(
+            `compile: module shared derived "${idPath.node.name}" is read-only (scope limit)`,
+          )
+        }
         if (parent.node.arguments.length > 1) {
           throw new Error(
             `compile: signal writes take exactly one argument, got ${parent.node.arguments.length} for "${idPath.node.name}" (scope limit)`,
@@ -681,6 +686,11 @@ export function analyzeHandlerExpr(
     const memberCall = parent?.isMemberExpression() ? parent.parentPath : null
     if (ctx.sharedDeclIds.has(id)) {
       if (parent?.isCallExpression() && parent.node.callee === idPath.node) {
+        if (ctx.declKind.get(id) === 'derived' && parent.node.arguments.length > 0) {
+          throw new Error(
+            `compile: module shared derived "${idPath.node.name}" is read-only (scope limit)`,
+          )
+        }
         if (parent.node.arguments.length > 1) {
           throw new Error(
             `compile: signal writes take exactly one argument, got ${parent.node.arguments.length} for "${idPath.node.name}" (scope limit)`,
@@ -994,6 +1004,11 @@ function analyzeActionIdentifier(
   const memberCall = parent?.isMemberExpression() ? parent.parentPath : null
   if (ctx.sharedDeclIds.has(id)) {
     if (parent?.isCallExpression() && parent.node.callee === idPath.node) {
+      if (ctx.declKind.get(id) === 'derived' && parent.node.arguments.length > 0) {
+        throw new Error(
+          `compile: module shared derived "${idPath.node.name}" is read-only (scope limit)`,
+        )
+      }
       if (parent.node.arguments.length > 1) {
         throw new Error(
           `compile: signal writes take exactly one argument, got ${parent.node.arguments.length} for "${idPath.node.name}" (scope limit)`,

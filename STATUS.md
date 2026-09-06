@@ -121,13 +121,15 @@ moduleを依存順にASTリンクする。named importとdefault import、二段
 受理する。`render(<JSX>)`を持つfunctionは既存のコンパイル時インライン化へ渡し、通常の
 functionと初期化済み単純`const`は生成moduleのmodule scopeへ補助宣言として一度だけ出す。
 component function、props object、component runtimeは生成しない。直接のmodule scope
-`const name = signal(initial)`はADR-0030の共有signalとして参照時だけ生成する。
+`const name = signal(initial)`と`const name = derived(() => expression)`はADR-0030/0037の
+共有stateとして参照時だけ生成する。
 
 `compile(source)`は単一文字列APIとして維持し、importは受理しない。`compileProject`の
-module scopeでは直接signal以外のstate、副作用文、`let`/`var`、分割代入、外部specifier、未解決path、
+module scopeでは直接signal/derived以外のstate、副作用文、`let`/`var`、分割代入、外部specifier、未解決path、
 namespace/side-effect import、dynamic import、re-export、循環依存を`compile:`エラーで
 拒否する。補助宣言はstateを呼ばない通常の処理に限る。背景は
-`docs/adr/0024-multi-file-module-composition.md`と`docs/adr/0030-module-shared-signal.md`、
+`docs/adr/0024-multi-file-module-composition.md`、`docs/adr/0030-module-shared-signal.md`、
+`docs/adr/0037-module-shared-derived.md`、
 受入条件は`openspec/specs/multi-file-module-composition/spec.md`と
 `openspec/specs/module-shared-state/spec.md`に記録した。
 
@@ -275,6 +277,7 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
 | Heatmap 4 | 外部解析依存、CSS・辞書URL・Worker資源のVite境界(ADR-0034)                     | **DONE** | `@libraz/suzume`、接頭辞付き本番build、未使用外部binding除外を確認                                                                                                                                                               |
 | Heatmap 5 | Worker解析、連続入力、文字確定、キーボード移動、性能測定(ADR-0035)             | **DONE** | 300段落・24,790文字の実Chromium測定、対応範囲と完了基準を`packages/bench/heatmap.results.md`へ記録                                                                                                                               |
 | Heatmap 6 | 診断、型定義、別アプリ導入、自動検査、配布形式(ADR-0036)                       | **DONE** | 元ファイル・行・列付き診断、`@irisout/compiler/jsx`、別workspaceアプリのbuild試験、CI、Apache-2.0を追加                                                                                                                          |
+| Shared 1  | module共有derivedの受理と依存更新(ADR-0037)                                    | **DONE** | 共有signalの通知経路、derived依存グラフ、未使用出力の除外、読み取り専用検査を追加                                                                                                                                                |
 
 ## 既知の制約(現時点のcodegenの限界)
 
@@ -317,6 +320,15 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
 対応範囲は300段落・25,000文字、入力から表示1,000ms、表示更新の差分100ms、ページ側ヒープ32MiB、
 キーボード応答16msを完了基準とする。詳細は`packages/bench/heatmap.results.md`とADR-0035へ記録した。
 
+## 追加実装結果(2026-09-06・module共有derived、ADR-0037)
+
+`compileProject()`は直接の`const name = derived(() => expression)`をmodule scopeの共有derivedとして
+受理する。参照されたderivedは生成moduleへ一つだけ出力し、共有signalの更新時は各instanceの
+既存`update_*()`から関数を読み直す。derived専用のcache、購読registry、schedulerは生成しない。
+module共有derivedの呼び出しは読み取り専用で、引数付き呼び出しは`compile:`エラーになる。
+未使用のderivedと、その依存だけの共有signalは生成物へ出力しない。collection共有、永続化、
+request単位SSR分離は引き続き別契約である。
+
 ## 現在地(2026-09-06・利用者向け開発環境)
 
 コンパイル時の失敗を`CompileDiagnostic`へまとめ、入口または対象moduleのファイル名、行、列を
@@ -341,12 +353,13 @@ Apache License 2.0で、ルートの`LICENSE`と各配布対象packageの`licens
   拒否する。`const [a] = signal(0)`
   のような分割代入宣言子も拒否する。ビルド時実行の例外は
   `compile: build-time execution failed:`(`cause`付き)に包まれる。
-- **`compileProject(entryPath)`のmodule境界**(ADR-0024/0030/0034): 相対`.js`/`.jsx`の静的
+- **`compileProject(entryPath)`のmodule境界**(ADR-0024/0030/0034/0037): 相対`.js`/`.jsx`の静的
   named/default importを解析して連結する。外部moduleの静的named/default/namespace importと
   CSS、`?url`、`?worker`などの資源importは解析せず生成moduleへ残し、使用されないbindingは
-  出力しない。相対資源の実pathは依存一覧へ含める。module scopeの`derived`/`collection`、
-  副作用文、`let`/`var`、分割代入、未解決の相対path、相対`.js`/`.jsx`のside-effect import、
-  dynamic import、re-export、循環依存は`compile:`エラーで拒否する。
+  出力しない。相対資源の実pathは依存一覧へ含める。module scopeの直接`signal`/`derived`は
+  共有stateとして受理し、`collection`、副作用文、`let`/`var`、分割代入、未解決の相対path、
+  相対`.js`/`.jsx`のside-effect import、dynamic import、re-export、循環依存は`compile:`エラーで
+  拒否する。
 - **複数インスタンスは対応済み**(ADR-0018): 同じ生成moduleを複数containerへ
   mount/hydrateした場合と、stateを持つ同じ子componentをroot内で複数回使う場合の
   どちらもstate・marker・handler・構造ユニット状態が独立する。1つの
@@ -420,8 +433,8 @@ Apache License 2.0で、ルートの`LICENSE`と各配布対象packageの`licens
   - instance context(ADR-0027〜0029)は実装済み。context keyはトップレベル`const`、providerは
     component変数ゾーンまたは構造unitへインライン化されたproviderに限る。consumerは
     JSX/式解析時に静的置換され、構造unitの動的provider treeとPromiseLikeの非同期contextも
-    受理する。runtime provider伝播、非同期scheduler、module共有derived/collection、
-    動きゾーンでのprovider宣言は対象外。module共有signalはADR-0030の直接形だけを
+    受理する。runtime provider伝播、非同期scheduler、module共有collection、動きゾーンでの
+    provider宣言は対象外。module共有signal/derivedはADR-0030/0037の直接形だけを
     `compileProject`で受理する。
   - action本体のconcise arrow(単一式)にネストしたリスナー等がある場合、
     その内部の書き込みに対する`update_*`挿入位置は本体全体の実行時点に
@@ -456,5 +469,6 @@ Apache License 2.0で、ルートの`LICENSE`と各配布対象packageの`licens
     関数名は、呼び出し元の既存識別子と衝突する場合のみ、衝突した側を
     コンポーネント名で接頭辞化してリネームする(例: `TodoItem_count`,
     `TodoItem_inc`)。衝突しない場合はauthored名のまま出力する。
-  - `compileProject`のmodule helperは純粋な補助処理を前提にする。module scopeの
-    stateは共有storeとして扱わず、componentのstateは入口側へ置いてpropsで渡す。
+  - `compileProject`のmodule helperは純粋な補助処理を前提にする。module scopeのstateは
+    ADR-0030/0037の直接signal/derivedだけを共有stateとして受理し、collectionや汎用storeは
+    追加しない。componentのstateは入口側へ置いてpropsで渡す。
