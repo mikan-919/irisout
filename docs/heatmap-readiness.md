@@ -108,3 +108,15 @@ examplesの専用Vite実装は`@irisout/vite-plugin`へ移し、仮想module、�
 依存監視を連携へまとめた。依存の変更は再コンパイルと全体再読み込みへつながる。構文エラー
 の後にファイルを修正した場合も、直前の正常結果を保持したまま次の変更で復帰できることを
 試験で確認した。状態保持とDOM差分更新はロードマップの完了条件に含めていない。
+
+## 第2段階の実装結果(2026-09-06)
+
+handlerの解析結果へ`async`を保持し、生成wrapperの`await`を有効な非同期関数として
+出力するようにした。handlerとPromise callbackを関数スコープごとに解析し、直接の
+signal書き込みはそのhandlerまたはcallbackの実行後に、入れ子callbackの書き込みは
+Promise完了後に更新する。Promiseの成功callbackと拒否callbackを使う開始・結果・失敗の
+代表例を実DOMで確認した。
+
+`try`/`catch`/`finally`は更新を置く経路を静的に確定できないため、handlerでは引き続き
+`scope limit`で拒否する。失敗表示はPromiseの拒否callbackで記述する。要求の競合や
+Worker連携は第5段階へ残す。

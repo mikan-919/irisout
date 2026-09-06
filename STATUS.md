@@ -381,6 +381,13 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
     その内部の書き込みに対する`update_*`挿入位置は本体全体の実行時点に
     まとまる(リスナー発火時ではない)。ブロック本体は正しく分離される
     (`packages/compiler/src/compiler/analyze.ts`の`analyzeActionExprScope`コメント参照)。
+- **非同期handlerのsignal更新は実装済み**(ADR-0032): `async`を生成wrapperへ保持し、
+  `await`後の直接書き込みをhandler本体末尾で更新する。Promiseの`.then()`に渡す入れ子
+  callbackは個別の関数スコープとして解析し、成功callback・拒否callbackの書き込み後に
+  更新を呼ぶ。同期handlerの開始状態はcallback登録後に更新し、完了後の結果・失敗状態は
+  各callbackの実行時に更新する。`try`/`catch`/`finally`、ループ、`switch`、値を返す
+  handlerなど更新位置を静的に決められない経路は`scope limit`で拒否する。要求の競合、
+  古い結果の破棄、Worker、画面破棄後の応答は未実装で、第5段階の対象とする。
 - **コンポーネント合成はコンパイル時に消える**(ADR-0014、ADR-0024)。同一ファイルの
   合成はroot scopeとlist itemへインライン化し、別ファイルの合成は
   `compileProject(entryPath)`が相対moduleをリンクして同じ経路へ渡す。以下は明示的な

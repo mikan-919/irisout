@@ -39,6 +39,10 @@ export interface HandlerOutput {
   markerId: MarkerId
   eventName: string
   rendered: string
+  /** authored handlerがasync関数またはasync arrowか。 */
+  async: boolean
+  /** renderedに本体・入れ子関数の更新文を含めているか。 */
+  updatesInRendered: boolean
   updateNames: string[]
   /** 複数 root が同じ marker を共有するときだけ使う同期 batch 名。 */
   updateBatchName: string | null
@@ -163,7 +167,7 @@ export interface GenerateModuleInput {
   attrBindings: AttrBinding[] // ADR-0012: トップレベルの動的属性
   // cross-function-handler-writes: 追跡対象として呼ばれた動きゾーン関数を
   // authored 名のままモジュールスコープへ1回だけ emit する(design D4)。
-  emittedFns: { name: string; params: string; body: string }[]
+  emittedFns: { name: string; params: string; body: string; async: boolean }[]
   initialHtml: string
 }
 
@@ -200,13 +204,28 @@ function renderHandlerCall(
   ]
     .map((expr) => `${expr};`)
     .join(' ')
-  const body = `${prelude}${h.rendered}`
-  const scopedBody = h.updateBatchNeedsCollection
-    ? `__update_batch_depth__++; try { ${body} } finally { __update_batch_depth__--; }`
-    : body
+  const replaceLocalUpdates = (source: string): string =>
+    source.replace(/__LOCAL_(SELF_UPDATE|ANCESTOR_(\d+))__\(\);?/g, (_match, kind, levelText) => {
+      const level = kind === 'SELF_UPDATE' ? 0 : Number(levelText)
+      const updateExpr = localUpdateExprs[level]
+      if (!updateExpr) {
+        throw new Error(
+          `codegen: missing local update expression for handler ${h.markerId} at level ${level}`,
+        )
+      }
+      return `${updateExpr};`
+    })
+  const body = `${prelude}${replaceLocalUpdates(h.rendered)}`
+  const scopedBody =
+    !h.updatesInRendered && h.updateBatchNeedsCollection
+      ? `__update_batch_depth__++; try { ${body} } finally { __update_batch_depth__--; }`
+      : body
+  const tail = h.updatesInRendered
+    ? ''
+    : `${updateCalls}${localUpdateCalls ? ` ${localUpdateCalls}` : ''}`
   // ADR-0009 D4: 第1引数があるハンドラのみ authored 名を束縛する。
   const params = h.param ? `${h.param}, ...__args` : '...__args'
-  return `(${params}) => { ${scopedBody}; ${updateCalls}${localUpdateCalls ? ` ${localUpdateCalls}` : ''} }`
+  return `${h.async ? 'async ' : ''}(${params}) => { ${scopedBody}${h.updatesInRendered ? '' : ';'}${tail ? ` ${tail}` : ''} }`
 }
 
 // ADR-0012 決定2: 動的属性1個ぶんの設定文。boolProp/prop はプロパティ代入、
@@ -1265,7 +1284,7 @@ export function generateModule({
   // 名のままinstanceスコープへemitする(update_*()は本体に入れない — D3)。
   // 関数宣言なのでhoistされ、ハンドラ/他の追跡関数からそのまま呼べる。
   for (const fn of emittedFns) {
-    instanceLines.push(`function ${fn.name}(${fn.params}) {${fn.body}}`)
+    instanceLines.push(`${fn.async ? 'async ' : ''}function ${fn.name}(${fn.params}) {${fn.body}}`)
   }
   if (emittedFns.length > 0) instanceLines.push('')
   instanceLines.push(`const __INITIAL_HTML__ = ${JSON.stringify(initialHtml)};`, '')

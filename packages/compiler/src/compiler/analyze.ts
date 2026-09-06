@@ -229,6 +229,7 @@ function ensureTrackedFn(ctx: CompilerState, name: string, instanceId: number): 
     name,
     paramSource,
     rendered: '',
+    async: fnPath.node.async,
     writeDeclIds: new Set(),
     directCollectionWriteDeclIds: new Set(),
     calleeNames: new Set(),
@@ -627,6 +628,8 @@ export function analyzeExpr(
 export interface HandlerAnalysis {
   /** 出力向け(書き込み呼び出しを代入文へ書き換え済み)。 */
   rendered: string
+  /** signalToMarkers確定後に本体と入れ子関数の更新文を挿入する。 */
+  finalize: (resolveUpdateCall: ResolveUpdateCall) => string
   /** このハンドラが書き込む root signal の declId 集合(推移解決済み)。 */
   writeDeclIds: Set<DeclId>
   directCollectionWriteDeclIds: Set<DeclId>
@@ -648,6 +651,7 @@ export function analyzeHandlerExpr(
   const directCollectionWriteDeclIds = new Set<DeclId>()
   const calleeNames = new Set<string>()
   const edits: Edit[] = []
+  const nestedScopes: ReturnType<typeof analyzeFunctionBodyScope>[] = []
   const ast = usesTransformedAst(ctx, exprPath as NodePath<t.Node>)
     ? createAstRewrite(exprPath.node)
     : null
@@ -783,15 +787,63 @@ export function analyzeHandlerExpr(
     }
   }
 
-  forEachReferencedIdentifier(exprPath, visit)
+  const captureNested = (
+    fnPath: NodePath<t.FunctionExpression | t.ArrowFunctionExpression | t.ObjectMethod>,
+  ) => {
+    nestedScopes.push(analyzeFunctionBodyScope(ctx, fnPath, instanceId, false, false))
+    fnPath.skip()
+  }
+  if (exprPath.isIdentifier()) visit(exprPath)
+  exprPath.traverse({
+    Identifier(idPath) {
+      if (idPath.isReferencedIdentifier()) visit(idPath)
+    },
+    FunctionExpression: captureNested,
+    ArrowFunctionExpression: captureNested,
+    ObjectMethod: captureNested,
+  })
   collectTransitiveWrites(ctx, calleeNames, writeDeclIds, directCollectionWriteDeclIds)
 
+  const allWriteDeclIds = new Set(writeDeclIds)
+  const allCollectionWriteDeclIds = new Set(directCollectionWriteDeclIds)
+  for (const child of nestedScopes) {
+    for (const id of child.writeDeclIds) allWriteDeclIds.add(id)
+    for (const id of child.allCollectionWriteDeclIds) allCollectionWriteDeclIds.add(id)
+  }
+
+  const rendered = ast
+    ? ast.generate()
+    : render(ctx.source, exprPath.node.start!, exprPath.node.end!, edits)
+
   return {
-    rendered: ast
-      ? ast.generate()
-      : render(ctx.source, exprPath.node.start!, exprPath.node.end!, edits),
-    writeDeclIds,
-    directCollectionWriteDeclIds,
+    rendered,
+    finalize: (resolveUpdateCall) => {
+      const allEdits = [...edits]
+      for (const child of nestedScopes) {
+        const childCode = child.finalize(resolveUpdateCall)
+        allEdits.push({
+          start: child.start,
+          end: child.end,
+          text: childCode,
+        })
+        if (ast) {
+          ast.replace(child.node, child.parent, child.depth, () =>
+            parseGeneratedFunctionBody(childCode),
+          )
+        }
+      }
+      const rendered = ast
+        ? ast.generate()
+        : render(ctx.source, exprPath.node.start!, exprPath.node.end!, allEdits)
+      const updateCall = resolveUpdateCall(writeDeclIds, directCollectionWriteDeclIds)
+      if (!updateCall.code) return rendered
+      if (updateCall.needsCollectionBatch) {
+        return `{ __update_batch_depth__++; try { ${rendered}; } finally { __update_batch_depth__--; } ${updateCall.code} }`
+      }
+      return `${rendered}; ${updateCall.code}`
+    },
+    writeDeclIds: allWriteDeclIds,
+    directCollectionWriteDeclIds: allCollectionWriteDeclIds,
   }
 }
 
@@ -881,13 +933,24 @@ export function analyzeHandlerBody(
   stmts: NodePath<t.Statement>[],
   instanceId: number,
 ): HandlerAnalysis {
-  const core = analyzeHandlerStatementsCore(ctx, stmts, instanceId)
-  // cross-function-handler-writes design D3: 追跡呼び出し先の推移的な書き込み先を
-  // 合流し、update_*() は従来どおりハンドラ末尾(codegen)で一括発火させる。
-  const writeDeclIds = new Set(core.writeDeclIds)
-  const directCollectionWriteDeclIds = new Set(core.directCollectionWriteDeclIds)
-  collectTransitiveWrites(ctx, core.calleeNames, writeDeclIds, directCollectionWriteDeclIds)
-  return { rendered: core.rendered, writeDeclIds, directCollectionWriteDeclIds }
+  if (stmts.length === 0) {
+    return {
+      rendered: '',
+      finalize: () => '',
+      writeDeclIds: new Set(),
+      directCollectionWriteDeclIds: new Set(),
+    }
+  }
+  // handlerはactionと同じ関数境界解析を使うが、値を返すreturn・throw・
+  // 親スコープへの入れ子書き込み合流は受理しない。各callback自身の実行後に
+  // 更新を置くことで、Promise完了前の親更新を発火させない。
+  const scope = analyzeActionStatements(ctx, stmts, instanceId, false, false, false, false)
+  return {
+    rendered: scope.finalize(NO_ACTION_UPDATE),
+    finalize: scope.finalize,
+    writeDeclIds: scope.writeDeclIds,
+    directCollectionWriteDeclIds: scope.allCollectionWriteDeclIds,
+  }
 }
 
 // ADR-0011: action本体・ネストした関数本体・返り値クロージャで共有する
@@ -906,6 +969,7 @@ function analyzeActionIdentifier(
   calleeNames: Set<string>,
   root: t.Node,
   ast?: AstRewriteSession | null,
+  trackSharedWrites = true,
 ): void {
   const id = resolveDeclId(ctx, idPath, instanceId)
   if (!id) {
@@ -936,7 +1000,7 @@ function analyzeActionIdentifier(
         )
       }
       if (parent.node.arguments.length === 0) readDeclIds.add(id)
-      else {
+      else if (trackSharedWrites) {
         writeDeclIds.add(id)
         onWrite(parent.node.start!)
       }
@@ -1006,9 +1070,16 @@ function analyzeActionIdentifier(
     edits.push({
       start: parent.node.start!,
       end: arg.start!,
-      text: `${outputName} = `,
+      text:
+        ctx.declKind.get(id) === 'collection'
+          ? `${outputName} = __replaceCollection__(__collection_${outputName}__, `
+          : `${outputName} = `,
     })
-    edits.push({ start: arg.end!, end: parent.node.end!, text: '' })
+    edits.push({
+      start: arg.end!,
+      end: parent.node.end!,
+      text: ctx.declKind.get(id) === 'collection' ? ')' : '',
+    })
     if (ast) {
       const callPath = parent as NodePath<t.CallExpression>
       planAstReplacement(ast, callPath, root, (get) => {
@@ -1046,9 +1117,12 @@ interface ActionScopeAnalysis {
   /** このスコープが直接読む signal/derived(推移解決前)。クロージャの依存
    * 解析にのみ使う。 */
   readDeclIds: Set<DeclId>
+  /** このスコープ自身が直接書き込む宣言。入れ子関数の更新位置を分けるために使う。 */
+  directWriteDeclIds: Set<DeclId>
+  directCollectionWriteDeclIds: Set<DeclId>
   /** このスコープと内側の関数が書き込む宣言。 */
   writeDeclIds: Set<DeclId>
-  directCollectionWriteDeclIds: Set<DeclId>
+  allCollectionWriteDeclIds: Set<DeclId>
 }
 
 // action本体・ネストした関数本体で共有する文配列の解析(design D4-1)。
@@ -1063,11 +1137,14 @@ function analyzeActionStatements(
   stmts: NodePath<t.Statement>[],
   instanceId: number,
   allowValueReturn: boolean,
+  allowThrow = true,
+  includeNestedWritesInTail = true,
+  trackSharedWrites = true,
 ): ActionScopeAnalysis {
-  for (const stmt of stmts) validateHandlerStatement(stmt, allowValueReturn, true)
+  for (const stmt of stmts) validateHandlerStatement(stmt, allowValueReturn, allowThrow)
 
   const readDeclIds = new Set<DeclId>()
-  const writeDeclIds = new Set<DeclId>()
+  const directWriteDeclIds = new Set<DeclId>()
   const directCollectionWriteDeclIds = new Set<DeclId>()
   const calleeNames = new Set<string>()
   const edits: Edit[] = []
@@ -1088,7 +1165,7 @@ function analyzeActionStatements(
       idPath,
       edits,
       readDeclIds,
-      writeDeclIds,
+      directWriteDeclIds,
       directCollectionWriteDeclIds,
       (pos) => {
         if (firstWriteStart == null || pos < firstWriteStart) {
@@ -1098,12 +1175,21 @@ function analyzeActionStatements(
       calleeNames,
       astRoot,
       ast,
+      trackSharedWrites,
     )
 
   const captureNested = (
     fnPath: NodePath<t.FunctionExpression | t.ArrowFunctionExpression | t.ObjectMethod>,
   ) => {
-    nestedScopes.push(analyzeFunctionBodyScope(ctx, fnPath, instanceId))
+    nestedScopes.push(
+      analyzeFunctionBodyScope(
+        ctx,
+        fnPath,
+        instanceId,
+        includeNestedWritesInTail,
+        trackSharedWrites,
+      ),
+    )
     fnPath.skip()
   }
 
@@ -1134,15 +1220,18 @@ function analyzeActionStatements(
 
   // cross-function-handler-writes D3: 追跡呼び出し先の推移的書き込みを合流し、
   // このスコープ末尾の update_*() 発火(finalize)に含める。
-  collectTransitiveWrites(ctx, calleeNames, writeDeclIds, directCollectionWriteDeclIds)
+  collectTransitiveWrites(ctx, calleeNames, directWriteDeclIds, directCollectionWriteDeclIds)
+
+  const writeDeclIds = new Set(directWriteDeclIds)
+  const allCollectionWriteDeclIds = new Set(directCollectionWriteDeclIds)
 
   // ネストした関数は自身の実行時に更新文を持つが、構造unit内actionの
   // 字句スコープ検証では、その関数が書くlocal signalもaction全体の参照範囲
   // として扱う必要がある。
   for (const child of nestedScopes) {
     for (const id of child.writeDeclIds) writeDeclIds.add(id)
-    for (const id of child.directCollectionWriteDeclIds) {
-      directCollectionWriteDeclIds.add(id)
+    for (const id of child.allCollectionWriteDeclIds) {
+      allCollectionWriteDeclIds.add(id)
     }
   }
 
@@ -1151,8 +1240,10 @@ function analyzeActionStatements(
 
   return {
     readDeclIds,
-    writeDeclIds,
+    directWriteDeclIds,
     directCollectionWriteDeclIds,
+    writeDeclIds,
+    allCollectionWriteDeclIds,
     finalize: (resolveUpdateCall) => {
       const allEdits = [...edits]
       for (const child of nestedScopes) {
@@ -1168,7 +1259,11 @@ function analyzeActionStatements(
           )
         }
       }
-      const updateCall = resolveUpdateCall(writeDeclIds, directCollectionWriteDeclIds)
+      const tailWriteDeclIds = includeNestedWritesInTail ? writeDeclIds : directWriteDeclIds
+      const tailCollectionWriteDeclIds = includeNestedWritesInTail
+        ? allCollectionWriteDeclIds
+        : directCollectionWriteDeclIds
+      const updateCall = resolveUpdateCall(tailWriteDeclIds, tailCollectionWriteDeclIds)
       if (updateCall.code && !updateCall.needsCollectionBatch) {
         allEdits.push({
           start: end,
@@ -1194,53 +1289,101 @@ function analyzeActionStatements(
 // 書き込みが挿入する update_* が必要になった場合のみブロックへ包む
 // (design D4-1: 「同じ書き換え」を式本体にも適用する最小コスト実装)。
 //
-// ponytail: 式本体の中に更にネストした関数(リスナー等)がある場合、その
-// 内部の書き込みはこのスコープの writeDeclIds に合流し、末尾(式全体の後)に
-// まとめて update_* が挿入される -- ネストしたリスナー発火のたびではなく
-// 式本体自身が実行された時点になる。ブロック本体(analyzeActionStatements)
-// は正しく分離するが、concise body の入れ子分離は実例が出た時点で拡張する。
 function analyzeActionExprScope(
   ctx: CompilerState,
   exprPath: NodePath<t.Expression>,
   instanceId: number,
+  includeNestedWritesInTail = true,
+  trackSharedWrites = true,
 ): ActionScopeAnalysis {
   const readDeclIds = new Set<DeclId>()
-  const writeDeclIds = new Set<DeclId>()
+  const directWriteDeclIds = new Set<DeclId>()
   const directCollectionWriteDeclIds = new Set<DeclId>()
   const calleeNames = new Set<string>()
   const edits: Edit[] = []
+  const nestedScopes: ReturnType<typeof analyzeFunctionBodyScope>[] = []
   const ast = usesTransformedAst(ctx, exprPath as NodePath<t.Node>)
     ? createAstRewrite(exprPath.node)
     : null
 
   collectContextCalls(ctx, exprPath, readDeclIds, edits, null, ast, null, exprPath.node)
 
-  forEachReferencedIdentifier(exprPath, (idPath) =>
+  const visit = (idPath: NodePath<t.Identifier>) =>
     analyzeActionIdentifier(
       ctx,
       instanceId,
       idPath,
       edits,
       readDeclIds,
-      writeDeclIds,
+      directWriteDeclIds,
       directCollectionWriteDeclIds,
       () => {},
       calleeNames,
       exprPath.node,
       ast,
-    ),
-  )
-  collectTransitiveWrites(ctx, calleeNames, writeDeclIds, directCollectionWriteDeclIds)
+      trackSharedWrites,
+    )
+  const captureNested = (
+    fnPath: NodePath<t.FunctionExpression | t.ArrowFunctionExpression | t.ObjectMethod>,
+  ) => {
+    nestedScopes.push(
+      analyzeFunctionBodyScope(
+        ctx,
+        fnPath,
+        instanceId,
+        includeNestedWritesInTail,
+        trackSharedWrites,
+      ),
+    )
+    fnPath.skip()
+  }
+  if (exprPath.isIdentifier()) visit(exprPath)
+  exprPath.traverse({
+    Identifier(idPath) {
+      if (idPath.isReferencedIdentifier()) visit(idPath)
+    },
+    FunctionExpression: captureNested,
+    ArrowFunctionExpression: captureNested,
+    ObjectMethod: captureNested,
+  })
+  collectTransitiveWrites(ctx, calleeNames, directWriteDeclIds, directCollectionWriteDeclIds)
+
+  const writeDeclIds = new Set(directWriteDeclIds)
+  const allCollectionWriteDeclIds = new Set(directCollectionWriteDeclIds)
+  for (const child of nestedScopes) {
+    for (const id of child.writeDeclIds) writeDeclIds.add(id)
+    for (const id of child.allCollectionWriteDeclIds) allCollectionWriteDeclIds.add(id)
+  }
 
   const start = exprPath.node.start!
   const end = exprPath.node.end!
   return {
     readDeclIds,
-    writeDeclIds,
+    directWriteDeclIds,
     directCollectionWriteDeclIds,
+    writeDeclIds,
+    allCollectionWriteDeclIds,
     finalize: (resolveUpdateCall) => {
-      const rendered = ast ? ast.generate() : render(ctx.source, start, end, edits)
-      const updateCall = resolveUpdateCall(writeDeclIds, directCollectionWriteDeclIds)
+      const allEdits = [...edits]
+      for (const child of nestedScopes) {
+        const childCode = child.finalize(resolveUpdateCall)
+        allEdits.push({
+          start: child.start,
+          end: child.end,
+          text: childCode,
+        })
+        if (ast) {
+          ast.replace(child.node, child.parent, child.depth, () =>
+            parseGeneratedFunctionBody(childCode),
+          )
+        }
+      }
+      const tailWriteDeclIds = includeNestedWritesInTail ? writeDeclIds : directWriteDeclIds
+      const tailCollectionWriteDeclIds = includeNestedWritesInTail
+        ? allCollectionWriteDeclIds
+        : directCollectionWriteDeclIds
+      const updateCall = resolveUpdateCall(tailWriteDeclIds, tailCollectionWriteDeclIds)
+      const rendered = ast ? ast.generate() : render(ctx.source, start, end, allEdits)
       if (!updateCall.code) return rendered
       if (updateCall.needsCollectionBatch) {
         return `{ __update_batch_depth__++; try { ${rendered}; } finally { __update_batch_depth__--; } ${updateCall.code} }`
@@ -1258,6 +1401,8 @@ function analyzeFunctionBodyScope(
   ctx: CompilerState,
   fnPath: NodePath<t.FunctionExpression | t.ArrowFunctionExpression | t.ObjectMethod>,
   instanceId: number,
+  includeNestedWritesInTail = true,
+  trackSharedWrites = true,
 ): {
   start: number
   end: number
@@ -1266,20 +1411,32 @@ function analyzeFunctionBodyScope(
   depth: number
   finalize: (resolveUpdateCall: ResolveUpdateCall) => string
   readDeclIds: Set<DeclId>
-  writeDeclIds: Set<DeclId>
+  directWriteDeclIds: Set<DeclId>
   directCollectionWriteDeclIds: Set<DeclId>
+  writeDeclIds: Set<DeclId>
+  allCollectionWriteDeclIds: Set<DeclId>
 } {
   const bodyPath = fnPath.get('body')
   if (bodyPath.isBlockStatement()) {
     const stmts = bodyPath.get('body') as NodePath<t.Statement>[]
     const inner =
       stmts.length > 0
-        ? analyzeActionStatements(ctx, stmts, instanceId, true)
+        ? analyzeActionStatements(
+            ctx,
+            stmts,
+            instanceId,
+            true,
+            true,
+            includeNestedWritesInTail,
+            trackSharedWrites,
+          )
         : {
             finalize: () => '',
             readDeclIds: new Set<DeclId>(),
-            writeDeclIds: new Set<DeclId>(),
+            directWriteDeclIds: new Set<DeclId>(),
             directCollectionWriteDeclIds: new Set<DeclId>(),
+            writeDeclIds: new Set<DeclId>(),
+            allCollectionWriteDeclIds: new Set<DeclId>(),
           }
     return {
       start: bodyPath.node.start!,
@@ -1288,12 +1445,20 @@ function analyzeFunctionBodyScope(
       parent: fnPath.node,
       depth: pathDepth(bodyPath as NodePath<t.Node>),
       readDeclIds: inner.readDeclIds,
-      writeDeclIds: inner.writeDeclIds,
+      directWriteDeclIds: inner.directWriteDeclIds,
       directCollectionWriteDeclIds: inner.directCollectionWriteDeclIds,
+      writeDeclIds: inner.writeDeclIds,
+      allCollectionWriteDeclIds: inner.allCollectionWriteDeclIds,
       finalize: (resolveUpdateCall) => `{${inner.finalize(resolveUpdateCall)}}`,
     }
   }
-  const exprScope = analyzeActionExprScope(ctx, bodyPath as NodePath<t.Expression>, instanceId)
+  const exprScope = analyzeActionExprScope(
+    ctx,
+    bodyPath as NodePath<t.Expression>,
+    instanceId,
+    includeNestedWritesInTail,
+    trackSharedWrites,
+  )
   return {
     start: bodyPath.node.start!,
     end: bodyPath.node.end!,
@@ -1302,8 +1467,10 @@ function analyzeFunctionBodyScope(
     depth: pathDepth(bodyPath as NodePath<t.Node>),
     finalize: exprScope.finalize,
     readDeclIds: exprScope.readDeclIds,
-    writeDeclIds: exprScope.writeDeclIds,
+    directWriteDeclIds: exprScope.directWriteDeclIds,
     directCollectionWriteDeclIds: exprScope.directCollectionWriteDeclIds,
+    writeDeclIds: exprScope.writeDeclIds,
+    allCollectionWriteDeclIds: exprScope.allCollectionWriteDeclIds,
   }
 }
 
@@ -1381,7 +1548,7 @@ function analyzeActionResultExpression(
     return {
       deps: closureScope.readDeclIds,
       writeDeclIds: closureScope.writeDeclIds,
-      directCollectionWriteDeclIds: closureScope.directCollectionWriteDeclIds,
+      directCollectionWriteDeclIds: closureScope.allCollectionWriteDeclIds,
       finalize: (resolveUpdateCall) => `${prefix}${closureScope.finalize(resolveUpdateCall)}`,
     }
   }
@@ -1425,7 +1592,7 @@ function analyzeActionResultExpression(
     const scope = analyzeFunctionBodyScope(ctx, fnPath, instanceId)
     if (name === 'update') updateDeps = scope.readDeclIds
     for (const id of scope.writeDeclIds) writeDeclIds.add(id)
-    for (const id of scope.directCollectionWriteDeclIds) {
+    for (const id of scope.allCollectionWriteDeclIds) {
       directCollectionWriteDeclIds.add(id)
     }
     resultEdits.push({
@@ -1484,7 +1651,7 @@ export function analyzeActionBody(
       readDeclIds: scope.readDeclIds,
       result: null,
       writeDeclIds: scope.writeDeclIds,
-      directCollectionWriteDeclIds: scope.directCollectionWriteDeclIds,
+      directCollectionWriteDeclIds: scope.allCollectionWriteDeclIds,
     }
   }
 
@@ -1504,12 +1671,14 @@ export function analyzeActionBody(
       : {
           finalize: () => '',
           readDeclIds: new Set<DeclId>(),
-          writeDeclIds: new Set<DeclId>(),
+          directWriteDeclIds: new Set<DeclId>(),
           directCollectionWriteDeclIds: new Set<DeclId>(),
+          writeDeclIds: new Set<DeclId>(),
+          allCollectionWriteDeclIds: new Set<DeclId>(),
         }
 
   const writeDeclIds = new Set(bodyScope.writeDeclIds)
-  const directCollectionWriteDeclIds = new Set(bodyScope.directCollectionWriteDeclIds)
+  const directCollectionWriteDeclIds = new Set(bodyScope.allCollectionWriteDeclIds)
   if (result) {
     for (const id of result.writeDeclIds) writeDeclIds.add(id)
     for (const id of result.directCollectionWriteDeclIds) {

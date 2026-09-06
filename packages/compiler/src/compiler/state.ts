@@ -53,12 +53,16 @@ export interface HandlerDecl {
   markerId: MarkerId
   eventName: string
   rendered: string
+  /** 本体と入れ子関数の更新文をsignalToMarkers確定後に挿入する。 */
+  finalize?: (resolveUpdateCall: ResolveUpdateCall) => string
   writeDeclIds: Set<DeclId>
   /** collection.update() の直接通知経路で書き込むcollection。通常の
    * collection(next) setterとは異なり、同一スコープのbatch時だけ遅延する。 */
   directCollectionWriteDeclIds: Set<DeclId>
   /** ADR-0009: 第1仮引数(イベントオブジェクト)の authored 名。なければ null。 */
   param: string | null
+  /** authored handlerがasync関数またはasync arrowか。 */
+  async: boolean
 }
 
 // ADR-0012: 動的属性バインディング1個ぶん。要素のマーカー id に相乗りする
@@ -228,6 +232,8 @@ export interface TrackedFn {
   paramSource: string
   /** 書き換え済み本体(中括弧の中身、update_*() なし)。 */
   rendered: string
+  /** authored movement-zone functionがasyncか。 */
+  async: boolean
   writeDeclIds: Set<DeclId>
   directCollectionWriteDeclIds: Set<DeclId>
   calleeNames: Set<string>

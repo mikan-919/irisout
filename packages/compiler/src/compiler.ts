@@ -407,6 +407,29 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
   // 同じfactoryまたは祖先factoryのupdateへ直接つなぐため、ローカルsignalが
   // module scopeのsignalToMarkersへ混ざらない。
   const convertHandler = (h: HandlerDecl, localScopes: Set<DeclId>[] = []): HandlerOutput => {
+    const resolveHandlerUpdateCall = (
+      ids: Set<DeclId>,
+      directCollectionWriteDeclIds: Set<DeclId> = new Set(),
+    ) => {
+      const plan = resolveUpdateCall(ids, directCollectionWriteDeclIds)
+      const localUpdateLevels = localScopes.flatMap((scope, level) =>
+        [...ids].some((id) => scope.has(id)) ? [level] : [],
+      )
+      const localUpdateCalls = [
+        ...new Set(
+          localUpdateLevels.map((level) =>
+            level === 0 ? '__LOCAL_SELF_UPDATE__' : `__LOCAL_ANCESTOR_${level}__`,
+          ),
+        ),
+      ]
+        .map((name) => `${name}();`)
+        .join(' ')
+      return {
+        code: [plan.code, localUpdateCalls].filter(Boolean).join(' '),
+        needsCollectionBatch: plan.needsCollectionBatch,
+      }
+    }
+    const rendered = h.finalize ? h.finalize(resolveHandlerUpdateCall) : h.rendered
     const plan = resolveUpdatePlan(h.writeDeclIds, h.directCollectionWriteDeclIds)
     const localUpdateLevels = localScopes.flatMap((scope, level) =>
       [...h.writeDeclIds].some((id) => scope.has(id)) ? [level] : [],
@@ -414,7 +437,10 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
     return {
       markerId: h.markerId,
       eventName: h.eventName,
-      rendered: h.rendered,
+      rendered,
+      async: h.async,
+      updatesInRendered:
+        h.finalize != null && (h.writeDeclIds.size > 0 || h.directCollectionWriteDeclIds.size > 0),
       param: h.param,
       updateNames: plan.updateNames,
       updateBatchName: plan.updateBatchName,
@@ -627,6 +653,7 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
     name: f.name,
     params: f.paramSource,
     body: f.rendered,
+    async: f.async,
   }))
 
   const code = generateModule({

@@ -41,6 +41,7 @@ import type {
   LocalDecl,
   MarkerId,
   MountDecl,
+  ResolveUpdateCall,
   StructuralUnitBody,
   TextMarker,
 } from './state.ts'
@@ -420,14 +421,18 @@ function buildTextMarker(
 interface HandlerAttr {
   eventName: string
   rendered: string
+  finalize: (resolveUpdateCall: ResolveUpdateCall) => string
   writeDeclIds: Set<DeclId>
   directCollectionWriteDeclIds: Set<DeclId>
   param: string | null
+  async: boolean
 }
 
 interface HandlerBody {
   /** 第1仮引数(イベントオブジェクト)の authored 名。なければ null。 */
   param: string | null
+  /** authored handlerがasync関数またはasync arrowか。 */
+  async: boolean
   /** 単一式(inline arrow の式本体)、またはブロック本体の文配列(design D1)。 */
   body: NodePath<t.Expression> | NodePath<t.Statement>[]
 }
@@ -463,9 +468,13 @@ function resolveHandlerBody(
     const param = resolveHandlerParam(exprPath.get('params'), attrName)
     const bodyPath = exprPath.get('body')
     if (bodyPath.isBlockStatement()) {
-      return { param, body: bodyPath.get('body') as NodePath<t.Statement>[] }
+      return {
+        param,
+        async: exprPath.node.async,
+        body: bodyPath.get('body') as NodePath<t.Statement>[],
+      }
     }
-    return { param, body: bodyPath as NodePath<t.Expression> }
+    return { param, async: exprPath.node.async, body: bodyPath as NodePath<t.Expression> }
   }
   if (exprPath.isIdentifier()) {
     // ADR-0008: 識別子参照の解決先は render() より後ろの function宣言に限る。
@@ -478,7 +487,11 @@ function resolveHandlerBody(
       )
     }
     const param = resolveHandlerParam(fn.get('params'), attrName)
-    return { param, body: fn.get('body.body') as NodePath<t.Statement>[] }
+    return {
+      param,
+      async: fn.node.async,
+      body: fn.get('body.body') as NodePath<t.Statement>[],
+    }
   }
   throw new Error(
     `compile: handler "${attrName}" must be an arrow function or a reference to one (scope limit)`,
@@ -556,12 +569,20 @@ function collectAttrs(
       throw new Error(`compile: handler "${attrName.name}" must be an expression (scope limit)`)
     }
     const exprPath = attr.get('value.expression') as NodePath<t.Expression>
-    const { param, body } = resolveHandlerBody(exprPath, attrName.name, handlerFns)
+    const { param, async: isAsync, body } = resolveHandlerBody(exprPath, attrName.name, handlerFns)
     const eventName = attrName.name.slice(2).toLowerCase()
-    const { rendered, writeDeclIds, directCollectionWriteDeclIds } = Array.isArray(body)
+    const analysis = Array.isArray(body)
       ? analyzeHandlerBody(ctx, body, instanceId)
       : analyzeHandlerExpr(ctx, body, instanceId)
-    handlerAttrs.push({ eventName, rendered, writeDeclIds, directCollectionWriteDeclIds, param })
+    handlerAttrs.push({
+      eventName,
+      rendered: analysis.rendered,
+      finalize: analysis.finalize,
+      writeDeclIds: analysis.writeDeclIds,
+      directCollectionWriteDeclIds: analysis.directCollectionWriteDeclIds,
+      param,
+      async: isAsync,
+    })
   }
   return { handlerAttrs, staticAttrs, actionAttr, dynamicAttrPaths }
 }
