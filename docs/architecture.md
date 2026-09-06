@@ -66,7 +66,9 @@ linked source + module-scope補助宣言
 
 `compileProject()`は生成結果とともに、リンクした入口・相対moduleの絶対pathを返す。
 `@irisout/vite-plugin`はこの一覧だけを監視対象にし、変更時に同じ入口を再コンパイルする。
-初期HTMLはindex.htmlのmarkerへ埋め込み、仮想moduleへhydrate処理を出力する。開発時の
+初期HTMLはビルド時に一度生成してindex.htmlのmarkerへ埋め込み、仮想moduleへhydrate処理を
+出力する。これは要求ごとのSSR HTMLではなく、静的HTMLをブラウザで引き継ぐclient buildの
+契約である。request SSRの入口と要求ごとのstate所有はADR-0038で別契約に分ける。開発時の
 変更反映はページ全体の再読み込みであり、状態保持やDOM差分HMRは対象外である。
 
 `compileComponent()`(4)が受理しないパターンに当たると、常に
@@ -152,7 +154,7 @@ triage手続きで捌く — コンパイラの受理条件自体を場当たり
 - **List更新アドレス**(ADR-0015): コンパイル時のList marker ID、key式のitem ID、
   item内marker由来のbinding IDを分離して保持する。共有ランタイムはkey照合と
   DOM順序、生成factoryはbinding単位の直接DOM更新を担当する。
-- **module境界**(ADR-0024/0030): `compileProject()`は相対`.js`/`.jsx`の静的named/default
+- **module境界**(ADR-0024/0030/0037/0038): `compileProject()`は相対`.js`/`.jsx`の静的named/default
   importだけをAST bindingへ解決する。componentはinline pathへ入り、通常のfunctionと
   `const`だけが補助宣言としてmodule scopeに残る。直接`const name = signal(initial)`と
   `const name = derived(() => expression)`は、参照時だけ専用shared stateとして出力する。

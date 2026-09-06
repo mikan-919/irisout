@@ -75,8 +75,9 @@ bun run dev
 bun run build:inspect
 ```
 
-出力先は`apps/examples/dist/`です。`dist/index.html`には初期値が反映され、
-`dist/app.js`にはDOM更新処理が含まれます。
+出力先は`apps/examples/dist/`です。`dist/index.html`にはbuild時の初期値が反映され、
+`dist/app.js`にはDOM更新処理が含まれます。現行の公開入口はclient build用で、要求ごとの
+SSR HTML生成は対応していません。
 
 ### 別の例
 
@@ -98,9 +99,9 @@ Worker入口を読み込みます。配信先に接頭辞がある場合は`IRIS
 
 1. `compileProject(entryPath)`が入口の`.jsx`と相対読み込み先を解析します。
 2. コンポーネントを展開し、JSX、状態、依存関係、更新先を確定します。
-3. コンポーネントをビルド時に一度実行し、初期HTMLを生成します。
+3. コンポーネントをビルド時に一度実行し、静的な初期HTMLを生成します。
 4. 状態ごとのDOM更新関数と、使用した機能に必要な共有処理を生成します。
-5. ブラウザは初期HTMLを引き継ぎ、イベントと更新処理を接続します。
+5. ブラウザは初期HTMLを引き継ぎ、イベントと更新処理を接続します。要求ごとのSSRは別契約です。
 
 この処理では、仮想DOMやアプリケーション全体を対象にする実行時の依存グラフを
 使用しません。設計原則は[`CONCEPT.v3.md`](./CONCEPT.v3.md)、コンパイラの処理は

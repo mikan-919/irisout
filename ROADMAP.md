@@ -112,10 +112,11 @@ irisoutの到達基準は、入力、解析処理の呼び出し、状態管理�
 
 ### 今回は先に広げない範囲
 
-childrenによる共通パネル、SVG、双方向入力の省略記法、モジュール共有派生状態は、
+childrenによる共通パネル、SVG、双方向入力の省略記法、モジュール共有collectionは、
 代表アプリで必要になった例から再検討する。PDF抽出、サーバーでの要求ごとのHTML生成、
 画面遷移の基盤、汎用の非同期実行基盤、学習済みモデルの導入は初期版の必須条件にしない。
 注: SVGは図形を要素として記述する形式であり、初期版の地図はHTML要素で構成できる。
+SSRの現行境界はADR-0038で定める。現在はビルド時に静的HTMLを生成してブラウザでhydrateする。
 
 ## 設計判断待ち(次のchangeを書く前に決めること)
 
@@ -307,10 +308,10 @@ namespace/side-effect/dynamic import、re-export、循環依存は`compile:`エ�
   value属性+`onInput`ハンドラの手書き配線が必要(手書き相当のまま)。
 
 以下は「基本セットに含めるかどうか自体が未確定」な発展機能。
-CONCEPT.v3.mdに記述が無く、in/outの判断すら未着手:
+CONCEPT.v3.mdに記述が無く、in/outの判断すら未着手。request単位のSSRはADR-0038で現行版の
+範囲外と決め、現在の静的HTMLモデルとサーバー用の別契約を分けた:
 transition/animation、portal、error boundary、async/resource
-(Suspense相当)、リクエスト単位のSSR(現状はビルド時に静的HTMLを1回焼く
-だけで、動的な per-request 生成とは別モデル)。
+(Suspense相当)。
 
 ## 次のアクション
 
@@ -418,17 +419,17 @@ transition/animation、portal、error boundary、async/resource
        `component-props-handler-type-checking`)。JSDocで宣言したcomponent propsを
        同一ファイルと相対importで検査し、6イベントの型と要素別`currentTarget`を
        `packages/compiler/types/jsx.d.ts`へ追加した。型検査専用fixtureで成功・失敗の両方を固定した。
-    2. ~~**module共有stateの派生値**~~ — **完了**(ADR-0037)。module共有signalの
+    2. ~~**module共有stateの派生値とSSR境界**~~ — **完了**(ADR-0037/0038)。module共有signalの
        既存通知経路を使う読み取り専用関数として実装し、共有derivedのcache・schedulerを
-       追加しない。**保留: module共有collectionとSSR境界**。request単位分離、永続化、
-       collection共有は別契約へ分ける。
+       追加しない。SSRはclient buildと要求ごとのサーバー生成を分け、module共有collectionと
+       永続化は別契約へ分ける。
 
 ## 参考資料
 
 - `STATUS.md` — 現在地・マイルストーン進捗・既知の制約
 - `CONCEPT.v3.md` — 現在のプロダクトコンセプト
 - `CONCEPT.v2.md` — 旧コンセプト(履歴)
-- `docs/adr/0001`〜`0030` — 決定済みの設計判断
+- `docs/adr/0001`〜`0038` — 決定済みの設計判断
 - `session/000_ts-rewrite-kickoff-and-m1.md` — 書き直しキックオフの全経緯、
   quixとの比較
 - `openspec/specs/` — 実装対象の受入条件の正本

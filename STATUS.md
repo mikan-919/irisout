@@ -326,8 +326,15 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
 受理する。参照されたderivedは生成moduleへ一つだけ出力し、共有signalの更新時は各instanceの
 既存`update_*()`から関数を読み直す。derived専用のcache、購読registry、schedulerは生成しない。
 module共有derivedの呼び出しは読み取り専用で、引数付き呼び出しは`compile:`エラーになる。
-未使用のderivedと、その依存だけの共有signalは生成物へ出力しない。collection共有、永続化、
-request単位SSR分離は引き続き別契約である。
+未使用のderivedと、その依存だけの共有signalは生成物へ出力しない。collection共有と永続化は
+別契約であり、request単位SSR分離はADR-0038で現行版の対象外と定めた。
+
+## 現在地(2026-09-06・client buildとSSR境界、ADR-0038)
+
+`compileProject()`とVite連携は、ビルド時に一度生成した静的HTMLをブラウザでmountまたはhydrate
+するclient buildの入口である。`initialHtml`を要求ごとのSSR結果とは扱わず、要求ごとの入力や
+state factory、サーバーtargetは現行版へ追加しない。request SSRが必要になった場合は、要求ごとの
+state所有とhydrate引き継ぎを別のADRとOpenSpecで定める。
 
 ## 現在地(2026-09-06・利用者向け開発環境)
 
@@ -353,7 +360,7 @@ Apache License 2.0で、ルートの`LICENSE`と各配布対象packageの`licens
   拒否する。`const [a] = signal(0)`
   のような分割代入宣言子も拒否する。ビルド時実行の例外は
   `compile: build-time execution failed:`(`cause`付き)に包まれる。
-- **`compileProject(entryPath)`のmodule境界**(ADR-0024/0030/0034/0037): 相対`.js`/`.jsx`の静的
+- **`compileProject(entryPath)`のmodule境界**(ADR-0024/0030/0034/0037/0038): 相対`.js`/`.jsx`の静的
   named/default importを解析して連結する。外部moduleの静的named/default/namespace importと
   CSS、`?url`、`?worker`などの資源importは解析せず生成moduleへ残し、使用されないbindingは
   出力しない。相対資源の実pathは依存一覧へ含める。module scopeの直接`signal`/`derived`は
