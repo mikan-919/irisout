@@ -9,7 +9,12 @@
   "type": "module",
   "scripts": {
     "dev": "vp -C apps/examples dev",
+    "dev:list": "IRISOUT_ENTRY=list.jsx vp -C apps/examples dev",
+    "dev:notes": "IRISOUT_ENTRY=notes.jsx vp -C apps/examples dev",
+    "dev:todomvc": "IRISOUT_ENTRY=todomvc.jsx vp -C apps/examples dev",
+    "dev:multi-file": "IRISOUT_ENTRY=multi-file/App.jsx vp -C apps/examples dev",
     "build": "vp -C apps/examples build",
+    "build:inspect": "IRISOUT_MINIFY=false vp -C apps/examples build",
     "start": "bun run build && vp -C apps/examples preview",
     "check": "vp check",
     "check:fix": "vp check --fix",

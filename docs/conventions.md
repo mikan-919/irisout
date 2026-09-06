@@ -2,7 +2,7 @@
 
 ## ツールチェーン
 
-- 統合ツールチェーンは **Vite+**。依存導入は`vp install`、静的検査は`vp check`、
+- 統合ツールチェーンは **Vite+**。依存導入は`bun install`、静的検査は`vp check`、
   テストは`vp test --run`、example buildは`vp build`を使う。
 - package managerはBunに固定するが、直接の`bun test`/`Bun.build`には依存しない。
 - フォーマットはOxfmt、lintはOxlint、テストはVite+ Test(Vitest)。設定はルートの

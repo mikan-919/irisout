@@ -2,23 +2,26 @@
 
 ![irisout](./docs/assets/logo.webp)
 
-**JSX を書く。ブラウザに届くのは、その UI に必要なコードだけ。**
+**JSXから、静的HTMLと状態ごとのDOM更新コードを生成するUIコンパイラです。**
 
-irisout は React の代替ではありません。JSX の宣言的な開発体験を保ったまま、
-静的に決められる処理をコンパイル時に解決し、仮想 DOM を介さず実 DOM へ
-直接反映する compiler-first なコンパイラです。
+```text
+JSX → ビルド → 静的HTML + DOM更新コード
+                         └ 仮想DOMなし
+```
 
-> この UI に必要な仕事だけを、ブラウザで最も小さく素直に実行するには
-> どう書くか?
->
-> — [`CONCEPT.v3.md`](./CONCEPT.v3.md)
+irisoutは、JSXの記述方法を保ちながら、ブラウザで動く処理をUIに必要な範囲へ
+限定します。コンポーネント、状態の依存関係、更新先をビルド時に解析し、実DOMを
+更新するコードへ変換します。
 
----
+> [!WARNING]
+> 実装と検証の段階です。公開パッケージではなく、ライセンスも未定です。
+> 実製品への導入ではなく、設計と生成結果の試用を対象にしています。
 
-## これは何をするものか
+## 30秒で把握する
 
-```tsx
-// apps/examples/counter.jsx
+次のJSXを記述します。
+
+```jsx
 export function Counter() {
   const count = signal(0)
   const doubled = derived(() => count() * 2)
@@ -40,148 +43,111 @@ export function Counter() {
 }
 ```
 
-このコンポーネントはビルド時に実行され、依存グラフに基づいて
-必要な DOM 更新コードへコンパイルされます。ブラウザに届くのは焼き込み済みの
-静的 HTML、専用の更新関数、そして動的構造に必要な最小限のコードだけです。
-仮想 DOM や Fiber のような汎用実行基盤は使いません。
+ビルド結果は次の役割に分かれます。
 
-## なぜ
+| 結果              | 役割                                             |
+| ----------------- | ------------------------------------------------ |
+| `dist/index.html` | 初期表示のHTMLを保持する                         |
+| `dist/app.js`     | クリック処理と、`count`に依存するDOMの更新を行う |
 
-- **Compiler-first** — 静的に決められる構造・依存・更新先を事前に確定する。
-- **HTML ファースト** — 可能な限り静的 HTML を生成する。
-- **直接 DOM 更新** — 仮想 DOM を介さず実 DOMへ反映しつつ、Listの差分や
-  複数更新のバッチなど、更新粒度は実測に基づいて最適化する。
-- **最小ランタイム** — Listなど実行時にしか決まらない処理には小さな共有
-  ヘルパーを許容し、使用した機能に必要なコードだけを含める。
-- **安全に拒否する** — 対応していない構文は黙って握りつぶさず、
-  `compile: ... (scope limit)` で明示的に拒否する(ADR-0004)。
+`signal`、`derived`、`render`は記述用APIです。コンパイラが意味を解析するための
+構文であり、同じ形の実行時APIをブラウザへ送るものではありません。リストや条件分岐
+など、実行時の管理が必要な機能だけが共有処理を使用します。
 
-詳しい設計思想は [`CONCEPT.v3.md`](./CONCEPT.v3.md) を参照してください。
+## 5分で試す
 
-## クイックスタート
+必要なものは[Git](https://git-scm.com/)と
+[Bun 1.3.13](https://bun.sh/docs/installation)です。Vite+の全体インストールは不要です。
 
 ```bash
-vp install
-vp build
+git clone https://github.com/mikan-919/irisout.git
+cd irisout
+bun install
+bun run dev
 ```
 
-`dist/index.html`(初期 HTML 焼き込み済み)と `dist/app.js`(hydrate 専用、
-innerHTML は一切書かない)が生成されます。既定のList playgroundでは、itemの
-追加・1件更新・並べ替え・削除とkeyed DOM再利用を試せます。
+端末に表示されたURLをブラウザで開き、`increment`を押してください。ソースは
+[`apps/examples/counter.jsx`](./apps/examples/counter.jsx)です。
 
-入口を分割したfixtureは次でビルドできます。
+生成コードを圧縮せずに確認する場合は、次を実行します。
 
 ```bash
-cd apps/examples
-IRISOUT_ENTRY=multi-file/App.jsx vp build
+bun run build:inspect
 ```
 
-`compileProject(entryPath)`は相対`.js`/`.jsx`の静的importを依存順にリンクし、
-componentをコンパイル時にインライン化します。通常の補助関数と`const`は生成moduleへ
-残ります。module直下の直接`const name = signal(initial)`はmodule共有signalとして受理し、
-参照された場合だけ生成moduleの共有cellとinstance購読を出力します。外部module、dynamic
-import、re-export、循環依存、module scopeの`derived`/`collection`や副作用文は受理しません。
-`compile(source)`は単一文字列APIとして残ります。
+出力先は`apps/examples/dist/`です。`dist/index.html`には初期値が反映され、
+`dist/app.js`にはDOM更新処理が含まれます。
 
-## ベンチマーク
+### 別の例
 
-TodoMVC 相当のシナリオ(mount / filter / add / remove、N=100〜100,000)を
-実 Chromium 上で計測した結果、`apps/examples/todomvc.handwritten.js` の
-keyed再利用による手書き基準は全シナリオ・全 N で React (`useState` のみ、
-非最適化) より高速でした(1.1〜4 倍、中心は 1.4〜1.8 倍)。これはM5の
-生成物を評価する基準fixtureの比較であり、現行compilerが生成したproduction
-生成物そのものの比較ではありません。初期計測の方法論と表は
-[`packages/bench/todomvc-vs-react.results.md`](./packages/bench/todomvc-vs-react.results.md)
-にあります。
+| コマンド                 | 確認できる機能                                   | ソース                                                     |
+| ------------------------ | ------------------------------------------------ | ---------------------------------------------------------- |
+| `bun run dev:list`       | キー付きリストの追加、更新、並べ替え、削除       | [`list.jsx`](./apps/examples/list.jsx)                     |
+| `bun run dev:notes`      | フォーム、タブ、局所状態、条件分岐、入れ子リスト | [`notes.jsx`](./apps/examples/notes.jsx)                   |
+| `bun run dev:todomvc`    | TodoMVCの操作                                    | [`todomvc.jsx`](./apps/examples/todomvc.jsx)               |
+| `bun run dev:multi-file` | 相対モジュールによるファイル分割                 | [`multi-file/App.jsx`](./apps/examples/multi-file/App.jsx) |
 
-2026-09-05に、現行コンパイラ生成版と手書き基準、React productionの比較を
-Chromium 152.0.7977.75で追加計測した。N=100/1,000/10,000、予熱2回後7回の
-中央値であり、手書き版をirisoutの生成性能とは扱わない。転送量、初期化、更新、
-DOM変更、JavaScriptヒープ、生成コードの調査は
+開発サーバーを切り替えるときは、実行中の処理を`Ctrl+C`で終了してください。
+
+## 処理の流れ
+
+1. `compileProject(entryPath)`が入口の`.jsx`と相対読み込み先を解析します。
+2. コンポーネントを展開し、JSX、状態、依存関係、更新先を確定します。
+3. コンポーネントをビルド時に一度実行し、初期HTMLを生成します。
+4. 状態ごとのDOM更新関数と、使用した機能に必要な共有処理を生成します。
+5. ブラウザは初期HTMLを引き継ぎ、イベントと更新処理を接続します。
+
+この処理では、仮想DOMやアプリケーション全体を対象にする実行時の依存グラフを
+使用しません。設計原則は[`CONCEPT.v3.md`](./CONCEPT.v3.md)、コンパイラの処理は
+[`docs/architecture.md`](./docs/architecture.md)に記録しています。
+
+## 対応範囲
+
+主な対応機能は次のとおりです。
+
+- `signal`と`derived`
+- テキストと属性の更新
+- イベント処理
+- キー付きリストと条件分岐
+- 同一ファイルと相対モジュールのコンポーネント合成
+- `use=`によるDOM操作と破棄処理
+- `onMount`、`effect`、コンテキスト
+- コンポーネントのマウント、初期HTMLの引き継ぎ、破棄
+
+ルートコンポーネントは1個、読み込めるモジュールは相対`.js`と`.jsx`、
+子要素の受け渡しは未対応です。コンパイラは未対応の構文を`compile: ... (scope limit)`
+として拒否します。対応状況と制約は[`STATUS.md`](./STATUS.md)を参照してください。
+
+## 性能計測
+
+現行コンパイラの生成物、手書き実装、Reactの製品用ビルドを同じChromiumで計測して
+います。転送量、初期化、更新、DOM変更、JavaScriptヒープ、生成コードの結果と条件は
 [`packages/bench/todomvc-compiler.results.md`](./packages/bench/todomvc-compiler.results.md)
-にある。
-
-## 現在のステータス
-
-TypeScript 実装は M1〜M6(全マイルストーン横断の no-wrapper 検証)まで
-完了しており、「使ってもらえる閾値」(M5 + `use=` アクション)に到達
-しています。
-
-対応済み: signal / derived、keyed collectionの1件直接更新、テキスト・属性の
-動的バインディング、イベントハンドラ、`.map()` によるリスト(keyed reuse)、
-任意の深さの条件分岐・構造unit、`use=` action(top-level要素・list item・branch)、ハンドラ/action
-からの動きゾーン関数呼び出しの追跡(ADR-0013)、複数root writeで共有markerを
-一度だけ反映する同期更新batch(ADR-0020)、component instanceの
-`unmount()`と`use=` actionの`{ update?, destroy? }` cleanup(ADR-0022)、相対moduleの
-複数ファイル合成(ADR-0024)。
-
-`mountComponent(container)` / `hydrateComponent(container)` は instance を返します。
-instanceは一度だけmount/hydrateでき、`unmount()`はidempotentです。既存の
-`use={action}` の `() => void` 返り値は従来どおりリアクティブ update closure のままです。
-timer・subscription・外部 listenerなどactionが確保したresourceは、object形式の
-`{ destroy() { ... } }` で解除します。list item・conditional branchのactionは各factory
-instanceが所有し、keyed reorderでは再初期化せず、item削除・branch切替・祖先unit破棄・
-root `unmount()`でdestroyします。ルートcomponentの動きゾーンでは
-`onMount(() => void | (() => void))`を使えます。callbackはmount/hydrate完了後に一度だけ
-実行され、返り値のcleanupはunmount時に逆順で一度だけ実行されます。再mount、
-構造unit内の`onMount`とinline化される子componentの`onMount`は、rootまたはunitの
-instanceが所有します。ルートcomponentの動きゾーンでは`effect(() => void | (() => void))`
-も使えます。callback本体が読むsignal/
-derivedの更新時に再実行され、返り値のcleanupは再実行前とunmount時に呼ばれます。
-effect本体から追跡signalへ書き込むこと、非同期schedulerを暗黙に導入することはscope
-limitです。構造unit内・inline子componentのeffectは各unit/root instanceが所有します。
-component treeの共有依存には、トップレベル`const Theme = createContext(defaultValue)`、
-変数ゾーンの`provideContext(Theme, value)`、JSX式の`useContext(Theme)`を使えます。
-consumerは最も近いproviderまたはdefault値へコンパイル時に置換され、root・list item・
-conditional branchの各instanceが自身の値と更新依存を所有します。contextを使わない生成物に
-context runtimeやMapは出力しません。構造unitの動的provider treeとPromiseLikeを扱う非同期
-contextは静的置換として受理します。module共有stateは`compileProject`の直接signalに限り、
-`derived`/`collection`や汎用storeはscope limitです。
-
-既知の制約(ルートコンポーネントは1つのみ、children/slot未対応、module解決は相対
-importのみ、など)は [`STATUS.md`](./STATUS.md) に一覧があります。
-まだ実験的なコンパイラであり、実プロダクトでの採用は制約を理解した上で
-検討してください。
-
-## ドキュメント
-
-| ファイル                                         | 内容                               |
-| ------------------------------------------------ | ---------------------------------- |
-| [`CONCEPT.v3.md`](./CONCEPT.v3.md)               | プロジェクトの目的と哲学           |
-| [`docs/architecture.md`](./docs/architecture.md) | コンパイラの内部構造・パイプライン |
-| [`docs/conventions.md`](./docs/conventions.md)   | コーディング規約                   |
-| [`STATUS.md`](./STATUS.md)                       | 実装ステータス・既知の制約         |
-| [`ROADMAP.md`](./ROADMAP.md)                     | 設計判断待ちの論点・次のアクション |
-| [`docs/adr/`](./docs/adr/)                       | 決定済みの設計判断(却下案も含む)   |
-| [`openspec/specs/`](./openspec/specs/)           | 実装対象の受入条件・仕様           |
-
-## プロジェクト構成
-
-```
-packages/
-  compiler/          # compiler本体とVite+ Testスイート
-  runtime/           # ブラウザへ必要時に出荷する最小ランタイム
-  bench/             # Reactとの性能比較ベンチマーク
-apps/
-  examples/          # Vite+でdev/buildできるサンプルと比較用fixture
-    multi-file/      # 相対module分割のfixture
-vite.config.ts       # format・lint・typecheck・test・workspace共通設定
-legacy/              # 旧JS実装(参照専用、メンテナンスしない)
-```
+にあります。手書き実装の値をirisoutの生成性能として扱っていません。
 
 ## 開発
 
 ```bash
-vp install
-vp check             # Oxfmt + Oxlint + typecheck
-vp test --run        # Vite+ Test
-vp build             # apps/examplesをbuild
-vp run @irisout/bench#bench
+bun install
+bun run check
+bun run test
+bun run build
 ```
 
-コミット前は `vp check && vp test --run` を通してください。共通設定は
-`vite.config.ts`に集約しています。詳細は [`docs/conventions.md`](./docs/conventions.md)。
+`check`は整形、静的検査、型検査を実行します。`test`はVite+ Testによる試験を
+実行します。規約は[`docs/conventions.md`](./docs/conventions.md)を参照してください。
+
+## 資料
+
+| ファイル                                         | 内容                           |
+| ------------------------------------------------ | ------------------------------ |
+| [`CONCEPT.v3.md`](./CONCEPT.v3.md)               | 目的と設計原則                 |
+| [`STATUS.md`](./STATUS.md)                       | 対応状況と制約                 |
+| [`ROADMAP.md`](./ROADMAP.md)                     | 設計判断が必要な論点と次の作業 |
+| [`docs/architecture.md`](./docs/architecture.md) | コンパイラの構成と処理         |
+| [`docs/adr/`](./docs/adr/)                       | 設計判断と却下案               |
+| [`openspec/specs/`](./openspec/specs/)           | 実装対象の受け入れ条件と仕様   |
 
 ## ライセンス
 
-未定(TBD)。
+未定です。
