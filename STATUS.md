@@ -38,6 +38,18 @@ actionを含まないunitは従来の`reconcileList()`とfactory経路を使い�
 importしない。counter generated bundleの固定費は実測5.33xとなったため、golden size
 budgetを5.5xへ更新した。
 
+## 現在地(2026-09-06・ルートcomponent onMount)
+
+ルートcomponentの動きゾーンで`onMount(() => void | (() => void))`を受理する
+(ADR-0025)。callbackはmarker収集、handler配線、構造unit初期化、`use=` action初期化の
+後にmount/hydrateごと一度実行する。返り値の0引数関数はinstanceが所有し、unmount時に
+登録順の逆順で一度だけ実行する。初期化失敗時は登録済みcleanupを回収し、cleanup例外は
+残りの処理後に再送出する。
+
+構造unit内とinline化される子componentの`onMount`はscope limitで拒否する。`effect`、
+context、SSR、再mount、汎用lifecycle registryは未実装である。`onMount`を使わない生成物
+には専用変数・配線・runtime importを出力しない。
+
 ## 現在地(2026-09-05・構造ユニットのDOM範囲所有)
 
 List/conditionalは親要素を更新対象にせず、初期HTMLへ開始・終了コメントアンカーを
@@ -316,8 +328,9 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
   - reactive paramsは未実装。actionの引数をsignal更新で再評価せず、必要なら別の実需と
     代表fixtureで判断する。
   - 1要素への複数actionは未実装。`use`属性は一要素一つのままとする。
-  - 汎用`onMount`/`onDestroy`/effect runtime、contextは未実装。component instanceの
-    cleanupとunit action lifecycleは解消済み。
+  - ルートcomponentの`onMount`(ADR-0025)は実装済み。構造unit内・inline化される
+    子componentの`onMount`、汎用`onDestroy`/effect runtime、contextは未実装。
+    component instanceのcleanupとunit action lifecycleは解消済み。
   - action本体のconcise arrow(単一式)にネストしたリスナー等がある場合、
     その内部の書き込みに対する`update_*`挿入位置は本体全体の実行時点に
     まとまる(リスナー発火時ではない)。ブロック本体は正しく分離される

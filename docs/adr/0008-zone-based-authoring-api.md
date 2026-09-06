@@ -77,6 +77,10 @@ function Component() {
   function宣言に限る。
 - `render()`は値を返さない「ここがUI宣言」というマーカー。`signal()`と同じ
   ビルド時に消える宣言イディオム(ADR-0006)。
+- 動きゾーンの`onMount(() => void | (() => void))`はADR-0025で実装した。
+  ルートcomponentだけが使え、callbackはmount/hydrate後に一度、返り値のcleanupは
+  `unmount()`時に逆順で一度実行する。構造unit内とinline化される子componentは
+  scope limitで拒否する。
 - **コンポーネントはJSXをreturnしない**。当時の`compileComponent`の
   「単一の`return <JSXElement>`」前提(`packages/compiler/src/compiler/render.ts`)を
   覆す変更。

@@ -94,7 +94,8 @@ DOM subtreeのremoveと参照解放だけを行う。
 ## 対象外・意図的な制約
 
 - unit内(`.map()` item / conditional branch)の`use=`はfactory handleへ接続する。
-  動的な汎用action registry、汎用`onMount`/effect runtimeは追加しない。
+  動的な汎用action registry、汎用`effect` runtimeは追加しない。ルートcomponentの
+  `onMount`はADR-0025で別のinstance-owned cleanup列として追加した。
 - component instance の再 mount/reuse、暗黙の DOM observer、custom element lifecycle は
   追加しない。
 - `destroy` を signal 更新へ自動接続したり、action の引数を reactive に再評価したり

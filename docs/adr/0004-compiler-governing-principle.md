@@ -20,7 +20,7 @@ Web Components化・hyperscript風authoring API・リストアイテムの状態
 
 - **Web Components を却下**(ADR-0005参照): `disconnectedCallback`等のライフサイクル機構、カスタム要素のアップグレード処理は、ソースが要求していない実行時の隠れた処理を持ち込む。加えて、autonomous custom element + `display: contents`はDOMツリー構造(`nth-child`/子結合子)を書き換えるという、ソースが要求していない副作用も生む。customized built-in(`is=`)はSafariが実装しておらず、ブラウザ間で挙動が分岐する。
 - **hyperscript風API(`render([x, y], tree)`のような明示的依存配列)を却下**: JSXの式コンテナが既に持っている情報の言い換えに過ぎず、新しい実行内容を要求しない上、依存の書き忘れという新しいバグ源(Reactの`useEffect`依存配列問題と同型)を持ち込む。得るものがない。
-- **`onMount`/`onLeave`フックを保留**: 何も使っていない機構は、定義上「書かれていないのに存在する」もの。
+- **`onMount`/`onLeave`フックを保留**: 何も使っていない機構は、定義上「書かれていないのに存在する」もの。このうちルートcomponentの明示的な`onMount`は、instanceごとのcleanup所有権を定めたADR-0025で一部解消した。`onLeave`と汎用hook registryは引き続き対象外である。
 - **明示的なcomponent `unmount()`はこの保留と別物**: 呼び出し側が取得した
   `createComponent()`/`mountComponent()` instanceへ明示的に要求した場合だけ、所有DOMと
   generated listenerを解放する。`use=`が`{ destroy }`を返した場合のdestroyも、actionが

@@ -25,6 +25,7 @@ import {
   analyzeExpr,
   analyzeHandlerBody,
   analyzeHandlerExpr,
+  analyzeMountBody,
 } from './analyze.ts'
 import type {
   CompilerState,
@@ -35,6 +36,7 @@ import type {
   ListMarker,
   LocalDecl,
   MarkerId,
+  MountDecl,
   StructuralUnitBody,
   TextMarker,
 } from './state.ts'
@@ -56,6 +58,11 @@ type JSXChild =
 // この表で解決する(ADR-0008)。render の1パス中だけ有効な一時状態なので
 // ctx には積まず、renderElement/collectAttrs へ引数で渡す。
 export type HandlerFns = Map<string, NodePath<t.FunctionDeclaration>>
+
+// `onMount`はルートcomponentの動きゾーンに置くcallbackだけを受理する。
+// 構造unitへインライン化されるcomponentではinline-components.tsが明示的に
+// 拒否するため、ここでNodePathを保持して後段で1回だけ解析する。
+export type MountHooks = NodePath<t.ArrowFunctionExpression>[]
 
 function emitSignal(
   ctx: CompilerState,
@@ -1138,6 +1145,28 @@ export interface ComponentZones {
   varZoneStmts: NodePath<t.Statement>[]
   renderJsxPath: NodePath<t.JSXElement>
   movementZoneFns: HandlerFns
+  mountHooks: MountHooks
+}
+
+function resolveOnMountHook(
+  stmt: NodePath<t.Statement>,
+): NodePath<t.ArrowFunctionExpression> | null {
+  if (!stmt.isExpressionStatement()) return null
+  const expression = stmt.get('expression')
+  if (!expression.isCallExpression()) return null
+  const callee = expression.node.callee
+  if (callee.type !== 'Identifier' || callee.name !== 'onMount') return null
+  const args = expression.get('arguments')
+  if (args.length !== 1 || !args[0]!.isArrowFunctionExpression()) {
+    throw new Error(
+      'compile: onMount() takes exactly one zero-argument arrow function (scope limit)',
+    )
+  }
+  const callback = args[0] as NodePath<t.ArrowFunctionExpression>
+  if (callback.node.params.length !== 0) {
+    throw new Error('compile: onMount() callback must not take parameters (scope limit)')
+  }
+  return callback
 }
 
 // ADR-0008のゾーン構造(変数ゾーン→render()→動きゾーン)を、ctx を触らず
@@ -1174,17 +1203,23 @@ export function splitComponentZones(
 
   // 動きゾーン(render後): function宣言のみ。ハンドラ識別子参照の解決表に積む。
   const movementZoneFns: HandlerFns = new Map()
+  const mountHooks: MountHooks = []
   for (let i = renderIndex + 1; i < stmts.length; i++) {
     const stmt = stmts[i]!
+    const mountHook = resolveOnMountHook(stmt)
+    if (mountHook) {
+      mountHooks.push(mountHook)
+      continue
+    }
     if (!stmt.isFunctionDeclaration() || !stmt.node.id) {
       throw new Error(
-        'compile: only function declarations are allowed after render() (scope limit)',
+        'compile: only function declarations are allowed after render(); onMount() calls are also allowed (scope limit)',
       )
     }
     movementZoneFns.set(stmt.node.id.name, stmt as NodePath<t.FunctionDeclaration>)
   }
 
-  return { varZoneStmts, renderJsxPath, movementZoneFns }
+  return { varZoneStmts, renderJsxPath, movementZoneFns, mountHooks }
 }
 
 // ADR-0008: コンポーネント本体を「変数ゾーン → render() → 動きゾーン」の3構造で
@@ -1197,7 +1232,8 @@ export function compileComponent(
   instanceId: number,
   out: RenderOutput,
 ): string {
-  const { varZoneStmts, renderJsxPath, movementZoneFns } = splitComponentZones(componentPath)
+  const { varZoneStmts, renderJsxPath, movementZoneFns, mountHooks } =
+    splitComponentZones(componentPath)
 
   // 変数ゾーン(render前): signal()/derived() の const 宣言のみ。function宣言
   // など他の文は processDeclarationStatement の scope limit が拒否する。
@@ -1208,6 +1244,15 @@ export function compileComponent(
   // cross-function-handler-writes: 呼び出し追跡(analyze.ts)が callee の
   // binding 同一性を確認できるよう、動きゾーン関数表を ctx へ載せる。
   ctx.movementFns = movementZoneFns
+
+  for (const callbackPath of mountHooks) {
+    const analysis = analyzeMountBody(ctx, callbackPath, instanceId)
+    const mount: MountDecl = {
+      finalizeBody: analysis.finalizeBody,
+      finalizeCleanup: analysis.finalizeCleanup,
+    }
+    ctx.mounts.push(mount)
+  }
 
   return renderElement(ctx, renderJsxPath, instanceId, movementZoneFns)
 }

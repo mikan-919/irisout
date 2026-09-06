@@ -31,7 +31,9 @@ component unmount/action cleanupも実装済み(ADR-0022)。生成instanceの`un
 component-owned DOM、marker/List/conditional stateを解放する。`use=`の既存関数返り値は
 update closureの意味を維持し、外部resourceの解除は`{ update?, destroy? }`の`destroy`
 へ限定する。unit内`use=`のfactory lifecycleも`structural-unit-use-actions`で実装済み。
-汎用lifecycle runtime・同instance再mountは引き続き対象外。
+ルートcomponentの`onMount`とcleanupも実装済み(ADR-0025)。callbackは
+mount/hydrate完了後に一度実行し、返り値のcleanupをunmount時に逆順で呼ぶ。汎用lifecycle
+runtime、構造unit内・子componentのonMount、同instance再mountは引き続き対象外。
 
 **第2段階実装済み(ADR-0020)**: 同一ハンドラ/action/追跡関数のwrite setに複数root
 があり、同じmarkerへ依存する場合だけ、コンパイル時に専用同期batchを生成する。
@@ -166,15 +168,9 @@ namespace/side-effect/dynamic import、re-export、循環依存は`compile:`エ�
 - **context(ツリー越しの暗黙DI)**: ROADMAP・ADR・STATUSのどこにも記述が
   無い、今回はじめて言語化した論点。props(§4)が解決してもprop
   drillingを避ける手段が無いままになる。
-- **onDestroy/cleanup**: component instanceの明示的な`unmount()`とtop-level
-  `use=` actionの`{ destroy }`はADR-0022で解消済み。要素を持たない処理に対する
-  汎用`onMount`/`onDestroy`/effect runtimeは引き続き未着手。unit内action lifecycleは
-  `structural-unit-use-actions`で実装済み。
-- **onMount的な、要素に紐付かない起動処理**: `use=`は要素単位のmount時
-  実行はカバーする(ADR-0011)が、「特定の要素を持たない副作用」(例:
-  タイマー開始、WebSocket接続)を書く場所が無い。ADR-0004「`onMount`/
-  `onLeave`フックを保留」は意図的な先送りであり、ADR-0008の`onMount(...)`
-  というコード例は構文イメージのみで未実装。
+- **onDestroy/cleanup**: component instanceの明示的な`unmount()`、top-level
+  `use=` actionの`{ destroy }`、ルートcomponentの`onMount` cleanupはADR-0022/0025で
+  解消済み。構造unit内action lifecycleは`structural-unit-use-actions`で実装済み。
 - **effect(DOM以外への副作用)**: `update_*()`はコンパイラが生成する
   内部関数のみで、author側が「signalが変わったら実行」を宣言する手段が
   無い(localStorage同期・analytics送信など、DOM更新を伴わない副作用が
@@ -295,9 +291,9 @@ transition/animation、portal、error boundary、async/resource
     実装・検証した。
 
 18. 次の一般用途対応は次の順番で検討する。大きな実装には着手しない。
-    1. **優先度P1: 要素に紐付かない`onMount`/`effect`とcleanup**。データ取得、
-       timer、WebSocketなどをDOM actionだけでなく処理単位で扱うために必要である。
-       `use=`の`destroy`との責務分離、SSRなしのbuild-time実行との境界を先に決める。
+    1. **優先度P1: effect**。signalが変化したときにlocalStorage同期やanalytics送信
+       などのDOM外処理を実行する契約が未定義である。初回実行、依存追跡、再実行前の
+       cleanup、`onMount`/`use=` destroyとの責務境界を先に決める。
     2. **優先度P1: context**。複数ファイルcomponentはpropsで接続できるが、深い
        component treeの共有依存はprops drillingになる。module scope stateを導入する
        前に、instance単位の所有権とcleanupを決める必要がある。

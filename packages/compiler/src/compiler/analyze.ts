@@ -1172,6 +1172,10 @@ const NO_ACTION_UPDATE: ResolveUpdateCall = () => ({
   needsCollectionBatch: false,
 })
 
+// onMountのcleanupはunmount中に実行するため、その本体へsignal更新を
+// 挿入しない。callback本体の更新は通常のresolveUpdateCallを使う。
+const NO_MOUNT_CLEANUP_UPDATE: ResolveUpdateCall = NO_ACTION_UPDATE
+
 type ActionResultFunctionPath = NodePath<
   t.FunctionExpression | t.ArrowFunctionExpression | t.ObjectMethod
 >
@@ -1355,6 +1359,69 @@ export function analyzeActionBody(
     result,
     writeDeclIds,
     directCollectionWriteDeclIds,
+  }
+}
+
+export interface MountBodyAnalysis {
+  finalizeBody: (resolveUpdateCall: ResolveUpdateCall) => string
+  /** `onMount` callbackが返す、unmount時だけ呼ぶcleanup。 */
+  finalizeCleanup: (() => string) | null
+}
+
+// `onMount(() => void | (() => void))` のcallbackをactionと同じ解析機械へ
+// 通す。actionのobject resultは要素action専用なので拒否し、cleanupは
+// `NO_MOUNT_CLEANUP_UPDATE`で確定してunmount後のDOM更新を出力しない。
+export function analyzeMountBody(
+  ctx: CompilerState,
+  callbackPath: NodePath<t.ArrowFunctionExpression>,
+  instanceId: number,
+): MountBodyAnalysis {
+  const bodyPath = callbackPath.get('body')
+  let body: NodePath<t.Expression> | NodePath<t.Statement>[]
+  let returnsCleanup = false
+
+  if (bodyPath.isBlockStatement()) {
+    const stmts = bodyPath.get('body') as NodePath<t.Statement>[]
+    const last = stmts[stmts.length - 1]
+    if (last?.isReturnStatement() && last.node.argument != null) {
+      const returned = last.get('argument') as NodePath<t.Expression>
+      if (!returned.isArrowFunctionExpression() && !returned.isFunctionExpression()) {
+        throw new Error(
+          'compile: onMount() may only return a zero-argument cleanup function (scope limit)',
+        )
+      }
+      returnsCleanup = true
+    }
+    body = stmts
+  } else {
+    // Concise `() => () => cleanup()` is the compact cleanup-only form. Other
+    // concise expressions are setup statements and their return value is
+    // intentionally discarded by codegen, so `onMount(() => setup())` remains
+    // a void callback.
+    returnsCleanup = bodyPath.isArrowFunctionExpression() || bodyPath.isFunctionExpression()
+    if (bodyPath.isObjectExpression()) {
+      throw new Error(
+        'compile: onMount() may only return void or a zero-argument cleanup function (scope limit)',
+      )
+    }
+    body = bodyPath as NodePath<t.Expression>
+  }
+
+  const analysis = analyzeActionBody(ctx, body, instanceId)
+  if (returnsCleanup && !analysis.result) {
+    throw new Error('compile: failed to analyze onMount() cleanup function (scope limit)')
+  }
+  if (!returnsCleanup && analysis.result) {
+    throw new Error(
+      'compile: onMount() may only return void or a zero-argument cleanup function (scope limit)',
+    )
+  }
+
+  return {
+    finalizeBody: analysis.finalizeBody,
+    finalizeCleanup: analysis.result
+      ? () => analysis.result!.finalize(NO_MOUNT_CLEANUP_UPDATE)
+      : null,
   }
 }
 

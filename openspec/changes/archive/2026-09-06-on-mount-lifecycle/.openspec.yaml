@@ -1,0 +1,3 @@
+schema: spec-driven
+created: 2026-09-06
+goal: Add root-component onMount callbacks with instance-owned cleanup

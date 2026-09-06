@@ -50,6 +50,11 @@ declare function collection<T, K>(
 ): IrisCollection<T, K>
 declare function derived<T>(compute: () => T): () => T
 declare function render(element: JSX.Element): void
+// componentのmount/hydrate完了後に一度だけ呼ばれ、返り値のcleanupは
+// instanceのunmount時に一度だけ呼ばれる。構造unit内はcompilerのscope limitで
+// 拒否されるため、この型宣言は実行時受理条件の代替ではない。
+// biome-ignore lint/suspicious/noConfusingVoidType: callbackの「返り値なし」を表す
+declare function onMount(callback: () => void | (() => void)): void
 
 declare namespace JSX {
   // 同一ファイル内合成(ADR-0014)のコンポーネントは`render()`を内部で

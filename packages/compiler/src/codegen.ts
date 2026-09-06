@@ -114,6 +114,13 @@ export interface ActionOutput {
   resultRendered: string | null
 }
 
+// ルートcomponentのonMount callback。callback本体はmount直後、cleanupは
+// unmount時に実行する。cleanupへ更新呼び出しは挿入しない。
+export interface MountOutput {
+  bodyRendered: string
+  cleanupRendered: string | null
+}
+
 export interface GenerateModuleInput {
   /** compileProject()でリンクされた通常の関数/const。runtimeへは出さず、module scopeへ一度だけ出す。 */
   supportStatements: string[]
@@ -127,6 +134,7 @@ export interface GenerateModuleInput {
   collectionKeyRendered: Map<DeclId, string>
   handlers: HandlerOutput[]
   actions: ActionOutput[]
+  mounts: MountOutput[]
   attrBindings: AttrBinding[] // ADR-0012: トップレベルの動的属性
   // cross-function-handler-writes: 追跡対象として呼ばれた動きゾーン関数を
   // authored 名のままモジュールスコープへ1回だけ emit する(design D4)。
@@ -1002,6 +1010,17 @@ function renderActionCall(
   return `{ const ${resultVar} = __normalizeUseActionResult__(${call}, ${JSON.stringify(a.markerId)}); __use_update_${a.markerId}__ = ${resultVar}.update ?? null; __use_destroy_${a.markerId}__ = ${resultVar}.destroy ?? null; if (__use_update_${a.markerId}__) __use_update_${a.markerId}__(); }`
 }
 
+// ADR-0025: onMount callbackをDOMへ接続しないcomponent-level lifecycleとして
+// 呼び出す。cleanupを返す形だけ生成変数へ保持し、登録順の逆順でunmountする。
+// callbackの戻り値形は解析段階で検証済みなので、action用の汎用runtime helperを
+// importしない。
+function renderMountCall(m: MountOutput, index: number): string {
+  const body = m.bodyRendered ? `${m.bodyRendered};` : ''
+  const callback = `(function() { ${body}${m.cleanupRendered ? ` return ${m.cleanupRendered};` : ''} })()`
+  if (!m.cleanupRendered) return `${callback};`
+  return `{ const __mount_cleanup_result__ = ${callback}; __on_mount_cleanup_${index}__ = __mount_cleanup_result__; }`
+}
+
 export function generateModule({
   supportStatements,
   declStatements,
@@ -1014,6 +1033,7 @@ export function generateModule({
   collectionKeyRendered,
   handlers,
   actions,
+  mounts,
   attrBindings,
   emittedFns,
   initialHtml,
@@ -1100,6 +1120,14 @@ export function generateModule({
     .flatMap((a) => [`let __use_update_${a.markerId}__;`, `let __use_destroy_${a.markerId}__;`])
   if (actionDeclLines.length > 0) instanceLines.push(...actionDeclLines, '')
 
+  // onMountのcleanup返り値を持つcallbackだけ、component instance専有の参照を
+  // 生成する。onMount未使用、またはcleanupなしのcallbackでは関連コードを
+  // 出力しない。
+  const mountCleanupDeclLines = mounts
+    .map((mount, index) => (mount.cleanupRendered ? `let __on_mount_cleanup_${index}__;` : null))
+    .filter((line): line is string => line !== null)
+  if (mountCleanupDeclLines.length > 0) instanceLines.push(...mountCleanupDeclLines, '')
+
   // collection.update()を含む同期batchだけが使う、インスタンス専有の
   // 深さカウンタ。ハンドラ/actionの本体中は直接DOM通知を抑止し、scope末尾
   // のbatchが最終状態を一度だけ反映する。
@@ -1170,6 +1198,7 @@ export function generateModule({
   const actionCallLines = actions.map(
     (a) => `  ${renderActionCall(a, `__markers__.get(${JSON.stringify(a.markerId)})`)}`,
   )
+  const mountCallLines = mounts.map((mount, index) => `  ${renderMountCall(mount, index)}`)
 
   const actionDestroyOperations = actions
     .filter((a) => a.resultRendered)
@@ -1178,6 +1207,14 @@ export function generateModule({
       (a) =>
         `if (__use_destroy_${a.markerId}__) { const __destroy__ = __use_destroy_${a.markerId}__; __use_destroy_${a.markerId}__ = null; __use_update_${a.markerId}__ = null; __destroy__(); } else { __use_update_${a.markerId}__ = null; }`,
     )
+  const mountCleanupOperations = mounts
+    .map((mount, index) =>
+      mount.cleanupRendered
+        ? `if (__on_mount_cleanup_${index}__) { const __cleanup__ = __on_mount_cleanup_${index}__; __on_mount_cleanup_${index}__ = null; __cleanup__(); }`
+        : null,
+    )
+    .filter((operation): operation is string => operation !== null)
+    .reverse()
   const handlerRemoveLines = handlers.map(
     (h) =>
       `  __markers__?.get(${JSON.stringify(h.markerId)})?.removeEventListener(${JSON.stringify(h.eventName)}, __handler_${h.markerId}_${h.eventName});`,
@@ -1215,6 +1252,7 @@ export function generateModule({
   const templateCleanupLines = [...templateVars].map((name) => `  ${name} = null;`)
   const documentCleanupLines = templateSetupLines.length > 0 ? ['  __doc__ = undefined;'] : []
   const destroyOperations = [...structuralDestroyOperations, ...actionDestroyOperations]
+  destroyOperations.push(...mountCleanupOperations)
   const destroyErrorLines =
     destroyOperations.length > 0
       ? [
@@ -1231,8 +1269,10 @@ export function generateModule({
     ...setupLines,
     ...initialUpdateCalls,
     ...actionCallLines,
+    ...mountCallLines,
   ]
-  const shouldGuardInitialization = actions.length > 0 || markersHaveStructuralActions(markers)
+  const shouldGuardInitialization =
+    actions.length > 0 || markersHaveStructuralActions(markers) || mounts.length > 0
   const guardedInitializationLines =
     shouldGuardInitialization && initializationLines.length > 0
       ? [

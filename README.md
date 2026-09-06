@@ -119,7 +119,10 @@ instanceは一度だけmount/hydrateでき、`unmount()`はidempotentです。�
 timer・subscription・外部 listenerなどactionが確保したresourceは、object形式の
 `{ destroy() { ... } }` で解除します。list item・conditional branchのactionは各factory
 instanceが所有し、keyed reorderでは再初期化せず、item削除・branch切替・祖先unit破棄・
-root `unmount()`でdestroyします。再mountはscope limit/非対応です。
+root `unmount()`でdestroyします。ルートcomponentの動きゾーンでは
+`onMount(() => void | (() => void))`を使えます。callbackはmount/hydrate完了後に一度だけ
+実行され、返り値のcleanupはunmount時に逆順で一度だけ実行されます。再mount、
+構造unit内・子componentの`onMount`はscope limit/非対応です。
 
 既知の制約(ルートコンポーネントは1つのみ、children/slot未対応、module解決は相対
 importのみ、など)は [`STATUS.md`](./STATUS.md) に一覧があります。

@@ -114,6 +114,11 @@ triage手続きで捌く — コンパイラの受理条件自体を場当たり
   でremoveし、action `destroy`を逆順に実行してからcomponent-owned DOM、marker Map、
   List/conditional/template stateを解放する。unmount後のupdateはno-opで、同instanceの
   再mountは拒否する。
+- **root `onMount` lifecycle**(ADR-0025): 動きゾーンの0引数callbackをmarker収集・
+  handler配線・構造unit初期化・`use=` action初期化の後に一度実行する。callbackが返す
+  0引数cleanupはinstanceが保持し、unmount時に登録順の逆順で一度だけ実行する。
+  初期化失敗時は登録済みcleanupを回収し、構造unit/actionと同じ例外回収規則を使う。
+  構造unit内とinline化される子componentの`onMount`はscope limitで拒否する。
 - **`use=` action result**: 既存の `() => void` は `update` closureとして初回+依存
   signal update時に呼ぶ。外部resource cleanupが必要な場合だけ
   `{ update?: () => void; destroy?: () => void }`を返し、`destroy`はunmount時のみ呼ぶ。

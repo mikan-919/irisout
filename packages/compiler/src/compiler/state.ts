@@ -164,6 +164,15 @@ export interface ActionDecl {
   directCollectionWriteDeclIds: Set<DeclId>
 }
 
+// ルートcomponentの`onMount(() => ...)` 1個ぶんの解析結果。actionと同じ
+// 本体解析を使うが、要素を受け取らず、返り値はunmount時だけ呼ぶcleanup関数
+// に限定する。cleanup本体へ更新呼び出しを挿入しないのは、componentが既に
+// 破棄される段階でDOM更新を発生させないためである。
+export interface MountDecl {
+  finalizeBody: (resolveUpdateCall: ResolveUpdateCall) => string
+  finalizeCleanup: (() => string) | null
+}
+
 // cross-function-handler-writes: ハンドラ/action から追跡対象として呼ばれた
 // 動きゾーン関数の解析結果。writeDeclIds は自分の本体が直接書く root signal
 // (推移解決済み)、calleeNames は自分が呼ぶ別の追跡関数。推移的な書き込み
@@ -213,6 +222,8 @@ export interface CompilerState {
   markerDeps: Map<MarkerId, Set<DeclId>> // markerId -> Set<declId>(直接依存、推移閉包を取る前)
   handlers: HandlerDecl[]
   actions: ActionDecl[]
+  /** ルートcomponentの`onMount`。構造unit内では収集しない。 */
+  mounts: MountDecl[]
   attrBindings: AttrBinding[] // ADR-0012: 動的属性(トップレベル+splice前のユニット内)
 
   markerCounter: number
@@ -254,6 +265,7 @@ export function createCompilerState(
     markerDeps: new Map(),
     handlers: [],
     actions: [],
+    mounts: [],
     attrBindings: [],
     markerCounter: 0,
     instanceCounter: 0,

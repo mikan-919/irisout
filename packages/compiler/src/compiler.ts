@@ -25,6 +25,7 @@ import type {
   HandlerOutput,
   ListMarkerOutput,
   MarkerOutput,
+  MountOutput,
   StructuralUnitBodyOutput,
   UpdateBatchOutput,
 } from './codegen.ts'
@@ -38,6 +39,7 @@ import type {
   HandlerDecl,
   ListMarker,
   MarkerId,
+  MountDecl,
   StructuralUnitBody,
 } from './compiler/state.ts'
 import { createCompilerState } from './compiler/state.ts'
@@ -359,6 +361,14 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
   // クロージャの最終テキストは signalToMarkers 確定後にしか組み立てられない。
   const actionOutputs: ActionOutput[] = ctx.actions.map((a) => convertAction(a))
 
+  // ADR-0025: onMount callback本体だけはcomponent mount直後の更新を許し、
+  // cleanup本体へは更新呼び出しを挿入しない。root component専用なので
+  // structural unitのlocal scope変換は不要である。
+  const mountOutputs: MountOutput[] = ctx.mounts.map((m: MountDecl) => ({
+    bodyRendered: m.finalizeBody(resolveUpdateCall),
+    cleanupRendered: m.finalizeCleanup ? m.finalizeCleanup() : null,
+  }))
+
   // --- ビルド時実行:discovery の確認 + 実際の初期 HTML の取得 ---
   const instrumentedBody = [
     ...(options.supportStatements ?? []),
@@ -434,6 +444,7 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
     collectionKeyRendered: ctx.collectionKeyRendered,
     handlers: handlerOutputs,
     actions: actionOutputs,
+    mounts: mountOutputs,
     attrBindings: ctx.attrBindings,
     emittedFns,
     initialHtml,

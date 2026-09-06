@@ -376,6 +376,14 @@ function expandComponentRef(
   substituteProps(clonedFnPath, jsxPath, tagName)
   const zones = splitComponentZones(clonedFnPath)
 
+  // onMountはruntime component instance境界がまだ存在しないroot component
+  // だけのAPI。コンパイル時inline化される子componentへ暗黙に昇格させると
+  // 子のmount順・所有権が不明確になるため、構造unitを含めて明示的に拒否する。
+  if (zones.mountHooks.length > 0) {
+    clonedFnPath.remove()
+    throw new Error('compile: onMount() is supported only in the root component (scope limit)')
+  }
+
   const enclosingArrow = findEnclosingListItemArrow(jsxPath)
   // 呼び出し箇所そのものがarrow本体全体(concise body)である場合、
   // ensureUnitArrowBlockBodyのreplaceWithがjsxPathの指すノードを直接
