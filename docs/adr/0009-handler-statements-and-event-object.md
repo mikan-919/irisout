@@ -79,7 +79,7 @@ factory handlerを検証している(これらのhelper dispatchはtarget要素�
 
 ### イベント引数の静的型付け(2026-09-06追記)
 
-`types/jsx.d.ts`は、上表の6属性を`MouseEvent`、`KeyboardEvent`、`InputEvent`、
+`@irisout/compiler/jsx`は、上表の6属性を`MouseEvent`、`KeyboardEvent`、`InputEvent`、
 `Event`、`FocusEvent`へ対応付ける。`currentTarget`はJSX属性が書かれた要素型へ
 絞る。生成コードがその要素へ直接`addEventListener`するためである。
 

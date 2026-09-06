@@ -171,17 +171,17 @@ event objectの同一性を失った。native eventの意味を保つためprodu
 ## 現在地(2026-09-06・JSX型検査)
 
 authored `.jsx` の型検査基盤を実装(change `jsx-type-checking-foundation`、
-ROADMAP 次のアクション10)。`types/jsx.d.ts`でグローバル`JSX`namespace
+ROADMAP 次のアクション10)。`@irisout/compiler/jsx`でグローバル`JSX`namespace
 (`Element`・`IntrinsicElements`・`IntrinsicAttributes`)と`signal`/
 `derived`/`render`のグローバル関数シグネチャを宣言し、`apps/examples/`配下
 専用の`apps/examples/tsconfig.json`(`allowJs`+`checkJs`+`jsx: "preserve"`、
-`types: []`)で`apps/examples/*.jsx`を型検査対象にした。ルートの`tsconfig.json`
+`types: ["@irisout/compiler/jsx"]`)で`apps/examples/*.jsx`を型検査対象にした。ルートの`tsconfig.json`
 は無変更 ― `allowJs`/`checkJs`をルートへ足すと
 `apps/examples/todomvc.handwritten.js`(`packages/compiler/test/todomvc-handwritten.test.ts`が
 importする比較用の手書きJS、型検査対象外)まで巻き込まれ、既存の
 `@ts-expect-error`抑制が壊れるため、examples専用の別プロジェクトに
 切り出した。あわせて`node_modules/@types/react`が自動包含され`JSX`
-namespaceを上書きする踏み台バグを`types: []`で踏みつぶした(実装前調査
+namespaceを上書きする踏み台バグを明示した型定義だけを読み込む設定で解消した(実装前調査
 未発見の計画外の落とし穴)。ADR-0011が先送りしていた`use=`のJSX型定義
 (design.md Decision 6)も同時に解消した。
 
@@ -274,6 +274,7 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
 | Heatmap 3 | 同期解析の派生値連鎖・構造unitのroot依存・条件分岐内の状態付き子部品(ADR-0033) | **DONE** | `apps/examples/heatmap.jsx`、回帰試験を追加                                                                                                                                                                                      |
 | Heatmap 4 | 外部解析依存、CSS・辞書URL・Worker資源のVite境界(ADR-0034)                     | **DONE** | `@libraz/suzume`、接頭辞付き本番build、未使用外部binding除外を確認                                                                                                                                                               |
 | Heatmap 5 | Worker解析、連続入力、文字確定、キーボード移動、性能測定(ADR-0035)             | **DONE** | 300段落・24,790文字の実Chromium測定、対応範囲と完了基準を`packages/bench/heatmap.results.md`へ記録                                                                                                                               |
+| Heatmap 6 | 診断、型定義、別アプリ導入、自動検査、配布形式(ADR-0036)                       | **DONE** | 元ファイル・行・列付き診断、`@irisout/compiler/jsx`、別workspaceアプリのbuild試験、CI、Apache-2.0を追加                                                                                                                          |
 
 ## 既知の制約(現時点のcodegenの限界)
 
@@ -315,6 +316,21 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
 表示更新の差分21.0ms、ページ側JavaScriptヒープ増分432,568B、キーボード応答0.4msだった。
 対応範囲は300段落・25,000文字、入力から表示1,000ms、表示更新の差分100ms、ページ側ヒープ32MiB、
 キーボード応答16msを完了基準とする。詳細は`packages/bench/heatmap.results.md`とADR-0035へ記録した。
+
+## 現在地(2026-09-06・利用者向け開発環境)
+
+コンパイル時の失敗を`CompileDiagnostic`へまとめ、入口または対象moduleのファイル名、行、列を
+エラーメッセージへ付ける。公開入口は`@irisout/compiler/diagnostics`であり、Vite連携の失敗も
+同じ形式を使う。生成コードから元コードへ戻るソースマップは未実装である。
+
+JSX型定義は`@irisout/compiler/jsx`としてcompiler packageから参照できる。`apps/examples`と
+`examples/consumer-app`の`tsconfig.json`がこの入口を使う。`bun run check`には両方の型検査が含まれ、
+`bun run test`には別ディレクトリのVite build試験が含まれる。GitHub Actionsの`.github/workflows/ci.yml`
+では`bun install --frozen-lockfile`、`bun run check`、`bun run test`、`bun run build`を実行する。
+
+配布形式はGitリポジトリ内のprivate workspaceとし、npm等への公開は行わない。コードのライセンスは
+Apache License 2.0で、ルートの`LICENSE`と各配布対象packageの`license`欄に記載する。外部解析依存の
+ライセンスは依存元の記載に従う。導入手順は`examples/consumer-app/README.md`で確認できる。
 
 - **ルートコンポーネントは1つだけ**: `compile()`は「他から一度も参照
   されないトップレベル関数」がちょうど1つであることを要求し、そうで
@@ -417,7 +433,7 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
   更新を呼ぶ。同期handlerの開始状態はcallback登録後に更新し、完了後の結果・失敗状態は
   各callbackの実行時に更新する。`try`/`catch`/`finally`、ループ、`switch`、値を返す
   handlerなど更新位置を静的に決められない経路は`scope limit`で拒否する。要求の競合、
-  古い結果の破棄、Worker、画面破棄後の応答は未実装で、第5段階の対象とする。
+  古い結果の破棄、Worker、画面破棄後の応答はヒートマップ例のアプリ側で実装済みである。
 - **コンポーネント合成はコンパイル時に消える**(ADR-0014、ADR-0024)。同一ファイルの
   合成はroot scopeとlist itemへインライン化し、別ファイルの合成は
   `compileProject(entryPath)`が相対moduleをリンクして同じ経路へ渡す。以下は明示的な

@@ -2,6 +2,10 @@
   "name": "@irisout/runtime",
   "version": "0.0.0",
   "private": true,
+  "license": "Apache-2.0",
+  "files": [
+    "src"
+  ],
   "type": "module",
   "exports": {
     ".": "./src/index.ts"

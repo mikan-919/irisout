@@ -45,7 +45,7 @@ irisoutの到達基準は、入力、解析処理の呼び出し、状態管理�
 [`docs/heatmap-readiness.md`](./docs/heatmap-readiness.md)を参照。
 各段階では代表例を動かして受け入れ条件を確認し、生成コードの検証を継続する。
 
-### 1. 開発中の検査と編集反映を揃える
+### 1. 開発中の検査と編集反映を揃える(実装済み・2026-09-06)
 
 - 通常の検査コマンドへJSX専用の型検査を組み込む。現状は`typecheck`が通っても、
   `typecheck:tsc`だけが検出する型エラーがある。まず数値signalへの文字列代入と
@@ -56,7 +56,7 @@ irisoutの到達基準は、入力、解析処理の呼び出し、状態管理�
 - 完了条件: サーバーを再起動せずに入口・子コンポーネント・補助関数の変更が反映され、
   構文エラーを直した後も復帰できる。まずページ全体の再読み込みとし、状態保持は後回しにする。
 
-### 2. 非同期の更新漏れと不正な生成物を解消する
+### 2. 非同期の更新漏れと不正な生成物を解消する(実装済み・2026-09-06)
 
 - `async`ハンドラから`async`が落ちて不正な`await`を出力する問題と、ハンドラ内の
   `.then()`の書き込み後にDOMが更新されない問題を修正する。先に回帰試験で再現を固定する。
@@ -101,7 +101,7 @@ irisoutの到達基準は、入力、解析処理の呼び出し、状態管理�
   測定結果から対応上限と完了基準を決める。全段落の表示が問題になった場合に限り、
   表示範囲の限定を検討する。注: 表示範囲の限定とは、画面付近の段落だけをDOMへ置くこと。
 
-### 6. 他の人が試せる開発環境にする
+### 6. 他の人が試せる開発環境にする(実装済み・2026-09-06)
 
 - 元ファイル・行・列を含む診断、導入用の型定義、別アプリの設定例を用意する。
   診断を先に整え、生成コードのソースマップは必要な範囲から検討する。
@@ -376,7 +376,7 @@ transition/animation、portal、error boundary、async/resource
    children/slot・自己/相互再帰参照は引き続きscope limit
    (詳細はSTATUS.md既知の制約参照)。
 10. ~~authored `.jsx` の型検査基盤~~ — **完了**(change
-    `jsx-type-checking-foundation`)。`types/jsx.d.ts`(グローバル`JSX`
+    `jsx-type-checking-foundation`)。`packages/compiler/types/jsx.d.ts`(グローバル`JSX`
     namespace・`signal`/`derived`/`render`のシグネチャ)+
     `apps/examples/tsconfig.json`(examples専用、ルートtsconfigとは分離)を実装。
     先送りされていた`use=`のJSX型定義(ADR-0011 design.md Decision 6)も
@@ -415,7 +415,7 @@ transition/animation、portal、error boundary、async/resource
     1. ~~**優先度P2: component propsとhandlerの型検査**~~ — **完了**(change
        `component-props-handler-type-checking`)。JSDocで宣言したcomponent propsを
        同一ファイルと相対importで検査し、6イベントの型と要素別`currentTarget`を
-       `types/jsx.d.ts`へ追加した。型検査専用fixtureで成功・失敗の両方を固定した。
+       `packages/compiler/types/jsx.d.ts`へ追加した。型検査専用fixtureで成功・失敗の両方を固定した。
     2. **保留: module共有stateの派生値とSSR境界**。直接signalの実需をfixtureで
        確認し、derived/collection、request単位分離、永続化を同時に決めずに別契約へ分ける。
 

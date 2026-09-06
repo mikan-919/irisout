@@ -2,10 +2,17 @@
   "name": "@irisout/compiler",
   "version": "0.0.0",
   "private": true,
+  "license": "Apache-2.0",
+  "files": [
+    "src",
+    "types"
+  ],
   "type": "module",
   "exports": {
     ".": "./src/compiler.ts",
-    "./state": "./src/compiler/state.ts"
+    "./state": "./src/compiler/state.ts",
+    "./diagnostics": "./src/diagnostics.ts",
+    "./jsx": "./types/jsx.d.ts"
   },
   "dependencies": {
     "@babel/generator": "^8.0.0",

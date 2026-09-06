@@ -14,8 +14,8 @@ irisoutは、JSXの記述方法を保ちながら、ブラウザで動く処理�
 更新するコードへ変換します。
 
 > [!WARNING]
-> 実装と検証の段階です。公開パッケージではなく、ライセンスも未定です。
-> 実製品への導入ではなく、設計と生成結果の試用を対象にしています。
+> 現時点の配布形式はGitリポジトリのworkspaceです。npm等へは公開していません。
+> 実製品へ導入する場合は、対応範囲と依存パッケージのライセンスを確認してください。
 
 ## 30秒で把握する
 
@@ -144,10 +144,12 @@ bun run test
 bun run build
 ```
 
-`check`は整形、静的検査、TypeScriptとauthored JSXの型検査を実行します。`test`はVite+ Testによる試験を
-実行します。規約は[`docs/conventions.md`](./docs/conventions.md)を参照してください。
+`check`は整形、静的検査、TypeScriptとauthored JSXの型検査を実行します。examplesと別アプリの
+型検査も含みます。`test`はVite+ Testによる試験を実行します。規約は
+[`docs/conventions.md`](./docs/conventions.md)を参照してください。
 
 別のViteアプリから使う場合は、設定へ連携を追加して入口とhydrate対象を指定します。
+workspaceでの導入例は[`examples/consumer-app/`](./examples/consumer-app/)です。
 
 ```ts
 import { irisout } from '@irisout/vite-plugin'
@@ -159,6 +161,9 @@ export default {
 
 入口と相対`.js`/`.jsx`の編集時は、開発サーバーを再起動せずに初期HTMLと生成JavaScriptを
 再生成し、ページ全体を再読み込みします。
+
+このリポジトリのパッケージは`private`なworkspaceとして管理しています。利用者が導入手順を
+確認できる状態を先に作り、npm等への公開は別の計画で扱います。
 
 ## 資料
 
@@ -173,4 +178,4 @@ export default {
 
 ## ライセンス
 
-未定です。
+Apache License 2.0です。[`LICENSE`](./LICENSE)を参照してください。

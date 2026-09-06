@@ -32,7 +32,7 @@ onMount(() => {
 - concise callbackの関数以外の式は起動処理として実行し、返り値は捨てる。
   したがって`onMount(() => connect())`はvoid callbackとして扱う。
 
-`types/jsx.d.ts`にも`onMount(() => void | (() => void))`を宣言する。
+`@irisout/compiler/jsx`にも`onMount(() => void | (() => void))`を宣言する。
 
 ### instance lifecycle
 

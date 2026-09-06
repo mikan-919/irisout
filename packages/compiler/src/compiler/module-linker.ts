@@ -9,6 +9,7 @@ import { parse } from '@babel/parser'
 import type { NodePath } from '@babel/traverse'
 import traverseImport from '@babel/traverse'
 import * as t from '@babel/types'
+import { withCompileDiagnostic } from '../diagnostics.ts'
 
 const traverse =
   (traverseImport as unknown as { default?: typeof traverseImport }).default ?? traverseImport
@@ -29,6 +30,7 @@ interface ExternalImportSpec {
 
 interface ModuleRecord {
   filePath: string
+  source: string
   ast: t.File
   imports: ImportSpec[]
   externalImports: ExternalImportSpec[]
@@ -56,6 +58,14 @@ function compileError(message: string): Error {
 }
 
 function parseModule(filePath: string, source: string): ModuleRecord {
+  try {
+    return parseModuleUnchecked(filePath, source)
+  } catch (error) {
+    throw withCompileDiagnostic(error, { filePath, source })
+  }
+}
+
+function parseModuleUnchecked(filePath: string, source: string): ModuleRecord {
   let ast: t.File
   try {
     ast = parse(source, {
@@ -286,6 +296,7 @@ function parseModule(filePath: string, source: string): ModuleRecord {
 
   return {
     filePath,
+    source,
     ast,
     imports,
     externalImports,
@@ -392,9 +403,12 @@ function loadModule(filePath: string, records: Map<string, ModuleRecord>): Modul
   try {
     source = readFileSync(filePath, 'utf8')
   } catch (error) {
-    throw new Error(
-      `compile: failed to read module "${filePath}": ${error instanceof Error ? error.message : String(error)}`,
-      { cause: error },
+    throw withCompileDiagnostic(
+      new Error(
+        `compile: failed to read module "${filePath}": ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error },
+      ),
+      { filePath, source: '' },
     )
   }
   const record = parseModule(filePath, source)
@@ -417,6 +431,17 @@ function generatedName(record: ModuleRecord, sourceName: string): string {
 }
 
 function renameModuleBindings(record: ModuleRecord, dependencies: Map<string, ModuleRecord>): void {
+  try {
+    renameModuleBindingsUnchecked(record, dependencies)
+  } catch (error) {
+    throw withCompileDiagnostic(error, { filePath: record.filePath, source: record.source })
+  }
+}
+
+function renameModuleBindingsUnchecked(
+  record: ModuleRecord,
+  dependencies: Map<string, ModuleRecord>,
+): void {
   const ownRenames = new Map(record.ownNames.map((name) => [name, generatedName(record, name)]))
   const importRenames = new Map<string, string>()
 
@@ -540,12 +565,22 @@ function linkGraph(entryPath: string): { entry: ModuleRecord; order: ModuleRecor
     const record = loadModule(filePath, records)
     if (record.state === 'visiting') {
       const cycle = [...stack, filePath].join(' -> ')
-      throw compileError(`circular module dependency is not supported: ${cycle}`)
+      throw withCompileDiagnostic(
+        compileError(`circular module dependency is not supported: ${cycle}`),
+        {
+          filePath: record.filePath,
+          source: record.source,
+        },
+      )
     }
     if (record.state === 'done') return record
     record.state = 'visiting'
     for (const spec of record.imports) {
-      visit(resolveModule(record.filePath, spec.source), [...stack, record.filePath])
+      try {
+        visit(resolveModule(record.filePath, spec.source), [...stack, record.filePath])
+      } catch (error) {
+        throw withCompileDiagnostic(error, { filePath: record.filePath, source: record.source })
+      }
     }
     record.state = 'done'
     record.moduleIndex = order.length
@@ -561,10 +596,19 @@ function linkGraph(entryPath: string): { entry: ModuleRecord; order: ModuleRecor
 export function linkProject(entryPath: string): LinkedProject {
   const absoluteEntry = path.resolve(entryPath)
   if (!isFile(absoluteEntry)) {
-    throw compileError(`entry module "${absoluteEntry}" does not exist`)
+    throw withCompileDiagnostic(compileError(`entry module "${absoluteEntry}" does not exist`), {
+      filePath: absoluteEntry,
+      source: '',
+    })
   }
   if (!absoluteEntry.endsWith('.js') && !absoluteEntry.endsWith('.jsx')) {
-    throw compileError(`entry module "${absoluteEntry}" must use .js or .jsx`)
+    throw withCompileDiagnostic(
+      compileError(`entry module "${absoluteEntry}" must use .js or .jsx`),
+      {
+        filePath: absoluteEntry,
+        source: '',
+      },
+    )
   }
 
   const { order } = linkGraph(absoluteEntry)

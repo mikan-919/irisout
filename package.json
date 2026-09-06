@@ -2,8 +2,10 @@
   "name": "irisout-workspace",
   "version": "0.0.0",
   "private": true,
+  "license": "Apache-2.0",
   "workspaces": [
     "apps/*",
+    "examples/*",
     "packages/*"
   ],
   "type": "module",
@@ -22,7 +24,8 @@
     "lint": "vp lint",
     "typecheck": "vp check --no-fmt --no-lint && bun run typecheck:tsc",
     "typecheck:jsx": "tsc --noEmit -p apps/examples/tsconfig.json",
-    "typecheck:tsc": "tsc --noEmit && bun run typecheck:jsx",
+    "typecheck:consumer": "tsc --noEmit -p examples/consumer-app/tsconfig.json",
+    "typecheck:tsc": "tsc --noEmit && bun run typecheck:jsx && bun run typecheck:consumer",
     "test": "vp test --run",
     "bench": "vp run @irisout/bench#bench",
     "bench:browser": "vp run @irisout/bench#bench:browser",

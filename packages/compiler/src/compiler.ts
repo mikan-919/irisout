@@ -16,6 +16,8 @@
 //   5. 依存グラフ(marker -> signal、derived 経由、packages/compiler/src/compiler/decl-graph.ts)
 //      を構築し、ルート signal ごとに専用の update_<name> 関数を生成する。
 
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { parse } from '@babel/parser'
 import type { NodePath } from '@babel/traverse'
 import type * as t from '@babel/types'
@@ -46,6 +48,8 @@ import type {
 } from './compiler/state.ts'
 import { assignOutputName, createCompilerState, toContextId, toDeclId } from './compiler/state.ts'
 import { linkProject } from './compiler/module-linker.ts'
+import { withCompileDiagnostic } from './diagnostics.ts'
+export { CompileDiagnostic } from './diagnostics.ts'
 import { collection, derived, registry, signal } from '@irisout/runtime'
 
 export interface CompileResult {
@@ -58,11 +62,9 @@ export interface CompileResult {
   dependencies: string[]
 }
 
-// Program 直下は関数宣言(export 付き含む)のみ受理する。import 文・
-// トップレベル const・副作用式は現状の実装では出力に反映されない(黙って
-// 捨てられ、参照時に生 ReferenceError になる)ため、一律拒否が正直な挙動。
-// 将来トップレベル定数等を受理するときは、ここを明示的な設計判断として
-// 緩める(scope-limit-coverage design D2)。
+// Program 直下はcompile()では関数宣言(export付き含む)だけを受理する。
+// compileProject()ではmodule linkerが許可した補助constと共有signalも受理する。
+// それ以外のトップレベル処理は出力へ安全に移せないため拒否する。
 function assertTopLevelShape(program: t.Program, allowModuleSupport = false): void {
   for (const stmt of program.body) {
     const inner = stmt.type === 'ExportNamedDeclaration' ? stmt.declaration : stmt
@@ -697,19 +699,30 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
 }
 
 export function compile(source: string): CompileResult {
-  return compileSource(source)
+  try {
+    return compileSource(source)
+  } catch (error) {
+    throw withCompileDiagnostic(error, { filePath: '<source>', source })
+  }
 }
 
 // Node側のbuild入口。module graphの読込はここで行い、既存compile(source)の
 // 単一文字列APIとsource-onlyテストを変更しない。Vite pluginはentry pathだけを
 // 渡し、リンク済みsourceや補助宣言を直接扱わない。
 export function compileProject(entryPath: string): CompileResult {
-  const linked = linkProject(entryPath)
-  return compileSource(linked.source, {
-    allowModuleSupport: true,
-    supportStatements: linked.supportStatements,
-    supportNames: linked.supportNames,
-    externalImports: linked.externalImports,
-    dependencies: linked.dependencies,
-  })
+  const diagnosticFilePath = path.resolve(entryPath)
+  let diagnosticSource = ''
+  try {
+    diagnosticSource = readFileSync(diagnosticFilePath, 'utf8')
+    const linked = linkProject(entryPath)
+    return compileSource(linked.source, {
+      allowModuleSupport: true,
+      supportStatements: linked.supportStatements,
+      supportNames: linked.supportNames,
+      externalImports: linked.externalImports,
+      dependencies: linked.dependencies,
+    })
+  } catch (error) {
+    throw withCompileDiagnostic(error, { filePath: diagnosticFilePath, source: diagnosticSource })
+  }
 }

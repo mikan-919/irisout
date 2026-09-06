@@ -28,6 +28,18 @@
         "@vitejs/plugin-react": "^6.0.3",
       },
     },
+    "examples/consumer-app": {
+      "name": "@irisout/consumer-example",
+      "version": "0.0.0",
+      "dependencies": {
+        "@irisout/runtime": "workspace:*",
+      },
+      "devDependencies": {
+        "@irisout/compiler": "workspace:*",
+        "@irisout/vite-plugin": "workspace:*",
+        "vite-plus": "0.3.0",
+      },
+    },
     "packages/bench": {
       "name": "@irisout/bench",
       "version": "0.0.0",
@@ -182,6 +194,8 @@
     "@irisout/bench": ["@irisout/bench@workspace:packages/bench"],
 
     "@irisout/compiler": ["@irisout/compiler@workspace:packages/compiler"],
+
+    "@irisout/consumer-example": ["@irisout/consumer-example@workspace:examples/consumer-app"],
 
     "@irisout/examples": ["@irisout/examples@workspace:apps/examples"],
 

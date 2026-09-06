@@ -6,7 +6,8 @@
 第1〜3段階で、開発中の型検査と編集反映、非同期handlerの更新、派生値の連鎖、
 一覧と共通状態の接続、条件分岐内の状態付き子部品を実装した。代表アプリを
 `apps/examples/heatmap.jsx`へ置いた。外部解析ライブラリ、辞書、Workerは第4段階で、長文の
-非同期解析は第5段階で扱った。本調査は実装前の再現結果と実装結果を記録し、
+非同期解析は第5段階で扱った。診断、利用者向け型定義、別アプリの導入、自動検査、配布形式は
+第6段階で扱った。本調査は実装前の再現結果と実装結果を記録し、
 `ROADMAP.md`の優先順位を支える記録である。
 
 ## 確認できた機能と不足
@@ -82,11 +83,11 @@ function run() {
 | 編集の反映         | `apps/examples/vite.config.ts`は設定評価時に一度だけ`compileProject`を呼ぶ。プラグイン生成後に入口ファイルを書き換えても`transformIndexHtml`は旧HTMLを返した        | 入口と相対依存を監視し、HTMLとJSを同じ再コンパイル結果へ更新する。まずページ全体の再読み込みでよい                        |
 | 依存ファイルの取得 | `CompileResult`は依存ファイル一覧を返さず、リンカーが内部でファイルを読む                                                                                           | ビルド連携側が依存を監視できる公開結果または同等の仕組みを設ける                                                          |
 | JSXの型検査        | 一時的に`types/test/`へ`signal(1)`に文字列を書き込むJSXを追加した。`bun run typecheck`は成功し、`bun run typecheck:tsc`はTS2345で失敗した。再現用ファイルは削除済み | 通常の検査手順にJSX専用の型検査を含め、誤ったpropsとイベント値も検出する                                                  |
-| 利用者用の型定義   | `types/jsx.d.ts`をexamplesの設定から相対参照している。compiler/runtimeの公開先はソースTSで、各パッケージはprivate                                                   | 別アプリから設定できる型の入口とビルド連携を用意する。公開形式は別途決める                                                |
-| エラー位置         | リンク後のコードを解析し、多くのscope limitは元ファイル・行・列を付けない。生成結果にソースマップがない                                                             | まず元ファイルと位置を診断へ付ける。生成コードから原文へ戻るソースマップは次段階で検討する                                |
+| 利用者用の型定義   | `@irisout/compiler/jsx`を`apps/examples`と別アプリの設定から参照する。各packageはGit/workspace配布のprivate package                                                 | 型定義のpackage入口と別アプリの設定例を用意する。npm等への公開は別計画とする                                              |
+| エラー位置         | `CompileDiagnostic`が対象moduleの元ファイル・行・列をメッセージへ付ける。生成結果にソースマップはない                                                               | 診断を実装済みとし、生成コードから原文へ戻るソースマップは後続で検討する                                                  |
 | 型と対応範囲の差   | 任意属性はunknownで許容され、型定義のコメントには構造内onMountを未対応とする記述が残る                                                                              | 実装とコメントを揃え、型が通ってもコンパイルできない境界を説明する。SVGは型一覧に含まれないが、初期地図はHTML要素で作れる |
 | 実ブラウザの検証   | 通常の試験対象はcompiler配下。ブラウザ用計測スクリプトはあるが、ヒートマップの操作試験はない                                                                        | 入力、移動、フォーカス、日本語入力中の再解析、長文での操作性をブラウザで確認する                                          |
-| 自動検査と公開準備 | `.github`の継続的検査設定はなく、READMEでライセンス未定、パッケージ未公開と記載                                                                                     | 外部試用前に検査の自動実行、導入例、ライセンスの決定を行う                                                                |
+| 自動検査と公開準備 | `.github/workflows/ci.yml`で型検査・試験・buildを実行し、別アプリのbuild試験を持つ。コードはApache-2.0、packageはprivate workspace                                  | Git/workspaceの導入手順を`examples/consumer-app/README.md`へ記載し、npm等への公開は別計画とする                           |
 
 注: ソースマップは生成コードの位置と元のソースの位置を結び付ける情報である。
 開発サーバーは調査環境の待受制限(EPERM)により起動できなかったため、編集反映は
@@ -171,3 +172,17 @@ URLへ接頭辞が付くことを確認した。`packages/compiler/test/heatmap.
 
 Worker連携、要求競合、文字確定、日本語入力、段落移動、性能計測の試験は
 `packages/compiler/test/heatmap.test.ts`と`packages/bench/heatmap.playwright.ts`で確認した。
+
+## 第6段階の実装結果(2026-09-06)
+
+`CompileDiagnostic`を追加し、parser、module linker、コンパイル中の失敗へ元ファイル・行・列を
+付けた。`packages/compiler`は`@irisout/compiler/diagnostics`と`@irisout/compiler/jsx`をexportsへ
+追加し、JSX型定義をpackage内へ移した。`apps/examples/tsconfig.json`と別アプリの
+`examples/consumer-app/tsconfig.json`はpackage入口を参照する。
+
+`examples/consumer-app`へVite設定、入口JSX、HTML、導入手順を置いた。`vp -C examples/consumer-app build`
+を実行し、初期HTMLと生成JavaScriptを確認した。回帰試験にも同じbuildを登録した。`.github/workflows/ci.yml`
+へ`bun run check`、`bun run test`、`bun run build`を登録した。
+
+配布形式はGit/workspaceとし、npm等への公開は行わない。コードのライセンスをApache License 2.0とし、
+ルートの`LICENSE`、root/packageの`license`欄、READMEへ記載した。生成コードのソースマップは後続の検討とした。

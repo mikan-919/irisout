@@ -249,7 +249,7 @@ JSX型定義(`JSX.IntrinsicElements`の`use`宣言)は同changeのdesign.md
 Decision 6で明示的にスコープ外とし、別changeへ先送りした
 (当時はauthored `.jsx`の型検査基盤が未整備だったため)。この先送りは change
 `jsx-type-checking-foundation`(2026-07-21)で解消済み ―
-`types/jsx.d.ts`の`JSX.IntrinsicElements`共通属性に`use`を型付けした。
+`@irisout/compiler/jsx`の`JSX.IntrinsicElements`共通属性に`use`を型付けした。
 
 - `packages/compiler/src/compiler/render.ts`: `use`属性の解析・識別子参照ルールの解決
   (ADR-0008のハンドラ配線ルールの転用)。top-level要素と構造unit内要素を受理し、
