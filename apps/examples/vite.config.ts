@@ -1,32 +1,14 @@
-// authored JSXをirisout compilerで処理し、初期HTMLとhydrate専用モジュールを
-// Viteの標準ビルドへ渡す。module graphの読込はcompilerへ委譲し、アプリ側は
-// compiler/runtimeの内部配置を知らない。
-import path from 'node:path'
-import { compileProject } from '@irisout/compiler'
+// authored JSXを再利用可能なirisout Vite連携へ渡すexamples設定。
 import { defineConfig } from 'vite-plus'
-
-const virtualEntry = 'virtual:irisout-entry'
-const resolvedEntry = `\0${virtualEntry}`
+import { irisout } from '@irisout/vite-plugin'
 
 export default defineConfig(() => {
-  const input = path.resolve(process.env.IRISOUT_ENTRY ?? 'counter.jsx')
-  const { code, initialHtml } = compileProject(input)
-
   return {
     plugins: [
-      {
-        name: 'irisout-example',
-        resolveId(id) {
-          return id === virtualEntry ? resolvedEntry : null
-        },
-        load(id) {
-          if (id !== resolvedEntry) return null
-          return `${code}\nhydrateComponent(document.getElementById('app'));`
-        },
-        transformIndexHtml(html) {
-          return html.replace('<!--irisout-html-->', initialHtml)
-        },
-      },
+      irisout({
+        entry: process.env.IRISOUT_ENTRY ?? 'counter.jsx',
+        container: '#app',
+      }),
     ],
     build: {
       outDir: process.env.IRISOUT_OUT_DIR ?? 'dist',

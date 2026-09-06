@@ -33,10 +33,18 @@ function writeProject(files: Record<string, string>, entry = 'main.jsx'): string
 
 describe('compileProject: static multi-file module composition', () => {
   it('compiles a split fixture into static HTML and runtime-free component code', async () => {
-    const { code, initialHtml } = compileProject(FIXTURE)
+    const { code, initialHtml, dependencies } = compileProject(FIXTURE)
 
     expect(initialHtml).toContain('<main class="multi-file-notes">')
     expect(initialHtml).toContain('irisout / ノート')
+    expect(new Set(dependencies)).toEqual(
+      new Set([
+        path.resolve('apps/examples/multi-file/lib/constants.js'),
+        path.resolve('apps/examples/multi-file/lib/format.js'),
+        path.resolve('apps/examples/multi-file/components/SplitCard.jsx'),
+        FIXTURE,
+      ]),
+    )
     expect(initialHtml).not.toContain('note-card')
     expect(code).not.toContain('SplitCard')
     expect(code).not.toContain('signal(')

@@ -17,6 +17,7 @@
       "dependencies": {
         "@irisout/compiler": "workspace:*",
         "@irisout/runtime": "workspace:*",
+        "@irisout/vite-plugin": "workspace:*",
         "react": "^19.2.7",
         "react-dom": "^19.2.7",
       },
@@ -62,6 +63,16 @@
     "packages/runtime": {
       "name": "@irisout/runtime",
       "version": "0.0.0",
+    },
+    "packages/vite-plugin": {
+      "name": "@irisout/vite-plugin",
+      "version": "0.0.0",
+      "dependencies": {
+        "@irisout/compiler": "workspace:*",
+      },
+      "devDependencies": {
+        "vite-plus": "0.3.0",
+      },
     },
   },
   "overrides": {
@@ -174,6 +185,8 @@
     "@irisout/examples": ["@irisout/examples@workspace:apps/examples"],
 
     "@irisout/runtime": ["@irisout/runtime@workspace:packages/runtime"],
+
+    "@irisout/vite-plugin": ["@irisout/vite-plugin@workspace:packages/vite-plugin"],
 
     "@jridgewell/gen-mapping": ["@jridgewell/gen-mapping@0.3.13", "", { "dependencies": { "@jridgewell/sourcemap-codec": "^1.5.0", "@jridgewell/trace-mapping": "^0.3.24" } }, "sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA=="],
 

@@ -36,6 +36,8 @@ export interface LinkedProject {
   source: string
   supportStatements: string[]
   supportNames: Set<string>
+  /** compileProject()の利用側が相対moduleを監視できる絶対pathの一覧。 */
+  dependencies: string[]
 }
 
 function compileError(message: string): Error {
@@ -523,5 +525,6 @@ export function linkProject(entryPath: string): LinkedProject {
     source: sourceParts.join('\n'),
     supportStatements,
     supportNames,
+    dependencies: order.map((record) => record.filePath),
   }
 }

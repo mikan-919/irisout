@@ -134,8 +134,21 @@ bun run test
 bun run build
 ```
 
-`check`は整形、静的検査、型検査を実行します。`test`はVite+ Testによる試験を
+`check`は整形、静的検査、TypeScriptとauthored JSXの型検査を実行します。`test`はVite+ Testによる試験を
 実行します。規約は[`docs/conventions.md`](./docs/conventions.md)を参照してください。
+
+別のViteアプリから使う場合は、設定へ連携を追加して入口とhydrate対象を指定します。
+
+```ts
+import { irisout } from '@irisout/vite-plugin'
+
+export default {
+  plugins: [irisout({ entry: 'src/App.jsx', container: '#app' })],
+}
+```
+
+入口と相対`.js`/`.jsx`の編集時は、開発サーバーを再起動せずに初期HTMLと生成JavaScriptを
+再生成し、ページ全体を再読み込みします。
 
 ## 資料
 

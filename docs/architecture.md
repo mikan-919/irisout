@@ -57,12 +57,17 @@ generateModule()             ── 6. 依存グラフから ES モジュール�
 
 ```
 entryPath (.js/.jsx)
-  │ module-linker: 相対import解決、依存順、cycle/import/export検証、binding名変更
+  │ module-linker: 相対import解決、依存順、cycle/import/export検証、binding名変更、依存path収集
   ▼
 linked source + module-scope補助宣言
   │
   └── 上のparseからgenerateModuleまでの処理
 ```
+
+`compileProject()`は生成結果とともに、リンクした入口・相対moduleの絶対pathを返す。
+`@irisout/vite-plugin`はこの一覧だけを監視対象にし、変更時に同じ入口を再コンパイルする。
+初期HTMLはindex.htmlのmarkerへ埋め込み、仮想moduleへhydrate処理を出力する。開発時の
+変更反映はページ全体の再読み込みであり、状態保持やDOM差分HMRは対象外である。
 
 `compileComponent()`(4)が受理しないパターンに当たると、常に
 `compile:`+`(scope limit)`エラーで拒否する(ADR-0004の裏面、
@@ -86,9 +91,10 @@ triage手続きで捌く — コンパイラの受理条件自体を場当たり
 | `packages/compiler/src/compiler/ast-codegen.ts`       | props置換などAST変換を含む式を、元ソースの位置範囲に依存せずASTからコード生成する境界                                                                                                               |
 | `packages/compiler/src/compiler/decl-graph.ts`        | derived を辿ってルート signal 集合へ展開する推移解決                                                                                                                                                |
 | `packages/compiler/src/codegen.ts`                    | 最終 codegen。文字列組み立てのみ、AST もコンパイラ状態も触らない                                                                                                                                    |
+| `packages/vite-plugin/src/index.ts`                   | `compileProject()`の生成結果をViteの仮想module・初期HTML・依存監視・全体再読み込みへ接続                                                                                                            |
 | `packages/runtime/src/index.ts`                       | 2つの顔を持つ: signal/derived は**ビルド時専用**。mount/hydrate、`use=`返り値のshape検証、List使用時だけimportされるkey照合・binding値キャッシュは**ブラウザ出荷用**の最小ランタイム(ADR-0015/0022) |
 | `packages/compiler/src/template.ts`                   | テンプレートリテラル組み立てヘルパー(render と codegen の共有部)                                                                                                                                    |
-| `apps/examples/vite.config.ts`                        | entry path → `compileProject()` → `dist/index.html`(焼き込み済み HTML)+ `dist/app.js`(hydrate のみ)                                                                                                 |
+| `apps/examples/vite.config.ts`                        | `@irisout/vite-plugin`へentry pathを渡し、`dist/index.html`(焼き込み済み HTML)+ `dist/app.js`(hydrate のみ)を生成                                                                                   |
 
 ## 重要な概念
 

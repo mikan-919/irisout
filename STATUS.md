@@ -277,10 +277,13 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
 2026-09-06のヒートマップ調査で、非同期ハンドラから`async`が落ちて不正な生成物に
 なる問題と、ハンドラ内のPromiseコールバックによる状態更新がDOMへ反映されない問題を
 再現した。`onMount`のブロック本体からのPromise更新は動作したため、経路を区別する。
-また、派生値を参照する`derived`は`derived-of-derived`として拒否される。
-修正は未実施。開発時の編集反映とJSX型検査経路の不足を含む調査結果は
-[`docs/heatmap-readiness.md`](./docs/heatmap-readiness.md)、対応順序は
-[`ROADMAP.md`](./ROADMAP.md)を参照。
+また、派生値を参照する`derived`は`derived-of-derived`として拒否される。これらは未修正で、
+ロードマップ第2段階以降の対象である。
+
+ロードマップ第1段階の検査と編集反映は実装済みである。`bun run check`と`bun run typecheck`
+が`apps/examples/tsconfig.json`のJSX型検査を実行し、`@irisout/vite-plugin`が
+`compileProject()`の依存pathを監視して入口・相対moduleの変更時に全体再読み込みを送る。
+構文エラー時は直前の正常結果を保持し、修正後の変更で復帰する。
 
 - **ルートコンポーネントは1つだけ**: `compile()`は「他から一度も参照
   されないトップレベル関数」がちょうど1つであることを要求し、そうで

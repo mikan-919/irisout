@@ -54,6 +54,8 @@ export interface CompileResult {
   markers: ReturnType<typeof createCompilerState>['markers']
   signalToMarkers: Map<DeclId, Set<MarkerId>>
   declName: Map<DeclId, string>
+  /** compileProject()が読み込んだ入口と相対moduleの絶対path。 */
+  dependencies: string[]
 }
 
 // Program 直下は関数宣言(export 付き含む)のみ受理する。import 文・
@@ -272,6 +274,7 @@ interface CompileOptions {
   allowModuleSupport?: boolean
   supportStatements?: string[]
   supportNames?: Set<string>
+  dependencies?: string[]
 }
 
 function compileSource(source: string, options: CompileOptions = {}): CompileResult {
@@ -658,6 +661,7 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
     markers: ctx.markers,
     signalToMarkers,
     declName: ctx.declOutputName,
+    dependencies: options.dependencies ?? [],
   }
 }
 
@@ -674,5 +678,6 @@ export function compileProject(entryPath: string): CompileResult {
     allowModuleSupport: true,
     supportStatements: linked.supportStatements,
     supportNames: linked.supportNames,
+    dependencies: linked.dependencies,
   })
 }

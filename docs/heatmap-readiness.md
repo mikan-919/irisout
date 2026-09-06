@@ -96,3 +96,15 @@ function run() {
 `bun run typecheck:tsc`は成功した。成功している既存機能と、本調査で見つけた未検証経路を
 区別する。性能値、実用的な文章量、辞書の容量、解析精度は今回測定していない。
 特定ライブラリの採用や比較、自然言語処理の指標の正当性も今回の調査対象外である。
+
+## 第1段階の実装結果(2026-09-06)
+
+検査と編集反映を実装した。`bun run check`と`bun run typecheck`は、rootの検査に続けて
+`apps/examples/tsconfig.json`を実行し、`types/test/`のsignal、props、イベントの誤用を
+検出する。`compileProject()`は入口と静的にリンクした相対`.js`/`.jsx`の絶対pathを
+`dependencies`として返す。
+
+examplesの専用Vite実装は`@irisout/vite-plugin`へ移し、仮想module、初期HTML、hydrate対象、
+依存監視を連携へまとめた。依存の変更は再コンパイルと全体再読み込みへつながる。構文エラー
+の後にファイルを修正した場合も、直前の正常結果を保持したまま次の変更で復帰できることを
+試験で確認した。状態保持とDOM差分更新はロードマップの完了条件に含めていない。
