@@ -43,7 +43,7 @@ import type {
   MountDecl,
   StructuralUnitBody,
 } from './compiler/state.ts'
-import { createCompilerState } from './compiler/state.ts'
+import { createCompilerState, toContextId } from './compiler/state.ts'
 import { linkProject } from './compiler/module-linker.ts'
 import { collection, derived, registry, signal } from '@irisout/runtime'
 
@@ -70,8 +70,66 @@ function assertTopLevelShape(program: t.Program, allowModuleSupport = false): vo
       inner.declarations.every(
         (declaration) => declaration.id.type === 'Identifier' && declaration.init != null,
       )
-    if (inner?.type !== 'FunctionDeclaration' && !isSupportConst) {
+    const isContextConst =
+      inner?.type === 'VariableDeclaration' &&
+      inner.kind === 'const' &&
+      inner.declarations.every((declaration) => {
+        const init = declaration.init
+        return (
+          declaration.id.type === 'Identifier' &&
+          init?.type === 'CallExpression' &&
+          init.callee.type === 'Identifier' &&
+          init.callee.name === 'createContext' &&
+          init.arguments.length === 1 &&
+          init.arguments[0]?.type !== 'SpreadElement'
+        )
+      })
+    const hasContextCall =
+      inner?.type === 'VariableDeclaration' &&
+      inner.declarations.some(
+        (declaration) =>
+          declaration.init?.type === 'CallExpression' &&
+          declaration.init.callee.type === 'Identifier' &&
+          declaration.init.callee.name === 'createContext',
+      )
+    if (hasContextCall && !isContextConst) {
+      throw new Error(
+        'compile: createContext() declarations require one default value and simple names (scope limit)',
+      )
+    }
+    if (inner?.type !== 'FunctionDeclaration' && !isSupportConst && !isContextConst) {
       throw new Error('compile: only top-level function declarations are supported (scope limit)')
+    }
+  }
+}
+
+function collectContextDeclarations(
+  ast: ReturnType<typeof parse>,
+  source: string,
+  ctx: ReturnType<typeof createCompilerState>,
+): void {
+  for (const statement of ast.program.body) {
+    const declaration =
+      statement.type === 'ExportNamedDeclaration' ? statement.declaration : statement
+    if (declaration?.type !== 'VariableDeclaration' || declaration.kind !== 'const') continue
+    for (const declarator of declaration.declarations) {
+      if (
+        declarator.id.type !== 'Identifier' ||
+        declarator.init?.type !== 'CallExpression' ||
+        declarator.init.callee.type !== 'Identifier' ||
+        declarator.init.callee.name !== 'createContext' ||
+        declarator.init.arguments.length !== 1 ||
+        declarator.init.arguments[0]?.type === 'SpreadElement'
+      ) {
+        continue
+      }
+      const start = declarator.start
+      const arg = declarator.init.arguments[0]
+      if (start == null || !arg || arg.start == null || arg.end == null) continue
+      const id = toContextId(`context_${start}_${declarator.id.name}`)
+      const defaultSourceRendered = source.slice(arg.start, arg.end)
+      ctx.contexts.set(id, { id, defaultRendered: defaultSourceRendered, defaultSourceRendered })
+      ctx.contextIdByKey.set(`${start}:${declarator.id.name}`, id)
     }
   }
 }
@@ -159,6 +217,7 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
   const transformedNodes = new Set<t.Node>()
   inlineComponents(ast, transformedNodes)
   const ctx = createCompilerState(source, transformedNodes, options.supportNames)
+  collectContextDeclarations(ast, source, ctx)
   for (const supportName of options.supportNames ?? []) ctx.usedOutputNames.add(supportName)
   const rootPath = findRootComponent(ast, options.allowModuleSupport === true)
 

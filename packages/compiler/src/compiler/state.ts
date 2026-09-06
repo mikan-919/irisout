@@ -8,9 +8,11 @@ import type * as t from '@babel/types'
 // 意味的に別物。ブランドしてコンパイル時に取り違えを防ぐ(実行時コストゼロ)。
 export type DeclId = string & { readonly __brand: 'DeclId' }
 export type MarkerId = string & { readonly __brand: 'MarkerId' }
+export type ContextId = string & { readonly __brand: 'ContextId' }
 
 export const toDeclId = (s: string): DeclId => s as DeclId
 export const toMarkerId = (s: string): MarkerId => s as MarkerId
+export const toContextId = (s: string): ContextId => s as ContextId
 
 export type DeclKind = 'signal' | 'derived' | 'collection'
 
@@ -187,6 +189,19 @@ export interface EffectDecl {
   readDeclIds: Set<DeclId>
 }
 
+export interface ContextDecl {
+  id: ContextId
+  /** createContext()のdefaultValue。build時と生成時で同じ式を使う。 */
+  defaultRendered: string
+  defaultSourceRendered: string
+}
+
+export interface ContextValue {
+  rendered: string
+  sourceRendered: string
+  deps: Set<DeclId>
+}
+
 // cross-function-handler-writes: ハンドラ/action から追跡対象として呼ばれた
 // 動きゾーン関数の解析結果。writeDeclIds は自分の本体が直接書く root signal
 // (推移解決済み)、calleeNames は自分が呼ぶ別の追跡関数。推移的な書き込み
@@ -240,6 +255,11 @@ export interface CompilerState {
   mounts: MountDecl[]
   /** ルートcomponentの`effect`。構造unit内では収集しない。 */
   effects: EffectDecl[]
+  /** top-level createContext() declarations keyed by lexical binding. */
+  contexts: Map<ContextId, ContextDecl>
+  contextIdByKey: Map<string, ContextId>
+  /** render/analyze中の現在unitへ見えるprovider値。終了時に復元する。 */
+  contextValues: Map<ContextId, ContextValue>
   attrBindings: AttrBinding[] // ADR-0012: 動的属性(トップレベル+splice前のユニット内)
 
   markerCounter: number
@@ -283,6 +303,9 @@ export function createCompilerState(
     actions: [],
     mounts: [],
     effects: [],
+    contexts: new Map(),
+    contextIdByKey: new Map(),
+    contextValues: new Map(),
     attrBindings: [],
     markerCounter: 0,
     instanceCounter: 0,

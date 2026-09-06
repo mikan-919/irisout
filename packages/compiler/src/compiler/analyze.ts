@@ -10,7 +10,14 @@ import * as t from '@babel/types'
 import { createAstRewrite } from './ast-codegen.ts'
 import type { AstRewriteSession } from './ast-codegen.ts'
 import { resolveToSignals } from './decl-graph.ts'
-import type { CompilerState, DeclId, ResolveUpdateCall, TrackedFn } from './state.ts'
+import type {
+  CompilerState,
+  ContextId,
+  ContextValue,
+  DeclId,
+  ResolveUpdateCall,
+  TrackedFn,
+} from './state.ts'
 import { declKey } from './state.ts'
 
 interface Edit {
@@ -280,6 +287,9 @@ function analyzeHandlerStatementsCore(
   const ast = stmts.some((stmt) => usesTransformedAst(ctx, stmt as NodePath<t.Node>))
     ? createAstRewrite(astRoot)
     : null
+  for (const stmt of stmts) {
+    collectContextCalls(ctx, stmt as NodePath<t.Node>, new Set(), edits, null, ast, null, astRoot)
+  }
   let firstWriteStart: number | null = null
   const noteWrite = (pos: number) => {
     if (firstWriteStart == null || pos < firstWriteStart) firstWriteStart = pos
@@ -435,6 +445,92 @@ function analyzeHandlerStatementsCore(
   }
 }
 
+function resolveContextId(ctx: CompilerState, keyPath: NodePath<t.Expression>): ContextId | null {
+  if (!keyPath.isIdentifier()) return null
+  const binding = keyPath.scope.getBinding(keyPath.node.name)
+  if (!binding || binding.path.node.type !== 'VariableDeclarator') return null
+  const start = binding.path.node.start
+  if (start == null) return null
+  return ctx.contextIdByKey.get(`${start}:${binding.identifier.name}`) ?? null
+}
+
+function parseGeneratedExpression(code: string): t.Expression {
+  const parsed = parse(`(${code})`, { sourceType: 'module', plugins: ['typescript', 'jsx'] })
+  const statement = parsed.program.body[0]
+  if (statement?.type !== 'ExpressionStatement') {
+    throw new Error('compile: failed to parse generated context expression')
+  }
+  return statement.expression
+}
+
+function contextValueForCall(
+  ctx: CompilerState,
+  callPath: NodePath<t.CallExpression>,
+): ContextValue | null {
+  const callee = callPath.node.callee
+  if (callee.type !== 'Identifier' || callee.name !== 'useContext') return null
+  const args = callPath.get('arguments')
+  if (args.length !== 1 || !args[0]!.isExpression()) {
+    throw new Error('compile: useContext() takes exactly one context key (scope limit)')
+  }
+  const contextId = resolveContextId(ctx, args[0] as NodePath<t.Expression>)
+  if (!contextId) {
+    throw new Error('compile: useContext() key must be a createContext() binding (scope limit)')
+  }
+  const provided = ctx.contextValues.get(contextId)
+  if (provided) return provided
+  const declared = ctx.contexts.get(contextId)
+  if (declared) {
+    return {
+      rendered: declared.defaultRendered,
+      sourceRendered: declared.defaultSourceRendered,
+      deps: new Set(),
+    }
+  }
+  throw new Error('compile: useContext() context key was not collected (scope limit)')
+}
+
+function collectContextCalls(
+  ctx: CompilerState,
+  path: NodePath<t.Node>,
+  deps: Set<DeclId>,
+  outputEdits: Edit[],
+  sourceEdits: Edit[] | null,
+  outputAst: AstRewriteSession | null,
+  sourceAst: AstRewriteSession | null,
+  root: t.Node,
+): void {
+  const visitCall = (callPath: NodePath<t.CallExpression>): void => {
+    const value = contextValueForCall(ctx, callPath)
+    if (!value) return
+    for (const dep of value.deps) deps.add(dep)
+    outputEdits.push({
+      start: callPath.node.start!,
+      end: callPath.node.end!,
+      text: value.rendered,
+    })
+    sourceEdits?.push({
+      start: callPath.node.start!,
+      end: callPath.node.end!,
+      text: value.sourceRendered,
+    })
+    if (outputAst) {
+      planAstReplacement(outputAst, callPath, root, () => parseGeneratedExpression(value.rendered))
+    }
+    if (sourceAst) {
+      planAstReplacement(sourceAst, callPath, root, () =>
+        parseGeneratedExpression(value.sourceRendered),
+      )
+    }
+  }
+  if (path.isCallExpression()) visitCall(path as NodePath<t.CallExpression>)
+  path.traverse({
+    CallExpression(callPath) {
+      visitCall(callPath)
+    },
+  })
+}
+
 export function analyzeExpr(
   ctx: CompilerState,
   path: NodePath<t.Expression>,
@@ -446,6 +542,8 @@ export function analyzeExpr(
   const useAst = usesTransformedAst(ctx, path as NodePath<t.Node>)
   const sourceAst = useAst ? createAstRewrite(path.node) : null
   const outputAst = useAst ? createAstRewrite(path.node) : null
+
+  collectContextCalls(ctx, path, deps, outputEdits, sourceEdits, outputAst, sourceAst, path.node)
 
   const visit = (idPath: NodePath<t.Identifier>) => {
     const id = resolveDeclId(ctx, idPath, instanceId)
@@ -528,6 +626,7 @@ export function analyzeHandlerExpr(
   const ast = usesTransformedAst(ctx, exprPath as NodePath<t.Node>)
     ? createAstRewrite(exprPath.node)
     : null
+  collectContextCalls(ctx, exprPath, new Set(), edits, null, ast, null, exprPath.node)
 
   const visit = (idPath: NodePath<t.Identifier>) => {
     const id = resolveDeclId(ctx, idPath, instanceId)
@@ -923,6 +1022,9 @@ function analyzeActionStatements(
   const ast = stmts.some((stmt) => usesTransformedAst(ctx, stmt as NodePath<t.Node>))
     ? createAstRewrite(astRoot)
     : null
+  for (const stmt of stmts) {
+    collectContextCalls(ctx, stmt as NodePath<t.Node>, readDeclIds, edits, null, ast, null, astRoot)
+  }
   let firstWriteStart: number | null = null
 
   const visit = (idPath: NodePath<t.Identifier>) =>
@@ -1056,6 +1158,8 @@ function analyzeActionExprScope(
   const ast = usesTransformedAst(ctx, exprPath as NodePath<t.Node>)
     ? createAstRewrite(exprPath.node)
     : null
+
+  collectContextCalls(ctx, exprPath, readDeclIds, edits, null, ast, null, exprPath.node)
 
   forEachReferencedIdentifier(exprPath, (idPath) =>
     analyzeActionIdentifier(

@@ -333,6 +333,16 @@ function ensureUnitArrowBlockBody(
   return arrowPath.get('body') as NodePath<t.BlockStatement>
 }
 
+function isContextProviderStatement(statement: NodePath<t.Statement>): boolean {
+  if (!statement.isExpressionStatement()) return false
+  const expression = statement.node.expression
+  return (
+    expression.type === 'CallExpression' &&
+    expression.callee.type === 'Identifier' &&
+    expression.callee.name === 'provideContext'
+  )
+}
+
 function markTransformedPath(path: NodePath<t.Node>, transformedNodes: Set<t.Node>): void {
   transformedNodes.add(path.node)
   path.traverse({
@@ -437,7 +447,11 @@ function expandComponentRef(
     // の式位置はブロック文を構文的に置けない)。黙ってルートスコープへ
     // 昇格させると壊れた挙動(本来インスタンスごとのはずの状態がモジュール
     // スコープで共有される)になるため、明示的に拒否する。
-    if (zones.varZoneStmts.length > 0 && isInsideConditionalBranch(jsxPath)) {
+    const conditionalBranch = isInsideConditionalBranch(jsxPath)
+    const contextProviderStmts = zones.varZoneStmts.filter((stmt) =>
+      isContextProviderStatement(stmt),
+    )
+    if (conditionalBranch && zones.varZoneStmts.some((stmt) => !isContextProviderStatement(stmt))) {
       clonedFnPath.remove()
       throw new Error(
         `compile: inlining component "${tagName}" with its own variable-zone declarations into a conditional branch is not supported yet (scope limit)`,
@@ -448,15 +462,18 @@ function expandComponentRef(
     // コンポーネント名で接頭辞化してリネームする(ADR-0014決定5)。
     renameCollidingRootDecls(clonedFnPath, zones.varZoneStmts, componentPath, tagName)
     renameCollidingMovementFns(clonedFnPath, zones.movementZoneFns, componentPath, tagName)
-    const varZoneNodes = zones.varZoneStmts.map((s) => s.node)
+    const varZoneNodes = (conditionalBranch ? [] : zones.varZoneStmts).map((s) => s.node)
+    const contextProviderNodes = contextProviderStmts.map((stmt) =>
+      t.jsxExpressionContainer((stmt.node as t.ExpressionStatement).expression),
+    )
     const movementFnNodes = [...zones.movementZoneFns.values()].map((p) => p.node)
     const mountHookNodes = zones.mountHooks.map(
       (p) => p.parentPath!.parentPath!.node as t.ExpressionStatement,
     )
     const renderJsxNode = zones.renderJsxPath.node
-    const conditionalBranch = isInsideConditionalBranch(jsxPath)
-    if (conditionalBranch && zones.mountHooks.length > 0) {
+    if (conditionalBranch && (contextProviderNodes.length > 0 || zones.mountHooks.length > 0)) {
       renderJsxNode.children.unshift(
+        ...contextProviderNodes,
         ...zones.mountHooks.map((callback) =>
           t.jsxExpressionContainer(t.callExpression(t.identifier('onMount'), [callback.node])),
         ),

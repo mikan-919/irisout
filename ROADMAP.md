@@ -38,6 +38,11 @@ mount/hydrate完了後に一度実行し、返り値のcleanupをunmount時に�
 effect、同instance再mountは引き続き対象外。構造unit内・inline子componentの`onMount`は
 unit/root instance所有へ拡張済み。
 
+instance単位のcontextもADR-0027で実装済みである。トップレベルcontext key、変数ゾーンの
+provider、JSX式のconsumerをコンパイル時に静的置換し、root・list item・conditional branchの
+所有instanceへ依存を接続する。汎用context runtime・Mapは出力しない。動的provider tree、
+非同期context、module共有mutable stateは対象外とする。
+
 **第2段階実装済み(ADR-0020)**: 同一ハンドラ/action/追跡関数のwrite setに複数root
 があり、同じmarkerへ依存する場合だけ、コンパイル時に専用同期batchを生成する。
 derivedは一度ずつ再計算し、markerの和集合を重複なしで最終状態へ反映する。
@@ -168,9 +173,9 @@ namespace/side-effect/dynamic import、re-export、循環依存は`compile:`エ�
 複数ファイル)の実装後にも残る/別軸のギャップだけをここに積む。設計判断は
 まだしていない。
 
-- **context(ツリー越しの暗黙DI)**: ROADMAP・ADR・STATUSのどこにも記述が
-  無い、今回はじめて言語化した論点。props(§4)が解決してもprop
-  drillingを避ける手段が無いままになる。
+- **context(ツリー越しの暗黙DI)**: ADR-0027で解消済み。`createContext`/
+  `provideContext`/`useContext`をcompile-timeで静的置換し、root・構造unitのinstance単位へ
+  接続する。動的provider tree、非同期context、module共有mutable stateは対象外。
 - **onDestroy/cleanup**: component instanceの明示的な`unmount()`、top-level
   `use=` actionの`{ destroy }`、ルートcomponentの`onMount` cleanupはADR-0022/0025で
   解消済み。構造unit内action lifecycleは`structural-unit-use-actions`で実装済み。
@@ -293,12 +298,10 @@ transition/animation、portal、error boundary、async/resource
     実装・検証した。
 
 18. 次の一般用途対応は次の順番で検討する。大きな実装には着手しない。
-    1. **優先度P1: context**。複数ファイルcomponentはpropsで接続できるが、深い
-       component treeの共有依存はprops drillingになる。module scope stateを導入する
-       前に、instance単位の所有権とcleanupを決める必要がある。
-    2. **優先度P2: 構造unit/子componentのlifecycle**。`onMount`のroot/unit所有は実装済み。
-       effectのunit所有、非同期scheduler、明示的なcomponent instance境界は別契約とする。
-    3. **優先度P2: component propsとhandlerの型検査**。現行の`types/jsx.d.ts`は
+    1. **優先度P2: 構造unit/子componentのeffect lifecycle**。`onMount`のroot/unit所有と
+       root `effect`は実装済み。effectのunit所有、非同期scheduler、明示的なcomponent
+       instance境界は別契約とする。
+    2. **優先度P2: component propsとhandlerの型検査**。現行の`types/jsx.d.ts`は
        intrinsic要素と共通属性を検査するが、componentごとのprops型・イベント対象の
        絞り込みは弱い。module分割後の名前間違いとprops形状をbuild前に検出するために
        必要である。

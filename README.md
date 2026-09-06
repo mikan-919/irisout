@@ -128,6 +128,12 @@ instanceが所有します。ルートcomponentの動きゾーンでは`effect((
 derivedの更新時に再実行され、返り値のcleanupは再実行前とunmount時に呼ばれます。
 effect本体から追跡signalへ書き込むこと、構造unit内・子componentでeffectを使うことは
 scope limitです。
+component treeの共有依存には、トップレベル`const Theme = createContext(defaultValue)`、
+変数ゾーンの`provideContext(Theme, value)`、JSX式の`useContext(Theme)`を使えます。
+consumerは最も近いproviderまたはdefault値へコンパイル時に置換され、root・list item・
+conditional branchの各instanceが自身の値と更新依存を所有します。contextを使わない生成物に
+context runtimeやMapは出力しません。動的provider tree、非同期context、module共有stateは
+scope limitです。
 
 既知の制約(ルートコンポーネントは1つのみ、children/slot未対応、module解決は相対
 importのみ、など)は [`STATUS.md`](./STATUS.md) に一覧があります。

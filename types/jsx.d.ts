@@ -61,6 +61,13 @@ declare function onMount(callback: () => void | (() => void)): void
 // biome-ignore lint/suspicious/noConfusingVoidType: callbackの「返り値なし」を表す
 declare function effect(callback: () => void | (() => void)): void
 
+interface IrisContext<T> {
+  readonly __irisoutContextType?: T
+}
+declare function createContext<T>(defaultValue: T): IrisContext<T>
+declare function provideContext<T>(context: IrisContext<T>, value: T): void
+declare function useContext<T>(context: IrisContext<T>): T
+
 declare namespace JSX {
   // 同一ファイル内合成(ADR-0014)のコンポーネントは`render()`を内部で
   // 呼ぶだけで値を返さない(推論される返り値型は`void`)。TSのJSX

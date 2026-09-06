@@ -38,7 +38,7 @@ actionを含まないunitは従来の`reconcileList()`とfactory経路を使い�
 importしない。counter generated bundleの固定費は実測5.33xとなったため、golden size
 budgetを5.5xへ更新した。
 
-## 現在地(2026-09-06・ルートcomponent onMount)
+## 現在地(2026-09-06・component lifecycleとinstance context)
 
 ルートcomponentの動きゾーンで`onMount(() => void | (() => void))`を受理する
 (ADR-0025)。callbackはmarker収集、handler配線、構造unit初期化、`use=` action初期化の
@@ -50,8 +50,16 @@ budgetを5.5xへ更新した。
 root instance、list/conditional scopeならunit factoryへ静的に収集する。ルートcomponent
 の`effect(() => void | (() => void))`はADR-0026で実装済みで、callback本体が読むroot
 signal/derivedの専用`update_*()`へ依存を接続し、再実行前とunmount時のcleanupをinstanceが
-所有する。追跡signalへの書き込みは再入を避けるため拒否する。context、SSR、再mount、
-汎用lifecycle registryは未実装である。`onMount`/`effect`を使わない生成物には専用変数・
+所有する。追跡signalへの書き込みは再入を避けるため拒否する。再mountと汎用lifecycle
+registryは未実装である。
+
+instance単位のcontextはADR-0027で実装済みである。トップレベルの
+`createContext(defaultValue)`をkeyとして、変数ゾーンの`provideContext(key, value)`と
+JSX式の`useContext(key)`を受理する。consumerは最も近いproviderまたはdefault値へ静的に
+置換され、root・list item・conditional branchの値式と更新依存はそれぞれの所有instanceへ
+閉じる。汎用Map、provider registry、module共有mutable stateは生成しない。動的provider
+tree、非同期context、context APIを動きゾーンやmodule共有stateとして使う形はscope limit
+である。`onMount`/`effect`/contextを使わない生成物には専用変数・
 配線・runtime importを出力しない。
 
 ## 現在地(2026-09-05・構造ユニットのDOM範囲所有)
@@ -234,29 +242,31 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
 
 ## マイルストーン表
 
-| M      | 内容                                                                         | 状態     | 備考                                                                                                                                                                                                                             |
-| ------ | ---------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| M1     | スキャフォールド、signal/derived、テキストマーカー                           | **DONE** | `0155e85`                                                                                                                                                                                                                        |
-| M2     | イベントハンドラ、書き込みトリガー更新                                       | **DONE** | `810bc83`→`645a820`                                                                                                                                                                                                              |
-| M3     | ブラウザビルドターゲット(hydrate/mount分割 + `apps/examples/vite.config.ts`) | **DONE** | `a2905c8`、Vite+移行後はADR-0016のbuild経路                                                                                                                                                                                      |
-| M4     | 静的host要素属性                                                             | **DONE** | `9829f88`、change `m4-static-host-attributes`                                                                                                                                                                                    |
-| M4.5   | authoring APIゾーン化(ADR-0008)                                              | **DONE** | change `authoring-api-zones`。render()マーカー・識別子参照ハンドラ・ゾーン配置強制                                                                                                                                               |
-| M5     | list/conditional factory closures、1階層のみ(ADR-0005の新実装)               | **DONE** | change `m5-list-conditional-factory-closures`。ネストした構造ユニット(06/07)は据え置き                                                                                                                                           |
-| M5.5   | ネストした構造ユニット(条件分岐の中のリスト/リストアイテムの中の条件分岐)    | **DONE** | change `recursive-structural-authoring`。任意の深さ、unitごとの状態/cache、祖先local signalの更新接続                                                                                                                            |
-| `use=` | 要素へのaction接続(ADR-0011)                                                 | **DONE** | `use-action-impl` + `structural-unit-use-actions` + ADR-0022。top-level、list item、conditional branchをfactory単位で初期化・更新・破棄。関数updateと`{ update?, destroy? }`、component `unmount()`を実装                        |
-| M6     | 全マイルストーン横断のno-wrapper検証                                         | **DONE** | change `m6-no-wrapper-verification`。全機能同居フィクスチャで no-wrapper・import面・実DOM動作を固定(`test/no-wrapper.test.ts`)。サイズ予算係数はADR-0022のlifecycle固定費を含む5.5x(実測5.33x)。締め直しはminify最適化時に再検討 |
-| 合成   | 同一ファイル内の複数コンポーネント合成(ADR-0014)                             | **DONE** | change `same-file-component-composition`。コンパイル時ASTインライン化、root scope + list itemのみ、children/slot・再帰は未対応(下記制約参照)                                                                                     |
-| 分割   | 相対moduleの複数ファイル合成(ADR-0024)                                       | **DONE** | `compileProject(entryPath)`、AST bindingリンク、依存順、静的import検証、Vite fixtureを実装。外部module・dynamic import・cycle・re-exportは対象外                                                                                 |
-| Batch  | 同期スコープ内の共有marker更新(ADR-0020)                                     | **DONE** | 複数root write時だけ専用batchを生成。公開batch API・scheduler・collection構造操作は対象外。イベント配線はADR-0021でdirectを採用                                                                                                  |
+| M       | 内容                                                                         | 状態     | 備考                                                                                                                                                                                                                             |
+| ------- | ---------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M1      | スキャフォールド、signal/derived、テキストマーカー                           | **DONE** | `0155e85`                                                                                                                                                                                                                        |
+| M2      | イベントハンドラ、書き込みトリガー更新                                       | **DONE** | `810bc83`→`645a820`                                                                                                                                                                                                              |
+| M3      | ブラウザビルドターゲット(hydrate/mount分割 + `apps/examples/vite.config.ts`) | **DONE** | `a2905c8`、Vite+移行後はADR-0016のbuild経路                                                                                                                                                                                      |
+| M4      | 静的host要素属性                                                             | **DONE** | `9829f88`、change `m4-static-host-attributes`                                                                                                                                                                                    |
+| M4.5    | authoring APIゾーン化(ADR-0008)                                              | **DONE** | change `authoring-api-zones`。render()マーカー・識別子参照ハンドラ・ゾーン配置強制                                                                                                                                               |
+| M5      | list/conditional factory closures、1階層のみ(ADR-0005の新実装)               | **DONE** | change `m5-list-conditional-factory-closures`。ネストした構造ユニット(06/07)は据え置き                                                                                                                                           |
+| M5.5    | ネストした構造ユニット(条件分岐の中のリスト/リストアイテムの中の条件分岐)    | **DONE** | change `recursive-structural-authoring`。任意の深さ、unitごとの状態/cache、祖先local signalの更新接続                                                                                                                            |
+| `use=`  | 要素へのaction接続(ADR-0011)                                                 | **DONE** | `use-action-impl` + `structural-unit-use-actions` + ADR-0022。top-level、list item、conditional branchをfactory単位で初期化・更新・破棄。関数updateと`{ update?, destroy? }`、component `unmount()`を実装                        |
+| M6      | 全マイルストーン横断のno-wrapper検証                                         | **DONE** | change `m6-no-wrapper-verification`。全機能同居フィクスチャで no-wrapper・import面・実DOM動作を固定(`test/no-wrapper.test.ts`)。サイズ予算係数はADR-0022のlifecycle固定費を含む5.5x(実測5.33x)。締め直しはminify最適化時に再検討 |
+| 合成    | 同一ファイル内の複数コンポーネント合成(ADR-0014)                             | **DONE** | change `same-file-component-composition`。コンパイル時ASTインライン化、root scope + list itemのみ、children/slot・再帰は未対応(下記制約参照)                                                                                     |
+| 分割    | 相対moduleの複数ファイル合成(ADR-0024)                                       | **DONE** | `compileProject(entryPath)`、AST bindingリンク、依存順、静的import検証、Vite fixtureを実装。外部module・dynamic import・cycle・re-exportは対象外                                                                                 |
+| Batch   | 同期スコープ内の共有marker更新(ADR-0020)                                     | **DONE** | 複数root write時だけ専用batchを生成。公開batch API・scheduler・collection構造操作は対象外。イベント配線はADR-0021でdirectを採用                                                                                                  |
+| Context | instance単位context(ADR-0027)                                                | **DONE** | `createContext`/`provideContext`/`useContext`を静的置換。root・list item・conditional branchの所有単位へ接続し、未使用時の生成物は増やさない                                                                                     |
 
 ## 既知の制約(現時点のcodegenの限界)
 
 - **ルートコンポーネントは1つだけ**: `compile()`は「他から一度も参照
   されないトップレベル関数」がちょうど1つであることを要求し、そうで
   なければcompile error(`packages/compiler/src/compiler.ts`のscope limit)。
-- **`compile(source)`のトップレベルは関数宣言のみ**(2026-07-18、change
-  `scope-limit-coverage`): Program直下は関数宣言(`export`付き含む)以外(import・
-  トップレベル`const`・副作用式等)を`scope limit`で拒否する。`const [a] = signal(0)`
+- **`compile(source)`のトップレベルは関数宣言とcontext keyだけ**(2026-07-18、change
+  `scope-limit-coverage`): Program直下は関数宣言(`export`付き含む)と
+  `const Name = createContext(defaultValue)`以外(import・副作用式等)を`scope limit`で
+  拒否する。`const [a] = signal(0)`
   のような分割代入宣言子も拒否する。ビルド時実行の例外は
   `compile: build-time execution failed:`(`cause`付き)に包まれる。
 - **`compileProject(entryPath)`のmodule境界**(ADR-0024): 相対`.js`/`.jsx`の静的
@@ -336,6 +346,10 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
     子componentの`onMount`と構造unit内の`onMount`は実装済み。ルートcomponentの`effect`は
     ADR-0026で実装済みだが、構造unit・子componentのeffectは対象外。
     component instanceのcleanupとunit action lifecycleは解消済み。
+  - instance context(ADR-0027)は実装済み。context keyはトップレベル`const`、providerは
+    component変数ゾーンまたは構造unitへインライン化されたproviderに限る。consumerは
+    JSX/式解析時に静的置換されるため、動的provider tree、非同期context、module共有state、
+    動きゾーンでのprovider宣言は対象外。
   - action本体のconcise arrow(単一式)にネストしたリスナー等がある場合、
     その内部の書き込みに対する`update_*`挿入位置は本体全体の実行時点に
     まとまる(リスナー発火時ではない)。ブロック本体は正しく分離される

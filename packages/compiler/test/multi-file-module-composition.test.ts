@@ -86,6 +86,19 @@ describe('compileProject: static multi-file module composition', () => {
     expect(fixtureCards(container)[1]?.querySelector('.tags')).toBeNull()
   })
 
+  it('keeps a shared context key compile-time-only across modules', () => {
+    const entry = writeProject({
+      'main.jsx': `import Child from './Child.jsx'; import { Theme } from './context.js'; export function App() { provideContext(Theme, 'dark'); render(<div><Child /></div>); }`,
+      'Child.jsx': `import { Theme } from './context.js'; export default function Child() { render(<span>{useContext(Theme)}</span>); }`,
+      'context.js': `export const Theme = createContext('light');`,
+    })
+    const { code, initialHtml } = compileProject(entry)
+    expect(initialHtml).toContain('<span data-iris-id="m0">dark</span>')
+    expect(code).not.toContain('createContext')
+    expect(code).not.toContain('useContext')
+    expect(code).not.toContain('provideContext')
+  })
+
   it('keeps compile(source) as the single-file API', () => {
     expect(() =>
       compile(`import { helper } from './helper.js'; export function App() { render(<div />) }`),

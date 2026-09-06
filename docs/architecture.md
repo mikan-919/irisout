@@ -124,6 +124,12 @@ triage手続きで捌く — コンパイラの受理条件自体を場当たり
   signal/derivedを専用`update_*()`へ接続し、初回実行・依存更新前のcleanup・unmountの
   cleanupを生成instanceが所有する。汎用schedulerは導入せず、effect本体から追跡signalへ
   の書き込みと構造unit/子componentのeffectはscope limitで拒否する。
+- **instance context**(ADR-0027): トップレベル`createContext(defaultValue)`をcompile-timeの
+  keyとして収集し、`provideContext(key, value)`を現在のrootまたはstructural factoryへ
+  登録する。`useContext(key)`は最も近いprovider/defaultの式へ置換し、値式のsignal依存を
+  既存marker/update経路へ合流させる。runtimeのMap・provider registryは生成せず、未使用時の
+  context専用出力も省略する。動的provider tree・非同期context・module共有stateはscope
+  limitである。
 - **`use=` action result**: 既存の `() => void` は `update` closureとして初回+依存
   signal update時に呼ぶ。外部resource cleanupが必要な場合だけ
   `{ update?: () => void; destroy?: () => void }`を返し、`destroy`はunmount時のみ呼ぶ。

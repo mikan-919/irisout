@@ -30,6 +30,8 @@ import {
 } from './analyze.ts'
 import type {
   CompilerState,
+  ContextId,
+  ContextValue,
   ConditionalMarker,
   ContentPart,
   DeclId,
@@ -55,6 +57,49 @@ type JSXChild =
   | t.JSXElement
   | t.JSXFragment
   | t.JSXSpreadChild
+
+function resolveContextId(ctx: CompilerState, keyPath: NodePath<t.Expression>): ContextId | null {
+  if (!keyPath.isIdentifier()) return null
+  const binding = keyPath.scope.getBinding(keyPath.node.name)
+  if (!binding || binding.path.node.type !== 'VariableDeclarator') return null
+  const start = binding.path.node.start
+  if (start == null) return null
+  return ctx.contextIdByKey.get(`${start}:${binding.identifier.name}`) ?? null
+}
+
+export interface ContextProvider {
+  key: ContextId
+  valuePath: NodePath<t.Expression>
+}
+
+function resolveContextProviderExpression(
+  ctx: CompilerState,
+  expression: NodePath<t.Expression>,
+): ContextProvider | null {
+  if (!expression.isCallExpression()) return null
+  const callee = expression.node.callee
+  if (callee.type !== 'Identifier' || callee.name !== 'provideContext') return null
+  const args = expression.get('arguments')
+  if (args.length !== 2 || !args[0]!.isExpression() || !args[1]!.isExpression()) {
+    throw new Error(
+      'compile: provideContext() takes a context key and one value expression (scope limit)',
+    )
+  }
+  const key = resolveContextId(ctx, args[0] as NodePath<t.Expression>)
+  if (!key) {
+    throw new Error('compile: provideContext() key must be a createContext() binding (scope limit)')
+  }
+  return { key, valuePath: args[1] as NodePath<t.Expression> }
+}
+
+export function resolveContextProvider(
+  ctx: CompilerState,
+  stmt: NodePath<t.Statement>,
+): ContextProvider | null {
+  if (!stmt.isExpressionStatement()) return null
+  const expression = stmt.get('expression')
+  return resolveContextProviderExpression(ctx, expression as NodePath<t.Expression>)
+}
 
 // 動きゾーン(render後)の function宣言テーブル。ハンドラの識別子参照を
 // この表で解決する(ADR-0008)。render の1パス中だけ有効な一時状態なので
@@ -665,6 +710,18 @@ function renderElement(
       }
       const exprPath = child.get('expression') as NodePath<t.Expression | t.JSXEmptyExpression>
       if (exprPath.isJSXEmptyExpression()) continue
+      const contextProvider = resolveContextProviderExpression(
+        ctx,
+        exprPath as NodePath<t.Expression>,
+      )
+      if (contextProvider) {
+        if (!insideUnit) {
+          throw new Error(
+            'compile: provideContext() in JSX must be inside a structural unit (scope limit)',
+          )
+        }
+        continue
+      }
       const mountHook = resolveOnMountExpression(exprPath as NodePath<t.Expression>)
       if (mountHook) {
         if (!opts.localMountHooks) {
@@ -714,7 +771,10 @@ function renderElement(
 
   const hasDirectExpr = children.some((c) => {
     if (!c.isJSXExpressionContainer() || c.get('expression').isJSXEmptyExpression()) return false
-    return !resolveOnMountExpression(c.get('expression') as NodePath<t.Expression>)
+    const expression = c.get('expression') as NodePath<t.Expression>
+    return (
+      !resolveOnMountExpression(expression) && !resolveContextProviderExpression(ctx, expression)
+    )
   })
 
   if (!hasDirectExpr) {
@@ -730,6 +790,18 @@ function renderElement(
       else if (child.isJSXExpressionContainer() && child.get('expression').isJSXEmptyExpression())
         continue
       else if (child.isJSXExpressionContainer()) {
+        const contextProvider = resolveContextProviderExpression(
+          ctx,
+          child.get('expression') as NodePath<t.Expression>,
+        )
+        if (contextProvider) {
+          if (!insideUnit) {
+            throw new Error(
+              'compile: provideContext() in JSX must be inside a structural unit (scope limit)',
+            )
+          }
+          continue
+        }
         const mountHook = resolveOnMountExpression(
           child.get('expression') as NodePath<t.Expression>,
         )
@@ -763,7 +835,9 @@ function renderElement(
   for (const child of children) {
     if (child.isJSXText()) runPaths.push(child)
     else if (child.isJSXExpressionContainer()) {
-      const mountHook = resolveOnMountExpression(child.get('expression') as NodePath<t.Expression>)
+      const expression = child.get('expression') as NodePath<t.Expression>
+      if (resolveContextProviderExpression(ctx, expression)) continue
+      const mountHook = resolveOnMountExpression(expression)
       if (mountHook) {
         if (!opts.localMountHooks) {
           throw new Error(
@@ -871,11 +945,15 @@ function classifyStructuralExpr(
 // のブロック本体も受理する(インライン化パスがコンポーネントの変数ゾーンを
 // ここへ展開するために使う形、design.md D5)。ブロック内で許すのは
 // signal()/derived()宣言と最終returnのみ。
-function resolveUnitBodySource(bodyPath: NodePath<t.BlockStatement | t.Expression>): {
+function resolveUnitBodySource(
+  ctx: CompilerState,
+  bodyPath: NodePath<t.BlockStatement | t.Expression>,
+): {
   jsxPath: NodePath<t.JSXElement>
   localDeclStmts: NodePath<t.VariableDeclaration>[]
   localMovementFns: HandlerFns
   localMountHooks: MountHooks
+  localContextProviders: ContextProvider[]
 } {
   if (bodyPath.isJSXElement()) {
     return {
@@ -883,6 +961,7 @@ function resolveUnitBodySource(bodyPath: NodePath<t.BlockStatement | t.Expressio
       localDeclStmts: [],
       localMovementFns: new Map(),
       localMountHooks: [],
+      localContextProviders: [],
     }
   }
   if (!bodyPath.isBlockStatement()) {
@@ -902,7 +981,13 @@ function resolveUnitBodySource(bodyPath: NodePath<t.BlockStatement | t.Expressio
   const localDeclStmts: NodePath<t.VariableDeclaration>[] = []
   const localMovementFns: HandlerFns = new Map()
   const localMountHooks: MountHooks = []
+  const localContextProviders: ContextProvider[] = []
   for (const s of stmts.slice(0, -1)) {
+    const contextProvider = resolveContextProvider(ctx, s)
+    if (contextProvider) {
+      localContextProviders.push(contextProvider)
+      continue
+    }
     const mountHook = resolveOnMountHook(s)
     if (mountHook) {
       localMountHooks.push(mountHook)
@@ -929,6 +1014,7 @@ function resolveUnitBodySource(bodyPath: NodePath<t.BlockStatement | t.Expressio
     localDeclStmts,
     localMovementFns,
     localMountHooks,
+    localContextProviders,
   }
 }
 
@@ -942,6 +1028,7 @@ function renderStructuralUnitBody(
   ancestorLocalDeclIds: Set<DeclId> = new Set(),
   localMovementFns: HandlerFns = new Map(),
   localMountHooks: MountHooks = [],
+  localContextProviders: ContextProvider[] = [],
 ): { body: StructuralUnitBody; nestedDeps: Set<DeclId> } {
   // same-file-component-composition (design.md D5/D6): このユニット直下の
   // ローカルsignal/derived宣言を先に処理する。以後のテキスト/属性の
@@ -960,9 +1047,11 @@ function renderStructuralUnitBody(
   const unitHandlerFns: HandlerFns = new Map(handlerFns)
   for (const [name, fn] of localMovementFns) unitHandlerFns.set(name, fn)
   const previousMovementFns = ctx.movementFns
+  const previousContextValues = ctx.contextValues
   ctx.movementFns = unitHandlerFns
 
   const collectedMountHooks = [...localMountHooks]
+  const localMounts: MountDecl[] = []
 
   const markersBefore = ctx.markers.length
   const handlersBefore = ctx.handlers.length
@@ -970,14 +1059,41 @@ function renderStructuralUnitBody(
   const actionsBefore = ctx.actions.length
   let template = ''
   try {
+    ctx.contextValues = new Map(previousContextValues)
+    const inlineContextProviders = (elementPath.get('children') as NodePath<JSXChild>[])
+      .map((child) => {
+        if (!child.isJSXExpressionContainer()) return null
+        const expression = child.get('expression') as NodePath<t.Expression | t.JSXEmptyExpression>
+        if (expression.isJSXEmptyExpression()) return null
+        return resolveContextProviderExpression(ctx, expression as NodePath<t.Expression>)
+      })
+      .filter((provider): provider is ContextProvider => provider != null)
+    for (const provider of [...localContextProviders, ...inlineContextProviders]) {
+      const value = analyzeExpr(ctx, provider.valuePath, instanceId)
+      ctx.contextValues.set(provider.key, {
+        rendered: value.rendered,
+        sourceRendered: value.sourceRendered,
+        deps: value.deps,
+      } satisfies ContextValue)
+    }
     template = renderElement(ctx, elementPath, instanceId, unitHandlerFns, {
       skipAttrName,
       insideUnit: true,
       localDeclIds: accessibleLocalDeclIds,
       localMountHooks: collectedMountHooks,
     })
+    for (const callbackPath of collectedMountHooks) {
+      const analysis = analyzeMountBody(ctx, callbackPath, instanceId)
+      localMounts.push({
+        finalizeBody: analysis.finalizeBody,
+        finalizeCleanup: analysis.finalizeCleanup,
+        writeDeclIds: analysis.writeDeclIds,
+        directCollectionWriteDeclIds: analysis.directCollectionWriteDeclIds,
+      })
+    }
   } finally {
     ctx.movementFns = previousMovementFns
+    ctx.contextValues = previousContextValues
   }
   const localMarkers = ctx.markers.splice(markersBefore) as (
     | TextMarker
@@ -986,15 +1102,6 @@ function renderStructuralUnitBody(
   )[]
   const localHandlers = ctx.handlers.splice(handlersBefore)
   const localActions = ctx.actions.splice(actionsBefore) as ActionDecl[]
-  const localMounts = collectedMountHooks.map((callbackPath) => {
-    const analysis = analyzeMountBody(ctx, callbackPath, instanceId)
-    return {
-      finalizeBody: analysis.finalizeBody,
-      finalizeCleanup: analysis.finalizeCleanup,
-      writeDeclIds: analysis.writeDeclIds,
-      directCollectionWriteDeclIds: analysis.directCollectionWriteDeclIds,
-    } satisfies MountDecl
-  })
   // ADR-0012 決定5: ユニット内の属性式が追跡signalを参照するのは、依存先が
   // 現在または祖先のローカルsignalである場合に限り許可する。ルートsignalや
   // 別の構造単位のローカルsignalは、字句的な所有範囲の外なので拒否する。
@@ -1088,7 +1195,8 @@ function renderListUnit(
     localDeclStmts,
     localMovementFns,
     localMountHooks,
-  } = resolveUnitBodySource(arrowPath.get('body'))
+    localContextProviders,
+  } = resolveUnitBodySource(ctx, arrowPath.get('body'))
 
   const keyAttrPath = itemPath
     .get('openingElement')
@@ -1122,6 +1230,7 @@ function renderListUnit(
     ancestorLocalDeclIds,
     localMovementFns,
     localMountHooks,
+    localContextProviders,
   )
   // M5.5: ネストしたユニットの依存はこのリストマーカーの依存に合流させる。
   // 該当 signal の update_* がリストの keyed diff を再実行し、既存アイテムの
@@ -1344,6 +1453,16 @@ export function compileComponent(
   // 変数ゾーン(render前): signal()/derived() の const 宣言のみ。function宣言
   // など他の文は processDeclarationStatement の scope limit が拒否する。
   for (const stmt of varZoneStmts) {
+    const contextProvider = resolveContextProvider(ctx, stmt)
+    if (contextProvider) {
+      const value = analyzeExpr(ctx, contextProvider.valuePath, instanceId)
+      ctx.contextValues.set(contextProvider.key, {
+        rendered: value.rendered,
+        sourceRendered: value.sourceRendered,
+        deps: value.deps,
+      } satisfies ContextValue)
+      continue
+    }
     processDeclarationStatement(ctx, stmt, instanceId, out)
   }
 

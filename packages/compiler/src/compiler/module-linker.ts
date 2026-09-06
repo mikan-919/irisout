@@ -292,6 +292,18 @@ function findModuleStateCall(node: t.Node): string | null {
   return stateCall
 }
 
+function isContextDeclarator(declarator: t.VariableDeclarator): boolean {
+  const init = declarator.init
+  return (
+    declarator.id.type === 'Identifier' &&
+    init?.type === 'CallExpression' &&
+    init.callee.type === 'Identifier' &&
+    init.callee.name === 'createContext' &&
+    init.arguments.length === 1 &&
+    init.arguments[0]?.type !== 'SpreadElement'
+  )
+}
+
 function resolveModule(fromFile: string, specifier: string): string {
   if (!specifier.startsWith('./') && !specifier.startsWith('../')) {
     throw compileError(`non-relative import "${specifier}" is not supported yet`)
@@ -477,8 +489,14 @@ export function linkProject(entryPath: string): LinkedProject {
         supportStatements.push(generate(statement, { comments: false }).code)
         if (statement.id) supportNames.add(statement.id.name)
       } else if (statement.type === 'VariableDeclaration') {
-        supportStatements.push(generate(statement, { comments: false }).code)
-        for (const declarator of statement.declarations) {
+        const supportDeclarators = statement.declarations.filter(
+          (declarator) => !isContextDeclarator(declarator),
+        )
+        if (supportDeclarators.length > 0) {
+          const supportStatement = t.variableDeclaration(statement.kind, supportDeclarators)
+          supportStatements.push(generate(supportStatement, { comments: false }).code)
+        }
+        for (const declarator of supportDeclarators) {
           if (declarator.id.type === 'Identifier') supportNames.add(declarator.id.name)
         }
       }
