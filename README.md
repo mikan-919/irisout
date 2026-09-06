@@ -114,6 +114,7 @@ Worker入口を読み込みます。配信先に接頭辞がある場合は`IRIS
 - `signal`と`derived`
 - `collection`によるキー付きリスト
 - テキストと属性の更新
+- `bind:value`による文字列signalと入力欄の双方向結合
 - イベント処理
 - キー付きリストと条件分岐
 - 同一ファイルと相対モジュールのコンポーネント合成
@@ -124,6 +125,10 @@ Worker入口を読み込みます。配信先に接頭辞がある場合は`IRIS
 `compileProject()`では、直接のmodule共有`signal`、`derived`、`collection`を受理します。
 共有collectionの配列は複数のcomponent instanceで共有され、ListのDOM状態はinstanceごとに
 保持されます。module共有stateのrequest単位SSR分離と永続化は対応範囲に含めません。
+
+`bind:value={text}`は`input`、`textarea`、`select`の`value` propertyと文字列signalを
+結びます。入力イベントの直接listenerがsignalへ書き戻し、通常の更新経路で表示を更新します。
+対象はsignal識別子に限り、`value`または`onInput`との併用は拒否します(ADR-0040)。
 
 ルートコンポーネントは1個、コンパイラが解析するモジュールは相対`.js`と`.jsx`、
 子要素の受け渡しは未対応です。外部moduleとViteの資源importは生成moduleへ渡します。

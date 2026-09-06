@@ -6,7 +6,7 @@
 // 表す型ではなく、TS の型検査を素通りさせるためのプレースホルダー型
 // (TS公式の「カスタムJSX」パターン、React非依存)。
 //
-// 属性名は意図的に緩くしている: 共通属性(key/use/onXxxハンドラ/children)
+// 属性名は意図的に緩くしている: 共通属性(key/use/bind:value/onXxxハンドラ/children)
 // のみ明示的に型付けし、それ以外は string キーの index signature で
 // 受ける。コンパイラ自身が host 属性名をホワイトリスト化していない
 // (M4静的host属性・ADR-0012動的host属性はchecked/valueの特別扱い以外
@@ -40,6 +40,11 @@ type IrisAnyEventHandler<El extends Element> =
   | IrisEventHandler<KeyboardEvent, El>
   | IrisEventHandler<MouseEvent, El>
 
+type IrisSignal<T> = {
+  (): T
+  (next: T): T
+}
+
 type IrisKnownEventAttributes<El extends Element> = {
   onBlur?: IrisEventHandler<FocusEvent, El>
   onChange?: IrisEventHandler<Event, El>
@@ -58,6 +63,9 @@ type IrisUseAction<El extends Element> = (el: El) => void | IrisUseActionResult
 
 type IrisCommonAttributes<El extends Element> = IrisKnownEventAttributes<El> & {
   use?: IrisUseAction<El>
+  // `bind:value`は文字列signalを値の読み取り・入力イベントからの書き戻しへ
+  // 接続する。compiler側の要素範囲・識別子制約はこの型宣言とは別に検査する。
+  'bind:value'?: IrisSignal<string>
   children?: unknown
   // onXxx パターンの未知のイベント処理属性も関数に限って受理する。
   [handler: `on${string}`]: IrisAnyEventHandler<El> | undefined
@@ -71,7 +79,7 @@ interface IrisCollection<T, K> {
   update(key: K, updater: (current: T) => T): T
 }
 
-declare function signal<T>(initial: T): (...args: [] | [T]) => T
+declare function signal<T>(initial: T): IrisSignal<T>
 declare function collection<T, K>(
   initial: readonly T[],
   keyOf: (item: T) => K,

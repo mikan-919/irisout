@@ -247,6 +247,11 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
 あわせて、構造ユニットと同じ親要素のハンドラが黙って捨てられる計画外バグを
 発見・修正(親要素専用のマーカー id へ配線)。
 
+2026-09-06: `bind:value`を実装(ADR-0040、change `bind-value`)。`input`、
+`textarea`、`select`のvalue propertyと文字列signalを接続し、入力イベントから
+ローカルsignalまたはmodule共有signalへ書き戻す。root、構造unit、複数module
+instanceで確認し、`value`/`onInput`との併用とsignal以外の対象はscope limitで拒否する。
+
 2026-07-19: ハンドラ/action 本体からの動きゾーン関数呼び出しの追跡を実装
 (ADR-0013、change `cross-function-handler-writes`、ROADMAP 論点0 解消)。
 `onClick={() => toggle(todo.id)}` のような引数つき補助関数呼び出しで
@@ -279,6 +284,7 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
 | Heatmap 6 | 診断、型定義、別アプリ導入、自動検査、配布形式(ADR-0036)                       | **DONE** | 元ファイル・行・列付き診断、`@irisout/compiler/jsx`、別workspaceアプリのbuild試験、CI、Apache-2.0を追加                                                                                                                          |
 | Shared 1  | module共有derivedの受理と依存更新(ADR-0037)                                    | **DONE** | 共有signalの通知経路、derived依存グラフ、未使用出力の除外、読み取り専用検査を追加                                                                                                                                                |
 | Shared 2  | module共有collectionの受理とList更新(ADR-0039)                                 | **DONE** | 共有accessor、key selector、instance購読、List key照合、未使用出力の除外を追加                                                                                                                                                   |
+| Input     | `bind:value`による入力値とsignalの双方向結合(ADR-0040)                         | **DONE** | `input`/`textarea`/`select`、root・構造unit・module共有signal、型定義と利用者向け例を追加                                                                                                                                        |
 
 ## 既知の制約(現時点のcodegenの限界)
 
@@ -342,6 +348,14 @@ module共有collectionの更新は各instanceの既存`update_*()`からListを�
 ではinstance専有collectionのitem直接更新経路を使わない。未使用のcollectionと、その依存だけの
 共有stateは生成物へ出力しない。永続化とrequest単位SSR分離は別契約である。
 
+## 追加実装結果(2026-09-06・`bind:value`、ADR-0040)
+
+`bind:value={text}`を`input`、`textarea`、`select`のvalue propertyと文字列signalへ
+分解する。root要素では初期HTMLへ値を焼き込み、構造unitではfactoryがpropertyを設定する。
+入力イベントはローカルsignalへの代入またはmodule共有signal accessorの呼び出しとなり、
+既存の`update_*()`とinstance購読を使う。`bind:value`の値はsignal識別子に限り、
+`value`と`onInput`の併用、対象外要素、`name()`やメンバー式は拒否する。
+
 ## 現在地(2026-09-06・client buildとSSR境界、ADR-0038)
 
 `compileProject()`とVite連携は、ビルド時に一度生成した静的HTMLをブラウザでmountまたはhydrate
@@ -391,6 +405,8 @@ Apache License 2.0で、ルートの`LICENSE`と各配布対象packageの`licens
   `setAttribute`)。リスト・条件分岐内の属性式がルートsignal/derivedを参照する
   場合は、依存を親markerへ持ち上げて所有者factoryのupdateへ接続する。同一unitまたは
   祖先unitで宣言されたlocal signalへの依存も接続する(UNRESOLVED-04解消)。
+- `bind:value`(ADR-0040)は対象要素のvalue propertyと文字列signalを接続し、
+  inputイベントからsignalへ書き戻す。
 - **リスト(`.map()`)・条件分岐(三項/`&&`)は再帰的に実装済み**
   (change `recursive-structural-authoring`)。構造unitは任意の深さでfactoryへ
   展開され、各instanceがDOM範囲、local state、binding cache、Listのkeyed Map、

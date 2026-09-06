@@ -112,8 +112,7 @@ irisoutの到達基準は、入力、解析処理の呼び出し、状態管理�
 
 ### 今回は先に広げない範囲
 
-childrenによる共通パネル、SVG、双方向入力の省略記法は、
-代表アプリで必要になった例から再検討する。PDF抽出、サーバーでの要求ごとのHTML生成、
+childrenによる共通パネル、SVGは、代表アプリで必要になった例から再検討する。PDF抽出、サーバーでの要求ごとのHTML生成、
 画面遷移の基盤、汎用の非同期実行基盤、学習済みモデルの導入は初期版の必須条件にしない。
 注: SVGは図形を要素として記述する形式であり、初期版の地図はHTML要素で構成できる。
 SSRの現行境界はADR-0038で定める。現在はビルド時に静的HTMLを生成してブラウザでhydrateする。
@@ -303,9 +302,10 @@ namespace/side-effect/dynamic import、re-export、循環依存は`compile:`エ�
   `const name = collection(initial, keyOf)`を`compileProject`のmodule共有stateとして実装済み。
   参照された生成物だけが出力され、signal/collectionがinstance購読を持つ。collectionのList
   DOM状態はinstanceごとに保持する。永続化、request単位SSR分離、汎用storeは対象外。
-- **`bind:value`的な双方向バインディング糖衣**: ADR-0012は一方向の
-  property反映のみを規定しており、双方向バインディングは
-  value属性+`onInput`ハンドラの手書き配線が必要(手書き相当のまま)。
+- **`bind:value`的な双方向バインディング糖衣**: **実装済み(ADR-0040)**。
+  `input`、`textarea`、`select`のvalue propertyと文字列signalを接続し、
+  入力イベントからsignalへ書き戻す。対象はsignal識別子、value属性、onInputとの
+  併用はscope limitで検査する。
 
 以下は「基本セットに含めるかどうか自体が未確定」な発展機能。
 CONCEPT.v3.mdに記述が無く、in/outの判断すら未着手。request単位のSSRはADR-0038で現行版の
@@ -425,13 +425,15 @@ transition/animation、portal、error boundary、async/resource
     3. ~~**module共有collection**~~ — **完了**(ADR-0039)。collection accessorとkey selectorを
        module scopeへ一度だけ出力し、各instanceのList更新経路へ同期通知する。List DOM状態は
        instanceごとに保持し、永続化とrequest単位SSR分離は別契約へ分ける。
+    4. ~~**`bind:value`**~~ — **完了**(ADR-0040)。文字列signalと入力欄のvalue propertyを
+       inputイベントへ接続し、root・構造unit・module共有signalを同じ更新経路で扱う。
 
 ## 参考資料
 
 - `STATUS.md` — 現在地・マイルストーン進捗・既知の制約
 - `CONCEPT.v3.md` — 現在のプロダクトコンセプト
 - `CONCEPT.v2.md` — 旧コンセプト(履歴)
-- `docs/adr/0001`〜`0039` — 決定済みの設計判断
+- `docs/adr/0001`〜`0040` — 決定済みの設計判断
 - `session/000_ts-rewrite-kickoff-and-m1.md` — 書き直しキックオフの全経緯、
   quixとの比較
 - `openspec/specs/` — 実装対象の受入条件の正本

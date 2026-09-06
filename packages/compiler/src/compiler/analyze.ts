@@ -34,7 +34,7 @@ export interface AnalyzeResult {
   sourceRendered: string
 }
 
-function resolveDeclId(
+export function resolveDeclId(
   ctx: CompilerState,
   idPath: NodePath<t.Identifier>,
   instanceId: number,
