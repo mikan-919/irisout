@@ -558,12 +558,23 @@ function createValueBindingHandler(ctx: CompilerState, targetId: DeclId): Handle
   }
 }
 
+function isBindValueAttribute(attrName: t.JSXAttribute['name']): boolean {
+  return (
+    attrName.type === 'JSXNamespacedName' &&
+    attrName.namespace.type === 'JSXIdentifier' &&
+    attrName.namespace.name === 'bind' &&
+    attrName.name.type === 'JSXIdentifier' &&
+    attrName.name.name === 'value'
+  )
+}
+
 function collectAttrs(
   ctx: CompilerState,
   elementPath: NodePath<t.JSXElement>,
   instanceId: number,
   handlerFns: HandlerFns,
   skipAttrName?: string,
+  svgElement = false,
 ): {
   handlerAttrs: HandlerAttr[]
   staticAttrs: StaticAttr[]
@@ -590,13 +601,25 @@ function collectAttrs(
       continue
     }
     const valueNode = attr.node.value
-    const isBindValue =
-      attrName.type === 'JSXNamespacedName' &&
-      attrName.namespace.type === 'JSXIdentifier' &&
-      attrName.namespace.name === 'bind' &&
-      attrName.name.type === 'JSXIdentifier' &&
-      attrName.name.name === 'value'
-    if (isBindValue) {
+    if (attrName.type === 'JSXNamespacedName' && !isBindValueAttribute(attrName)) {
+      const namespace = attrName.namespace.name
+      if (!svgElement || !['xlink', 'xml', 'xmlns'].includes(namespace)) {
+        throw new Error(
+          'compile: SVG namespace attributes are only supported on SVG elements (scope limit)',
+        )
+      }
+      if (valueNode?.type !== 'StringLiteral') {
+        throw new Error(
+          `compile: SVG namespace attribute "${namespace}:${attrName.name.name}" must have a static string value (scope limit)`,
+        )
+      }
+      staticAttrs.push({
+        name: `${namespace}:${attrName.name.name}`,
+        value: valueNode.value,
+      })
+      continue
+    }
+    if (isBindValueAttribute(attrName)) {
       if (valueBindings.length > 0) {
         throw new Error(
           'compile: an element can only have one `bind:value` attribute (scope limit)',
@@ -742,6 +765,8 @@ interface RenderElementOpts {
   localMountHooks?: MountHooks
   /** 構造unit factoryが所有する`effect` callbackの収集先。 */
   localEffectHooks?: EffectHooks
+  /** 親要素から受け継いだSVG名前空間。foreignObjectの子では解除する。 */
+  inSvgNamespace?: boolean
 }
 
 function renderElement(
@@ -756,6 +781,8 @@ function renderElement(
     throw new Error('compile: unsupported JSX tag form (scope limit)')
   }
   const tagName = openingName.name
+  const svgElement = opts.inSvgNamespace === true || tagName === 'svg'
+  const childInSvgNamespace = svgElement && tagName !== 'foreignObject'
 
   if (/^[A-Z]/.test(tagName)) {
     throw new Error(
@@ -768,6 +795,7 @@ function renderElement(
     instanceId,
     handlerFns,
     opts.skipAttrName,
+    svgElement,
   )
   const insideUnit = opts.insideUnit ?? false
   if (valueBindings.length > 0 && !['input', 'select', 'textarea'].includes(tagName)) {
@@ -853,6 +881,7 @@ function renderElement(
           localDeclIds: opts.localDeclIds,
           localMountHooks: opts.localMountHooks,
           localEffectHooks: opts.localEffectHooks,
+          inSvgNamespace: childInSvgNamespace,
         })
         continue
       }
@@ -905,8 +934,16 @@ function renderElement(
               instanceId,
               handlerFns,
               opts.localDeclIds,
+              childInSvgNamespace,
             )
-          : renderConditionalUnit(ctx, exprPath, instanceId, handlerFns, opts.localDeclIds)
+          : renderConditionalUnit(
+              ctx,
+              exprPath,
+              instanceId,
+              handlerFns,
+              opts.localDeclIds,
+              childInSvgNamespace,
+            )
       // Structural units are represented by comments in the initial HTML. The
       // runtime discovers the matching pair during mount and hydrate and all
       // subsequent operations are confined to the nodes between these comments.
@@ -948,6 +985,7 @@ function renderElement(
           localDeclIds: opts.localDeclIds,
           localMountHooks: opts.localMountHooks,
           localEffectHooks: opts.localEffectHooks,
+          inSvgNamespace: childInSvgNamespace,
         })
       else if (child.isJSXExpressionContainer() && child.get('expression').isJSXEmptyExpression())
         continue
@@ -1232,6 +1270,7 @@ function renderStructuralUnitBody(
   localMountHooks: MountHooks = [],
   localEffectHooks: EffectHooks = [],
   localContextProviders: ContextProvider[] = [],
+  inSvgNamespace = false,
 ): { body: StructuralUnitBody; nestedDeps: Set<DeclId> } {
   // same-file-component-composition (design.md D5/D6): このユニット直下の
   // ローカルsignal/derived宣言を先に処理する。以後のテキスト/属性の
@@ -1284,6 +1323,7 @@ function renderStructuralUnitBody(
     template = renderElement(ctx, elementPath, instanceId, unitHandlerFns, {
       skipAttrName,
       insideUnit: true,
+      inSvgNamespace,
       localDeclIds: accessibleLocalDeclIds,
       localMountHooks: collectedMountHooks,
       localEffectHooks: collectedEffectHooks,
@@ -1410,6 +1450,7 @@ function renderListUnit(
   instanceId: number,
   handlerFns: HandlerFns,
   ancestorLocalDeclIds: Set<DeclId> = new Set(),
+  inSvgNamespace = false,
 ): MarkerId {
   const callee = exprPath.get('callee') as NodePath<t.MemberExpression>
   const arrayObjPath = callee.get('object') as NodePath<t.Expression>
@@ -1469,6 +1510,7 @@ function renderListUnit(
     localMountHooks,
     localEffectHooks,
     localContextProviders,
+    inSvgNamespace,
   )
   // M5.5: ネストしたユニットの依存はこのリストマーカーの依存に合流させる。
   // 該当 signal の update_* がリストの keyed diff を再実行し、既存アイテムの
@@ -1498,6 +1540,7 @@ function renderConditionalUnit(
   instanceId: number,
   handlerFns: HandlerFns,
   ancestorLocalDeclIds: Set<DeclId> = new Set(),
+  inSvgNamespace = false,
 ): MarkerId {
   let testPath: NodePath<t.Expression>
   let branchPaths: (NodePath<t.Node> | null)[]
@@ -1544,6 +1587,7 @@ function renderConditionalUnit(
       source.localMountHooks,
       source.localEffectHooks,
       source.localContextProviders,
+      inSvgNamespace,
     )
     // M5.5: ネストしたユニットの依存を条件分岐マーカーの依存へ合流させる
     // (選択が変わらなくても handle.update() で内側を更新するため)。

@@ -112,9 +112,9 @@ irisoutの到達基準は、入力、解析処理の呼び出し、状態管理�
 
 ### 今回は先に広げない範囲
 
-SVGは、代表アプリで必要になった例から再検討する。PDF抽出、サーバーでの要求ごとのHTML生成、
+PDF抽出、サーバーでの要求ごとのHTML生成、
 画面遷移の基盤、汎用の非同期実行基盤、学習済みモデルの導入は初期版の必須条件にしない。
-注: SVGは図形を要素として記述する形式であり、初期版の地図はHTML要素で構成できる。
+SVG要素はADR-0042で実装済みだが、初期版の地図はHTML要素でも構成できる。
 SSRの現行境界はADR-0038で定める。現在はビルド時に静的HTMLを生成してブラウザでhydrateする。
 
 ## 設計判断待ち(次のchangeを書く前に決めること)
@@ -309,6 +309,9 @@ namespace/side-effect/dynamic import、re-export、循環依存は`compile:`エ�
 - **component children slot**: **実装済み(ADR-0041)**。`children`をshorthand分割代入
   した同一ファイルcomponentへ、呼び出し側の子ノードを直接のJSX子位置へコンパイル時に
   展開する。実行時slot runtimeは生成せず、既存render-treeの制約は維持する。
+- **SVG authoring**: **実装済み(ADR-0042)**。SVG要素を既存のHTML parserと直接DOM更新へ
+  渡し、通常の動的属性を`setAttribute`で更新する。静的namespace属性と`foreignObject`
+  のnamespaceを扱い、動的namespace属性と属性名変換は対象外とする。
 
 以下は「基本セットに含めるかどうか自体が未確定」な発展機能。
 CONCEPT.v3.mdに記述が無く、in/outの判断すら未着手。request単位のSSRはADR-0038で現行版の
@@ -433,13 +436,16 @@ transition/animation、portal、error boundary、async/resource
     5. ~~**component children slot**~~ — **完了**(ADR-0041)。同一ファイルcomponentの
        `children` propへ呼び出し側の子ノードをコンパイル時に展開し、共通パネルの
        authoringを受理する。fragment、spread child、直接子位置以外の参照は対象外。
+    6. ~~**SVG authoring**~~ — **完了**(ADR-0042)。SVG要素、静的namespace属性、
+       `foreignObject`、通常の動的属性更新を既存経路へ接続した。動的namespace属性と
+       SVG専用property変換は対象外。
 
 ## 参考資料
 
 - `STATUS.md` — 現在地・マイルストーン進捗・既知の制約
 - `CONCEPT.v3.md` — 現在のプロダクトコンセプト
 - `CONCEPT.v2.md` — 旧コンセプト(履歴)
-- `docs/adr/0001`〜`0040` — 決定済みの設計判断
+- `docs/adr/0001`〜`0042` — 決定済みの設計判断
 - `session/000_ts-rewrite-kickoff-and-m1.md` — 書き直しキックオフの全経緯、
   quixとの比較
 - `openspec/specs/` — 実装対象の受入条件の正本

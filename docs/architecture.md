@@ -40,6 +40,7 @@ compileComponent()           ── 4. render ツリーを深さ優先で走査(
   │    ・JSX 式 → マーカー発行 + 依存(deps)収集(packages/compiler/src/compiler/analyze.ts)
   │    ・AST変換済みの式 → ASTコード生成、未変更の式 → 位置編集
   │    ・`bind:value` → value propertyとinput eventの既存更新経路へ接続(ADR-0040)
+  │    ・SVG → 名前空間を保った初期HTML、通常属性のsetAttribute更新、静的名前空間属性(ADR-0042)
   │    ・onXxx ハンドラ → 書き込み先 signal(writeDeclIds)収集
   ▼
 new Function() でビルド時実行 ── 5. 計装済みスクリプトを Node 上で1回実行し、

@@ -76,6 +76,16 @@ render-tree解析へ渡し、実行時props objectやslot runtimeは生成しな
 `apps/examples/notes.jsx`のnote-list枠をchildren slotへ置き換え、root・複数子要素・
 動的式・handler・子componentの実DOM試験を追加した。
 
+## 現在地(2026-09-06・SVG authoring)
+
+SVG要素を既存のHTML文字列生成、hydrate、直接DOM更新へ接続した(ADR-0042、change
+`svg-authoring`)。`svg`以下の要素へSVG namespaceを引き継ぎ、`foreignObject`の子は
+HTML namespaceへ戻す。通常の動的属性は`setAttribute`で更新し、`xlink:*`、`xml:*`、
+`xmlns:*`は静的文字列属性として出力する。専用runtimeとSVG property変換表は生成しない。
+
+SVG intrinsic要素と静的名前空間属性を`@irisout/compiler/jsx`へ追加した。動的な名前空間
+属性、SVG外の名前空間属性、属性名の自動変換はscope limitまたは対象外とする。
+
 ## 現在地(2026-09-05・構造ユニットのDOM範囲所有)
 
 List/conditionalは親要素を更新対象にせず、初期HTMLへ開始・終了コメントアンカーを
@@ -288,6 +298,7 @@ instanceで確認し、`value`/`onInput`との併用とsignal以外の対象はs
 | `use=`    | 要素へのaction接続(ADR-0011)                                                   | **DONE** | `use-action-impl` + `structural-unit-use-actions` + ADR-0022。top-level、list item、conditional branchをfactory単位で初期化・更新・破棄。関数updateと`{ update?, destroy? }`、component `unmount()`を実装                        |
 | M6        | 全マイルストーン横断のno-wrapper検証                                           | **DONE** | change `m6-no-wrapper-verification`。全機能同居フィクスチャで no-wrapper・import面・実DOM動作を固定(`test/no-wrapper.test.ts`)。サイズ予算係数はADR-0022のlifecycle固定費を含む5.5x(実測5.33x)。締め直しはminify最適化時に再検討 |
 | 合成      | 同一ファイル内の複数コンポーネント合成(ADR-0014/0041)                          | **DONE** | change `same-file-component-composition` + `component-children-slot`。コンパイル時ASTインライン化、root scope + list item、直接children slotを実装。再帰は未対応                                                                 |
+| SVG       | SVG要素、名前空間属性、foreignObject(ADR-0042)                                 | **DONE** | change `svg-authoring`。既存HTML parser・setAttribute経路、SVG intrinsic型、静的`xlink:*`/`xml:*`/`xmlns:*`を実装。動的namespace属性は対象外                                                                                     |
 | 分割      | 相対moduleの複数ファイル合成(ADR-0024)                                         | **DONE** | `compileProject(entryPath)`、AST bindingリンク、依存順、静的import検証、Vite fixtureを実装。外部module・dynamic import・cycle・re-exportは対象外                                                                                 |
 | Batch     | 同期スコープ内の共有marker更新(ADR-0020)                                       | **DONE** | 複数root write時だけ専用batchを生成。公開batch API・scheduler・collection構造操作は対象外。イベント配線はADR-0021でdirectを採用                                                                                                  |
 | Context   | instance単位context(ADR-0027)                                                  | **DONE** | `createContext`/`provideContext`/`useContext`を静的置換。root・list item・conditional branchの所有単位へ接続し、未使用時の生成物は増やさない                                                                                     |
@@ -420,6 +431,9 @@ Apache License 2.0で、ルートの`LICENSE`と各配布対象packageの`licens
   祖先unitで宣言されたlocal signalへの依存も接続する(UNRESOLVED-04解消)。
 - `bind:value`(ADR-0040)は対象要素のvalue propertyと文字列signalを接続し、
   inputイベントからsignalへ書き戻す。
+- SVG(ADR-0042)は`svg`以下の要素と`foreignObject`のnamespaceを維持し、通常の動的属性を
+  `setAttribute`で更新する。静的な`xlink:*`、`xml:*`、`xmlns:*`だけを受理し、動的namespace
+  属性とSVG専用property変換は対象外とする。
 - **リスト(`.map()`)・条件分岐(三項/`&&`)は再帰的に実装済み**
   (change `recursive-structural-authoring`)。構造unitは任意の深さでfactoryへ
   展開され、各instanceがDOM範囲、local state、binding cache、Listのkeyed Map、

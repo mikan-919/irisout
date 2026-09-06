@@ -122,6 +122,7 @@ Worker入口を読み込みます。配信先に接頭辞がある場合は`IRIS
 - `onMount`、`effect`、コンテキスト
 - コンポーネントのマウント、初期HTMLの引き継ぎ、破棄
 - `children` propによる同一ファイルcomponentの子JSX展開
+- SVG要素、静的なSVG名前空間属性、SVGの動的属性更新
 
 `compileProject()`では、直接のmodule共有`signal`、`derived`、`collection`を受理します。
 共有collectionの配列は複数のcomponent instanceで共有され、ListのDOM状態はinstanceごとに
@@ -130,6 +131,9 @@ Worker入口を読み込みます。配信先に接頭辞がある場合は`IRIS
 `bind:value={text}`は`input`、`textarea`、`select`の`value` propertyと文字列signalを
 結びます。入力イベントの直接listenerがsignalへ書き戻し、通常の更新経路で表示を更新します。
 対象はsignal識別子に限り、`value`または`onInput`との併用は拒否します(ADR-0040)。
+
+SVGは`svg`以下の要素を既存のJSXで記述できます。通常の動的属性は`setAttribute`で更新し、
+`xlink:*`、`xml:*`、`xmlns:*`の名前空間属性は静的文字列に限ります(ADR-0042)。
 
 ルートコンポーネントは1個、コンパイラが解析するモジュールは相対`.js`と`.jsx`です。
 同一ファイルcomponentの`children` propは、component本体のJSX要素の直接の子位置へ

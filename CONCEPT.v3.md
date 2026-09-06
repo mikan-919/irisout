@@ -56,6 +56,10 @@ component本体のJSX要素にある`{children}`へコンパイル時に展開�
 objectやslot runtimeは追加せず、展開後の子ノードを既存のrender-tree解析へ渡す。
 直接の子位置以外での`children`参照はscope limitとする(ADR-0041)。
 
+SVGは既存の初期HTMLと直接DOM更新の境界で扱う。`svg`以下の要素はブラウザの名前空間
+処理へ渡し、通常の動的属性は`setAttribute`で更新する。`xlink:*`などの名前空間属性は
+静的文字列に限り、SVG専用の実行時property表は追加しない(ADR-0042)。
+
 ---
 
 ## 直接 DOM 更新と更新粒度

@@ -23,7 +23,8 @@ handwritten 目標出力は `el.classList.toggle(...)` / `checkbox.checked = ...
 
 ### 1. 式コンテナ値の host 属性を「動的属性バインディング」として受理する
 
-属性名は `JSXIdentifier` のみ(namespaced・spread は引き続き拒否)。
+属性名は通常のhost要素では `JSXIdentifier` のみ(namespaced・spread は引き続き拒否)。
+SVG要素の静的な`xlink:*`、`xml:*`、`xmlns:*`はADR-0042で別に定める。
 `key` / `use` / `on[A-Z]...` は既存の別分類のまま。
 
 ### 2. attribute / property の使い分けは固定表で行う

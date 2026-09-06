@@ -73,6 +73,14 @@ type IrisCommonAttributes<El extends Element> = IrisKnownEventAttributes<El> & {
   [attr: string]: unknown
 }
 
+type IrisSvgAttributes<El extends SVGElement> = IrisCommonAttributes<El> & {
+  // 名前空間属性はSVGの初期HTMLで使う静的な参照に限る。動的な値は
+  // compiler側のscope limitで拒否する。
+  'xlink:href'?: string
+  'xml:space'?: string
+  'xmlns:xlink'?: string
+}
+
 interface IrisCollection<T, K> {
   (): readonly T[]
   (next: readonly T[]): readonly T[]
@@ -129,5 +137,9 @@ declare namespace JSX {
   }
   type IntrinsicElements = {
     [K in keyof HTMLElementTagNameMap]: IrisCommonAttributes<HTMLElementTagNameMap[K]>
+  } & {
+    [K in Exclude<keyof SVGElementTagNameMap, keyof HTMLElementTagNameMap>]: IrisSvgAttributes<
+      SVGElementTagNameMap[K]
+    >
   }
 }
