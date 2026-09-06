@@ -46,9 +46,12 @@ budgetを5.5xへ更新した。
 登録順の逆順で一度だけ実行する。初期化失敗時は登録済みcleanupを回収し、cleanup例外は
 残りの処理後に再送出する。
 
-構造unit内とinline化される子componentの`onMount`はscope limitで拒否する。`effect`、
-context、SSR、再mount、汎用lifecycle registryは未実装である。`onMount`を使わない生成物
-には専用変数・配線・runtime importを出力しない。
+構造unit内とinline化される子componentの`onMount`はscope limitで拒否する。ルートcomponent
+の`effect(() => void | (() => void))`はADR-0026で実装済みで、callback本体が読むroot
+signal/derivedの専用`update_*()`へ依存を接続し、再実行前とunmount時のcleanupをinstanceが
+所有する。追跡signalへの書き込みは再入を避けるため拒否する。context、SSR、再mount、
+汎用lifecycle registryは未実装である。`onMount`/`effect`を使わない生成物には専用変数・
+配線・runtime importを出力しない。
 
 ## 現在地(2026-09-05・構造ユニットのDOM範囲所有)
 
@@ -329,7 +332,8 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
     代表fixtureで判断する。
   - 1要素への複数actionは未実装。`use`属性は一要素一つのままとする。
   - ルートcomponentの`onMount`(ADR-0025)は実装済み。構造unit内・inline化される
-    子componentの`onMount`、汎用`onDestroy`/effect runtime、contextは未実装。
+    子componentの`onMount`、構造unit内の`onMount`、contextは未実装。ルートcomponentの
+    `effect`はADR-0026で実装済みだが、構造unit・子componentのeffectは対象外。
     component instanceのcleanupとunit action lifecycleは解消済み。
   - action本体のconcise arrow(単一式)にネストしたリスナー等がある場合、
     その内部の書き込みに対する`update_*`挿入位置は本体全体の実行時点に

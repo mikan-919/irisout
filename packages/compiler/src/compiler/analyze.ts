@@ -1151,6 +1151,8 @@ function analyzeFunctionBodyScope(
 
 export interface ActionBodyAnalysis {
   finalizeBody: (resolveUpdateCall: ResolveUpdateCall) => string
+  /** action/effect本体が直接読み取る宣言。返り値cleanupのreadは含めない。 */
+  readDeclIds: Set<DeclId>
   /** 返り値(function または { update?, destroy? })。無ければ null。 */
   result: {
     finalize: (resolveUpdateCall: ResolveUpdateCall) => string
@@ -1312,6 +1314,7 @@ export function analyzeActionBody(
     ) {
       return {
         finalizeBody: () => '',
+        readDeclIds: new Set<DeclId>(),
         result: analyzeActionResultExpression(ctx, body, instanceId),
         writeDeclIds: new Set<DeclId>(),
         directCollectionWriteDeclIds: new Set<DeclId>(),
@@ -1320,6 +1323,7 @@ export function analyzeActionBody(
     const scope = analyzeActionExprScope(ctx, body, instanceId)
     return {
       finalizeBody: scope.finalize,
+      readDeclIds: scope.readDeclIds,
       result: null,
       writeDeclIds: scope.writeDeclIds,
       directCollectionWriteDeclIds: scope.directCollectionWriteDeclIds,
@@ -1341,6 +1345,7 @@ export function analyzeActionBody(
       ? analyzeActionStatements(ctx, bodyStmts, instanceId, false)
       : {
           finalize: () => '',
+          readDeclIds: new Set<DeclId>(),
           writeDeclIds: new Set<DeclId>(),
           directCollectionWriteDeclIds: new Set<DeclId>(),
         }
@@ -1356,6 +1361,7 @@ export function analyzeActionBody(
 
   return {
     finalizeBody: bodyScope.finalize,
+    readDeclIds: bodyScope.readDeclIds,
     result,
     writeDeclIds,
     directCollectionWriteDeclIds,
@@ -1364,6 +1370,8 @@ export function analyzeActionBody(
 
 export interface MountBodyAnalysis {
   finalizeBody: (resolveUpdateCall: ResolveUpdateCall) => string
+  readDeclIds: Set<DeclId>
+  writeDeclIds: Set<DeclId>
   /** `onMount` callbackが返す、unmount時だけ呼ぶcleanup。 */
   finalizeCleanup: (() => string) | null
 }
@@ -1419,6 +1427,72 @@ export function analyzeMountBody(
 
   return {
     finalizeBody: analysis.finalizeBody,
+    readDeclIds: analysis.readDeclIds,
+    writeDeclIds: analysis.writeDeclIds,
+    finalizeCleanup: analysis.result
+      ? () => analysis.result!.finalize(NO_MOUNT_CLEANUP_UPDATE)
+      : null,
+  }
+}
+
+export interface EffectBodyAnalysis {
+  finalizeBody: (resolveUpdateCall: ResolveUpdateCall) => string
+  /** effect callback本体が直接読み取る宣言。cleanupのreadは除外する。 */
+  readDeclIds: Set<DeclId>
+  finalizeCleanup: (() => string) | null
+}
+
+// `effect(() => void | (() => void))` のcallbackをonMountと同じ解析機械へ
+// 通す。ただしeffect本体・cleanupから追跡対象signalへ書き込むと、同期
+// update_*()の再入を暗黙に発生させるためscope limitで拒否する。
+export function analyzeEffectBody(
+  ctx: CompilerState,
+  callbackPath: NodePath<t.ArrowFunctionExpression>,
+  instanceId: number,
+): EffectBodyAnalysis {
+  const bodyPath = callbackPath.get('body')
+  let body: NodePath<t.Expression> | NodePath<t.Statement>[]
+  let returnsCleanup = false
+
+  if (bodyPath.isBlockStatement()) {
+    const stmts = bodyPath.get('body') as NodePath<t.Statement>[]
+    const last = stmts[stmts.length - 1]
+    if (last?.isReturnStatement() && last.node.argument != null) {
+      const returned = last.get('argument') as NodePath<t.Expression>
+      if (!returned.isArrowFunctionExpression() && !returned.isFunctionExpression()) {
+        throw new Error(
+          'compile: effect() may only return a zero-argument cleanup function (scope limit)',
+        )
+      }
+      returnsCleanup = true
+    }
+    body = stmts
+  } else {
+    returnsCleanup = bodyPath.isArrowFunctionExpression() || bodyPath.isFunctionExpression()
+    if (bodyPath.isObjectExpression()) {
+      throw new Error(
+        'compile: effect() may only return void or a zero-argument cleanup function (scope limit)',
+      )
+    }
+    body = bodyPath as NodePath<t.Expression>
+  }
+
+  const analysis = analyzeActionBody(ctx, body, instanceId)
+  if (returnsCleanup && !analysis.result) {
+    throw new Error('compile: failed to analyze effect() cleanup function (scope limit)')
+  }
+  if (!returnsCleanup && analysis.result) {
+    throw new Error(
+      'compile: effect() may only return void or a zero-argument cleanup function (scope limit)',
+    )
+  }
+  if (analysis.writeDeclIds.size > 0) {
+    throw new Error('compile: effect() cannot write tracked signals (scope limit)')
+  }
+
+  return {
+    finalizeBody: analysis.finalizeBody,
+    readDeclIds: analysis.readDeclIds,
     finalizeCleanup: analysis.result
       ? () => analysis.result!.finalize(NO_MOUNT_CLEANUP_UPDATE)
       : null,

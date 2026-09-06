@@ -25,6 +25,7 @@ import {
   analyzeExpr,
   analyzeHandlerBody,
   analyzeHandlerExpr,
+  analyzeEffectBody,
   analyzeMountBody,
 } from './analyze.ts'
 import type {
@@ -33,6 +34,7 @@ import type {
   ContentPart,
   DeclId,
   ActionDecl,
+  EffectDecl,
   ListMarker,
   LocalDecl,
   MarkerId,
@@ -63,6 +65,7 @@ export type HandlerFns = Map<string, NodePath<t.FunctionDeclaration>>
 // 構造unitへインライン化されるcomponentではinline-components.tsが明示的に
 // 拒否するため、ここでNodePathを保持して後段で1回だけ解析する。
 export type MountHooks = NodePath<t.ArrowFunctionExpression>[]
+export type EffectHooks = NodePath<t.ArrowFunctionExpression>[]
 
 function emitSignal(
   ctx: CompilerState,
@@ -1146,6 +1149,7 @@ export interface ComponentZones {
   renderJsxPath: NodePath<t.JSXElement>
   movementZoneFns: HandlerFns
   mountHooks: MountHooks
+  effectHooks: EffectHooks
 }
 
 function resolveOnMountHook(
@@ -1165,6 +1169,27 @@ function resolveOnMountHook(
   const callback = args[0] as NodePath<t.ArrowFunctionExpression>
   if (callback.node.params.length !== 0) {
     throw new Error('compile: onMount() callback must not take parameters (scope limit)')
+  }
+  return callback
+}
+
+function resolveEffectHook(
+  stmt: NodePath<t.Statement>,
+): NodePath<t.ArrowFunctionExpression> | null {
+  if (!stmt.isExpressionStatement()) return null
+  const expression = stmt.get('expression')
+  if (!expression.isCallExpression()) return null
+  const callee = expression.node.callee
+  if (callee.type !== 'Identifier' || callee.name !== 'effect') return null
+  const args = expression.get('arguments')
+  if (args.length !== 1 || !args[0]!.isArrowFunctionExpression()) {
+    throw new Error(
+      'compile: effect() takes exactly one zero-argument arrow function (scope limit)',
+    )
+  }
+  const callback = args[0] as NodePath<t.ArrowFunctionExpression>
+  if (callback.node.params.length !== 0) {
+    throw new Error('compile: effect() callback must not take parameters (scope limit)')
   }
   return callback
 }
@@ -1204,6 +1229,7 @@ export function splitComponentZones(
   // 動きゾーン(render後): function宣言のみ。ハンドラ識別子参照の解決表に積む。
   const movementZoneFns: HandlerFns = new Map()
   const mountHooks: MountHooks = []
+  const effectHooks: EffectHooks = []
   for (let i = renderIndex + 1; i < stmts.length; i++) {
     const stmt = stmts[i]!
     const mountHook = resolveOnMountHook(stmt)
@@ -1211,15 +1237,20 @@ export function splitComponentZones(
       mountHooks.push(mountHook)
       continue
     }
+    const effectHook = resolveEffectHook(stmt)
+    if (effectHook) {
+      effectHooks.push(effectHook)
+      continue
+    }
     if (!stmt.isFunctionDeclaration() || !stmt.node.id) {
       throw new Error(
-        'compile: only function declarations are allowed after render(); onMount() calls are also allowed (scope limit)',
+        'compile: only function declarations are allowed after render(); onMount() and effect() calls are also allowed (scope limit)',
       )
     }
     movementZoneFns.set(stmt.node.id.name, stmt as NodePath<t.FunctionDeclaration>)
   }
 
-  return { varZoneStmts, renderJsxPath, movementZoneFns, mountHooks }
+  return { varZoneStmts, renderJsxPath, movementZoneFns, mountHooks, effectHooks }
 }
 
 // ADR-0008: コンポーネント本体を「変数ゾーン → render() → 動きゾーン」の3構造で
@@ -1232,7 +1263,7 @@ export function compileComponent(
   instanceId: number,
   out: RenderOutput,
 ): string {
-  const { varZoneStmts, renderJsxPath, movementZoneFns, mountHooks } =
+  const { varZoneStmts, renderJsxPath, movementZoneFns, mountHooks, effectHooks } =
     splitComponentZones(componentPath)
 
   // 変数ゾーン(render前): signal()/derived() の const 宣言のみ。function宣言
@@ -1252,6 +1283,16 @@ export function compileComponent(
       finalizeCleanup: analysis.finalizeCleanup,
     }
     ctx.mounts.push(mount)
+  }
+
+  for (const callbackPath of effectHooks) {
+    const analysis = analyzeEffectBody(ctx, callbackPath, instanceId)
+    const effect: EffectDecl = {
+      finalizeBody: analysis.finalizeBody,
+      finalizeCleanup: analysis.finalizeCleanup,
+      readDeclIds: analysis.readDeclIds,
+    }
+    ctx.effects.push(effect)
   }
 
   return renderElement(ctx, renderJsxPath, instanceId, movementZoneFns)

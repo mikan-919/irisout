@@ -379,9 +379,13 @@ function expandComponentRef(
   // onMountはruntime component instance境界がまだ存在しないroot component
   // だけのAPI。コンパイル時inline化される子componentへ暗黙に昇格させると
   // 子のmount順・所有権が不明確になるため、構造unitを含めて明示的に拒否する。
-  if (zones.mountHooks.length > 0) {
+  if (zones.mountHooks.length > 0 || zones.effectHooks.length > 0) {
     clonedFnPath.remove()
-    throw new Error('compile: onMount() is supported only in the root component (scope limit)')
+    const unsupported = [
+      ...(zones.mountHooks.length > 0 ? ['onMount()'] : []),
+      ...(zones.effectHooks.length > 0 ? ['effect()'] : []),
+    ].join(' and ')
+    throw new Error(`compile: ${unsupported} is supported only in the root component (scope limit)`)
   }
 
   const enclosingArrow = findEnclosingListItemArrow(jsxPath)

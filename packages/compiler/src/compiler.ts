@@ -22,6 +22,7 @@ import type * as t from '@babel/types'
 import type {
   ActionOutput,
   ConditionalMarkerOutput,
+  EffectOutput,
   HandlerOutput,
   ListMarkerOutput,
   MarkerOutput,
@@ -122,6 +123,16 @@ function buildSignalToMarkers(
       for (const sig of resolveToSignals(ctx, dep, new Set())) {
         if (!signalToMarkers.has(sig)) signalToMarkers.set(sig, new Set())
         signalToMarkers.get(sig)!.add(markerId)
+      }
+    }
+  }
+  // effectのみが読むsignalにも専用update_*()を生成する。空のmarker集合を
+  // 保持することで、handler/actionの書き込みからDOM以外のeffectへ同じ
+  // 依存経路を接続し、未使用effectの生成物は増やさない。
+  for (const effect of ctx.effects) {
+    for (const dep of effect.readDeclIds) {
+      for (const sig of resolveToSignals(ctx, dep, new Set())) {
+        if (!signalToMarkers.has(sig)) signalToMarkers.set(sig, new Set())
       }
     }
   }
@@ -368,6 +379,15 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
     bodyRendered: m.finalizeBody(resolveUpdateCall),
     cleanupRendered: m.finalizeCleanup ? m.finalizeCleanup() : null,
   }))
+  const effectOutputs: EffectOutput[] = ctx.effects.map((effect) => ({
+    bodyRendered: effect.finalizeBody(resolveUpdateCall),
+    cleanupRendered: effect.finalizeCleanup ? effect.finalizeCleanup() : null,
+    signalIds: [
+      ...new Set(
+        [...effect.readDeclIds].flatMap((dep) => [...resolveToSignals(ctx, dep, new Set())]),
+      ),
+    ],
+  }))
 
   // --- ビルド時実行:discovery の確認 + 実際の初期 HTML の取得 ---
   const instrumentedBody = [
@@ -445,6 +465,7 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
     handlers: handlerOutputs,
     actions: actionOutputs,
     mounts: mountOutputs,
+    effects: effectOutputs,
     attrBindings: ctx.attrBindings,
     emittedFns,
     initialHtml,

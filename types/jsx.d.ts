@@ -55,6 +55,11 @@ declare function render(element: JSX.Element): void
 // 拒否されるため、この型宣言は実行時受理条件の代替ではない。
 // biome-ignore lint/suspicious/noConfusingVoidType: callbackの「返り値なし」を表す
 declare function onMount(callback: () => void | (() => void)): void
+// root componentの依存signal/derivedが変わるたびに再実行され、前回の返り値の
+// cleanupは再実行前とinstanceのunmount時に呼ばれる。compilerのscope limitに
+// よる制約(signal書き込み禁止・root動きゾーン専用)は型宣言の代替ではない。
+// biome-ignore lint/suspicious/noConfusingVoidType: callbackの「返り値なし」を表す
+declare function effect(callback: () => void | (() => void)): void
 
 declare namespace JSX {
   // 同一ファイル内合成(ADR-0014)のコンポーネントは`render()`を内部で

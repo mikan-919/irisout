@@ -173,6 +173,16 @@ export interface MountDecl {
   finalizeCleanup: (() => string) | null
 }
 
+// ルートcomponentの`effect(() => ...)` 1個ぶんの解析結果。依存は本体の
+// readだけを保持し、cleanupのreadは再実行条件に含めない。effect本体の
+// signal書き込みはanalyze.tsで拒否するため、finalizeBodyへ渡す更新解決は
+// 既存actionと共有できるが実際には空になる。
+export interface EffectDecl {
+  finalizeBody: (resolveUpdateCall: ResolveUpdateCall) => string
+  finalizeCleanup: (() => string) | null
+  readDeclIds: Set<DeclId>
+}
+
 // cross-function-handler-writes: ハンドラ/action から追跡対象として呼ばれた
 // 動きゾーン関数の解析結果。writeDeclIds は自分の本体が直接書く root signal
 // (推移解決済み)、calleeNames は自分が呼ぶ別の追跡関数。推移的な書き込み
@@ -224,6 +234,8 @@ export interface CompilerState {
   actions: ActionDecl[]
   /** ルートcomponentの`onMount`。構造unit内では収集しない。 */
   mounts: MountDecl[]
+  /** ルートcomponentの`effect`。構造unit内では収集しない。 */
+  effects: EffectDecl[]
   attrBindings: AttrBinding[] // ADR-0012: 動的属性(トップレベル+splice前のユニット内)
 
   markerCounter: number
@@ -266,6 +278,7 @@ export function createCompilerState(
     handlers: [],
     actions: [],
     mounts: [],
+    effects: [],
     attrBindings: [],
     markerCounter: 0,
     instanceCounter: 0,

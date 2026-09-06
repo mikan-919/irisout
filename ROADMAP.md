@@ -32,8 +32,10 @@ component-owned DOM、marker/List/conditional stateを解放する。`use=`の�
 update closureの意味を維持し、外部resourceの解除は`{ update?, destroy? }`の`destroy`
 へ限定する。unit内`use=`のfactory lifecycleも`structural-unit-use-actions`で実装済み。
 ルートcomponentの`onMount`とcleanupも実装済み(ADR-0025)。callbackは
-mount/hydrate完了後に一度実行し、返り値のcleanupをunmount時に逆順で呼ぶ。汎用lifecycle
-runtime、構造unit内・子componentのonMount、同instance再mountは引き続き対象外。
+mount/hydrate完了後に一度実行し、返り値のcleanupをunmount時に逆順で呼ぶ。ルートcomponent
+の`effect`とcleanupも実装済み(ADR-0026)。依存root signalの専用`update_*()`へ接続し、
+再実行前とunmount時にcleanupを呼ぶ。汎用lifecycle runtime、構造unit内・子componentの
+onMount/effect、同instance再mountは引き続き対象外。
 
 **第2段階実装済み(ADR-0020)**: 同一ハンドラ/action/追跡関数のwrite setに複数root
 があり、同じmarkerへ依存する場合だけ、コンパイル時に専用同期batchを生成する。
@@ -171,10 +173,9 @@ namespace/side-effect/dynamic import、re-export、循環依存は`compile:`エ�
 - **onDestroy/cleanup**: component instanceの明示的な`unmount()`、top-level
   `use=` actionの`{ destroy }`、ルートcomponentの`onMount` cleanupはADR-0022/0025で
   解消済み。構造unit内action lifecycleは`structural-unit-use-actions`で実装済み。
-- **effect(DOM以外への副作用)**: `update_*()`はコンパイラが生成する
-  内部関数のみで、author側が「signalが変わったら実行」を宣言する手段が
-  無い(localStorage同期・analytics送信など、DOM更新を伴わない副作用が
-  書けない)。
+- **effect(DOM以外への副作用)**: ルートcomponentの`effect`はADR-0026で実装済み。
+  構造unit・子componentのeffect、effect本体から追跡signalへ書き込む再入、非同期
+  schedulerは対象外で、実需が出た時点で別契約を定める。
 - **モジュールスコープの共有state(Svelteのstore相当)**: トップレベルの
   `const`宣言自体が現状scope limitで拒否される(change
   `scope-limit-coverage`)。§4の複数コンポーネントが解決しても、
@@ -291,12 +292,12 @@ transition/animation、portal、error boundary、async/resource
     実装・検証した。
 
 18. 次の一般用途対応は次の順番で検討する。大きな実装には着手しない。
-    1. **優先度P1: effect**。signalが変化したときにlocalStorage同期やanalytics送信
-       などのDOM外処理を実行する契約が未定義である。初回実行、依存追跡、再実行前の
-       cleanup、`onMount`/`use=` destroyとの責務境界を先に決める。
-    2. **優先度P1: context**。複数ファイルcomponentはpropsで接続できるが、深い
+    1. **優先度P1: context**。複数ファイルcomponentはpropsで接続できるが、深い
        component treeの共有依存はprops drillingになる。module scope stateを導入する
        前に、instance単位の所有権とcleanupを決める必要がある。
+    2. **優先度P2: 構造unit/子componentのlifecycle**。component instance境界が
+       compile-time inlineで消えるため、onMount/effectをどのfactoryが所有するかを
+       決めてから実装する。
     3. **優先度P2: component propsとhandlerの型検査**。現行の`types/jsx.d.ts`は
        intrinsic要素と共通属性を検査するが、componentごとのprops型・イベント対象の
        絞り込みは弱い。module分割後の名前間違いとprops形状をbuild前に検出するために

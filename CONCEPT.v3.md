@@ -137,7 +137,9 @@ irisout は compiler-first なシステムです。
 - 条件分岐など動的構造の生存期間
 - component instanceのmount/hydrate/unmountと、top-level・構造unit内`use=` actionの明示的なdestroy
 - 実測で有利かつnative eventの意味同等性を確認した更新のバッチやイベント委譲
-- その他、コンパイル時には完結できない処理(ただし汎用lifecycle/effect runtimeは含めない)
+- その他、コンパイル時には完結できない処理(ただし汎用lifecycle/effect runtimeは含めない)。
+  ルートcomponentの明示的な`effect`はADR-0026に従い専用`update_*()`へ静的に接続する
+  ため、この例外には含めない。
 
 責務は固定ではありません。同じ仕事を専用コードとして生成する場合と共有
 ヘルパーへ任せる場合を比較し、より小さく速く単純な方を選びます。

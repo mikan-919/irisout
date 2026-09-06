@@ -121,6 +121,14 @@ export interface MountOutput {
   cleanupRendered: string | null
 }
 
+// ルートcomponentのeffect callback。signalIdsはcallback本体のreadをroot
+// signalへ展開した依存で、専用update_*()の末尾からrunnerを呼ぶ。
+export interface EffectOutput {
+  bodyRendered: string
+  cleanupRendered: string | null
+  signalIds: DeclId[]
+}
+
 export interface GenerateModuleInput {
   /** compileProject()でリンクされた通常の関数/const。runtimeへは出さず、module scopeへ一度だけ出す。 */
   supportStatements: string[]
@@ -135,6 +143,7 @@ export interface GenerateModuleInput {
   handlers: HandlerOutput[]
   actions: ActionOutput[]
   mounts: MountOutput[]
+  effects: EffectOutput[]
   attrBindings: AttrBinding[] // ADR-0012: トップレベルの動的属性
   // cross-function-handler-writes: 追跡対象として呼ばれた動きゾーン関数を
   // authored 名のままモジュールスコープへ1回だけ emit する(design D4)。
@@ -1021,6 +1030,28 @@ function renderMountCall(m: MountOutput, index: number): string {
   return `{ const __mount_cleanup_result__ = ${callback}; __on_mount_cleanup_${index}__ = __mount_cleanup_result__; }`
 }
 
+// effect callbackはinstance専用runnerへ固定する。再実行時は前回cleanupを
+// 先に空にしてからcallbackを呼ぶため、callbackが例外を投げても同じcleanupを
+// unmountで二重に呼ばない。
+function renderEffectRunner(e: EffectOutput, index: number): string[] {
+  const body = e.bodyRendered ? `${e.bodyRendered};` : ''
+  const callback = `(function() { ${body}${e.cleanupRendered ? ` return ${e.cleanupRendered};` : ''} })()`
+  const lines = [
+    `function __run_effect_${index}__() {`,
+    '  if (!__mounted__ || __unmounted__) return;',
+  ]
+  if (e.cleanupRendered) {
+    lines.push(
+      `  if (__effect_cleanup_${index}__) { const __cleanup__ = __effect_cleanup_${index}__; __effect_cleanup_${index}__ = null; __cleanup__(); }`,
+      `  __effect_cleanup_${index}__ = ${callback};`,
+    )
+  } else {
+    lines.push(`  ${callback};`)
+  }
+  lines.push('}')
+  return lines
+}
+
 export function generateModule({
   supportStatements,
   declStatements,
@@ -1034,6 +1065,7 @@ export function generateModule({
   handlers,
   actions,
   mounts,
+  effects,
   attrBindings,
   emittedFns,
   initialHtml,
@@ -1128,6 +1160,14 @@ export function generateModule({
     .filter((line): line is string => line !== null)
   if (mountCleanupDeclLines.length > 0) instanceLines.push(...mountCleanupDeclLines, '')
 
+  // effectのcleanup返り値を持つcallbackだけ、component instance専有の参照を
+  // 生成する。effect未使用、またはcleanupなしのcallbackでは関連コードを
+  // 出力しない。
+  const effectCleanupDeclLines = effects
+    .map((effect, index) => (effect.cleanupRendered ? `let __effect_cleanup_${index}__;` : null))
+    .filter((line): line is string => line !== null)
+  if (effectCleanupDeclLines.length > 0) instanceLines.push(...effectCleanupDeclLines, '')
+
   // collection.update()を含む同期batchだけが使う、インスタンス専有の
   // 深さカウンタ。ハンドラ/actionの本体中は直接DOM通知を抑止し、scope末尾
   // のbatchが最終状態を一度だけ反映する。
@@ -1194,11 +1234,14 @@ export function generateModule({
   }
 
   // design Decision 2: 呼び出し順は マーカー収集 → ハンドラ配線 →
-  // 初期update_*(populate) → action呼び出し+返り値クロージャ初期実行。
+  // 初期update_*(populate) → action → onMount → effect初期実行。
   const actionCallLines = actions.map(
     (a) => `  ${renderActionCall(a, `__markers__.get(${JSON.stringify(a.markerId)})`)}`,
   )
   const mountCallLines = mounts.map((mount, index) => `  ${renderMountCall(mount, index)}`)
+  const effectRunnerLines = effects.flatMap((effect, index) => renderEffectRunner(effect, index))
+  if (effectRunnerLines.length > 0) instanceLines.push(...effectRunnerLines, '')
+  const effectCallLines = effects.map((_, index) => `  __run_effect_${index}__();`)
 
   const actionDestroyOperations = actions
     .filter((a) => a.resultRendered)
@@ -1211,6 +1254,14 @@ export function generateModule({
     .map((mount, index) =>
       mount.cleanupRendered
         ? `if (__on_mount_cleanup_${index}__) { const __cleanup__ = __on_mount_cleanup_${index}__; __on_mount_cleanup_${index}__ = null; __cleanup__(); }`
+        : null,
+    )
+    .filter((operation): operation is string => operation !== null)
+    .reverse()
+  const effectCleanupOperations = effects
+    .map((effect, index) =>
+      effect.cleanupRendered
+        ? `if (__effect_cleanup_${index}__) { const __cleanup__ = __effect_cleanup_${index}__; __effect_cleanup_${index}__ = null; __cleanup__(); }`
         : null,
     )
     .filter((operation): operation is string => operation !== null)
@@ -1252,7 +1303,7 @@ export function generateModule({
   const templateCleanupLines = [...templateVars].map((name) => `  ${name} = null;`)
   const documentCleanupLines = templateSetupLines.length > 0 ? ['  __doc__ = undefined;'] : []
   const destroyOperations = [...structuralDestroyOperations, ...actionDestroyOperations]
-  destroyOperations.push(...mountCleanupOperations)
+  destroyOperations.push(...mountCleanupOperations, ...effectCleanupOperations)
   const destroyErrorLines =
     destroyOperations.length > 0
       ? [
@@ -1270,9 +1321,13 @@ export function generateModule({
     ...initialUpdateCalls,
     ...actionCallLines,
     ...mountCallLines,
+    ...effectCallLines,
   ]
   const shouldGuardInitialization =
-    actions.length > 0 || markersHaveStructuralActions(markers) || mounts.length > 0
+    actions.length > 0 ||
+    markersHaveStructuralActions(markers) ||
+    mounts.length > 0 ||
+    effects.length > 0
   const guardedInitializationLines =
     shouldGuardInitialization && initializationLines.length > 0
       ? [
@@ -1291,6 +1346,7 @@ export function generateModule({
     'let __container__;',
     'let __mounted__ = false;',
     'let __unmounted__ = false;',
+    ...(effects.length > 0 ? ['let __initializing__ = false;'] : []),
     'function mount(container) {',
     '  if (__mounted__ || __unmounted__) throw new Error("component instance can only be mounted or hydrated once");',
     structuralMarkerIds.length > 0
@@ -1298,7 +1354,9 @@ export function generateModule({
       : '  ({ markers: __markers__ } = __mount__(container, __INITIAL_HTML__, __MARKER_IDS__));',
     '  __container__ = container;',
     '  __mounted__ = true;',
+    ...(effects.length > 0 ? ['  __initializing__ = true;'] : []),
     ...guardedInitializationLines,
+    ...(effects.length > 0 ? ['  __initializing__ = false;'] : []),
     '}',
     '',
     'function hydrateComponentInstance(container) {',
@@ -1308,13 +1366,16 @@ export function generateModule({
       : '  ({ markers: __markers__ } = __hydrate__(container, __MARKER_IDS__));',
     '  __container__ = container;',
     '  __mounted__ = true;',
+    ...(effects.length > 0 ? ['  __initializing__ = true;'] : []),
     ...guardedInitializationLines,
+    ...(effects.length > 0 ? ['  __initializing__ = false;'] : []),
     '}',
     '',
     'function unmount() {',
     '  if (!__mounted__ || __unmounted__) return;',
     '  __unmounted__ = true;',
     '  __mounted__ = false;',
+    ...(effects.length > 0 ? ['  __initializing__ = false;'] : []),
     ...handlerRemoveLines,
     ...destroyErrorLines,
     ...listCleanupLines,
@@ -1352,6 +1413,23 @@ export function generateModule({
     attrsByMarker.set(b.markerId, list)
   }
   const actionMarkerIds = new Set(actions.map((action) => action.markerId))
+  const effectsBySignal = new Map<DeclId, number[]>()
+  effects.forEach((effect, index) => {
+    for (const signalId of effect.signalIds) {
+      const indexes = effectsBySignal.get(signalId) ?? []
+      indexes.push(index)
+      effectsBySignal.set(signalId, indexes)
+    }
+  })
+  const appendEffectUpdates = (lines: string[], signalIds: Iterable<DeclId>): void => {
+    const indexes = new Set<number>()
+    for (const signalId of signalIds) {
+      for (const index of effectsBySignal.get(signalId) ?? []) indexes.add(index)
+    }
+    for (const index of [...indexes].sort((a, b) => a - b)) {
+      lines.push(`  if (!__initializing__) __run_effect_${index}__();`)
+    }
+  }
 
   const appendMarkerUpdate = (lines: string[], mId: MarkerId): void => {
     // 動的属性の再設定(属性のみの marker id は markers に実体を持たない
@@ -1394,6 +1472,7 @@ export function generateModule({
       instanceLines.push(`  ${declOutputName.get(derivedId)} = ${derivedRecompute.get(derivedId)};`)
     }
     for (const mId of markerIds) appendMarkerUpdate(instanceLines, mId)
+    appendEffectUpdates(instanceLines, [signalId])
     instanceLines.push('}', '')
   }
 
@@ -1415,6 +1494,7 @@ export function generateModule({
       instanceLines.push(`  ${declOutputName.get(derivedId)} = ${derivedRecompute.get(derivedId)};`)
     }
     for (const markerId of batch.markerIds) appendMarkerUpdate(instanceLines, markerId)
+    appendEffectUpdates(instanceLines, batch.signalIds)
     instanceLines.push('}', '')
   }
 
@@ -1457,6 +1537,7 @@ export function generateModule({
     } else {
       instanceLines.push(...directUpdateLines)
     }
+    appendEffectUpdates(instanceLines, [collectionId])
     instanceLines.push('}', '')
   }
 

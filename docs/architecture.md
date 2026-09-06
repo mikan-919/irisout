@@ -119,11 +119,16 @@ triage手続きで捌く — コンパイラの受理条件自体を場当たり
   0引数cleanupはinstanceが保持し、unmount時に登録順の逆順で一度だけ実行する。
   初期化失敗時は登録済みcleanupを回収し、構造unit/actionと同じ例外回収規則を使う。
   構造unit内とinline化される子componentの`onMount`はscope limitで拒否する。
+- **root `effect` lifecycle**(ADR-0026): 動きゾーンの0引数callbackが直接読むroot
+  signal/derivedを専用`update_*()`へ接続し、初回実行・依存更新前のcleanup・unmountの
+  cleanupを生成instanceが所有する。汎用schedulerは導入せず、effect本体から追跡signalへ
+  の書き込みと構造unit/子componentのeffectはscope limitで拒否する。
 - **`use=` action result**: 既存の `() => void` は `update` closureとして初回+依存
   signal update時に呼ぶ。外部resource cleanupが必要な場合だけ
   `{ update?: () => void; destroy?: () => void }`を返し、`destroy`はunmount時のみ呼ぶ。
   構造unit内ではitem/branch factoryのinstanceがactionを所有し、keyの再利用では
-  初期化・破棄を繰り返さない。runtime境界でshapeを検証し、汎用lifecycle/effectは導入しない。
+  初期化・破棄を繰り返さない。runtime境界でshapeを検証し、汎用lifecycle schedulerは
+  導入しない。
 - **依存グラフが単一の真実の源**: marker→decl の直接依存(`ctx.markerDeps`)を
   `resolveToSignals()` で root signal まで推移解決し、signal→markers の逆引き
   から `update_<name>()` を生成する。ハンドラの書き込み先も同じ経路で解決する。
