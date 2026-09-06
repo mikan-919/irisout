@@ -14,6 +14,13 @@ import { renderCallJsx, splitComponentZones } from './render.ts'
 const traverse =
   (traverseImport as unknown as { default?: typeof traverseImport }).default ?? traverseImport
 
+type JSXChild =
+  | t.JSXText
+  | t.JSXExpressionContainer
+  | t.JSXElement
+  | t.JSXFragment
+  | t.JSXSpreadChild
+
 // `t.cloneNode`はASTノード構造を複製するが、解析済みノードの位置情報を
 // 省略することがある。位置情報はBabelのbinding解決と、未変更部分の位置編集
 // に必要なので、クローン後にオリジナルと同じ形の木を辿ってコピーする。
@@ -93,10 +100,51 @@ function findReferencedComponentNames(
   return referenced
 }
 
-function hasMeaningfulChildren(node: t.JSXElement): boolean {
-  return node.children.some((child) =>
-    child.type === 'JSXText' ? child.value.trim() !== '' : true,
-  )
+function extractMeaningfulChildren(node: t.JSXElement): JSXChild[] {
+  return node.children.filter((child) => {
+    if (child.type === 'JSXText') return child.value.trim() !== ''
+    if (child.type === 'JSXExpressionContainer') {
+      return child.expression.type !== 'JSXEmptyExpression'
+    }
+    return true
+  })
+}
+
+function componentChildAttributeValue(value: t.JSXAttribute['value']): JSXChild[] | null {
+  if (value == null) return null
+  if (value.type === 'StringLiteral') return [t.jsxText(value.value)]
+  if (value.type !== 'JSXExpressionContainer') return null
+  if (value.expression.type === 'JSXEmptyExpression') return []
+  if (value.expression.type === 'JSXElement') return [value.expression]
+  return [t.jsxExpressionContainer(value.expression)]
+}
+
+function substituteChildren(
+  clonedFnPath: NodePath<t.FunctionDeclaration>,
+  children: JSXChild[],
+  tagName: string,
+): void {
+  clonedFnPath.scope.crawl()
+  const binding = clonedFnPath.scope.getOwnBinding('children')
+  if (!binding) return
+
+  for (const refPath of binding.referencePaths.slice()) {
+    const containerPath = refPath.parentPath
+    const parentPath = containerPath?.parentPath
+    if (
+      !containerPath?.isJSXExpressionContainer() ||
+      containerPath.node.expression !== refPath.node ||
+      !parentPath?.isJSXElement()
+    ) {
+      throw new Error(
+        `compile: component "${tagName}" may use children only as a direct JSX child (scope limit)`,
+      )
+    }
+
+    const replacements = children.map((child) => cloneWithPositions(child))
+    if (replacements.length === 0) containerPath.remove()
+    else containerPath.replaceWithMultiple(replacements)
+  }
 }
 
 // same-file-component-composition: 呼び出し先のObjectPattern仮引数
@@ -110,7 +158,15 @@ function substituteProps(
   tagName: string,
 ): void {
   const params = clonedFnPath.get('params')
-  if (params.length === 0) return
+  const meaningfulChildren = extractMeaningfulChildren(jsxPath.node)
+  if (params.length === 0) {
+    if (meaningfulChildren.length > 0) {
+      throw new Error(
+        `compile: component "${tagName}" must declare a children prop to receive JSX children (scope limit)`,
+      )
+    }
+    return
+  }
   const propParam = params[0]!
   if (params.length > 1 || !propParam.isObjectPattern()) {
     throw new Error(
@@ -140,6 +196,8 @@ function substituteProps(
   }
 
   const argExprByProp = new Map<string, t.Expression>()
+  const hasChildrenProp = propNames.includes('children')
+  let componentChildren = meaningfulChildren
   for (const attrPath of jsxPath.get('openingElement').get('attributes')) {
     if (!attrPath.isJSXAttribute()) {
       throw new Error(`compile: spread props on "${tagName}" are not supported yet (scope limit)`)
@@ -147,6 +205,21 @@ function substituteProps(
     const nameNode = attrPath.node.name
     if (nameNode.type !== 'JSXIdentifier') continue
     const valueNode = attrPath.node.value
+    if (nameNode.name === 'children' && hasChildrenProp) {
+      if (meaningfulChildren.length > 0) {
+        throw new Error(
+          `compile: component "${tagName}" cannot combine a children prop with JSX child elements (scope limit)`,
+        )
+      }
+      const attrChildren = componentChildAttributeValue(valueNode)
+      if (attrChildren == null) {
+        throw new Error(
+          `compile: component "${tagName}" children prop has an unsupported value (scope limit)`,
+        )
+      }
+      componentChildren = attrChildren
+      continue
+    }
     if (valueNode == null) {
       // JSXの値なし属性はReact/JSXの規則どおりtrueとして扱う。元ソースに
       // 実引数の位置はないが、合成したboolean literalはASTコード生成へ渡る。
@@ -162,6 +235,7 @@ function substituteProps(
   }
 
   for (const propName of propNames) {
+    if (propName === 'children') continue
     if (!argExprByProp.has(propName)) {
       throw new Error(
         `compile: missing prop "${propName}" for component reference "${tagName}" (scope limit)`,
@@ -169,11 +243,20 @@ function substituteProps(
     }
   }
 
+  if (meaningfulChildren.length > 0 && !hasChildrenProp) {
+    throw new Error(
+      `compile: component "${tagName}" must declare a children prop to receive JSX children (scope limit)`,
+    )
+  }
+
+  if (hasChildrenProp) substituteChildren(clonedFnPath, componentChildren, tagName)
+
   // 1つ前のprop置換によるreplaceWithがscope情報を古くする(実装前調査で
   // 確認した既知のパターン ― 別のバインディングのreferencePathsが古い
   // ままになり、置換漏れになる)ため、propごとに再クロールしてから
   // 参照を引く。
   for (const propName of propNames) {
+    if (propName === 'children') continue
     clonedFnPath.scope.crawl()
     const argNode = argExprByProp.get(propName)!
     const binding = clonedFnPath.scope.getOwnBinding(propName)
@@ -416,11 +499,6 @@ function expandComponentRef(
   const targetPath = componentsByName.get(tagName)
   if (!targetPath) return // 未解決の参照 ― render.tsの既存scope limitに委ねる
 
-  if (hasMeaningfulChildren(jsxPath.node)) {
-    throw new Error(
-      `compile: component children (<${tagName}>...</${tagName}>) are not supported yet (scope limit)`,
-    )
-  }
   if (visited.has(tagName)) {
     throw new Error(
       `compile: recursive component reference "${tagName}" is not supported yet (scope limit)`,

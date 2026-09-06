@@ -86,11 +86,11 @@ export function NotesApp() {
         <p class="hint">Select a note to inspect its tags.</p>
       )}
 
-      <section class="note-list">
+      <NotesPanel>
         {visibleNotes().map((note) => (
           <NoteCard key={note.id} note={note} onArchive={() => archiveNote(note.id)} />
         ))}
-      </section>
+      </NotesPanel>
     </main>,
   )
 
@@ -167,4 +167,8 @@ function NoteCard({ note, onArchive }) {
       },
     }
   }
+}
+
+function NotesPanel({ children }) {
+  render(<section class="note-list">{children}</section>)
 }

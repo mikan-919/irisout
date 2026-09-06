@@ -51,6 +51,11 @@ irisout は React の代替ではありません。
 value propertyの読み取り、inputイベントの書き戻し、既存の更新経路を確定する
 (ADR-0040)。任意のsetterやメンバー式を実行時に推測する汎用機構は導入しない。
 
+同一ファイルcomponentの`children` propは、`<Panel>...</Panel>`の子ノードを
+component本体のJSX要素にある`{children}`へコンパイル時に展開する。実行時のprops
+objectやslot runtimeは追加せず、展開後の子ノードを既存のrender-tree解析へ渡す。
+直接の子位置以外での`children`参照はscope limitとする(ADR-0041)。
+
 ---
 
 ## 直接 DOM 更新と更新粒度

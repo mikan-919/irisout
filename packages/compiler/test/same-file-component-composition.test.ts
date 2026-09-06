@@ -376,16 +376,70 @@ function TodoItem({ todo, onCommitEdit, onRemove }) {
     expect(container.querySelectorAll('li').length).toBe(0)
   })
 
-  it('子要素を持つコンポーネント参照を拒否する', () => {
+  it('children propへ単一のJSX子要素を展開して描画できる', async () => {
     const source = `
 export function App() {
   render(<div><Wrapper><span>hi</span></Wrapper></div>);
 }
 function Wrapper({ children }) {
+  render(<section class="wrapper">before{children}after</section>);
+}
+`
+    const { code } = compile(source)
+    expect(code).not.toContain('function Wrapper')
+    const container = await mount(code)
+    expect(container.querySelector('.wrapper')?.textContent).toBe('beforehiafter')
+    expect(container.querySelectorAll('.wrapper > span')).toHaveLength(1)
+  })
+
+  it('children propへ複数の子要素と動的式を展開できる', async () => {
+    const source = `
+export function App() {
+  const label = signal('first');
+  render(
+    <div>
+      <Wrapper>
+        <span>{label()}</span>
+        <button onClick={() => label('second')}>change</button>
+      </Wrapper>
+    </div>
+  );
+}
+function Wrapper({ children }) {
+  render(<section class="wrapper">{children}</section>);
+}
+`
+    const { code } = compile(source)
+    const container = await mount(code)
+    expect(container.querySelector('.wrapper')?.textContent).toContain('first')
+    dispatch(container, container.querySelector('button'), 'click')
+    expect(container.querySelector('.wrapper')?.textContent).toContain('second')
+  })
+
+  it('children propを宣言しないコンポーネントへの子要素を拒否する', () => {
+    const source = `
+export function App() {
+  render(<div><Wrapper><span>hi</span></Wrapper></div>);
+}
+function Wrapper() {
   render(<div>wrap</div>);
 }
 `
-    expect(() => compile(source)).toThrow(/component children.*scope limit/)
+    expect(() => compile(source)).toThrow(/must declare a children prop.*scope limit/)
+  })
+
+  it('children propを直接のJSX子位置以外で使うコンポーネントを拒否する', () => {
+    const source = `
+export function App() {
+  render(<div><Wrapper><span>hi</span></Wrapper></div>);
+}
+function Wrapper({ children }) {
+  render(<div data-value={children}>wrap</div>);
+}
+`
+    expect(() => compile(source)).toThrow(
+      /may use children only as a direct JSX child.*scope limit/,
+    )
   })
 
   it('自己再帰参照を拒否する', () => {

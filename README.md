@@ -121,6 +121,7 @@ Worker入口を読み込みます。配信先に接頭辞がある場合は`IRIS
 - `use=`によるDOM操作と破棄処理
 - `onMount`、`effect`、コンテキスト
 - コンポーネントのマウント、初期HTMLの引き継ぎ、破棄
+- `children` propによる同一ファイルcomponentの子JSX展開
 
 `compileProject()`では、直接のmodule共有`signal`、`derived`、`collection`を受理します。
 共有collectionの配列は複数のcomponent instanceで共有され、ListのDOM状態はinstanceごとに
@@ -130,8 +131,9 @@ Worker入口を読み込みます。配信先に接頭辞がある場合は`IRIS
 結びます。入力イベントの直接listenerがsignalへ書き戻し、通常の更新経路で表示を更新します。
 対象はsignal識別子に限り、`value`または`onInput`との併用は拒否します(ADR-0040)。
 
-ルートコンポーネントは1個、コンパイラが解析するモジュールは相対`.js`と`.jsx`、
-子要素の受け渡しは未対応です。外部moduleとViteの資源importは生成moduleへ渡します。
+ルートコンポーネントは1個、コンパイラが解析するモジュールは相対`.js`と`.jsx`です。
+同一ファイルcomponentの`children` propは、component本体のJSX要素の直接の子位置へ
+展開します。外部moduleとViteの資源importは生成moduleへ渡します。
 コンパイラは未対応の構文を`compile: ... (scope limit)`
 として拒否します。対応状況と制約は[`STATUS.md`](./STATUS.md)を参照してください。
 

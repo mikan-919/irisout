@@ -29,8 +29,8 @@
 source (.jsx)
   │ 1. @babel/parser で parse(静的 AST)
   ▼
-inlineComponents()            ── 2. 同一ファイル内<Component/>参照をコンパイル時ASTインライン化
-  │    (packages/compiler/src/compiler/inline-components.ts、ADR-0014)。findRootComponent()より前に完結する
+inlineComponents()            ── 2. 同一ファイル内<Component/>参照とchildren slotをコンパイル時ASTインライン化
+  │    (packages/compiler/src/compiler/inline-components.ts、ADR-0014/0041)。findRootComponent()より前に完結する
   │    独立した前処理パスで、以後のパイプラインはコンポーネント合成という概念を一切知らない。
   ▼
 findRootComponent()          ── 3. 誰からも参照されない唯一のトップレベル関数をルートとする

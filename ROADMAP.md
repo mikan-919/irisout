@@ -112,7 +112,7 @@ irisoutの到達基準は、入力、解析処理の呼び出し、状態管理�
 
 ### 今回は先に広げない範囲
 
-childrenによる共通パネル、SVGは、代表アプリで必要になった例から再検討する。PDF抽出、サーバーでの要求ごとのHTML生成、
+SVGは、代表アプリで必要になった例から再検討する。PDF抽出、サーバーでの要求ごとのHTML生成、
 画面遷移の基盤、汎用の非同期実行基盤、学習済みモデルの導入は初期版の必須条件にしない。
 注: SVGは図形を要素として記述する形式であり、初期版の地図はHTML要素で構成できる。
 SSRの現行境界はADR-0038で定める。現在はビルド時に静的HTMLを生成してブラウザでhydrateする。
@@ -306,6 +306,9 @@ namespace/side-effect/dynamic import、re-export、循環依存は`compile:`エ�
   `input`、`textarea`、`select`のvalue propertyと文字列signalを接続し、
   入力イベントからsignalへ書き戻す。対象はsignal識別子、value属性、onInputとの
   併用はscope limitで検査する。
+- **component children slot**: **実装済み(ADR-0041)**。`children`をshorthand分割代入
+  した同一ファイルcomponentへ、呼び出し側の子ノードを直接のJSX子位置へコンパイル時に
+  展開する。実行時slot runtimeは生成せず、既存render-treeの制約は維持する。
 
 以下は「基本セットに含めるかどうか自体が未確定」な発展機能。
 CONCEPT.v3.mdに記述が無く、in/outの判断すら未着手。request単位のSSRはADR-0038で現行版の
@@ -376,8 +379,8 @@ transition/animation、portal、error boundary、async/resource
    ASTインライン化(root scope + list itemのみ)・shorthand propsの
    コンパイル時識別子置換・ローカルsignal(構造ユニット専有の変数ゾーン)
    を実装し、`apps/examples/todomvc.jsx`の`TodoApp`から`TodoItem`を切り出した。
-   children/slot・自己/相互再帰参照は引き続きscope limit
-   (詳細はSTATUS.md既知の制約参照)。
+   自己/相互再帰参照は引き続きscope limit。children slotはADR-0041で、
+   `children` propの直接子展開を実装した(詳細はSTATUS.md既知の制約参照)。
 10. ~~authored `.jsx` の型検査基盤~~ — **完了**(change
     `jsx-type-checking-foundation`)。`packages/compiler/types/jsx.d.ts`(グローバル`JSX`
     namespace・`signal`/`derived`/`render`のシグネチャ)+
@@ -427,6 +430,9 @@ transition/animation、portal、error boundary、async/resource
        instanceごとに保持し、永続化とrequest単位SSR分離は別契約へ分ける。
     4. ~~**`bind:value`**~~ — **完了**(ADR-0040)。文字列signalと入力欄のvalue propertyを
        inputイベントへ接続し、root・構造unit・module共有signalを同じ更新経路で扱う。
+    5. ~~**component children slot**~~ — **完了**(ADR-0041)。同一ファイルcomponentの
+       `children` propへ呼び出し側の子ノードをコンパイル時に展開し、共通パネルの
+       authoringを受理する。fragment、spread child、直接子位置以外の参照は対象外。
 
 ## 参考資料
 

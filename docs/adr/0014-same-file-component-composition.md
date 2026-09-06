@@ -106,10 +106,12 @@ module scopeには一切出ない(`CONTEXT.md`「ローカルsignal」)。JSの
 updateへ接続する形で許可した。直接のテキスト・属性がroot signalを読む制限と、
 字句スコープ外localの拒否は残る。
 
-### 7. スコープ外(scope limitで拒否)
+### 7. children/slotと再帰参照の境界
 
-- **children/slot**: `<Component>...</Component>`のように子JSXを渡す形。
-  実需が出るまで対応しない。
+- **children/slot**: ADR-0041で、`{ children }`をcomponent本体のJSX要素の直接の
+  子位置へ展開する範囲を実装した。`children`を宣言しないcomponentへの子要素、
+  属性・handlerなど直接の子位置以外での参照、既存render-treeが受理しない子ノードの
+  組み合わせはscope limitで拒否する。実行時props objectとslot runtimeは生成しない。
 - **再帰・循環参照**: インライン化前処理が展開中のコンポーネント名の
   集合を持ち、再訪問を`compile: recursive component reference "X" is
   not supported yet (scope limit)`で拒否する。深さ制限等の緩和は実需が

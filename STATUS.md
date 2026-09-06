@@ -63,6 +63,19 @@ JSX式の`useContext(key)`を受理する。consumerは最も近いproviderま�
 動きゾーンやmodule共有stateとして使う形はscope limitである。`onMount`/`effect`/contextを使わない生成物には専用変数・
 配線・runtime importを出力しない。
 
+## 現在地(2026-09-06・component children slot)
+
+同一ファイルcomponentの`children` propを実装した(ADR-0041、change
+`component-children-slot`)。`<Panel>...</Panel>`の空白以外の子ノード列を、
+`function Panel({ children })`の本体にある直接の`{children}`へコンパイル時に
+展開する。展開後の子要素、signal、handler、構造unit、子component参照は既存の
+render-tree解析へ渡し、実行時props objectやslot runtimeは生成しない。
+
+`children`を宣言しないcomponent、属性・handlerなど直接のJSX子位置以外での
+`children`参照、既存render-treeが受理しない子ノードの組み合わせはscope limitとする。
+`apps/examples/notes.jsx`のnote-list枠をchildren slotへ置き換え、root・複数子要素・
+動的式・handler・子componentの実DOM試験を追加した。
+
 ## 現在地(2026-09-05・構造ユニットのDOM範囲所有)
 
 List/conditionalは親要素を更新対象にせず、初期HTMLへ開始・終了コメントアンカーを
@@ -274,7 +287,7 @@ instanceで確認し、`value`/`onInput`との併用とsignal以外の対象はs
 | M5.5      | ネストした構造ユニット(条件分岐の中のリスト/リストアイテムの中の条件分岐)      | **DONE** | change `recursive-structural-authoring`。任意の深さ、unitごとの状態/cache、祖先local signalの更新接続                                                                                                                            |
 | `use=`    | 要素へのaction接続(ADR-0011)                                                   | **DONE** | `use-action-impl` + `structural-unit-use-actions` + ADR-0022。top-level、list item、conditional branchをfactory単位で初期化・更新・破棄。関数updateと`{ update?, destroy? }`、component `unmount()`を実装                        |
 | M6        | 全マイルストーン横断のno-wrapper検証                                           | **DONE** | change `m6-no-wrapper-verification`。全機能同居フィクスチャで no-wrapper・import面・実DOM動作を固定(`test/no-wrapper.test.ts`)。サイズ予算係数はADR-0022のlifecycle固定費を含む5.5x(実測5.33x)。締め直しはminify最適化時に再検討 |
-| 合成      | 同一ファイル内の複数コンポーネント合成(ADR-0014)                               | **DONE** | change `same-file-component-composition`。コンパイル時ASTインライン化、root scope + list itemのみ、children/slot・再帰は未対応(下記制約参照)                                                                                     |
+| 合成      | 同一ファイル内の複数コンポーネント合成(ADR-0014/0041)                          | **DONE** | change `same-file-component-composition` + `component-children-slot`。コンパイル時ASTインライン化、root scope + list item、直接children slotを実装。再帰は未対応                                                                 |
 | 分割      | 相対moduleの複数ファイル合成(ADR-0024)                                         | **DONE** | `compileProject(entryPath)`、AST bindingリンク、依存順、静的import検証、Vite fixtureを実装。外部module・dynamic import・cycle・re-exportは対象外                                                                                 |
 | Batch     | 同期スコープ内の共有marker更新(ADR-0020)                                       | **DONE** | 複数root write時だけ専用batchを生成。公開batch API・scheduler・collection構造操作は対象外。イベント配線はADR-0021でdirectを採用                                                                                                  |
 | Context   | instance単位context(ADR-0027)                                                  | **DONE** | `createContext`/`provideContext`/`useContext`を静的置換。root・list item・conditional branchの所有単位へ接続し、未使用時の生成物は増やさない                                                                                     |
@@ -487,15 +500,17 @@ Apache License 2.0で、ルートの`LICENSE`と各配布対象packageの`licens
   合成はroot scopeとlist itemへインライン化し、別ファイルの合成は
   `compileProject(entryPath)`が相対moduleをリンクして同じ経路へ渡す。以下は明示的な
   scope limit・別changeへの先送り:
-  - `<Component>children</Component>`(children/slot)は`scope limit`。
-    実需が出るまで対応しない(ADR-0014決定7)。
+  - `children`はshorthand分割代入したcomponent本体のJSX要素にある直接の子位置へ
+    展開する(ADR-0041)。children prop未宣言、属性・handlerなど直接の子位置以外の
+    参照、既存render-tree未対応形式は`scope limit`。
   - 自己/相互再帰参照(`function A() { render(<A/>) }`等)は
     `scope limit`(展開中コンポーネント名のvisited集合で検出)。
   - propsは`function Foo({ a, b })`形のshorthand分割代入のみ対応。
     非shorthand(`{ a: x }`)・複数仮引数・spread propsは`scope limit`。
   - コンポーネントを構造ユニット(list item)と条件分岐ブランチへインライン化できる。
     条件分岐内の状態付き子部品は、ブランチ全体を0引数arrowのblockへ包み、
-    ローカルsignalとライフサイクルをbranch factoryへ移す。children/slotは対象外。
+    ローカルsignalとライフサイクルをbranch factoryへ移す。children slotはADR-0041の
+    直接子展開を使う。
   - propsは`function Foo({ a, b })`形のshorthand分割代入のみ対応する。参照の
     bindingがpropsに対応する場合、実引数が識別子・メンバー式・添字式・呼び出し式
     のいずれでも、三項演算子・二項演算子・メンバー式・呼び出し式・ハンドラの
