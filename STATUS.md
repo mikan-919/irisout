@@ -274,6 +274,14 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
 
 ## 既知の制約(現時点のcodegenの限界)
 
+2026-09-06のヒートマップ調査で、非同期ハンドラから`async`が落ちて不正な生成物に
+なる問題と、ハンドラ内のPromiseコールバックによる状態更新がDOMへ反映されない問題を
+再現した。`onMount`のブロック本体からのPromise更新は動作したため、経路を区別する。
+また、派生値を参照する`derived`は`derived-of-derived`として拒否される。
+修正は未実施。開発時の編集反映とJSX型検査経路の不足を含む調査結果は
+[`docs/heatmap-readiness.md`](./docs/heatmap-readiness.md)、対応順序は
+[`ROADMAP.md`](./ROADMAP.md)を参照。
+
 - **ルートコンポーネントは1つだけ**: `compile()`は「他から一度も参照
   されないトップレベル関数」がちょうど1つであることを要求し、そうで
   なければcompile error(`packages/compiler/src/compiler.ts`のscope limit)。
