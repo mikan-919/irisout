@@ -17,6 +17,7 @@ function event(container: Element, target: Element, type: string): void {
 describe('authoring coverage fixture', () => {
   it('supports a form, tabs, local state, nested conditionals and nested lists', async () => {
     const { code } = compile(source)
+    expect(code).not.toContain('@typedef')
     const mod = await loadGenerated(code)
     const container = createContainer()
     ;(mod.mountComponent as (element: Element) => void)(container)

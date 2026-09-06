@@ -168,7 +168,7 @@ delegatedは`blur`を処理できず、captureは`currentTarget`と段階を変�
 event objectの同一性を失った。native eventの意味を保つためproduction既定はdirectを
 維持する。collection構造操作APIは引き続き未着手である。
 
-## 現在地(2026-07-21・型検査基盤)
+## 現在地(2026-09-06・JSX型検査)
 
 authored `.jsx` の型検査基盤を実装(change `jsx-type-checking-foundation`、
 ROADMAP 次のアクション10)。`types/jsx.d.ts`でグローバル`JSX`namespace
@@ -193,6 +193,17 @@ namespaceを上書きする踏み台バグを`types: []`で踏みつぶした(�
 実行時に`compile()`が受理することは別軸のまま ― 型はコンパイラの
 scope limit判定を代替しない(例: 字句スコープ外のsignal参照は別途拒否される、
 下記制約参照)。
+
+change `component-props-handler-type-checking`で、JSDocを付けたコンポーネントの
+必須props、余分なprops、値型を同一ファイルと相対importの呼び出し箇所で検査する。
+`.jsx`は維持し、型宣言はコメントとしてコンパイル時に消える。JSDocのない
+コンポーネント引数は`strict: false`のため従来どおり`any`であり、自動推論はしない。
+
+`onClick`/`onDblClick`、`onKeyDown`、`onInput`、`onChange`、`onBlur`は、それぞれ
+`MouseEvent`、`KeyboardEvent`、`InputEvent`、`Event`、`FocusEvent`へ型付けする。
+直接登録される要素を`currentTarget`へ反映し、子要素になり得る`target`はDOM標準型の
+まま維持する。その他の`onXxx`は関数だけを受理し、イベント種別は保証しない。
+`types/test/**/*.jsx`の成功例と`@ts-expect-error`付き失敗例で型が緩む回帰も検出する。
 
 ## 現在地(2026-07-21)
 

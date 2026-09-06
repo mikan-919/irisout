@@ -6,6 +6,7 @@
 `adr-0009-handler-statements` で実装した。設計レベルの追加決定
 (`IfStatement` 枝の再帰検証、書き込み後 `return` の拒否)は
 `openspec/changes/archive/2026-07-14-adr-0009-handler-statements/design.md` の D2/D3 を参照。
+UNRESOLVED(09)の静的型付けはchange `component-props-handler-type-checking`で解消した。
 
 ## コンテキスト
 
@@ -64,7 +65,7 @@ testsはitem内のclick、dblclick、change、keydownを直接hostへdispatchし
 same-file component composition testはList item内のblurも直接hostへdispatchして
 factory handlerを検証している(これらのhelper dispatchはtarget要素へ直接届かせる
 ため、bubbling経路自体は検証しない)。TodoMVC fixtureもList itemの`onChange`、
-`onDblClick`、`onKeyDown`、`onBlur`を含み、`e.target.value`を観測する。
+`onDblClick`、`onKeyDown`、`onBlur`を含み、`e.currentTarget.value`を観測する。
 これらのnative semanticsを親委譲で再現する設計は未決定である。
 
 | authored属性 | native event | 通常の伝播 |
@@ -76,20 +77,32 @@ factory handlerを検証している(これらのhelper dispatchはtarget要素�
 | `onDblClick` | `dblclick` | bubbling |
 | `onBlur` | `blur` | non-bubbling (`focusout`とは別event) |
 
+### イベント引数の静的型付け(2026-09-06追記)
+
+`types/jsx.d.ts`は、上表の6属性を`MouseEvent`、`KeyboardEvent`、`InputEvent`、
+`Event`、`FocusEvent`へ対応付ける。`currentTarget`はJSX属性が書かれた要素型へ
+絞る。生成コードがその要素へ直接`addEventListener`するためである。
+
+`target`はDOM標準の`EventTarget | null`を維持する。子要素から伝播したイベントでは
+属性を書いた要素と一致しないためである。入力値へアクセスする例は
+`e.currentTarget.value`を使う。既知の6属性以外は関数であることだけを検査し、
+個別イベント型は後続の実需まで追加しない。
+
 ### この ADR が答えるべき具体的入力(`apps/examples/todomvc.jsx`)
 
 - **UNRESOLVED(09)** — イベントオブジェクト `e` の型付け
-  (`apps/examples/todomvc.jsx`)。`handleInputKeyDown(e)` は
-  `e.target.value` へ素朴にアクセスする。この1関数だけで、本 ADR が扱う
+  (`apps/examples/todomvc.jsx`)。`handleInputKeyDown(e)` は当時
+  `e.target.value`へ素朴にアクセスしていた。静的型付け後は
+  `e.currentTarget.value`を使う。この1関数だけで、本 ADR が扱う
   4種の文がすべて現れる:
 
 ```jsx
 function handleInputKeyDown(e) {
   if (e.key !== 'Enter') return          // IfStatement + 早期 ReturnStatement
-  const text = e.target.value.trim()     // VariableDeclaration(ローカル)
+  const text = e.currentTarget.value.trim() // VariableDeclaration(ローカル)
   if (text === '') return
   todos([...todos(), { id: Date.now(), text, completed: false }])  // 書き込み
-  e.target.value = ''                    // イベント引数への代入
+  e.currentTarget.value = ''             // イベント引数への代入
 }
 ```
 
@@ -257,11 +270,11 @@ inline arrow の両方が同一の文レベル解析を共有**する。
 - **最小文種(質問2)**に留めるため、ループを使うハンドラは当面書けない。
   TodoMVC は不要で、必要時に別 ADR で拡張する運用コストを受容。
 
-## 未決定事項(後続で詰める)
+## 後続事項
 
-- **イベント `e` の静的型付け(UNRESOLVED(09))** — 生の `Event` のままか、
-  ハンドラ名(`onKeyDown` 等)や要素種別で `target` を絞るか。受け渡し方式
-  とは独立に決められるため、本 ADR では切り出す。
+- **イベント `e` の静的型付け(UNRESOLVED(09))** — change
+  `component-props-handler-type-checking`で解消した。6イベントをDOMイベント型へ
+  対応付け、`currentTarget`を要素型へ絞り、`target`はDOM標準型を維持する。
 - **`getBinding()` の前提が崩れる発見はなかった** — スクラッチ検証で
   `resolveDeclId` の設計前提(ローカル・引数・シャドーを追跡対象外へ落とす)
   は成立を確認済み。もし将来の文種拡張で崩れたら、その時点で別途記録する。

@@ -28,5 +28,5 @@
     "isolatedModules": true,
     "strict": false
   },
-  "include": ["**/*.jsx", "../../types/jsx.d.ts"]
+  "include": ["**/*.jsx", "../../types/jsx.d.ts", "../../types/test/**/*.jsx"]
 }

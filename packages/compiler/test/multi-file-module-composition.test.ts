@@ -41,6 +41,7 @@ describe('compileProject: static multi-file module composition', () => {
     expect(code).not.toContain('SplitCard')
     expect(code).not.toContain('signal(')
     expect(code).not.toContain('derived(')
+    expect(code).not.toContain('@typedef')
 
     const mod = await loadGenerated(code)
     const container = createContainer()

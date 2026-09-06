@@ -9,6 +9,21 @@
 // 構造ユニットは親要素の兄弟と共存できるコメント範囲として生成される。
 // TodoAppの条件分岐→リストとTodoItemのローカル編集条件はこの範囲を使う。
 
+/**
+ * @typedef {object} Todo
+ * @property {number} id
+ * @property {string} text
+ * @property {boolean} completed
+ */
+
+/**
+ * @typedef {object} TodoItemProps
+ * @property {Todo} todo
+ * @property {() => void} onToggle
+ * @property {(event: IrisElementEvent<KeyboardEvent, HTMLInputElement>) => void} onCommitEdit
+ * @property {() => void} onRemove
+ */
+
 export function TodoApp() {
   // ── 変数ゾーン: const のみ(signal/derived) ──
   const todos = signal([
@@ -44,7 +59,7 @@ export function TodoApp() {
               key={todo.id}
               todo={todo}
               onToggle={() => toggleTodo(todo.id)}
-              onCommitEdit={(e) => e.key === 'Enter' && commitEdit(todo.id, e.target.value)}
+              onCommitEdit={(e) => e.key === 'Enter' && commitEdit(todo.id, e.currentTarget.value)}
               onRemove={() => removeTodo(todo.id)}
             />
           ))}
@@ -74,13 +89,14 @@ export function TodoApp() {
     input.focus()
   }
 
-  // イベント引数のtargetはブラウザの入力要素を指す。
+  // currentTargetは処理関数を直接登録した入力要素として型付けされる。
+  /** @param {IrisElementEvent<KeyboardEvent, HTMLInputElement>} e */
   function handleInputKeyDown(e) {
     if (e.key !== 'Enter') return
-    const text = e.target.value.trim()
+    const text = e.currentTarget.value.trim()
     if (text === '') return
     todos([...todos(), { id: Date.now(), text, completed: false }])
-    e.target.value = ''
+    e.currentTarget.value = ''
   }
 
   function toggleTodo(id) {
@@ -105,6 +121,7 @@ export function TodoApp() {
 
 // same-file-component-composition(ADR-0014)で切り出したリストアイテム。
 // `editing`はfactoryクロージャ専有の局所状態になり、アイテムごとに独立する。
+/** @param {TodoItemProps} props */
 function TodoItem({ todo, onToggle, onCommitEdit, onRemove }) {
   const editing = signal(false)
 

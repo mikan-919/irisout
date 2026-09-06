@@ -1,5 +1,22 @@
 // 実用画面の作者向け網羅性fixture。フォーム、タブ、リスト項目ごとの局所状態、
 // 条件分岐、入れ子リスト、同一ファイルのコンポーネント合成を1画面で使う。
+
+/**
+ * @typedef {object} Note
+ * @property {number} id
+ * @property {string} title
+ * @property {string} summary
+ * @property {string} body
+ * @property {boolean} archived
+ * @property {string[]} tags
+ */
+
+/**
+ * @typedef {object} NoteCardProps
+ * @property {Note} note
+ * @property {() => void} onArchive
+ */
+
 export function NotesApp() {
   const notes = signal([
     {
@@ -57,10 +74,7 @@ export function NotesApp() {
             <input
               use={focusComposerInput}
               onInput={(e) => {
-                const target = e.target
-                if (target && 'value' in target && typeof target.value === 'string') {
-                  draft(target.value)
-                }
+                draft(e.currentTarget.value)
               }}
             />
           </label>
@@ -102,11 +116,13 @@ export function NotesApp() {
     notes(notes().map((note) => (note.id === id ? { ...note, archived: !note.archived } : note)))
   }
 
+  /** @param {HTMLInputElement} input */
   function focusComposerInput(input) {
     input.focus()
   }
 }
 
+/** @param {NoteCardProps} props */
 function NoteCard({ note, onArchive }) {
   const expanded = signal(false)
 
@@ -138,6 +154,7 @@ function NoteCard({ note, onArchive }) {
     </article>,
   )
 
+  /** @param {HTMLElement} article */
   function trackNoteCard(article) {
     const onNotesPulse = () => {
       const count = Number(article.getAttribute('data-pulse-count') || '0')

@@ -131,12 +131,13 @@ minifyを有効にしている。counterのsize budgetは`packages/compiler/test
   入力値の制御方式を一般化することは別のauthoring/API論点として残す。
 - (09) イベントオブジェクト(`e`)の型付け / `e.target.value` にJSの
   動的型付けのまま素朴にアクセスした(targetがHTMLInputElementである
-  保証はコード上ない) / **受け渡しは解決済み**(ADR-0009 承認済み・change
+  保証はコード上ない) / **解決済み**(ADR-0009 承認済み・change
   `adr-0009-handler-statements` で実装、
   `docs/adr/0009-handler-statements-and-event-object.md`)。ハンドラの
   イベント引数受け渡し・ブロック本体(4文種)の文レベル解析は実装済み。
-  `e` の**静的型付け**(target要素種別に応じた絞り込み)は ADR-0009 でも
-  未決定事項として切り出したままで、引き続き未決定。
+  change `component-props-handler-type-checking`で6イベントをDOMイベント型へ
+  対応付け、直接listenerを持つ要素型へ`currentTarget`を絞った。`target`は
+  子要素になり得るためDOM標準型を維持する。
 
 ### 3. エスケープハッチ(手書きJSとの共存)
 
@@ -301,10 +302,10 @@ transition/animation、portal、error boundary、async/resource
     実装・検証した。
 
 18. 次の一般用途対応は次の順番で検討する。大きな実装には着手しない。
-    1. **優先度P2: component propsとhandlerの型検査**。現行の`types/jsx.d.ts`は
-       intrinsic要素と共通属性を検査するが、componentごとのprops型・イベント対象の
-       絞り込みは弱い。module分割後の名前間違いとprops形状をbuild前に検出するために
-       必要である。
+    1. ~~**優先度P2: component propsとhandlerの型検査**~~ — **完了**(change
+       `component-props-handler-type-checking`)。JSDocで宣言したcomponent propsを
+       同一ファイルと相対importで検査し、6イベントの型と要素別`currentTarget`を
+       `types/jsx.d.ts`へ追加した。型検査専用fixtureで成功・失敗の両方を固定した。
     2. **優先度P2: module共有stateの派生値とSSR境界**。直接signalの実需をfixtureで
        確認し、derived/collection、request単位分離、永続化を同時に決めずに別契約へ分ける。
 
@@ -313,7 +314,7 @@ transition/animation、portal、error boundary、async/resource
 - `STATUS.md` — 現在地・マイルストーン進捗・既知の制約
 - `CONCEPT.v3.md` — 現在のプロダクトコンセプト
 - `CONCEPT.v2.md` — 旧コンセプト(履歴)
-- `docs/adr/0001`〜`0024` — 決定済みの設計判断
+- `docs/adr/0001`〜`0030` — 決定済みの設計判断
 - `session/000_ts-rewrite-kickoff-and-m1.md` — 書き直しキックオフの全経緯、
   quixとの比較
 - `openspec/specs/` — 実装対象の受入条件の正本

@@ -19,7 +19,35 @@
 // use= は型上も実行時も要素・リストアイテム・条件分岐ブランチで受理されるが、
 // 字句スコープ外のsignal参照など、STATUS.md のscope limitは別に適用される。
 
-type IrisEventHandler = (event: Event) => void
+// イベントの実体はブラウザ標準のまま維持し、直接addEventListenerされる
+// currentTargetだけを属性が書かれた要素へ絞る。targetは子要素になり得るため
+// EventTarget | nullから変更しない(ADR-0009 UNRESOLVED(09)の解消)。
+type IrisElementEvent<EventType extends Event, El extends Element> = EventType & {
+  readonly currentTarget: El
+}
+
+type IrisEventHandler<EventType extends Event, El extends Element> = (
+  event: IrisElementEvent<EventType, El>,
+) => void
+
+// 任意のonXxxを受理する既存契約を維持しつつ、既知属性の関数型が
+// テンプレートリテラル型の索引シグネチャにも代入できるようにする。
+// 未知のイベント名では個別のイベント型を保証しない。
+type IrisAnyEventHandler<El extends Element> =
+  | IrisEventHandler<Event, El>
+  | IrisEventHandler<FocusEvent, El>
+  | IrisEventHandler<InputEvent, El>
+  | IrisEventHandler<KeyboardEvent, El>
+  | IrisEventHandler<MouseEvent, El>
+
+type IrisKnownEventAttributes<El extends Element> = {
+  onBlur?: IrisEventHandler<FocusEvent, El>
+  onChange?: IrisEventHandler<Event, El>
+  onClick?: IrisEventHandler<MouseEvent, El>
+  onDblClick?: IrisEventHandler<MouseEvent, El>
+  onInput?: IrisEventHandler<InputEvent, El>
+  onKeyDown?: IrisEventHandler<KeyboardEvent, El>
+}
 
 // mount 時に1回呼ばれ、関数返り値は従来どおり「更新のたびに呼ばれる
 // 再描画クロージャ」として配線される。object 形式は更新クロージャと
@@ -28,11 +56,11 @@ type IrisUseActionResult = (() => void) | { update?: () => void; destroy?: () =>
 // biome-ignore lint/suspicious/noConfusingVoidType: 「返り値なし」を`void`で表す意図的な設計(`undefined`への機械的置換はしない)
 type IrisUseAction<El extends Element> = (el: El) => void | IrisUseActionResult
 
-type IrisCommonAttributes<El extends Element> = {
+type IrisCommonAttributes<El extends Element> = IrisKnownEventAttributes<El> & {
   use?: IrisUseAction<El>
   children?: unknown
-  // onXxx パターンのイベントハンドラ属性(onClick/onInput/onKeyDown 等)。
-  [handler: `on${string}`]: IrisEventHandler | undefined
+  // onXxx パターンの未知のイベント処理属性も関数に限って受理する。
+  [handler: `on${string}`]: IrisAnyEventHandler<El> | undefined
   // それ以外の属性名(aria-*/data-* 含む)は緩く受ける(design.md Decision 3)。
   [attr: string]: unknown
 }

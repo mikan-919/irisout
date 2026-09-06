@@ -1,6 +1,23 @@
 import { CARD_PREFIX } from '../lib/constants.js'
 import { formatTitle } from '../lib/format.js'
 
+/**
+ * @typedef {object} SplitCardNote
+ * @property {number} id
+ * @property {string} title
+ * @property {string} summary
+ * @property {string[]} tags
+ */
+
+/**
+ * @typedef {object} SplitCardProps
+ * @property {SplitCardNote} note
+ * @property {string} heading
+ * @property {string} prefix
+ * @property {() => void} onRemove
+ */
+
+/** @param {SplitCardProps} props */
 export default function SplitCard({ note, heading, prefix, onRemove }) {
   const expanded = signal(false)
 

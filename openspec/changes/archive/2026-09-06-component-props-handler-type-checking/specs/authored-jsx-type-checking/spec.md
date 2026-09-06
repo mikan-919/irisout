@@ -1,14 +1,24 @@
-# authored-jsx-type-checking
+## ADDED Requirements
 
-## Purpose
+### Requirement: コンポーネントのプロパティ形状を検査する
+authored `.jsx`のコンポーネントは、分割代入引数へJSDocでプロパティ形状を宣言した場合、
+同一ファイルと相対importの呼び出し箇所で必須プロパティ、プロパティ名、値の型を
+検査できなければならない(MUST)。型宣言を実行時オブジェクトや生成コードへ残しては
+ならない(MUST NOT)。
 
-authored `.jsx`向けの静的型検査を規定する。`types/jsx.d.ts`のグローバル
-`JSX`namespace・authoring API・要素別イベント型、JSDocで宣言するコンポーネントの
-props形状、examples専用の`apps/examples/tsconfig.json`で構成される。型は静的検査用で、
-コンパイラの実行時受理・拒否には影響しない。属性名のホワイトリスト化と、JSDocのない
-コンポーネントpropsの自動推論は対象外とする。
+#### Scenario: 宣言と一致するプロパティを受理する
+- **WHEN** JSDocで宣言した必須プロパティを正しい名前と型でコンポーネントへ渡す
+- **THEN** `tsc --noEmit`は同一ファイルと相対importのどちらでも型エラーを報告しない
 
-## Requirements
+#### Scenario: 必須プロパティの欠落を拒否する
+- **WHEN** JSDocで宣言した必須プロパティを呼び出し箇所で省略する
+- **THEN** `tsc --noEmit`は型エラーを報告する
+
+#### Scenario: 不明なプロパティまたは値型を拒否する
+- **WHEN** 宣言にないプロパティを渡すか、宣言と異なる型の値を渡す
+- **THEN** `tsc --noEmit`は型エラーを報告する
+
+## MODIFIED Requirements
 
 ### Requirement: authored .jsx が tsc の型検査対象に含まれる
 `apps/examples/tsconfig.json`(examples専用の独立したTSプロジェクト。
@@ -27,26 +37,6 @@ props形状、examples専用の`apps/examples/tsconfig.json`で構成される�
 #### Scenario: 存在しないグローバル関数を呼ぶと型エラーになる
 - **WHEN** authored `.jsx`内で未宣言のグローバル関数(例:
   `signal`/`derived`/`render`のいずれでもない不明な識別子)を呼び出す
-- **THEN** `tsc --noEmit`は型エラーを報告する
-
-### Requirement: signal/derived/render のグローバル型宣言
-`signal`・`derived`・`render`は`types/jsx.d.ts`でグローバル関数として
-型宣言されなければならない(MUST)。authored `.jsx`からimportなしで
-型付きで呼び出せなければならない(MUST)。
-`signal<T>(initial: T)`は読み書き両用の関数
-(`(): T`と`(next: T): void`の両方の呼び出し形)を返す SHALL。
-`derived<T>(compute: () => T)`は`() => T`を返す SHALL。
-`render(element: JSX.Element): void`はJSX式を1つ受け取る SHALL。
-
-#### Scenario: signal の読み書き両方の呼び出し形が型付けされる
-- **WHEN** `const count = signal(0)`のあと`count()`(読み取り)と
-  `count(1)`(書き込み)の両方を呼ぶ
-- **THEN** どちらの呼び出し形も型エラーにならず、`count()`の返り値型は
-  `number`と推論される
-
-#### Scenario: signal の初期値と異なる型を書き込むと型エラーになる
-- **WHEN** `const count = signal(0)`のあと`count('x')`のように初期値と
-  異なる型の値を書き込む
 - **THEN** `tsc --noEmit`は型エラーを報告する
 
 ### Requirement: JSX intrinsic 要素の型宣言
@@ -92,34 +82,3 @@ props形状、examples専用の`apps/examples/tsconfig.json`で構成される�
   関数、要素を受け取り引数なしの再描画関数を返す関数、または
   `{ update?, destroy? }`を返す関数を`use`へ渡す
 - **THEN** いずれの形も型エラーにならない
-
-### Requirement: 型検査は実行時 scope limit の代替ではない
-`types/jsx.d.ts`が特定の構文(例: リストアイテム内の`use=`)を型上
-許可していても、それは実行時のコンパイラによる別の`scope limit`検査を免れることを
-意味してはならない(MUST NOT)。構造unit内の`use=`は現在受理されるが、字句スコープ外の
-signal参照や未対応のaction形などは引き続き拒否される。この非対称性はdesign.mdおよび
-コード内コメントに明記しなければならない(MUST)。
-
-#### Scenario: useの型検査と実行時受理は別の検査である
-- **WHEN** リストアイテム内の要素に`use=`属性を書く
-- **THEN** `tsc --noEmit`は型エラーを報告せず、`compile()`は構造unit actionの
-  受理条件を検査する。構造unit内の`use=`自体は受理されるが、型宣言はscope limit
-  検査の代替ではない
-
-### Requirement: コンポーネントのプロパティ形状を検査する
-authored `.jsx`のコンポーネントは、分割代入引数へJSDocでプロパティ形状を宣言した場合、
-同一ファイルと相対importの呼び出し箇所で必須プロパティ、プロパティ名、値の型を
-検査できなければならない(MUST)。型宣言を実行時オブジェクトや生成コードへ残しては
-ならない(MUST NOT)。
-
-#### Scenario: 宣言と一致するプロパティを受理する
-- **WHEN** JSDocで宣言した必須プロパティを正しい名前と型でコンポーネントへ渡す
-- **THEN** `tsc --noEmit`は同一ファイルと相対importのどちらでも型エラーを報告しない
-
-#### Scenario: 必須プロパティの欠落を拒否する
-- **WHEN** JSDocで宣言した必須プロパティを呼び出し箇所で省略する
-- **THEN** `tsc --noEmit`は型エラーを報告する
-
-#### Scenario: 不明なプロパティまたは値型を拒否する
-- **WHEN** 宣言にないプロパティを渡すか、宣言と異なる型の値を渡す
-- **THEN** `tsc --noEmit`は型エラーを報告する
