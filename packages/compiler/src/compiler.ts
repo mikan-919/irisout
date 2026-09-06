@@ -274,6 +274,7 @@ interface CompileOptions {
   allowModuleSupport?: boolean
   supportStatements?: string[]
   supportNames?: Set<string>
+  externalImports?: string[]
   dependencies?: string[]
 }
 
@@ -660,6 +661,7 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
 
   const code = generateModule({
     supportStatements: options.supportStatements ?? [],
+    externalImports: options.externalImports ?? [],
     sharedStatements: ctx.sharedDecls
       .filter((decl) => ctx.usedSharedDeclIds.has(decl.id))
       .map((decl) => `const ${decl.outputName} = __sharedSignal__(${decl.rendered});`),
@@ -707,6 +709,7 @@ export function compileProject(entryPath: string): CompileResult {
     allowModuleSupport: true,
     supportStatements: linked.supportStatements,
     supportNames: linked.supportNames,
+    externalImports: linked.externalImports,
     dependencies: linked.dependencies,
   })
 }

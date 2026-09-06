@@ -47,6 +47,12 @@ export default defineConfig({
           'typescript/no-useless-default-assignment': 'off',
         },
       },
+      {
+        files: ['apps/examples/**/*.d.ts'],
+        rules: {
+          'typescript/no-useless-default-assignment': 'off',
+        },
+      },
     ],
   },
   test: {

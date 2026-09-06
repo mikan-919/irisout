@@ -1,6 +1,6 @@
 // compileProject()が使う静的module linker。入口から相対importを辿り、ASTの
 // bindingをmodule固有名へ変更してから一つのprogramへ連結する。対象は小規模な
-// .js/.jsx moduleに限り、node_modules・dynamic import・循環依存は拒否する。
+// .js/.jsx moduleで、外部moduleとViteの資源importはそのまま生成moduleへ渡す。
 
 import { readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
@@ -21,10 +21,19 @@ interface ImportSpec {
   named: { imported: string; local: string }[]
 }
 
+interface ExternalImportSpec {
+  statement: t.ImportDeclaration
+  resourcePath: string | null
+  usedLocals: Set<string>
+}
+
 interface ModuleRecord {
   filePath: string
   ast: t.File
   imports: ImportSpec[]
+  externalImports: ExternalImportSpec[]
+  resourceDependencies: Set<string>
+  externalStatements: string[]
   exports: Map<string, string>
   ownNames: string[]
   importNames: Set<string>
@@ -36,6 +45,8 @@ export interface LinkedProject {
   source: string
   supportStatements: string[]
   supportNames: Set<string>
+  /** 外部moduleとViteの資源import。compilerのAST解析へ入れず生成moduleへ残す。 */
+  externalImports: string[]
   /** compileProject()の利用側が相対moduleを監視できる絶対pathの一覧。 */
   dependencies: string[]
 }
@@ -59,6 +70,8 @@ function parseModule(filePath: string, source: string): ModuleRecord {
   }
 
   const imports: ImportSpec[] = []
+  const externalImports: ExternalImportSpec[] = []
+  const resourceDependencies = new Set<string>()
   const exports = new Map<string, string>()
   const ownNames: string[] = []
   const ownNameSet = new Set<string>()
@@ -118,16 +131,24 @@ function parseModule(filePath: string, source: string): ModuleRecord {
       if (statement.importKind === 'type') {
         throw compileError(`type-only imports are not supported in module "${filePath}"`)
       }
-      if (statement.specifiers.length === 0) {
+      const source = statement.source.value
+      const isRelative = source.startsWith('./') || source.startsWith('../')
+      const resourcePath = isRelative ? resolveResource(source, filePath) : null
+      const isResource = resourcePath !== null
+      if (isRelative && !isResource && statement.specifiers.length === 0) {
         throw compileError(`side-effect imports are not supported in module "${filePath}"`)
       }
       const spec: ImportSpec = {
-        source: statement.source.value,
+        source,
         defaultLocal: null,
         named: [],
       }
       for (const specifier of statement.specifiers) {
         if (specifier.type === 'ImportNamespaceSpecifier') {
+          if (!isRelative || isResource) {
+            addImportName(specifier.local.name)
+            continue
+          }
           throw compileError(`namespace imports are not supported in module "${filePath}"`)
         }
         if (specifier.type === 'ImportDefaultSpecifier') {
@@ -145,7 +166,15 @@ function parseModule(filePath: string, source: string): ModuleRecord {
         spec.named.push({ imported, local: specifier.local.name })
         addImportName(specifier.local.name)
       }
-      imports.push(spec)
+      if (!isRelative || isResource) {
+        externalImports.push({ statement, resourcePath, usedLocals: new Set() })
+        if (resourcePath) resourceDependencies.add(resourcePath)
+      } else {
+        if (statement.specifiers.length === 0) {
+          throw compileError(`side-effect imports are not supported in module "${filePath}"`)
+        }
+        imports.push(spec)
+      }
       continue
     }
 
@@ -259,6 +288,9 @@ function parseModule(filePath: string, source: string): ModuleRecord {
     filePath,
     ast,
     imports,
+    externalImports,
+    resourceDependencies,
+    externalStatements: [],
     exports,
     ownNames,
     importNames,
@@ -273,6 +305,21 @@ function isFile(filePath: string): boolean {
   } catch {
     return false
   }
+}
+
+function resolveResource(specifier: string, fromFile: string): string | null {
+  if (!specifier.startsWith('./') && !specifier.startsWith('../')) return null
+  const resourceSpecifier = specifier.split(/[?#]/, 1)[0] ?? specifier
+  const extension = path.extname(resourceSpecifier)
+  const hasQuery = resourceSpecifier !== specifier
+  if (!hasQuery && (extension === '' || extension === '.js' || extension === '.jsx')) {
+    return null
+  }
+  const resourcePath = path.resolve(path.dirname(fromFile), resourceSpecifier)
+  if (!isFile(resourcePath)) {
+    throw compileError(`cannot resolve resource import "${specifier}" from "${fromFile}"`)
+  }
+  return resourcePath
 }
 
 function findModuleStateCall(node: t.Node): string | null {
@@ -412,6 +459,17 @@ function renameModuleBindings(record: ModuleRecord, dependencies: Map<string, Mo
   const programPath = foundProgramPath as NodePath<t.Program>
   programPath.scope.crawl()
 
+  for (const external of record.externalImports) {
+    for (const specifier of external.statement.specifiers) {
+      const localName = specifier.local.name
+      const binding = programPath.scope.getBinding(localName)
+      if ((binding?.referencePaths.length ?? 0) === 0) continue
+      const outputName = generatedName(record, localName)
+      external.usedLocals.add(outputName)
+      importRenames.set(localName, outputName)
+    }
+  }
+
   for (const [sourceName, outputName] of ownRenames) {
     programPath.scope.rename(sourceName, outputName)
   }
@@ -421,6 +479,20 @@ function renameModuleBindings(record: ModuleRecord, dependencies: Map<string, Mo
       throw compileError(`import binding "${sourceName}" was not found in "${record.filePath}"`)
     }
     programPath.scope.rename(sourceName, outputName)
+  }
+
+  record.externalStatements = []
+  for (const external of record.externalImports) {
+    if (external.statement.specifiers.length === 0) {
+      record.externalStatements.push(generate(external.statement, { comments: false }).code)
+      continue
+    }
+    external.statement.specifiers = external.statement.specifiers.filter((specifier) =>
+      external.usedLocals.has(specifier.local.name),
+    )
+    if (external.statement.specifiers.length > 0) {
+      record.externalStatements.push(generate(external.statement, { comments: false }).code)
+    }
   }
 
   // Babelのscope.renameは通常のIdentifier参照を変更するが、JSX tagはparser版や
@@ -499,9 +571,14 @@ export function linkProject(entryPath: string): LinkedProject {
   const sourceParts: string[] = []
   const supportStatements: string[] = []
   const supportNames = new Set<string>()
+  const externalImports: string[] = []
+  const dependencies = new Set<string>()
 
   for (const record of order) {
     sourceParts.push(generate(record.ast, { comments: false }).code)
+    externalImports.push(...record.externalStatements)
+    dependencies.add(record.filePath)
+    for (const resourcePath of record.resourceDependencies) dependencies.add(resourcePath)
     for (const statement of record.ast.program.body) {
       if (statement.type === 'FunctionDeclaration' && !hasRenderCall(statement)) {
         supportStatements.push(generate(statement, { comments: false }).code)
@@ -525,6 +602,7 @@ export function linkProject(entryPath: string): LinkedProject {
     source: sourceParts.join('\n'),
     supportStatements,
     supportNames,
-    dependencies: order.map((record) => record.filePath),
+    externalImports: [...new Set(externalImports)],
+    dependencies: [...dependencies],
   }
 }

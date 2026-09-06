@@ -172,11 +172,13 @@ describe('compileProject: static multi-file module composition', () => {
 })
 
 describe('compileProject: module boundary errors', () => {
-  it('rejects non-relative imports, dynamic imports, and cycles', () => {
+  it('passes external imports through and still rejects dynamic imports and cycles', () => {
     const external = writeProject({
-      'main.jsx': `import { value } from 'external-package'; export function App() { render(<div>{value}</div>) }`,
+      'main.jsx': `import { value } from 'external-package'; export function App() { const text = signal('ready'); render(<button onClick={() => text(value)}>{text()}</button>) }`,
     })
-    expect(() => compileProject(external)).toThrow(/non-relative import.*scope limit/)
+    const externalResult = compileProject(external)
+    expect(externalResult.code).toContain("from 'external-package'")
+    expect(externalResult.code).toContain('IrisM0_value')
 
     const dynamic = writeProject({
       'main.jsx': `export function App() { render(<div />) } export function load() { return import('./dep.js') }`,
@@ -189,6 +191,37 @@ describe('compileProject: module boundary errors', () => {
       'child.js': `import { value } from './main.jsx'; export const child = value`,
     })
     expect(() => compileProject(cycle)).toThrow(/circular module dependency.*scope limit/)
+  })
+
+  it('passes CSS, URL, and worker resource imports to Vite and watches local resources', () => {
+    const entry = writeProject({
+      'main.jsx': `import analyzer from 'external-analyzer'; import termsUrl from './terms.json?url'; import Worker from './analysis.worker.js?worker'; import './heatmap.css'; export function App() { const status = signal('ready'); render(<button onClick={() => status(analyzer.name)}>{status()}</button>); onMount(() => { const worker = new Worker(); worker.postMessage(termsUrl); return () => worker.terminate(); }); }`,
+      'terms.json': '{"terms":["情報量"]}',
+      'analysis.worker.js': 'self.onmessage = () => {}',
+      'heatmap.css': '.heatmap { color: red; }',
+    })
+    const result = compileProject(entry)
+    expect(result.code).toContain("from 'external-analyzer'")
+    expect(result.code).toContain("from './terms.json?url'")
+    expect(result.code).toContain("from './analysis.worker.js?worker'")
+    expect(result.code).toContain("import './heatmap.css'")
+    expect(new Set(result.dependencies)).toEqual(
+      new Set([
+        entry,
+        path.join(path.dirname(entry), 'terms.json'),
+        path.join(path.dirname(entry), 'analysis.worker.js'),
+        path.join(path.dirname(entry), 'heatmap.css'),
+      ]),
+    )
+  })
+
+  it('omits an unused external binding from the generated module', () => {
+    const entry = writeProject({
+      'main.jsx': `import { unused } from 'unused-package'; export function App() { render(<span>ready</span>) }`,
+    })
+    const result = compileProject(entry)
+    expect(result.code).not.toContain('unused-package')
+    expect(result.code).not.toContain('IrisM0_unused')
   })
 
   it('rejects side-effect imports, namespace imports, and re-exports', () => {

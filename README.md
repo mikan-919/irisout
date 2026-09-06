@@ -90,6 +90,10 @@ bun run build:inspect
 
 開発サーバーを切り替えるときは、実行中の処理を`Ctrl+C`で終了してください。
 
+`dev:heatmap`は`@libraz/suzume`のブラウザ内日本語解析、WebAssembly、JSON辞書URL、CSS、
+Worker入口を読み込みます。配信先に接頭辞がある場合は`IRISOUT_BASE=/heatmap/ bun run build`
+で資源URLを確認できます。
+
 ## 処理の流れ
 
 1. `compileProject(entryPath)`が入口の`.jsx`と相対読み込み先を解析します。
@@ -115,8 +119,9 @@ bun run build:inspect
 - `onMount`、`effect`、コンテキスト
 - コンポーネントのマウント、初期HTMLの引き継ぎ、破棄
 
-ルートコンポーネントは1個、読み込めるモジュールは相対`.js`と`.jsx`、
-子要素の受け渡しは未対応です。コンパイラは未対応の構文を`compile: ... (scope limit)`
+ルートコンポーネントは1個、コンパイラが解析するモジュールは相対`.js`と`.jsx`、
+子要素の受け渡しは未対応です。外部moduleとViteの資源importは生成moduleへ渡します。
+コンパイラは未対応の構文を`compile: ... (scope limit)`
 として拒否します。対応状況と制約は[`STATUS.md`](./STATUS.md)を参照してください。
 
 ## 性能計測

@@ -1,3 +1,9 @@
+import { Suzume } from '@libraz/suzume'
+import suzumeWasmUrl from '@libraz/suzume/wasm?url'
+import analysisDictionaryUrl from './heatmap-dictionary.json?url'
+import HeatmapWorker from './heatmap.worker.js?worker'
+import './heatmap.css'
+
 // 日本語と記号を含む本文を、段落ごとの指標へ変換して表示する代表例。
 // 指標の定義はこのファイルに置き、compilerやruntimeは文章の意味を判定しない。
 
@@ -7,6 +13,8 @@ export function HeatmapApp() {
   )
   const metric = signal('length')
   const selectedId = signal(1)
+  const analysisStatus = signal('解析資源を準備中')
+  const tokenCount = signal(0)
   const paragraphs = derived(() =>
     source()
       .split(/\n\s*\n/)
@@ -55,6 +63,9 @@ export function HeatmapApp() {
       <p class="selection">
         選択中: {selectedParagraph() ? `第${selectedParagraph().id}段落` : 'なし'}
       </p>
+      <p class="analysis-status">
+        {analysisStatus()} / 単語数 {tokenCount()}
+      </p>
 
       <nav class="overview" aria-label="段落の全体地図">
         <h2>全体地図</h2>
@@ -90,6 +101,36 @@ export function HeatmapApp() {
       </section>
     </main>,
   )
+
+  onMount(() => {
+    let analyzer
+    let worker
+    let disposed = false
+    fetch(analysisDictionaryUrl)
+      .then((response) => response.json())
+      .then((dictionary) => {
+        if (disposed) return
+        return Suzume.create({ wasmPath: suzumeWasmUrl }).then((nextAnalyzer) => {
+          if (disposed) {
+            nextAnalyzer.destroy()
+            return
+          }
+          analyzer = nextAnalyzer
+          worker = new HeatmapWorker()
+          worker.postMessage({ type: 'dictionary', terms: dictionary.terms })
+          analysisStatus('解析準備完了')
+          tokenCount(analyzer.analyze(source()).length)
+        })
+      })
+      .catch(() => {
+        if (!disposed) analysisStatus('解析資源の読み込みに失敗')
+      })
+    return () => {
+      disposed = true
+      analyzer?.destroy()
+      worker?.terminate()
+    }
+  })
 }
 
 function ParagraphRow({ paragraph, selectedId }) {

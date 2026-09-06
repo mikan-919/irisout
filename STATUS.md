@@ -256,21 +256,23 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
 
 ## マイルストーン表
 
-| M       | 内容                                                                         | 状態     | 備考                                                                                                                                                                                                                             |
-| ------- | ---------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| M1      | スキャフォールド、signal/derived、テキストマーカー                           | **DONE** | `0155e85`                                                                                                                                                                                                                        |
-| M2      | イベントハンドラ、書き込みトリガー更新                                       | **DONE** | `810bc83`→`645a820`                                                                                                                                                                                                              |
-| M3      | ブラウザビルドターゲット(hydrate/mount分割 + `apps/examples/vite.config.ts`) | **DONE** | `a2905c8`、Vite+移行後はADR-0016のbuild経路                                                                                                                                                                                      |
-| M4      | 静的host要素属性                                                             | **DONE** | `9829f88`、change `m4-static-host-attributes`                                                                                                                                                                                    |
-| M4.5    | authoring APIゾーン化(ADR-0008)                                              | **DONE** | change `authoring-api-zones`。render()マーカー・識別子参照ハンドラ・ゾーン配置強制                                                                                                                                               |
-| M5      | list/conditional factory closures、1階層のみ(ADR-0005の新実装)               | **DONE** | change `m5-list-conditional-factory-closures`。ネストした構造ユニット(06/07)は据え置き                                                                                                                                           |
-| M5.5    | ネストした構造ユニット(条件分岐の中のリスト/リストアイテムの中の条件分岐)    | **DONE** | change `recursive-structural-authoring`。任意の深さ、unitごとの状態/cache、祖先local signalの更新接続                                                                                                                            |
-| `use=`  | 要素へのaction接続(ADR-0011)                                                 | **DONE** | `use-action-impl` + `structural-unit-use-actions` + ADR-0022。top-level、list item、conditional branchをfactory単位で初期化・更新・破棄。関数updateと`{ update?, destroy? }`、component `unmount()`を実装                        |
-| M6      | 全マイルストーン横断のno-wrapper検証                                         | **DONE** | change `m6-no-wrapper-verification`。全機能同居フィクスチャで no-wrapper・import面・実DOM動作を固定(`test/no-wrapper.test.ts`)。サイズ予算係数はADR-0022のlifecycle固定費を含む5.5x(実測5.33x)。締め直しはminify最適化時に再検討 |
-| 合成    | 同一ファイル内の複数コンポーネント合成(ADR-0014)                             | **DONE** | change `same-file-component-composition`。コンパイル時ASTインライン化、root scope + list itemのみ、children/slot・再帰は未対応(下記制約参照)                                                                                     |
-| 分割    | 相対moduleの複数ファイル合成(ADR-0024)                                       | **DONE** | `compileProject(entryPath)`、AST bindingリンク、依存順、静的import検証、Vite fixtureを実装。外部module・dynamic import・cycle・re-exportは対象外                                                                                 |
-| Batch   | 同期スコープ内の共有marker更新(ADR-0020)                                     | **DONE** | 複数root write時だけ専用batchを生成。公開batch API・scheduler・collection構造操作は対象外。イベント配線はADR-0021でdirectを採用                                                                                                  |
-| Context | instance単位context(ADR-0027)                                                | **DONE** | `createContext`/`provideContext`/`useContext`を静的置換。root・list item・conditional branchの所有単位へ接続し、未使用時の生成物は増やさない                                                                                     |
+| M         | 内容                                                                           | 状態     | 備考                                                                                                                                                                                                                             |
+| --------- | ------------------------------------------------------------------------------ | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M1        | スキャフォールド、signal/derived、テキストマーカー                             | **DONE** | `0155e85`                                                                                                                                                                                                                        |
+| M2        | イベントハンドラ、書き込みトリガー更新                                         | **DONE** | `810bc83`→`645a820`                                                                                                                                                                                                              |
+| M3        | ブラウザビルドターゲット(hydrate/mount分割 + `apps/examples/vite.config.ts`)   | **DONE** | `a2905c8`、Vite+移行後はADR-0016のbuild経路                                                                                                                                                                                      |
+| M4        | 静的host要素属性                                                               | **DONE** | `9829f88`、change `m4-static-host-attributes`                                                                                                                                                                                    |
+| M4.5      | authoring APIゾーン化(ADR-0008)                                                | **DONE** | change `authoring-api-zones`。render()マーカー・識別子参照ハンドラ・ゾーン配置強制                                                                                                                                               |
+| M5        | list/conditional factory closures、1階層のみ(ADR-0005の新実装)                 | **DONE** | change `m5-list-conditional-factory-closures`。ネストした構造ユニット(06/07)は据え置き                                                                                                                                           |
+| M5.5      | ネストした構造ユニット(条件分岐の中のリスト/リストアイテムの中の条件分岐)      | **DONE** | change `recursive-structural-authoring`。任意の深さ、unitごとの状態/cache、祖先local signalの更新接続                                                                                                                            |
+| `use=`    | 要素へのaction接続(ADR-0011)                                                   | **DONE** | `use-action-impl` + `structural-unit-use-actions` + ADR-0022。top-level、list item、conditional branchをfactory単位で初期化・更新・破棄。関数updateと`{ update?, destroy? }`、component `unmount()`を実装                        |
+| M6        | 全マイルストーン横断のno-wrapper検証                                           | **DONE** | change `m6-no-wrapper-verification`。全機能同居フィクスチャで no-wrapper・import面・実DOM動作を固定(`test/no-wrapper.test.ts`)。サイズ予算係数はADR-0022のlifecycle固定費を含む5.5x(実測5.33x)。締め直しはminify最適化時に再検討 |
+| 合成      | 同一ファイル内の複数コンポーネント合成(ADR-0014)                               | **DONE** | change `same-file-component-composition`。コンパイル時ASTインライン化、root scope + list itemのみ、children/slot・再帰は未対応(下記制約参照)                                                                                     |
+| 分割      | 相対moduleの複数ファイル合成(ADR-0024)                                         | **DONE** | `compileProject(entryPath)`、AST bindingリンク、依存順、静的import検証、Vite fixtureを実装。外部module・dynamic import・cycle・re-exportは対象外                                                                                 |
+| Batch     | 同期スコープ内の共有marker更新(ADR-0020)                                       | **DONE** | 複数root write時だけ専用batchを生成。公開batch API・scheduler・collection構造操作は対象外。イベント配線はADR-0021でdirectを採用                                                                                                  |
+| Context   | instance単位context(ADR-0027)                                                  | **DONE** | `createContext`/`provideContext`/`useContext`を静的置換。root・list item・conditional branchの所有単位へ接続し、未使用時の生成物は増やさない                                                                                     |
+| Heatmap 3 | 同期解析の派生値連鎖・構造unitのroot依存・条件分岐内の状態付き子部品(ADR-0033) | **DONE** | `apps/examples/heatmap.jsx`、回帰試験を追加                                                                                                                                                                                      |
+| Heatmap 4 | 外部解析依存、CSS・辞書URL・Worker資源のVite境界(ADR-0034)                     | **DONE** | `@libraz/suzume`、接頭辞付き本番build、未使用外部binding除外を確認                                                                                                                                                               |
 
 ## 既知の制約(現時点のcodegenの限界)
 
@@ -284,6 +286,21 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
 `compileProject()`の依存pathを監視して入口・相対moduleの変更時に全体再読み込みを送る。
 構文エラー時は直前の正常結果を保持し、修正後の変更で復帰する。
 
+## 第3段階の実装結果(2026-09-06)
+
+`derived`の依存グラフを循環検査し、root signalから到達する派生値を依存順に再計算する。
+リストと条件分岐の本文・属性からroot signal/derivedへの依存を所有factoryへ接続する。
+条件分岐内の状態付き子部品は、ブランチ全体を0引数arrowのblockへ包み、局所状態と
+ライフサイクルをbranch factoryへ置く。`apps/examples/heatmap.jsx`と回帰試験で確認した。
+
+## 第4段階の実装結果(2026-09-06)
+
+`compileProject()`は外部moduleとVite資源importを生成moduleへ残し、外部moduleの内部を解析
+しない。使用される外部bindingだけを出力し、CSS、`?url`、`?worker`の資源は依存一覧へ加える。
+`@libraz/suzume`、WebAssembly URL、用語辞書URL、Worker入口、CSSをヒートマップ例へ接続し、
+ブラウザ専用の初期化と破棄を`onMount()`とcleanupへ置いた。通常buildと`/heatmap/`接頭辞
+付きbuildで資源URLを確認した。Workerによる本文解析、連続入力、古い結果の破棄は第5段階へ残す。
+
 - **ルートコンポーネントは1つだけ**: `compile()`は「他から一度も参照
   されないトップレベル関数」がちょうど1つであることを要求し、そうで
   なければcompile error(`packages/compiler/src/compiler.ts`のscope limit)。
@@ -293,11 +310,12 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
   拒否する。`const [a] = signal(0)`
   のような分割代入宣言子も拒否する。ビルド時実行の例外は
   `compile: build-time execution failed:`(`cause`付き)に包まれる。
-- **`compileProject(entryPath)`のmodule境界**(ADR-0024/0030): 相対`.js`/`.jsx`の静的
-  named/default importだけを解決する。module直下で許可するのはimport、function宣言、
-  初期化済み単純`const`と直接`const name = signal(initial)`、それらのexportだけである。module scopeの`derived`/`collection`、副作用文、
-  `let`/`var`、分割代入、外部specifier、未解決path、namespace/side-effect/dynamic import、
-  re-export、循環依存は`compile:`エラーで拒否する。
+- **`compileProject(entryPath)`のmodule境界**(ADR-0024/0030/0034): 相対`.js`/`.jsx`の静的
+  named/default importを解析して連結する。外部moduleの静的named/default/namespace importと
+  CSS、`?url`、`?worker`などの資源importは解析せず生成moduleへ残し、使用されないbindingは
+  出力しない。相対資源の実pathは依存一覧へ含める。module scopeの`derived`/`collection`、
+  副作用文、`let`/`var`、分割代入、未解決の相対path、相対`.js`/`.jsx`のside-effect import、
+  dynamic import、re-export、循環依存は`compile:`エラーで拒否する。
 - **複数インスタンスは対応済み**(ADR-0018): 同じ生成moduleを複数containerへ
   mount/hydrateした場合と、stateを持つ同じ子componentをroot内で複数回使う場合の
   どちらもstate・marker・handler・構造ユニット状態が独立する。1つの

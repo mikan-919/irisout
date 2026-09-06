@@ -4,6 +4,7 @@ import { irisout } from '@irisout/vite-plugin'
 
 export default defineConfig(() => {
   return {
+    base: process.env.IRISOUT_BASE ?? '/',
     plugins: [
       irisout({
         entry: process.env.IRISOUT_ENTRY ?? 'counter.jsx',

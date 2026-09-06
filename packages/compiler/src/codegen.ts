@@ -151,6 +151,8 @@ export interface EffectOutput {
 export interface GenerateModuleInput {
   /** compileProject()でリンクされた通常の関数/const。runtimeへは出さず、module scopeへ一度だけ出す。 */
   supportStatements: string[]
+  /** 外部moduleとViteの資源import。compilerのAST解析へ入れず、生成moduleの先頭へ残す。 */
+  externalImports: string[]
   /** compileProjectの使用済みmodule共有signalをmodule scopeへ置く。 */
   sharedStatements: string[]
   sharedSignalNames: string[]
@@ -1258,6 +1260,7 @@ function renderLocalEffectRunner(e: LocalEffectOutput, index: number): string[] 
 
 export function generateModule({
   supportStatements,
+  externalImports,
   sharedStatements,
   sharedSignalNames,
   declStatements,
@@ -1315,6 +1318,7 @@ export function generateModule({
     }
   }
   if (sharedStatements.length > 0) runtimeImports.push('sharedSignal as __sharedSignal__')
+  if (externalImports.length > 0) moduleLines.push(...externalImports, '')
   moduleLines.push(`import { ${runtimeImports.join(', ')} } from '@irisout/runtime';`, '')
   if (supportStatements.length > 0) moduleLines.push(...supportStatements, '')
   if (sharedStatements.length > 0) moduleLines.push(...sharedStatements, '')

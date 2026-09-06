@@ -1,9 +1,13 @@
-import { readFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, readdirSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vite-plus/test'
-import { compile } from '../src/compiler.js'
+import { compileProject } from '../src/compiler.js'
 import { createContainer, loadGenerated } from './helpers.js'
 
-const SOURCE = readFileSync(new URL('../../../apps/examples/heatmap.jsx', import.meta.url), 'utf8')
+const ENTRY = fileURLToPath(new URL('../../../apps/examples/heatmap.jsx', import.meta.url))
 
 function click(container: Element, selector: string): void {
   const element = container.querySelector(selector) as HTMLElement | null
@@ -13,8 +17,16 @@ function click(container: Element, selector: string): void {
 
 describe('apps/examples/heatmap.jsx', () => {
   it('connects input, metric selection, paragraph selection, and overview links', async () => {
-    const { code } = compile(SOURCE)
-    const mod = await loadGenerated(code)
+    const { code } = compileProject(ENTRY)
+    const executableCode = `const IrisM0_analysisDictionaryUrl = 'data:application/json,%7B%22terms%22%3A%5B%5D%7D';
+const IrisM0_suzumeWasmUrl = '';
+const IrisM0_Suzume = { create: () => Promise.reject(new Error('test resource')) };
+class IrisM0_HeatmapWorker { postMessage() {} terminate() {} }
+${code
+  .split('\n')
+  .filter((line) => !line.startsWith('import ') || line.includes("'@irisout/runtime'"))
+  .join('\n')}`
+    const mod = await loadGenerated(executableCode)
     const container = createContainer()
     ;(mod.mountComponent as (container: Element) => unknown)(container)
 
@@ -39,5 +51,34 @@ describe('apps/examples/heatmap.jsx', () => {
     )
     expect(container.querySelectorAll('.paragraph-list article')).toHaveLength(2)
     expect(container.querySelector('#paragraph-2')?.textContent).toContain('99')
+  })
+
+  it('builds library, dictionary URL, CSS, and worker assets under a base path', () => {
+    const outDir = mkdtempSync(path.join(tmpdir(), 'irisout-heatmap-build-'))
+    const result = spawnSync(
+      path.resolve('node_modules/.bin/vp'),
+      ['-C', 'apps/examples', 'build'],
+      {
+        env: {
+          ...process.env,
+          IRISOUT_ENTRY: 'heatmap.jsx',
+          IRISOUT_MINIFY: 'false',
+          IRISOUT_BASE: '/heatmap/',
+          IRISOUT_OUT_DIR: outDir,
+        },
+        encoding: 'utf8',
+      },
+    )
+    expect(result.status, result.stderr).toBe(0)
+
+    const html = readFileSync(path.join(outDir, 'index.html'), 'utf8')
+    const app = readFileSync(path.join(outDir, 'app.js'), 'utf8')
+    const assets = readdirSync(path.join(outDir, 'assets'))
+    expect(html).toContain('/heatmap/app.js')
+    expect(html).toMatch(/\/heatmap\/assets\/.*\.css/)
+    expect(app).toMatch(/\/heatmap\/assets\/suzume-.*\.wasm/)
+    expect(app).toMatch(/\/heatmap\/assets\/heatmap\.worker-.*\.js/)
+    expect(assets.some((name) => name.endsWith('.wasm'))).toBe(true)
+    expect(assets.some((name) => name.startsWith('heatmap.worker-'))).toBe(true)
   })
 })

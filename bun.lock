@@ -18,6 +18,7 @@
         "@irisout/compiler": "workspace:*",
         "@irisout/runtime": "workspace:*",
         "@irisout/vite-plugin": "workspace:*",
+        "@libraz/suzume": "0.9.10",
         "react": "^19.2.7",
         "react-dom": "^19.2.7",
       },
@@ -195,6 +196,8 @@
     "@jridgewell/sourcemap-codec": ["@jridgewell/sourcemap-codec@1.6.0", "", {}, "sha512-T7jf+5zgsZHwNJ4lvQ7/aezbyk0nNX+zJVWpmHA7VYsEx7a7qr5Rg5IbtJFqkgze5Y2sruq1RUY8Q837Od7iFw=="],
 
     "@jridgewell/trace-mapping": ["@jridgewell/trace-mapping@0.3.31", "", { "dependencies": { "@jridgewell/resolve-uri": "^3.1.0", "@jridgewell/sourcemap-codec": "^1.4.14" } }, "sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw=="],
+
+    "@libraz/suzume": ["@libraz/suzume@0.9.10", "", {}, "sha512-+G2TAGejH1oDQIB774UVE1gp7apD3uvlf9sdylPxJapuu146uipGodB7CLfRL6Z58Nq7o1GNP/BIrZmMNjQmsg=="],
 
     "@oxc-project/runtime": ["@oxc-project/runtime@0.146.0", "", {}, "sha512-lbXHIpZ1MmK6zuw5txlMdIZ2waLVUIU5Gnm3sEuwJOiqDfQfbtjeHscatmeBoxbv8+If9LFM6PGh/3DcDWYIYw=="],
 
