@@ -78,8 +78,10 @@ IRISOUT_ENTRY=multi-file/App.jsx vp build
 
 `compileProject(entryPath)`は相対`.js`/`.jsx`の静的importを依存順にリンクし、
 componentをコンパイル時にインライン化します。通常の補助関数と`const`は生成moduleへ
-残ります。外部module、dynamic import、re-export、循環依存、module scopeのstateは
-受理しません。`compile(source)`は単一文字列APIとして残ります。
+残ります。module直下の直接`const name = signal(initial)`はmodule共有signalとして受理し、
+参照された場合だけ生成moduleの共有cellとinstance購読を出力します。外部module、dynamic
+import、re-export、循環依存、module scopeの`derived`/`collection`や副作用文は受理しません。
+`compile(source)`は単一文字列APIとして残ります。
 
 ## ベンチマーク
 
@@ -126,14 +128,15 @@ root `unmount()`でdestroyします。ルートcomponentの動きゾーンでは
 instanceが所有します。ルートcomponentの動きゾーンでは`effect(() => void | (() => void))`
 も使えます。callback本体が読むsignal/
 derivedの更新時に再実行され、返り値のcleanupは再実行前とunmount時に呼ばれます。
-effect本体から追跡signalへ書き込むこと、構造unit内・子componentでeffectを使うことは
-scope limitです。
+effect本体から追跡signalへ書き込むこと、非同期schedulerを暗黙に導入することはscope
+limitです。構造unit内・inline子componentのeffectは各unit/root instanceが所有します。
 component treeの共有依存には、トップレベル`const Theme = createContext(defaultValue)`、
 変数ゾーンの`provideContext(Theme, value)`、JSX式の`useContext(Theme)`を使えます。
 consumerは最も近いproviderまたはdefault値へコンパイル時に置換され、root・list item・
 conditional branchの各instanceが自身の値と更新依存を所有します。contextを使わない生成物に
-context runtimeやMapは出力しません。動的provider tree、非同期context、module共有stateは
-scope limitです。
+context runtimeやMapは出力しません。構造unitの動的provider treeとPromiseLikeを扱う非同期
+contextは静的置換として受理します。module共有stateは`compileProject`の直接signalに限り、
+`derived`/`collection`や汎用storeはscope limitです。
 
 既知の制約(ルートコンポーネントは1つのみ、children/slot未対応、module解決は相対
 importのみ、など)は [`STATUS.md`](./STATUS.md) に一覧があります。

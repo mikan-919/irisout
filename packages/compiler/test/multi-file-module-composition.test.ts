@@ -111,6 +111,50 @@ describe('compileProject: static multi-file module composition', () => {
     expect(code).not.toContain('provideContext')
   })
 
+  it('shares a module signal across component instances and unsubscribes on unmount', async () => {
+    const entry = writeProject({
+      'main.jsx': `import { count } from './state.js'; export function App() { render(<div><button onClick={increment}>inc</button><span>{count()}</span></div>); function increment() { count(count() + 1); } }`,
+      'state.js': `export const count = signal(0);`,
+    })
+    const { code, initialHtml } = compileProject(entry)
+    expect(initialHtml).toContain('<span data-iris-id="m1">0</span>')
+    expect(code).toContain('sharedSignal')
+    expect(code).toContain('.subscribe(update_IrisM0_count)')
+    expect(code).not.toContain('const IrisM0_count = signal(')
+
+    const mod = await loadGenerated(code)
+    const first = createContainer()
+    const second = createContainer()
+    const firstInstance = (mod.mountComponent as (container: Element) => { unmount(): void })(first)
+    const secondInstance = (mod.mountComponent as (container: Element) => { unmount(): void })(
+      second,
+    )
+    expect(first.textContent).toBe('inc0')
+    expect(second.textContent).toBe('inc0')
+
+    const EventCtor = first.ownerDocument.defaultView!.Event
+    first.querySelector('button')!.dispatchEvent(new EventCtor('click', { bubbles: true }))
+    expect(first.textContent).toBe('inc1')
+    expect(second.textContent).toBe('inc1')
+
+    firstInstance.unmount()
+    second.querySelector('button')!.dispatchEvent(new EventCtor('click', { bubbles: true }))
+    expect(first.textContent).toBe('')
+    expect(second.textContent).toBe('inc2')
+    secondInstance.unmount()
+  })
+
+  it('omits runtime output for an unused module signal', () => {
+    const entry = writeProject({
+      'main.jsx': `import { unused } from './state.js'; export function App() { render(<span>ready</span>); }`,
+      'state.js': `export const unused = signal(0);`,
+    })
+    const { code, initialHtml } = compileProject(entry)
+    expect(initialHtml).toBe('<span>ready</span>')
+    expect(code).not.toContain('sharedSignal')
+    expect(code).not.toContain('IrisM0_unused')
+  })
+
   it('keeps compile(source) as the single-file API', () => {
     expect(() =>
       compile(`import { helper } from './helper.js'; export function App() { render(<div />) }`),
@@ -158,16 +202,16 @@ describe('compileProject: module boundary errors', () => {
     expect(() => compileProject(reExport)).toThrow(/re-exports.*scope limit/)
   })
 
-  it('rejects unresolved paths and module-scope state or statements', () => {
+  it('rejects unresolved paths, unsupported module state, or statements', () => {
     const unresolved = writeProject({
       'main.jsx': `import { missing } from './missing.js'; export function App() { render(<div>{missing}</div>) }`,
     })
     expect(() => compileProject(unresolved)).toThrow(/cannot resolve relative import.*scope limit/)
 
     const moduleState = writeProject({
-      'main.jsx': `const count = signal(0); export function App() { render(<div />) }`,
+      'main.jsx': `const count = derived(() => 0); export function App() { render(<div />) }`,
     })
-    expect(() => compileProject(moduleState)).toThrow(/module-scope signal.*scope limit/)
+    expect(() => compileProject(moduleState)).toThrow(/module-scope derived.*scope limit/)
 
     const topLevelStatement = writeProject({
       'main.jsx': `console.log('not allowed'); export function App() { render(<div />) }`,

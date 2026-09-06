@@ -34,14 +34,15 @@ update closureの意味を維持し、外部resourceの解除は`{ update?, dest
 ルートcomponentの`onMount`とcleanupも実装済み(ADR-0025)。callbackは
 mount/hydrate完了後に一度実行し、返り値のcleanupをunmount時に逆順で呼ぶ。ルートcomponent
 の`effect`とcleanupも実装済み(ADR-0026)。依存root signalの専用`update_*()`へ接続し、
-再実行前とunmount時にcleanupを呼ぶ。汎用lifecycle runtime、構造unit内・子componentの
-effect、同instance再mountは引き続き対象外。構造unit内・inline子componentの`onMount`は
-unit/root instance所有へ拡張済み。
+再実行前とunmount時にcleanupを呼ぶ。汎用lifecycle runtime、同instance再mountは引き続き
+対象外。構造unit内・inline子componentの`onMount`と`effect`はunit/root instance所有へ
+拡張済み。
 
 instance単位のcontextもADR-0027で実装済みである。トップレベルcontext key、変数ゾーンの
 provider、JSX式のconsumerをコンパイル時に静的置換し、root・list item・conditional branchの
-所有instanceへ依存を接続する。汎用context runtime・Mapは出力しない。動的provider tree、
-非同期context、module共有mutable stateは対象外とする。
+所有instanceへ依存を接続する。汎用context runtime・Mapは出力しない。構造unitの動的provider
+treeと非同期contextは静的置換として実装済みで、runtime provider伝播・非同期schedulerは
+対象外とする。module共有signalはADR-0030の直接形だけを実装する。
 
 **第2段階実装済み(ADR-0020)**: 同一ハンドラ/action/追跡関数のwrite setに複数root
 があり、同じmarkerへ依存する場合だけ、コンパイル時に専用同期batchを生成する。
@@ -157,10 +158,11 @@ programを一回だけ実行する。
 
 `render(<JSX>)`を持つfunctionはコンパイル時にinline化し、component functionとprops
 objectを生成しない。componentでないfunctionと初期化済み単純`const`は補助宣言として
-生成moduleのmodule scopeへ一度だけ出す。補助宣言はcomponentのstateを書き換えない純粋な
-処理に限る。
+生成moduleのmodule scopeへ一度だけ出す。直接`const name = signal(initial)`はADR-0030の
+共有signalとして参照時だけ出力する。その他の補助宣言はcomponentのstateを書き換えない
+純粋な処理に限る。
 
-module scopeのstate、副作用文、`let`/`var`、分割代入、外部specifier、未解決path、
+module scopeの直接signal以外のstate、副作用文、`let`/`var`、分割代入、外部specifier、未解決path、
 namespace/side-effect/dynamic import、re-export、循環依存は`compile:`エラーで拒否する。
 `compile(source)`は単一source APIとして保持し、module解決を行わない。fixtureと受入条件は
 `apps/examples/multi-file/`、`packages/compiler/test/multi-file-module-composition.test.ts`、
@@ -173,19 +175,20 @@ namespace/side-effect/dynamic import、re-export、循環依存は`compile:`エ�
 複数ファイル)の実装後にも残る/別軸のギャップだけをここに積む。設計判断は
 まだしていない。
 
-- **context(ツリー越しの暗黙DI)**: ADR-0027で解消済み。`createContext`/
+- **context(ツリー越しの暗黙DI)**: ADR-0027〜0029で解消済み。`createContext`/
   `provideContext`/`useContext`をcompile-timeで静的置換し、root・構造unitのinstance単位へ
-  接続する。動的provider tree、非同期context、module共有mutable stateは対象外。
+  接続する。構造unitの動的provider treeとPromiseLikeの非同期contextも受理するが、runtime
+  provider伝播・非同期schedulerは対象外。
 - **onDestroy/cleanup**: component instanceの明示的な`unmount()`、top-level
   `use=` actionの`{ destroy }`、ルートcomponentの`onMount` cleanupはADR-0022/0025で
   解消済み。構造unit内action lifecycleは`structural-unit-use-actions`で実装済み。
-- **effect(DOM以外への副作用)**: ルートcomponentの`effect`はADR-0026で実装済み。
-  構造unit・子componentのeffect、effect本体から追跡signalへ書き込む再入、非同期
-  schedulerは対象外で、実需が出た時点で別契約を定める。
-- **モジュールスコープの共有state(Svelteのstore相当)**: トップレベルの
-  `const`宣言自体が現状scope limitで拒否される(change
-  `scope-limit-coverage`)。§4の複数コンポーネントが解決しても、
-  コンポーネント間で状態を共有する手段がこのままでは無い。
+- **effect(DOM以外への副作用)**: ルートcomponentと構造unit・inline子componentの`effect`は
+  ADR-0026で実装済み。effect本体から追跡signalへ書き込む再入、非同期schedulerは対象外で、
+  実需が出た時点で別契約を定める。
+- **モジュールスコープの共有state(Svelteのstore相当)**: ADR-0030で直接の
+  `const name = signal(initial)`を`compileProject`のmodule共有signalとして実装済み。
+  参照された生成物だけが専用helperとinstance購読を持つ。module共有derived/collection、
+  永続化、request単位SSR分離、汎用storeは対象外。
 - **`bind:value`的な双方向バインディング糖衣**: ADR-0012は一方向の
   property反映のみを規定しており、双方向バインディングは
   value属性+`onInput`ハンドラの手書き配線が必要(手書き相当のまま)。
@@ -298,13 +301,12 @@ transition/animation、portal、error boundary、async/resource
     実装・検証した。
 
 18. 次の一般用途対応は次の順番で検討する。大きな実装には着手しない。
-    1. **優先度P2: 構造unit/子componentのeffect lifecycle**。`onMount`のroot/unit所有と
-       root `effect`は実装済み。effectのunit所有、非同期scheduler、明示的なcomponent
-       instance境界は別契約とする。
-    2. **優先度P2: component propsとhandlerの型検査**。現行の`types/jsx.d.ts`は
+    1. **優先度P2: component propsとhandlerの型検査**。現行の`types/jsx.d.ts`は
        intrinsic要素と共通属性を検査するが、componentごとのprops型・イベント対象の
        絞り込みは弱い。module分割後の名前間違いとprops形状をbuild前に検出するために
        必要である。
+    2. **優先度P2: module共有stateの派生値とSSR境界**。直接signalの実需をfixtureで
+       確認し、derived/collection、request単位分離、永続化を同時に決めずに別契約へ分ける。
 
 ## 参考資料
 

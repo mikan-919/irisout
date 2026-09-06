@@ -5,8 +5,9 @@ import { createContainer, loadGenerated } from './helpers.js'
 type AsyncContextLog = string[]
 
 function setAsyncContextLog(log: AsyncContextLog): void {
-  ;(globalThis as typeof globalThis & { __irisoutAsyncContextLog?: AsyncContextLog })
-    .__irisoutAsyncContextLog = log
+  ;(
+    globalThis as typeof globalThis & { __irisoutAsyncContextLog?: AsyncContextLog }
+  ).__irisoutAsyncContextLog = log
 }
 
 function asyncContextLog(): AsyncContextLog {

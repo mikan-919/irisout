@@ -475,7 +475,9 @@ function expandComponentRef(
     const renderJsxNode = zones.renderJsxPath.node
     if (
       conditionalBranch &&
-      (contextProviderNodes.length > 0 || zones.mountHooks.length > 0 || zones.effectHooks.length > 0)
+      (contextProviderNodes.length > 0 ||
+        zones.mountHooks.length > 0 ||
+        zones.effectHooks.length > 0)
     ) {
       renderJsxNode.children.unshift(
         ...contextProviderNodes,

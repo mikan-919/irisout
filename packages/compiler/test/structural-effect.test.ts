@@ -5,8 +5,9 @@ import { createContainer, loadGenerated } from './helpers.js'
 type EffectLog = string[]
 
 function setEffectLog(log: EffectLog): void {
-  ;(globalThis as typeof globalThis & { __irisoutStructuralEffectLog?: EffectLog })
-    .__irisoutStructuralEffectLog = log
+  ;(
+    globalThis as typeof globalThis & { __irisoutStructuralEffectLog?: EffectLog }
+  ).__irisoutStructuralEffectLog = log
 }
 
 function effectLog(): EffectLog {
@@ -41,10 +42,14 @@ export function App() {
     expect(effectLog()).toEqual(['effect-1-false'])
 
     const EventCtor = container.ownerDocument.defaultView!.Event
-    container.querySelectorAll('button')[1]!.dispatchEvent(new EventCtor('click', { bubbles: true }))
+    container
+      .querySelectorAll('button')[1]!
+      .dispatchEvent(new EventCtor('click', { bubbles: true }))
     expect(effectLog()).toEqual(['effect-1-false', 'cleanup-1-false', 'effect-1-true'])
 
-    container.querySelectorAll('button')[0]!.dispatchEvent(new EventCtor('click', { bubbles: true }))
+    container
+      .querySelectorAll('button')[0]!
+      .dispatchEvent(new EventCtor('click', { bubbles: true }))
     expect(effectLog()).toEqual([
       'effect-1-false',
       'cleanup-1-false',
@@ -77,7 +82,9 @@ export function App() {
     const instance = (mod.mountComponent as (container: Element) => { unmount(): void })(container)
     expect(effectLog()).toEqual(['effect-1-0', 'effect-2-0'])
     const EventCtor = container.ownerDocument.defaultView!.Event
-    container.querySelectorAll('button')[0]!.dispatchEvent(new EventCtor('click', { bubbles: true }))
+    container
+      .querySelectorAll('button')[0]!
+      .dispatchEvent(new EventCtor('click', { bubbles: true }))
     expect(effectLog()).toEqual([
       'effect-1-0',
       'effect-2-0',
@@ -86,7 +93,9 @@ export function App() {
       'cleanup-2',
       'effect-2-1',
     ])
-    container.querySelectorAll('button')[1]!.dispatchEvent(new EventCtor('click', { bubbles: true }))
+    container
+      .querySelectorAll('button')[1]!
+      .dispatchEvent(new EventCtor('click', { bubbles: true }))
     expect(effectLog()).toEqual([
       'effect-1-0',
       'effect-2-0',

@@ -145,6 +145,9 @@ export interface EffectOutput {
 export interface GenerateModuleInput {
   /** compileProject()でリンクされた通常の関数/const。runtimeへは出さず、module scopeへ一度だけ出す。 */
   supportStatements: string[]
+  /** compileProjectの使用済みmodule共有signalをmodule scopeへ置く。 */
+  sharedStatements: string[]
+  sharedSignalNames: string[]
   declStatements: string[]
   markers: MarkerOutput[]
   signalToMarkers: Map<DeclId, Set<MarkerId>>
@@ -1199,6 +1202,8 @@ function renderLocalEffectRunner(e: LocalEffectOutput, index: number): string[] 
 
 export function generateModule({
   supportStatements,
+  sharedStatements,
+  sharedSignalNames,
   declStatements,
   markers,
   signalToMarkers,
@@ -1251,8 +1256,10 @@ export function generateModule({
       runtimeImports.push('updateListItem as __updateListItem__')
     }
   }
+  if (sharedStatements.length > 0) runtimeImports.push('sharedSignal as __sharedSignal__')
   moduleLines.push(`import { ${runtimeImports.join(', ')} } from '@irisout/runtime';`, '')
   if (supportStatements.length > 0) moduleLines.push(...supportStatements, '')
+  if (sharedStatements.length > 0) moduleLines.push(...sharedStatements, '')
   instanceLines.push(...declStatements, '')
   // cross-function-handler-writes design D4: 追跡された動きゾーン関数をauthored
   // 名のままinstanceスコープへemitする(update_*()は本体に入れない — D3)。
@@ -1314,6 +1321,11 @@ export function generateModule({
     .filter((line): line is string => line !== null)
   if (effectCleanupDeclLines.length > 0) instanceLines.push(...effectCleanupDeclLines, '')
 
+  const sharedUnsubscribeDeclLines = sharedSignalNames.map(
+    (_name, index) => `let __shared_unsubscribe_${index}__;`,
+  )
+  if (sharedUnsubscribeDeclLines.length > 0) instanceLines.push(...sharedUnsubscribeDeclLines, '')
+
   // collection.update()を含む同期batchだけが使う、インスタンス専有の
   // 深さカウンタ。ハンドラ/actionの本体中は直接DOM通知を抑止し、scope末尾
   // のbatchが最終状態を一度だけ反映する。
@@ -1335,6 +1347,9 @@ export function generateModule({
   const setupLines = handlers.map(
     (h) =>
       `  __markers__.get(${JSON.stringify(h.markerId)})?.addEventListener(${JSON.stringify(h.eventName)}, __handler_${h.markerId}_${h.eventName});`,
+  )
+  const sharedSubscribeLines = sharedSignalNames.map(
+    (name, index) => `  __shared_unsubscribe_${index}__ = ${name}.subscribe(update_${name});`,
   )
 
   // M5: リスト/条件分岐は初期 HTML に含まれないので、mount/hydrate 直後に
@@ -1501,6 +1516,7 @@ export function generateModule({
       : '  ({ markers: __markers__ } = __mount__(container, __INITIAL_HTML__, __MARKER_IDS__));',
     '  __container__ = container;',
     '  __mounted__ = true;',
+    ...sharedSubscribeLines,
     ...(effects.length > 0 ? ['  __initializing__ = true;'] : []),
     ...guardedInitializationLines,
     ...(effects.length > 0 ? ['  __initializing__ = false;'] : []),
@@ -1513,6 +1529,7 @@ export function generateModule({
       : '  ({ markers: __markers__ } = __hydrate__(container, __MARKER_IDS__));',
     '  __container__ = container;',
     '  __mounted__ = true;',
+    ...sharedSubscribeLines,
     ...(effects.length > 0 ? ['  __initializing__ = true;'] : []),
     ...guardedInitializationLines,
     ...(effects.length > 0 ? ['  __initializing__ = false;'] : []),
@@ -1524,6 +1541,10 @@ export function generateModule({
     '  __mounted__ = false;',
     ...(effects.length > 0 ? ['  __initializing__ = false;'] : []),
     ...handlerRemoveLines,
+    ...sharedSignalNames.map(
+      (_name, index) =>
+        `  if (__shared_unsubscribe_${index}__) { const __unsubscribe__ = __shared_unsubscribe_${index}__; __shared_unsubscribe_${index}__ = null; __unsubscribe__(); }`,
+    ),
     ...destroyErrorLines,
     ...listCleanupLines,
     ...conditionalCleanupLines,
@@ -1578,11 +1599,7 @@ export function generateModule({
     }
   }
 
-  const appendMarkerUpdate = (
-    lines: string[],
-    mId: MarkerId,
-    effectTriggerExpr = 'null',
-  ): void => {
+  const appendMarkerUpdate = (lines: string[], mId: MarkerId, effectTriggerExpr = 'null'): void => {
     // 動的属性の再設定(属性のみの marker id は markers に実体を持たない
     // ため、marker 解決より先に処理する)。
     const bindings = attrsByMarker.get(mId)
@@ -1636,7 +1653,11 @@ export function generateModule({
       instanceLines.push(`  __effect_trigger__ = new Set([${JSON.stringify(name)}]);`)
       instanceLines.push('  try {')
       for (const mId of markerIds) appendMarkerUpdate(instanceLines, mId, '__effect_trigger__')
-      instanceLines.push('  } finally {', '    __effect_trigger__ = __previous_effect_trigger__;', '  }')
+      instanceLines.push(
+        '  } finally {',
+        '    __effect_trigger__ = __previous_effect_trigger__;',
+        '  }',
+      )
     } else {
       for (const mId of markerIds) appendMarkerUpdate(instanceLines, mId)
     }
@@ -1670,7 +1691,11 @@ export function generateModule({
       for (const markerId of batch.markerIds) {
         appendMarkerUpdate(instanceLines, markerId, '__effect_trigger__')
       }
-      instanceLines.push('  } finally {', '    __effect_trigger__ = __previous_effect_trigger__;', '  }')
+      instanceLines.push(
+        '  } finally {',
+        '    __effect_trigger__ = __previous_effect_trigger__;',
+        '  }',
+      )
     } else {
       for (const markerId of batch.markerIds) appendMarkerUpdate(instanceLines, markerId)
     }
@@ -1698,7 +1723,11 @@ export function generateModule({
     for (const mId of signalToMarkers.get(collectionId) ?? []) {
       const direct = directLists.find((marker) => marker.id === mId)
       if (!direct) {
-        appendMarkerUpdate(directUpdateLines, mId, hasStructuralEffects ? '__effect_trigger__' : 'null')
+        appendMarkerUpdate(
+          directUpdateLines,
+          mId,
+          hasStructuralEffects ? '__effect_trigger__' : 'null',
+        )
         continue
       }
       const usesSharedUpdater =

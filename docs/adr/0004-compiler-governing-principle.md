@@ -23,7 +23,9 @@ Web Components化・hyperscript風authoring API・リストアイテムの状態
 - **`onMount`/`onLeave`フックを保留**: 何も使っていない機構は、定義上「書かれていないのに存在する」もの。このうちルートcomponentの明示的な`onMount`は、instanceごとのcleanup所有権を定めたADR-0025で一部解消した。signal依存を明示するルート`effect`はADR-0026で専用`update_*()`へ接続した。`onLeave`と汎用hook registry/schedulerは引き続き対象外である。
 - **instance contextを静的置換で扱う**(ADR-0027): `createContext`/`provideContext`/`useContext`を
   使ったときだけprovider値と依存を生成コードへ接続し、未使用時のMapやregistryを出力しない。
-  動的provider tree・非同期context・module共有stateは暗黙に追加せず、scope limitとする。
+  構造unitの動的provider treeとPromiseLikeのasync contextは各ADRの静的境界で扱い、runtime
+  registryは追加しない。module共有stateもADR-0030の直接signalに限定し、未使用時のhelperを
+  出力しない。
 - **明示的なcomponent `unmount()`はこの保留と別物**: 呼び出し側が取得した
   `createComponent()`/`mountComponent()` instanceへ明示的に要求した場合だけ、所有DOMと
   generated listenerを解放する。`use=`が`{ destroy }`を返した場合のdestroyも、actionが

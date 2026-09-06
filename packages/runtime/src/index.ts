@@ -431,6 +431,36 @@ export function signal<T>(initial: T, declId?: DeclId): (...args: [] | [T]) => T
   return accessor
 }
 
+// compileProjectのmodule scopeで使う共有signal。component instanceごとの購読だけを
+// 管理し、共有signalを使わない生成moduleへはimportされない。汎用schedulerやregistry
+// ではなく、値の設定時に現在の購読者へ同期通知する専用境界である。
+export interface SharedSignal<T> {
+  (): T
+  (next: T): T
+  subscribe(listener: () => void): () => void
+}
+
+export function sharedSignal<T>(initial: T): SharedSignal<T> {
+  let value = initial
+  const listeners = new Set<() => void>()
+  const accessor = ((...args: [] | [T]): T => {
+    if (args.length === 0) return value
+    value = args[0] as T
+    for (const listener of Array.from(listeners)) listener()
+    return value
+  }) as SharedSignal<T>
+  accessor.subscribe = (listener: () => void): (() => void) => {
+    listeners.add(listener)
+    let active = true
+    return () => {
+      if (!active) return
+      active = false
+      listeners.delete(listener)
+    }
+  }
+  return accessor
+}
+
 export function derived<T>(compute: () => T, declId?: DeclId): () => T {
   if (declId) registry.set(declId, { kind: 'derived' })
   return compute

@@ -51,15 +51,16 @@ root instance、list/conditional scopeならunit factoryへ静的に収集する
 の`effect(() => void | (() => void))`はADR-0026で実装済みで、callback本体が読むroot
 signal/derivedの専用`update_*()`へ依存を接続し、再実行前とunmount時のcleanupをinstanceが
 所有する。追跡signalへの書き込みは再入を避けるため拒否する。再mountと汎用lifecycle
-registryは未実装である。
+registryは未実装である。構造unit内・inline子componentのeffectは、構造unitが再実行と
+cleanupを所有する形へ拡張済みである。
 
 instance単位のcontextはADR-0027で実装済みである。トップレベルの
 `createContext(defaultValue)`をkeyとして、変数ゾーンの`provideContext(key, value)`と
 JSX式の`useContext(key)`を受理する。consumerは最も近いproviderまたはdefault値へ静的に
 置換され、root・list item・conditional branchの値式と更新依存はそれぞれの所有instanceへ
-閉じる。汎用Map、provider registry、module共有mutable stateは生成しない。動的provider
-tree、非同期context、context APIを動きゾーンやmodule共有stateとして使う形はscope limit
-である。`onMount`/`effect`/contextを使わない生成物には専用変数・
+閉じる。汎用Map、provider registryは生成しない。構造unitの動的provider treeと非同期contextは
+静的置換の範囲で実装済みであり、runtime provider伝播、非同期scheduler、context APIを
+動きゾーンやmodule共有stateとして使う形はscope limitである。`onMount`/`effect`/contextを使わない生成物には専用変数・
 配線・runtime importを出力しない。
 
 ## 現在地(2026-09-05・構造ユニットのDOM範囲所有)
@@ -119,14 +120,16 @@ item factoryのmarker参照はイベント配線で再検索せず、factoryの�
 moduleを依存順にASTリンクする。named importとdefault import、二段以上の相対importを
 受理する。`render(<JSX>)`を持つfunctionは既存のコンパイル時インライン化へ渡し、通常の
 functionと初期化済み単純`const`は生成moduleのmodule scopeへ補助宣言として一度だけ出す。
-component function、props object、component runtimeは生成しない。
+component function、props object、component runtimeは生成しない。直接のmodule scope
+`const name = signal(initial)`はADR-0030の共有signalとして参照時だけ生成する。
 
 `compile(source)`は単一文字列APIとして維持し、importは受理しない。`compileProject`の
-module scopeではstate、副作用文、`let`/`var`、分割代入、外部specifier、未解決path、
+module scopeでは直接signal以外のstate、副作用文、`let`/`var`、分割代入、外部specifier、未解決path、
 namespace/side-effect import、dynamic import、re-export、循環依存を`compile:`エラーで
-拒否する。補助宣言はsignal/derived/collectionを呼ばない通常の処理に限る。背景は
-`docs/adr/0024-multi-file-module-composition.md`、受入条件は
-`openspec/specs/multi-file-module-composition/spec.md`に記録した。
+拒否する。補助宣言はstateを呼ばない通常の処理に限る。背景は
+`docs/adr/0024-multi-file-module-composition.md`と`docs/adr/0030-module-shared-signal.md`、
+受入条件は`openspec/specs/multi-file-module-composition/spec.md`と
+`openspec/specs/module-shared-state/spec.md`に記録した。
 
 `apps/examples/multi-file/`は入口、部品、補助関数、定数を分けたfixtureである。
 `packages/compiler/test/multi-file-module-composition.test.ts`は初期HTML、mount、hydrate、
@@ -269,9 +272,9 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
   拒否する。`const [a] = signal(0)`
   のような分割代入宣言子も拒否する。ビルド時実行の例外は
   `compile: build-time execution failed:`(`cause`付き)に包まれる。
-- **`compileProject(entryPath)`のmodule境界**(ADR-0024): 相対`.js`/`.jsx`の静的
+- **`compileProject(entryPath)`のmodule境界**(ADR-0024/0030): 相対`.js`/`.jsx`の静的
   named/default importだけを解決する。module直下で許可するのはimport、function宣言、
-  初期化済み単純`const`とそれらのexportだけである。module scopeのstate、副作用文、
+  初期化済み単純`const`と直接`const name = signal(initial)`、それらのexportだけである。module scopeの`derived`/`collection`、副作用文、
   `let`/`var`、分割代入、外部specifier、未解決path、namespace/side-effect/dynamic import、
   re-export、循環依存は`compile:`エラーで拒否する。
 - **複数インスタンスは対応済み**(ADR-0018): 同じ生成moduleを複数containerへ
@@ -343,13 +346,15 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
     代表fixtureで判断する。
   - 1要素への複数actionは未実装。`use`属性は一要素一つのままとする。
   - ルートcomponentの`onMount`(ADR-0025)は実装済み。構造unit内・inline化される
-    子componentの`onMount`と構造unit内の`onMount`は実装済み。ルートcomponentの`effect`は
-    ADR-0026で実装済みだが、構造unit・子componentのeffectは対象外。
-    component instanceのcleanupとunit action lifecycleは解消済み。
-  - instance context(ADR-0027)は実装済み。context keyはトップレベル`const`、providerは
+    子componentの`onMount`と構造unit内の`onMount`は実装済み。ルートcomponentの`effect`と
+    構造unit・inline子componentのeffectはADR-0026で実装済みであり、各ownerが再実行前と
+    破棄時のcleanupを持つ。component instanceのcleanupとunit action lifecycleは解消済み。
+  - instance context(ADR-0027〜0029)は実装済み。context keyはトップレベル`const`、providerは
     component変数ゾーンまたは構造unitへインライン化されたproviderに限る。consumerは
-    JSX/式解析時に静的置換されるため、動的provider tree、非同期context、module共有state、
-    動きゾーンでのprovider宣言は対象外。
+    JSX/式解析時に静的置換され、構造unitの動的provider treeとPromiseLikeの非同期contextも
+    受理する。runtime provider伝播、非同期scheduler、module共有derived/collection、
+    動きゾーンでのprovider宣言は対象外。module共有signalはADR-0030の直接形だけを
+    `compileProject`で受理する。
   - action本体のconcise arrow(単一式)にネストしたリスナー等がある場合、
     その内部の書き込みに対する`update_*`挿入位置は本体全体の実行時点に
     まとまる(リスナー発火時ではない)。ブロック本体は正しく分離される

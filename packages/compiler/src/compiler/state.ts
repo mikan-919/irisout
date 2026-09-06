@@ -206,6 +206,16 @@ export interface ContextValue {
   deps: Set<DeclId>
 }
 
+// compileProjectのmodule先頭に置く共有signal。生成moduleのmodule scopeへ
+// 一度だけ出力し、各component instanceは必要な場合だけ購読する。
+export interface SharedDecl {
+  id: DeclId
+  kind: 'signal'
+  outputName: string
+  rendered: string
+  sourceRendered: string
+}
+
 // cross-function-handler-writes: ハンドラ/action から追跡対象として呼ばれた
 // 動きゾーン関数の解析結果。writeDeclIds は自分の本体が直接書く root signal
 // (推移解決済み)、calleeNames は自分が呼ぶ別の追跡関数。推移的な書き込み
@@ -283,6 +293,12 @@ export interface CompilerState {
   // (design.md D6 ― 漏れるとモジュールスコープに存在しない変数を参照する
   // 壊れたコードになる)。
   localDeclIds: Set<DeclId>
+
+  /** compileProjectで収集したmodule共有signal。 */
+  sharedDecls: SharedDecl[]
+  sharedDeclIdByBindingKey: Map<string, DeclId>
+  sharedDeclIds: Set<DeclId>
+  usedSharedDeclIds: Set<DeclId>
 }
 
 export function createCompilerState(
@@ -316,6 +332,10 @@ export function createCompilerState(
     movementFns: new Map(),
     trackedFns: new Map(),
     localDeclIds: new Set(),
+    sharedDecls: [],
+    sharedDeclIdByBindingKey: new Map(),
+    sharedDeclIds: new Set(),
+    usedSharedDeclIds: new Set(),
   }
 }
 

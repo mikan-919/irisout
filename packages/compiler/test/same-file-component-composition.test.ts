@@ -589,7 +589,7 @@ export function App() {
 }
 `
     expect(() => compile(source)).toThrow(
-      /only signal\(\)\/derived\(\) declarations, onMount\(\) calls, and function declarations are allowed before the return.*scope limit/,
+      /only signal\(\)\/derived\(\) declarations, onMount\(\)\/effect\(\) calls, and function declarations are allowed before the return.*scope limit/,
     )
   })
 

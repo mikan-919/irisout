@@ -71,8 +71,9 @@ factoryは自身のDOM範囲、局所状態、binding cache、内側Listのkeyed
 branchを再生成したときは新しいcacheを作り、別instanceの前回値を使って更新を省略しない。
 component treeの共有依存はinstance単位のcontextとして扱う。`createContext`で宣言した
 compile-time keyを`provideContext`/`useContext`へ静的に接続し、consumerは最も近いprovider
-またはdefault式へ置換する。汎用context registryやmodule共有stateは導入せず、未使用時の
-生成物へ固定費を載せない。
+またはdefault式へ置換する。構造unitの動的provider treeとPromiseLikeの非同期contextも
+この静的境界へ限定する。汎用context registryや汎用storeは導入せず、module共有stateは
+`compileProject`の直接`signal`だけを参照時に出力し、未使用時の生成物へ固定費を載せない。
 
 イベント配線は、速度やJavaScriptヒープだけでなく、`target`、`currentTarget`、
 event objectの同一性、バブル・捕捉、非バブルイベントの意味を含めて選ぶ。実Chromium
@@ -144,8 +145,9 @@ irisout は compiler-first なシステムです。
 - その他、コンパイル時には完結できない処理(ただし汎用lifecycle/effect runtimeは含めない)。
   ルートcomponentの明示的な`effect`はADR-0026に従い専用`update_*()`へ静的に接続する
   ため、この例外には含めない。
-- contextはADR-0027に従いコンパイル時に式置換して扱うため、専用のruntime registryを
-  追加しない。動的provider tree・非同期context・module共有stateは対象外とする。
+- contextはADR-0027〜0029に従いコンパイル時に式置換して扱うため、専用のruntime registryを
+  追加しない。module共有stateはADR-0030の直接signalに限り、参照された生成物へ専用helperを
+  出力する。汎用provider registry、非同期scheduler、module共有derived/collectionは対象外とする。
 
 責務は固定ではありません。同じ仕事を専用コードとして生成する場合と共有
 ヘルパーへ任せる場合を比較し、より小さく速く単純な方を選びます。

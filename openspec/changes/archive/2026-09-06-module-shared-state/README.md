@@ -1,0 +1,3 @@
+# module-shared-state
+
+compileProjectでトップレベルsignalをmodule共有stateとして受理する

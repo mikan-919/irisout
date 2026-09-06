@@ -122,14 +122,15 @@ triage手続きで捌く — コンパイラの受理条件自体を場当たり
   rootまたは現在のunitへ静的に収集する。runtime child objectは生成しない。
 - **root `effect` lifecycle**(ADR-0026): 動きゾーンの0引数callbackが直接読むroot
   signal/derivedを専用`update_*()`へ接続し、初回実行・依存更新前のcleanup・unmountの
-  cleanupを生成instanceが所有する。汎用schedulerは導入せず、effect本体から追跡signalへ
-  の書き込みと構造unit/子componentのeffectはscope limitで拒否する。
-- **instance context**(ADR-0027): トップレベル`createContext(defaultValue)`をcompile-timeの
+  cleanupを生成instanceが所有する。構造unit・inline子componentのeffectはunit/root
+  instanceの専用updateへ接続する。汎用schedulerは導入せず、effect本体から追跡signalへの
+  書き込みと非同期schedulerはscope limitで拒否する。
+- **instance context**(ADR-0027〜0029): トップレベル`createContext(defaultValue)`をcompile-timeの
   keyとして収集し、`provideContext(key, value)`を現在のrootまたはstructural factoryへ
   登録する。`useContext(key)`は最も近いprovider/defaultの式へ置換し、値式のsignal依存を
   既存marker/update経路へ合流させる。runtimeのMap・provider registryは生成せず、未使用時の
-  context専用出力も省略する。動的provider tree・非同期context・module共有stateはscope
-  limitである。
+  context専用出力も省略する。構造unitの動的provider treeとPromiseLikeの非同期contextは
+  静的置換の範囲で実装済みで、runtime provider伝播・schedulerはscope limitである。
 - **`use=` action result**: 既存の `() => void` は `update` closureとして初回+依存
   signal update時に呼ぶ。外部resource cleanupが必要な場合だけ
   `{ update?: () => void; destroy?: () => void }`を返し、`destroy`はunmount時のみ呼ぶ。
@@ -145,10 +146,11 @@ triage手続きで捌く — コンパイラの受理条件自体を場当たり
 - **List更新アドレス**(ADR-0015): コンパイル時のList marker ID、key式のitem ID、
   item内marker由来のbinding IDを分離して保持する。共有ランタイムはkey照合と
   DOM順序、生成factoryはbinding単位の直接DOM更新を担当する。
-- **module境界**(ADR-0024): `compileProject()`は相対`.js`/`.jsx`の静的named/default
+- **module境界**(ADR-0024/0030): `compileProject()`は相対`.js`/`.jsx`の静的named/default
   importだけをAST bindingへ解決する。componentはinline pathへ入り、通常のfunctionと
-  `const`だけが補助宣言としてmodule scopeに残る。外部module、dynamic import、re-export、
-  cycle、module scope stateは`compile:`エラーで拒否する。
+  `const`だけが補助宣言としてmodule scopeに残る。直接`const name = signal(initial)`は
+  参照時だけ専用shared signalとして出力し、外部module、dynamic import、re-export、cycle、
+  `derived`/`collection`を含むその他のmodule scope stateは`compile:`エラーで拒否する。
 
 ## 設計変更の進め方
 

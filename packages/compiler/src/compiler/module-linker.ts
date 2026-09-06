@@ -98,7 +98,11 @@ function parseModule(filePath: string, source: string): ModuleRecord {
       }
       const stateCall = findModuleStateCall(declarator.init)
       if (stateCall) {
-        throw compileError(`module "${filePath}" cannot declare module-scope ${stateCall}() state`)
+        if (stateCall !== 'signal' || !isSharedSignalDeclarator(declarator)) {
+          throw compileError(
+            `module "${filePath}" cannot declare module-scope ${stateCall}() state`,
+          )
+        }
       }
       addOwnName(declarator.id.name)
     }
@@ -304,6 +308,18 @@ function isContextDeclarator(declarator: t.VariableDeclarator): boolean {
   )
 }
 
+function isSharedSignalDeclarator(declarator: t.VariableDeclarator): boolean {
+  const init = declarator.init
+  return (
+    declarator.id.type === 'Identifier' &&
+    init?.type === 'CallExpression' &&
+    init.callee.type === 'Identifier' &&
+    init.callee.name === 'signal' &&
+    init.arguments.length === 1 &&
+    init.arguments[0]?.type !== 'SpreadElement'
+  )
+}
+
 function resolveModule(fromFile: string, specifier: string): string {
   if (!specifier.startsWith('./') && !specifier.startsWith('../')) {
     throw compileError(`non-relative import "${specifier}" is not supported yet`)
@@ -490,7 +506,7 @@ export function linkProject(entryPath: string): LinkedProject {
         if (statement.id) supportNames.add(statement.id.name)
       } else if (statement.type === 'VariableDeclaration') {
         const supportDeclarators = statement.declarations.filter(
-          (declarator) => !isContextDeclarator(declarator),
+          (declarator) => !isContextDeclarator(declarator) && !isSharedSignalDeclarator(declarator),
         )
         if (supportDeclarators.length > 0) {
           const supportStatement = t.variableDeclaration(statement.kind, supportDeclarators)

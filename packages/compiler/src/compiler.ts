@@ -44,7 +44,7 @@ import type {
   MountDecl,
   StructuralUnitBody,
 } from './compiler/state.ts'
-import { createCompilerState, toContextId } from './compiler/state.ts'
+import { assignOutputName, createCompilerState, toContextId, toDeclId } from './compiler/state.ts'
 import { linkProject } from './compiler/module-linker.ts'
 import { collection, derived, registry, signal } from '@irisout/runtime'
 
@@ -142,6 +142,69 @@ function collectContextDeclarations(
   }
 }
 
+function collectSharedSignalDeclarations(
+  ast: ReturnType<typeof parse>,
+  source: string,
+  ctx: ReturnType<typeof createCompilerState>,
+): void {
+  const pending: {
+    id: DeclId
+    name: string
+    start: number
+    argStart: number
+    argEnd: number
+  }[] = []
+  for (const statement of ast.program.body) {
+    if (statement.type !== 'VariableDeclaration' || statement.kind !== 'const') continue
+    for (const declarator of statement.declarations) {
+      const init = declarator.init
+      if (
+        declarator.id.type !== 'Identifier' ||
+        init?.type !== 'CallExpression' ||
+        init.callee.type !== 'Identifier'
+      ) {
+        continue
+      }
+      if (init.callee.name !== 'signal') {
+        if (init.callee.name === 'derived' || init.callee.name === 'collection') {
+          throw new Error(
+            `compile: module-scope ${init.callee.name}() shared state is not supported yet (scope limit)`,
+          )
+        }
+        continue
+      }
+      if (init.arguments.length !== 1 || init.arguments[0]?.type === 'SpreadElement') {
+        throw new Error('compile: module-scope signal() takes exactly one argument')
+      }
+      const start = declarator.start
+      const arg = init.arguments[0]
+      if (start == null || !arg || arg.start == null || arg.end == null) continue
+      const id = toDeclId(`shared_${start}_${declarator.id.name}`)
+      const outputName = assignOutputName(ctx, declarator.id.name, id)
+      ctx.declKind.set(id, 'signal')
+      ctx.sharedDeclIds.add(id)
+      ctx.sharedDeclIdByBindingKey.set(`${start}:${declarator.id.name}`, id)
+      pending.push({
+        id,
+        name: outputName,
+        start,
+        argStart: arg.start,
+        argEnd: arg.end,
+      })
+    }
+  }
+  for (const declaration of pending) {
+    const sourceRendered = source.slice(declaration.argStart, declaration.argEnd)
+    ctx.sharedDecls.push({
+      id: declaration.id,
+      kind: 'signal',
+      outputName: declaration.name,
+      rendered: sourceRendered,
+      sourceRendered,
+    })
+  }
+}
+
 // トップレベルのコンポーネントをすべて列挙し、誰からも参照されない唯一の
 // ルートを特定する(パイプライン手順2)。same-file-component-composition:
 // この時点ではinlineComponentsが既に子コンポーネントの参照を展開・元宣言を
@@ -227,6 +290,7 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
   const ctx = createCompilerState(source, transformedNodes, options.supportNames)
   collectContextDeclarations(ast, source, ctx)
   for (const supportName of options.supportNames ?? []) ctx.usedOutputNames.add(supportName)
+  if (options.allowModuleSupport) collectSharedSignalDeclarations(ast, source, ctx)
   const rootPath = findRootComponent(ast, options.allowModuleSupport === true)
 
   const out = {
@@ -263,7 +327,7 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
     needsCollectionBatch: boolean
   } => {
     const rootIds = [...new Set([...ids, ...directCollectionWriteDeclIds])]
-      .filter((id) => signalToMarkers.has(id))
+      .filter((id) => signalToMarkers.has(id) && !ctx.sharedDeclIds.has(id))
       .sort()
     // collection.update() は専用の直接通知をすでに行うため、batch になら
     // ないスコープの末尾へ通常の update_<collection>() を足さない。ただし
@@ -498,6 +562,10 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
   // --- ビルド時実行:discovery の確認 + 実際の初期 HTML の取得 ---
   const instrumentedBody = [
     ...(options.supportStatements ?? []),
+    ...ctx.sharedDecls.map(
+      (decl) =>
+        `const ${decl.outputName} = signal(${decl.sourceRendered}, ${JSON.stringify(decl.id)});`,
+    ),
     ...out.instrumentedDeclStatements,
     `return \`${rootHtmlSource}\`;`,
   ].join('\n')
@@ -560,6 +628,13 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
 
   const code = generateModule({
     supportStatements: options.supportStatements ?? [],
+    sharedStatements: ctx.sharedDecls
+      .filter((decl) => ctx.usedSharedDeclIds.has(decl.id))
+      .map((decl) => `const ${decl.outputName} = __sharedSignal__(${decl.rendered});`),
+    sharedSignalNames: [...signalToMarkers.keys()]
+      .filter((id) => ctx.sharedDeclIds.has(id))
+      .map((id) => ctx.declOutputName.get(id)!)
+      .filter((name): name is string => name != null),
     declStatements: out.declStatements,
     markers: markerOutputs,
     signalToMarkers,

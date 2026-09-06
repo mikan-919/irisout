@@ -57,8 +57,8 @@ onMount(() => {
 - inline化された子componentがroot scopeにある場合は、子のcallbackをroot instanceへ
   静的に移動する。これは既存のcompile-time inline境界をそのまま使う明示的な変換であり、
   runtime child objectや暗黙のregistryを生成しない。
-- 構造unitのJSX式へ現れるinline childのcallbackも同じunit factoryへ収集する。effectは
-  引き続きroot component専用で、子componentへ暗黙に昇格させない。
+- 構造unitのJSX式へ現れるinline childのcallbackも同じunit factoryへ収集する。effectの
+  同じ所有境界への接続はADR-0026で定める。
 - `effect`、context、SSR、再mount、汎用lifecycle registryはこのADRの対象外である。
 
 ## 検討した代替案

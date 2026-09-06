@@ -740,9 +740,7 @@ function renderElement(
       const effectHook = resolveEffectExpression(exprPath as NodePath<t.Expression>)
       if (effectHook) {
         if (!opts.localEffectHooks) {
-          throw new Error(
-            'compile: effect() in JSX must be inside a structural unit (scope limit)',
-          )
+          throw new Error('compile: effect() in JSX must be inside a structural unit (scope limit)')
         }
         opts.localEffectHooks.push(effectHook)
         continue
@@ -880,9 +878,7 @@ function renderElement(
       const effectHook = resolveEffectExpression(expression)
       if (effectHook) {
         if (!opts.localEffectHooks) {
-          throw new Error(
-            'compile: effect() in JSX must be inside a structural unit (scope limit)',
-          )
+          throw new Error('compile: effect() in JSX must be inside a structural unit (scope limit)')
         }
         opts.localEffectHooks.push(effectHook)
         continue
@@ -1052,7 +1048,7 @@ function resolveUnitBodySource(
     }
     if (!s.isVariableDeclaration()) {
       throw new Error(
-      'compile: only signal()/derived() declarations, onMount()/effect() calls, and function declarations are allowed before the return in a list item block body (scope limit)',
+        'compile: only signal()/derived() declarations, onMount()/effect() calls, and function declarations are allowed before the return in a list item block body (scope limit)',
       )
     }
     localDeclStmts.push(s)

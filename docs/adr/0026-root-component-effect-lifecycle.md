@@ -1,4 +1,4 @@
-# ADR-0026: ルートcomponentの`effect` lifecycle
+# ADR-0026: component instanceの`effect` lifecycle
 
 ## ステータス
 
@@ -15,7 +15,8 @@
 
 ### authored API
 
-ルートcomponentの動きゾーン、またはlist/conditionalのunit本体で次の形を受理する。
+ルートcomponentの動きゾーン、またはlist/conditionalのunit本体、inline化された子component
+の動きゾーンで次の形を受理する。
 
 ```jsx
 effect(() => {

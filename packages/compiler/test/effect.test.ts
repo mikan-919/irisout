@@ -87,7 +87,7 @@ export function App() {
     expect(code).not.toContain('effect(')
   })
 
-  it('rejects tracked signal writes and non-root effect callbacks', () => {
+  it('rejects tracked signal writes and accepts structural effect callbacks', () => {
     expect(() =>
       compile(`
 export function App() {
@@ -106,6 +106,6 @@ function Child() {
 }
 export function App() { render(<div><Child /></div>); }
 `),
-    ).toThrow(/effect\(\) is supported only in the root component.*scope limit/)
+    ).not.toThrow()
   })
 })

@@ -43,7 +43,15 @@ function resolveDeclId(
   if (binding?.path.node.type !== 'VariableDeclarator') return null
   const start = binding.path.node.start
   if (start == null) return null
-  return ctx.declIdByKey.get(declKey(instanceId, start, binding.identifier.name)) ?? null
+  return (
+    ctx.declIdByKey.get(declKey(instanceId, start, binding.identifier.name)) ??
+    ctx.sharedDeclIdByBindingKey.get(`${start}:${binding.identifier.name}`) ??
+    null
+  )
+}
+
+function noteDeclUse(ctx: CompilerState, id: DeclId): void {
+  if (ctx.sharedDeclIds.has(id)) ctx.usedSharedDeclIds.add(id)
 }
 
 // same-file-component-composition (ADR-0014決定5): 名前衝突時、
@@ -309,11 +317,23 @@ function analyzeHandlerStatementsCore(
       )
       return
     }
+    noteDeclUse(ctx, id)
     const outputName = ctx.declOutputName.get(id)
     if (!outputName) return
 
     const parent = idPath.parentPath
     const memberCall = parent?.isMemberExpression() ? parent.parentPath : null
+    if (ctx.sharedDeclIds.has(id)) {
+      if (parent?.isCallExpression() && parent.node.callee === idPath.node) {
+        if (parent.node.arguments.length > 1) {
+          throw new Error(
+            `compile: signal writes take exactly one argument, got ${parent.node.arguments.length} for "${idPath.node.name}" (scope limit)`,
+          )
+        }
+        if (parent.node.arguments.length === 1) noteWrite(parent.node.start!)
+      }
+      return
+    }
     if (
       ctx.declKind.get(id) === 'collection' &&
       parent?.isMemberExpression() &&
@@ -550,6 +570,7 @@ export function analyzeExpr(
   const visit = (idPath: NodePath<t.Identifier>) => {
     const id = resolveDeclId(ctx, idPath, instanceId)
     if (!id) return
+    noteDeclUse(ctx, id)
     deps.add(id)
     const outputName = ctx.declOutputName.get(id)
     if (!outputName) return
@@ -571,15 +592,17 @@ export function analyzeExpr(
       parent.node.callee === idPath.node &&
       parent.node.arguments.length === 0
     ) {
-      outputEdits.push({
-        start: parent.node.start!,
-        end: parent.node.end!,
-        text: outputName,
-      })
-      if (outputAst) {
-        planAstReplacement(outputAst, parent as NodePath<t.CallExpression>, path.node, () =>
-          t.identifier(outputName),
-        )
+      if (!ctx.sharedDeclIds.has(id)) {
+        outputEdits.push({
+          start: parent.node.start!,
+          end: parent.node.end!,
+          text: outputName,
+        })
+        if (outputAst) {
+          planAstReplacement(outputAst, parent as NodePath<t.CallExpression>, path.node, () =>
+            t.identifier(outputName),
+          )
+        }
       }
       return
     }
@@ -646,11 +669,22 @@ export function analyzeHandlerExpr(
       )
       return
     }
+    noteDeclUse(ctx, id)
     const outputName = ctx.declOutputName.get(id)
     if (!outputName) return
 
     const parent = idPath.parentPath
     const memberCall = parent?.isMemberExpression() ? parent.parentPath : null
+    if (ctx.sharedDeclIds.has(id)) {
+      if (parent?.isCallExpression() && parent.node.callee === idPath.node) {
+        if (parent.node.arguments.length > 1) {
+          throw new Error(
+            `compile: signal writes take exactly one argument, got ${parent.node.arguments.length} for "${idPath.node.name}" (scope limit)`,
+          )
+        }
+      }
+      return
+    }
     if (
       ctx.declKind.get(id) === 'collection' &&
       parent?.isMemberExpression() &&
@@ -888,11 +922,29 @@ function analyzeActionIdentifier(
     )
     return
   }
+  noteDeclUse(ctx, id)
   const outputName = ctx.declOutputName.get(id)
   if (!outputName) return
 
   const parent = idPath.parentPath
   const memberCall = parent?.isMemberExpression() ? parent.parentPath : null
+  if (ctx.sharedDeclIds.has(id)) {
+    if (parent?.isCallExpression() && parent.node.callee === idPath.node) {
+      if (parent.node.arguments.length > 1) {
+        throw new Error(
+          `compile: signal writes take exactly one argument, got ${parent.node.arguments.length} for "${idPath.node.name}" (scope limit)`,
+        )
+      }
+      if (parent.node.arguments.length === 0) readDeclIds.add(id)
+      else {
+        writeDeclIds.add(id)
+        onWrite(parent.node.start!)
+      }
+    } else {
+      readDeclIds.add(id)
+    }
+    return
+  }
   if (
     ctx.declKind.get(id) === 'collection' &&
     parent?.isMemberExpression() &&

@@ -59,14 +59,20 @@ props object、汎用component runtimeを出力してはならない(SHALL NOT)�
 ### Requirement: 未対応module機能の明示拒否
 
 外部specifier、未解決path、dynamic import、namespace/side-effect import、re-export、
-循環依存、トップレベル副作用、トップレベルstateは`compile:`で始まるエラーを
+循環依存、トップレベル副作用、トップレベルの`derived`/`collection` stateは`compile:`で始まるエラーを
 返さなければならない(SHALL)。黙って無視してはならない(SHALL NOT)。
 
 #### Scenario: 未対応module構文を拒否する
 
 - **WHEN** module graphに外部import、dynamic import、re-export、循環依存、または
-  module scope stateが含まれる
+  module scopeの`derived`/`collection` stateが含まれる
 - **THEN** compileProjectは生成物を作らず、原因を示す`compile:`エラーを返す
+
+#### Scenario: module共有signalを受理する
+
+- **WHEN** module graphに単純な`const count = signal(initial)`が含まれ、componentがcountを読む
+- **THEN** compileProjectはそのsignalをmodule共有cellとして一度だけ生成し、component instance
+  ごとの更新購読を出力する
 
 ### Requirement: Vite通常経路
 
