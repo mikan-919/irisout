@@ -124,10 +124,13 @@ function emitSignal(
   sourceRendered: string,
   out: RenderOutput,
 ): DeclId {
-  const id = toDeclId(`decl_${instanceId}_${declaratorStart}_${naturalName}`)
-  ctx.declIdByKey.set(declKey(instanceId, declaratorStart, naturalName), id)
-  ctx.declKind.set(id, 'signal')
-  const outputName = assignOutputName(ctx, naturalName, id)
+  const { id, outputName } = ensureRootDeclIdentity(
+    ctx,
+    instanceId,
+    declaratorStart,
+    naturalName,
+    'signal',
+  )
   // 出力: プレーン変数(ADR-0006) -- signal() ラッパーは出力に現れない。
   out.declStatements.push(`let ${outputName} = ${rendered};`)
   // ビルド時実行専用: registry 検証のため本物の signal() を declId 付きで呼ぶ。
@@ -148,10 +151,13 @@ function emitCollection(
   keySourceRendered: string,
   out: RenderOutput,
 ): DeclId {
-  const id = toDeclId(`decl_${instanceId}_${declaratorStart}_${naturalName}`)
-  ctx.declIdByKey.set(declKey(instanceId, declaratorStart, naturalName), id)
-  ctx.declKind.set(id, 'collection')
-  const outputName = assignOutputName(ctx, naturalName, id)
+  const { id, outputName } = ensureRootDeclIdentity(
+    ctx,
+    instanceId,
+    declaratorStart,
+    naturalName,
+    'collection',
+  )
   ctx.collectionKeyRendered.set(id, keyRendered)
   out.declStatements.push(
     `const __collection_${outputName}__ = __createCollectionState__(${rendered}, ${keyRendered});`,
@@ -183,21 +189,19 @@ function emitDerived(
     )
   }
 
-  const id = toDeclId(`decl_${instanceId}_${declaratorStart}_${naturalName}`)
-  ctx.declIdByKey.set(declKey(instanceId, declaratorStart, naturalName), id)
-  ctx.declKind.set(id, 'derived')
-  const outputName = assignOutputName(ctx, naturalName, id)
+  const { id, outputName } = ensureRootDeclIdentity(
+    ctx,
+    instanceId,
+    declaratorStart,
+    naturalName,
+    'derived',
+  )
 
   const { deps, rendered, sourceRendered } = analyzeExpr(
     ctx,
     bodyPath as NodePath<t.Expression>,
     instanceId,
   )
-  for (const dep of deps) {
-    if (ctx.declKind.get(dep) === 'derived') {
-      throw new Error('compile: derived-of-derived is not supported yet (scope limit)')
-    }
-  }
   ctx.derivedDeps.set(id, deps)
   // ADR-0006: root signal の update_* がこの式で再計算する(codegen.ts 参照)。
   ctx.derivedRecompute.set(id, rendered)
@@ -208,6 +212,35 @@ function emitDerived(
     `const ${outputName} = derived(() => ${sourceRendered}, ${JSON.stringify(id)});`,
   )
   return id
+}
+
+function ensureRootDeclIdentity(
+  ctx: CompilerState,
+  instanceId: number,
+  declaratorStart: number,
+  naturalName: string,
+  kind: 'signal' | 'derived' | 'collection',
+): { id: DeclId; outputName: string } {
+  const key = declKey(instanceId, declaratorStart, naturalName)
+  const id =
+    ctx.declIdByKey.get(key) ?? toDeclId(`decl_${instanceId}_${declaratorStart}_${naturalName}`)
+  const existingKind = ctx.declKind.get(id)
+  if (existingKind && existingKind !== kind) {
+    throw new Error(`compile: declaration "${naturalName}" changes kind during analysis`)
+  }
+  ctx.declIdByKey.set(key, id)
+  ctx.declKind.set(id, kind)
+  const outputName = ctx.declOutputName.get(id) ?? assignOutputName(ctx, naturalName, id)
+  return { id, outputName }
+}
+
+function prepareRootDeclaration(
+  ctx: CompilerState,
+  stmt: NodePath<t.Statement>,
+  instanceId: number,
+): void {
+  const { kind, naturalName, declaratorStart } = parseSignalDeclStatement(stmt)
+  ensureRootDeclIdentity(ctx, instanceId, declaratorStart, naturalName, kind)
 }
 
 interface ParsedSignalDecl {
@@ -352,11 +385,6 @@ function emitLocalDerived(
   const outputName = assignOutputName(ctx, naturalName, id)
 
   const { deps, rendered } = analyzeExpr(ctx, bodyPath as NodePath<t.Expression>, instanceId)
-  for (const dep of deps) {
-    if (ctx.declKind.get(dep) === 'derived') {
-      throw new Error('compile: derived-of-derived is not supported yet (scope limit)')
-    }
-  }
   ctx.derivedDeps.set(id, deps)
   ctx.derivedRecompute.set(id, rendered)
   return { id, kind: 'derived', outputName, rendered }
@@ -966,12 +994,23 @@ function classifyStructuralExpr(
     return null
   }
   if (exprPath.isLogicalExpression() && exprPath.node.operator === '&&') {
-    return exprPath.get('right').isJSXElement() ? 'conditional' : null
+    const right = exprPath.get('right')
+    return right.isJSXElement() ||
+      (right.isArrowFunctionExpression() &&
+        right.node.params.length === 0 &&
+        looksLikeUnitBodyJsx(right.get('body')))
+      ? 'conditional'
+      : null
   }
   if (exprPath.isConditionalExpression()) {
     const consequent = exprPath.get('consequent')
     const alternate = exprPath.get('alternate')
-    const isBranchable = (p: NodePath<t.Node>) => p.isJSXElement() || p.isNullLiteral()
+    const isBranchable = (p: NodePath<t.Node>) =>
+      p.isJSXElement() ||
+      p.isNullLiteral() ||
+      (p.isArrowFunctionExpression() &&
+        p.node.params.length === 0 &&
+        looksLikeUnitBodyJsx(p.get('body')))
     if (
       isBranchable(consequent) &&
       isBranchable(alternate) &&
@@ -1180,19 +1219,24 @@ function renderStructuralUnitBody(
   )[]
   const localHandlers = ctx.handlers.splice(handlersBefore)
   const localActions = ctx.actions.splice(actionsBefore) as ActionDecl[]
-  // ADR-0012 決定5: ユニット内の属性式が追跡signalを参照するのは、依存先が
-  // 現在または祖先のローカルsignalである場合に限り許可する。ルートsignalや
-  // 別の構造単位のローカルsignalは、字句的な所有範囲の外なので拒否する。
+  // ADR-0012 決定5: 別の構造単位のローカルsignalは字句的な所有範囲の外
+  // なので拒否する。ルートsignalはこのunitの親markerへ依存を持ち上げ、
+  // factoryのupdateへ接続する。
+  const nestedDeps = new Set<DeclId>()
   const localAttrBindings = ctx.attrBindings.splice(attrsBefore)
   for (const b of localAttrBindings) {
-    const leaksBeyondThisUnit = [...b.deps].some((d) => !accessibleLocalDeclIds.has(d))
-    if (leaksBeyondThisUnit) {
+    const leaksIntoAnotherLocalScope = [...b.deps].some(
+      (d) => ctx.localDeclIds.has(d) && !accessibleLocalDeclIds.has(d),
+    )
+    if (leaksIntoAnotherLocalScope) {
       throw new Error(
         'compile: attribute binding referencing a tracked signal inside a list item or conditional branch is not supported yet (scope limit)',
       )
     }
+    for (const d of b.deps) {
+      if (!accessibleLocalDeclIds.has(d)) nestedDeps.add(d)
+    }
   }
-  const nestedDeps = new Set<DeclId>()
   for (const action of localActions) {
     for (const dep of action.resultDeps) {
       if (ctx.localDeclIds.has(dep) && !accessibleLocalDeclIds.has(dep)) {
@@ -1217,13 +1261,16 @@ function renderStructuralUnitBody(
     const deps = ctx.markerDeps.get(m.id)
     ctx.markerDeps.delete(m.id)
     if (m.kind === 'text') {
-      const leaksBeyondThisUnit = deps
-        ? [...deps].some((d) => !accessibleLocalDeclIds.has(d))
+      const leaksIntoAnotherLocalScope = deps
+        ? [...deps].some((d) => ctx.localDeclIds.has(d) && !accessibleLocalDeclIds.has(d))
         : false
-      if (leaksBeyondThisUnit) {
+      if (leaksIntoAnotherLocalScope) {
         throw new Error(
           'compile: referencing a tracked signal inside a list item or conditional branch is not supported yet (scope limit)',
         )
+      }
+      for (const d of deps ?? []) {
+        if (!accessibleLocalDeclIds.has(d)) nestedDeps.add(d)
       }
     } else {
       // ネストした構造ユニット自身の依存(さらに内側からバブル済みの分を
@@ -1250,6 +1297,7 @@ function renderStructuralUnitBody(
       localEffects,
       localAttrBindings,
       localDecls,
+      rootDeps: new Set(nestedDeps),
     },
     nestedDeps,
   }
@@ -1371,15 +1419,32 @@ function renderConditionalUnit(
   const { deps, rendered: condRendered } = analyzeExpr(ctx, testPath, instanceId)
 
   const branches = branchPaths.map((branchPath) => {
-    if (!branchPath?.isJSXElement()) return { body: null }
+    if (!branchPath || branchPath.isNullLiteral()) return { body: null }
+    const source = branchPath.isJSXElement()
+      ? {
+          jsxPath: branchPath,
+          localDeclStmts: [],
+          localMovementFns: new Map<string, NodePath<t.FunctionDeclaration>>(),
+          localMountHooks: [] as MountHooks,
+          localEffectHooks: [] as EffectHooks,
+          localContextProviders: [] as ContextProvider[],
+        }
+      : branchPath.isArrowFunctionExpression() && branchPath.node.params.length === 0
+        ? resolveUnitBodySource(ctx, branchPath.get('body'))
+        : null
+    if (!source) return { body: null }
     const { body, nestedDeps } = renderStructuralUnitBody(
       ctx,
-      branchPath,
+      source.jsxPath,
       instanceId,
       handlerFns,
       undefined,
-      [],
+      source.localDeclStmts,
       ancestorLocalDeclIds,
+      source.localMovementFns,
+      source.localMountHooks,
+      source.localEffectHooks,
+      source.localContextProviders,
     )
     // M5.5: ネストしたユニットの依存を条件分岐マーカーの依存へ合流させる
     // (選択が変わらなくても handle.update() で内側を更新するため)。
@@ -1548,6 +1613,13 @@ export function compileComponent(
 
   // 変数ゾーン(render前): signal()/derived() の const 宣言のみ。function宣言
   // など他の文は processDeclarationStatement の scope limit が拒否する。
+  // 先に宣言IDを登録しておくことで、derived()の式から後ろにあるderived()も
+  // 依存先として解決できる。これにより、循環参照はビルド時実行のTDZエラー
+  // ではなく、依存グラフの検査で報告できる。
+  for (const stmt of varZoneStmts) {
+    if (resolveContextProvider(ctx, stmt)) continue
+    prepareRootDeclaration(ctx, stmt, instanceId)
+  }
   for (const stmt of varZoneStmts) {
     const contextProvider = resolveContextProvider(ctx, stmt)
     if (contextProvider) {

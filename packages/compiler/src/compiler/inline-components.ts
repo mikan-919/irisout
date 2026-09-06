@@ -258,12 +258,11 @@ function findRenderStmt(componentPath: NodePath<t.FunctionDeclaration>): NodePat
   throw new Error('compile: a component must contain a render(<JSX>) call (scope limit)')
 }
 
-// jsxPathの祖先を遡り、`.map((item) => ...)`のarrow関数(構造ユニット)に
-// 包まれているかを判定する。他の関数境界(ハンドラのinline arrow・
-// コンポーネント自身の関数宣言)に先に当たれば null(root scope 扱い)。
-// same-file-component-compositionのローカルsignalはlist itemでのみ
-// サポートするため(render.ts参照)、conditional branchは対象外のまま。
-function findEnclosingListItemArrow(
+// jsxPathの祖先を遡り、`.map((item) => ...)`または条件分岐用に生成した
+// arrow関数(構造ユニット)に包まれているかを判定する。他の関数境界
+// (ハンドラのinline arrow・コンポーネント自身の関数宣言)に先に当たれば
+// null(root scope扱い)。
+function findEnclosingStructuralArrow(
   jsxPath: NodePath<t.JSXElement>,
 ): NodePath<t.ArrowFunctionExpression> | null {
   let current: NodePath<t.Node> | null = jsxPath.parentPath
@@ -280,6 +279,19 @@ function findEnclosingListItemArrow(
           return current
         }
       }
+      if (
+        parent?.isConditionalExpression() &&
+        (parent.node.consequent === current.node || parent.node.alternate === current.node)
+      ) {
+        return current
+      }
+      if (
+        parent?.isLogicalExpression() &&
+        parent.node.operator === '&&' &&
+        parent.node.right === current.node
+      ) {
+        return current
+      }
       return null
     }
     if (current.isFunctionDeclaration() || current.isFunctionExpression()) {
@@ -292,13 +304,9 @@ function findEnclosingListItemArrow(
 
 // jsxPathの祖先を、関数境界に当たる前まで遡り、三項/`&&`の条件分岐ブランチ
 // (ConditionalExpressionのconsequent/alternate、LogicalExpressionの右辺)
-// に包まれているかを判定する。findEnclosingListItemArrowがnullを返した後
-// (=list itemではない)にだけ呼ぶ ― 変数ゾーン宣言を持つコンポーネントを
-// 条件分岐ブランチへインライン化すると、ローカルsignalにすべき宣言が
-// ルートスコープへ静かに昇格してしまう(実装前調査で確認した不具合:
-// 三項/`&&`の式位置はブロック文を構文的に置けずローカルsignal化できない
-// ため、render.tsのresolveUnitBodySourceによる受理もできない ―
-// list item同様に安全な受け皿がないので明示的に拒否する必要がある)。
+// に包まれているかを判定する。list itemではない条件分岐のブランチも、
+// ローカル宣言を持つ場合はfindEnclosingConditionalBranchがブランチ全体を
+// block arrowへ包むため、状態とライフサイクルをbranch factoryへ置ける。
 function isInsideConditionalBranch(jsxPath: NodePath<t.JSXElement>): boolean {
   let current: NodePath<t.Node> | null = jsxPath.parentPath
   while (current) {
@@ -318,6 +326,48 @@ function isInsideConditionalBranch(jsxPath: NodePath<t.JSXElement>): boolean {
     current = current.parentPath
   }
   return false
+}
+
+interface ConditionalBranchSlot {
+  parent: NodePath<t.ConditionalExpression | t.LogicalExpression>
+  key: 'consequent' | 'alternate' | 'right'
+  branch: NodePath<t.JSXElement>
+}
+
+// 条件分岐の中にある子部品をローカル状態付きで展開する場合、子部品だけ
+// ではなく、条件分岐ブランチ全体をarrowのblockへ包む必要がある。これで
+// `<div><Child /></div>`のように子部品がブランチの深い位置にあっても、
+// signal宣言をそのブランチのfactoryへ置ける。
+function findEnclosingConditionalBranch(
+  jsxPath: NodePath<t.JSXElement>,
+): ConditionalBranchSlot | null {
+  let child: NodePath<t.Node> = jsxPath
+  let current: NodePath<t.Node> | null = jsxPath.parentPath
+  while (current) {
+    if (current.isConditionalExpression()) {
+      if (current.node.consequent === child.node && child.isJSXElement()) {
+        return { parent: current, key: 'consequent', branch: child }
+      }
+      if (current.node.alternate === child.node && child.isJSXElement()) {
+        return { parent: current, key: 'alternate', branch: child }
+      }
+    }
+    if (current.isLogicalExpression() && current.node.operator === '&&') {
+      if (current.node.right === child.node && child.isJSXElement()) {
+        return { parent: current, key: 'right', branch: child }
+      }
+    }
+    if (
+      current.isArrowFunctionExpression() ||
+      current.isFunctionDeclaration() ||
+      current.isFunctionExpression()
+    ) {
+      return null
+    }
+    child = current
+    current = current.parentPath
+  }
+  return null
 }
 
 // list item arrowの現在の本体(bare JSXまたは既存のblock)をblockに変換
@@ -386,7 +436,7 @@ function expandComponentRef(
   substituteProps(clonedFnPath, jsxPath, tagName)
   const zones = splitComponentZones(clonedFnPath)
 
-  const enclosingArrow = findEnclosingListItemArrow(jsxPath)
+  const enclosingArrow = findEnclosingStructuralArrow(jsxPath)
   // 呼び出し箇所そのものがarrow本体全体(concise body)である場合、
   // ensureUnitArrowBlockBodyのreplaceWithがjsxPathの指すノードを直接
   // 書き換える(jsxPathとarrow本体pathは同一ノードを指すため)。その場合
@@ -440,72 +490,104 @@ function expandComponentRef(
     }
     finalJsxPath.replaceWith(renderJsxNode)
   } else {
-    // ルートスコープへのインライン化。呼び出し箇所が条件分岐ブランチの中
-    // (list itemではない)にあり、かつ対象コンポーネントが変数ゾーン宣言を
-    // 持つ場合、それはローカルsignalになるべきだが受け皿がない(三項/`&&`
-    // の式位置はブロック文を構文的に置けない)。黙ってルートスコープへ
-    // 昇格させると壊れた挙動(本来インスタンスごとのはずの状態がモジュール
-    // スコープで共有される)になるため、明示的に拒否する。
+    // ルートスコープまたは条件分岐ブランチへのインライン化。条件分岐
+    // ブランチにローカル宣言を持つ子部品がある場合は、ブランチ全体を
+    // block arrowへ包み、宣言をその条件unitのfactoryへ閉じ込める。
     const conditionalBranch = isInsideConditionalBranch(jsxPath)
+    const conditionalSlot = findEnclosingConditionalBranch(jsxPath)
     const contextProviderStmts = zones.varZoneStmts.filter((stmt) =>
       isContextProviderStatement(stmt),
     )
-    if (conditionalBranch && zones.varZoneStmts.some((stmt) => !isContextProviderStatement(stmt))) {
+
+    if (conditionalSlot && zones.varZoneStmts.some((stmt) => !isContextProviderStatement(stmt))) {
+      const branchParent = conditionalSlot.parent
+      const branchKey = conditionalSlot.key
+      const varZoneNodes = zones.varZoneStmts.map((s) => s.node)
+      const movementFnNodes = [...zones.movementZoneFns.values()].map((p) => p.node)
+      const mountHookNodes = zones.mountHooks.map(
+        (p) => p.parentPath!.parentPath!.node as t.ExpressionStatement,
+      )
+      const effectHookNodes = zones.effectHooks.map(
+        (p) => p.parentPath!.parentPath!.node as t.ExpressionStatement,
+      )
+      const renderJsxNode = zones.renderJsxPath.node
+
+      // 子部品の描画木を条件分岐の元のJSX木へ置き換えてから、その木全体を
+      // 構造unitの入力として保存する。条件分岐の式位置には文を直接置けない
+      // ため、`() => { ... return <branch /> }`をコンパイラ専用の表現にする。
+      conditionalSlot.branch.replaceWith(renderJsxNode)
+      const branchPath = branchParent.get(branchKey) as NodePath<t.JSXElement>
+      const branchArrow = t.arrowFunctionExpression(
+        [],
+        t.blockStatement([
+          ...varZoneNodes,
+          ...movementFnNodes,
+          ...mountHookNodes,
+          ...effectHookNodes,
+          t.returnStatement(branchPath.node),
+        ]),
+      )
+      markTransformedPath(clonedFnPath, transformedNodes)
       clonedFnPath.remove()
-      throw new Error(
-        `compile: inlining component "${tagName}" with its own variable-zone declarations into a conditional branch is not supported yet (scope limit)`,
-      )
-    }
+      branchPath.replaceWith(branchArrow)
 
-    // signal/derived宣言名・動きゾーン関数名の衝突は、検出時のみ
-    // コンポーネント名で接頭辞化してリネームする(ADR-0014決定5)。
-    renameCollidingRootDecls(clonedFnPath, zones.varZoneStmts, componentPath, tagName)
-    renameCollidingMovementFns(clonedFnPath, zones.movementZoneFns, componentPath, tagName)
-    const varZoneNodes = (conditionalBranch ? [] : zones.varZoneStmts).map((s) => s.node)
-    const contextProviderNodes = contextProviderStmts.map((stmt) =>
-      t.jsxExpressionContainer((stmt.node as t.ExpressionStatement).expression),
-    )
-    const movementFnNodes = [...zones.movementZoneFns.values()].map((p) => p.node)
-    const mountHookNodes = zones.mountHooks.map(
-      (p) => p.parentPath!.parentPath!.node as t.ExpressionStatement,
-    )
-    const effectHookNodes = zones.effectHooks.map(
-      (p) => p.parentPath!.parentPath!.node as t.ExpressionStatement,
-    )
-    const renderJsxNode = zones.renderJsxPath.node
-    if (
-      conditionalBranch &&
-      (contextProviderNodes.length > 0 ||
-        zones.mountHooks.length > 0 ||
-        zones.effectHooks.length > 0)
-    ) {
-      renderJsxNode.children.unshift(
-        ...contextProviderNodes,
-        ...zones.mountHooks.map((callback) =>
-          t.jsxExpressionContainer(t.callExpression(t.identifier('onMount'), [callback.node])),
-        ),
-        ...zones.effectHooks.map((callback) =>
-          t.jsxExpressionContainer(t.callExpression(t.identifier('effect'), [callback.node])),
-        ),
+      const branchArrowPath = branchPath as unknown as NodePath<t.ArrowFunctionExpression>
+      const branchStatements = branchArrowPath.get('body.body') as NodePath<t.Statement>[]
+      const returnStatement = branchStatements[
+        branchStatements.length - 1
+      ] as NodePath<t.ReturnStatement>
+      finalJsxPath = returnStatement.get('argument') as NodePath<t.JSXElement>
+    } else {
+      // signal/derived宣言名・動きゾーン関数名の衝突は、検出時のみ
+      // コンポーネント名で接頭辞化してリネームする(ADR-0014決定5)。
+      renameCollidingRootDecls(clonedFnPath, zones.varZoneStmts, componentPath, tagName)
+      renameCollidingMovementFns(clonedFnPath, zones.movementZoneFns, componentPath, tagName)
+      const varZoneNodes = (conditionalBranch ? [] : zones.varZoneStmts).map((s) => s.node)
+      const contextProviderNodes = contextProviderStmts.map((stmt) =>
+        t.jsxExpressionContainer((stmt.node as t.ExpressionStatement).expression),
       )
-    }
-    markTransformedPath(clonedFnPath, transformedNodes)
-    clonedFnPath.remove()
+      const movementFnNodes = [...zones.movementZoneFns.values()].map((p) => p.node)
+      const mountHookNodes = zones.mountHooks.map(
+        (p) => p.parentPath!.parentPath!.node as t.ExpressionStatement,
+      )
+      const effectHookNodes = zones.effectHooks.map(
+        (p) => p.parentPath!.parentPath!.node as t.ExpressionStatement,
+      )
+      const renderJsxNode = zones.renderJsxPath.node
+      if (
+        conditionalBranch &&
+        (contextProviderNodes.length > 0 ||
+          zones.mountHooks.length > 0 ||
+          zones.effectHooks.length > 0)
+      ) {
+        renderJsxNode.children.unshift(
+          ...contextProviderNodes,
+          ...zones.mountHooks.map((callback) =>
+            t.jsxExpressionContainer(t.callExpression(t.identifier('onMount'), [callback.node])),
+          ),
+          ...zones.effectHooks.map((callback) =>
+            t.jsxExpressionContainer(t.callExpression(t.identifier('effect'), [callback.node])),
+          ),
+        )
+      }
+      markTransformedPath(clonedFnPath, transformedNodes)
+      clonedFnPath.remove()
 
-    if (varZoneNodes.length > 0) {
-      findRenderStmt(componentPath).insertBefore(varZoneNodes)
+      if (varZoneNodes.length > 0) {
+        findRenderStmt(componentPath).insertBefore(varZoneNodes)
+      }
+      if (movementFnNodes.length > 0) {
+        componentPath.get('body').pushContainer('body', movementFnNodes)
+      }
+      if (mountHookNodes.length > 0 && !conditionalBranch) {
+        componentPath.get('body').pushContainer('body', mountHookNodes)
+      }
+      if (effectHookNodes.length > 0 && !conditionalBranch) {
+        componentPath.get('body').pushContainer('body', effectHookNodes)
+      }
+      finalJsxPath = jsxPath
+      finalJsxPath.replaceWith(renderJsxNode)
     }
-    if (movementFnNodes.length > 0) {
-      componentPath.get('body').pushContainer('body', movementFnNodes)
-    }
-    if (mountHookNodes.length > 0 && !conditionalBranch) {
-      componentPath.get('body').pushContainer('body', mountHookNodes)
-    }
-    if (effectHookNodes.length > 0 && !conditionalBranch) {
-      componentPath.get('body').pushContainer('body', effectHookNodes)
-    }
-    finalJsxPath = jsxPath
-    finalJsxPath.replaceWith(renderJsxNode)
   }
 
   // 展開後の内容にさらにコンポーネント参照が残っていれば再帰的に展開する

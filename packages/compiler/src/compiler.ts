@@ -32,7 +32,7 @@ import type {
   UpdateBatchOutput,
 } from './codegen.ts'
 import { generateModule } from './codegen.ts'
-import { resolveToSignals } from './compiler/decl-graph.ts'
+import { assertAcyclicDerivedGraph, resolveToSignals } from './compiler/decl-graph.ts'
 import { collectTopLevelComponents, inlineComponents } from './compiler/inline-components.ts'
 import { compileComponent } from './compiler/render.ts'
 import type {
@@ -302,6 +302,7 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
   }
   const rootHtmlSource = compileComponent(ctx, rootPath, ctx.instanceCounter++, out)
 
+  assertAcyclicDerivedGraph(ctx)
   const signalToMarkers = buildSignalToMarkers(ctx)
 
   // 同じ同期スコープで複数 root signal が書き込まれる場合でも、依存 marker
@@ -561,6 +562,7 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
       localEffects: body.localEffects.map(convertLocalEffect),
       localAttrBindings: body.localAttrBindings,
       localDecls: body.localDecls,
+      rootDeps: body.rootDeps,
     }
   }
   const markerOutputs: MarkerOutput[] = ctx.markers.map((m) => {

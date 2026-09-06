@@ -11,6 +11,7 @@
     "dev": "vp -C apps/examples dev",
     "dev:list": "IRISOUT_ENTRY=list.jsx vp -C apps/examples dev",
     "dev:notes": "IRISOUT_ENTRY=notes.jsx vp -C apps/examples dev",
+    "dev:heatmap": "IRISOUT_ENTRY=heatmap.jsx vp -C apps/examples dev",
     "dev:todomvc": "IRISOUT_ENTRY=todomvc.jsx vp -C apps/examples dev",
     "dev:multi-file": "IRISOUT_ENTRY=multi-file/App.jsx vp -C apps/examples dev",
     "build": "vp -C apps/examples build",

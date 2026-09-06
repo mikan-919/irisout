@@ -125,21 +125,28 @@ describe('ADR-0012: dynamic attribute bindings', () => {
     expect(firstBox.checked).toBe(true)
   })
 
-  it('rejects an item-scoped attribute expression referencing a tracked signal', () => {
+  it('updates an item-scoped attribute expression referencing a root signal', async () => {
     const source = `export function App() {
-      const mode = signal(0);
+      const mode = signal(1);
       const items = signal([{ id: 1 }]);
       render(
-        <ul>
-          {items().map((item) => (
-            <li key={item.id} class={mode() === item.id ? 'a' : ''}><span>x</span></li>
-          ))}
-        </ul>
+        <div>
+          <button onClick={() => mode(mode() + 1)}>next</button>
+          <ul>
+            {items().map((item) => (
+              <li key={item.id} class={mode() === item.id ? 'a' : ''}><span>x</span></li>
+            ))}
+          </ul>
+        </div>
       );
     }`
-    expect(() => compile(source)).toThrow(
-      /attribute binding referencing a tracked signal.*scope limit/,
-    )
+    const { code } = compile(source)
+    const mod = await loadGenerated(code)
+    const container = createContainer()
+    ;(mod.mountComponent as (container: Element) => unknown)(container)
+    expect(container.querySelector('li')?.className).toBe('a')
+    dispatch(container, container.querySelector('button'), 'click')
+    expect(container.querySelector('li')?.className).toBe('')
   })
 
   it('wires handlers on a unit-host element instead of dropping them silently', async () => {

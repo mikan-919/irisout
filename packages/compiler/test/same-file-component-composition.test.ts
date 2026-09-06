@@ -137,7 +137,7 @@ export function App() {
     expect(li.querySelector('span')?.textContent).toBe('a')
   })
 
-  it('ルートsignalへの依存は引き続きscope limitで拒否する(回帰確認)', () => {
+  it('ルートsignalへの依存をリストアイテムから解決できる', () => {
     const source = `
 export function App() {
   const todos = signal([{ id: 1, text: 'a' }]);
@@ -151,7 +151,8 @@ export function App() {
   );
 }
 `
-    expect(() => compile(source)).toThrow(/scope limit/)
+    const { code } = compile(source)
+    expect(code).toContain('filter')
   })
 
   it('リストへインライン化した同一ファイル部品のuse=をitem単位で初期化・破棄する', async () => {
@@ -491,12 +492,7 @@ function B() {
     expect(em?.textContent).toBe('1')
   })
 
-  it('ローカル状態を持つコンポーネントを条件分岐ブランチへインライン化することは拒否する', () => {
-    // ローカルsignalの受け皿はlist itemのみ(design.md参照、三項/`&&`の
-    // 式位置はブロック文を構文的に置けないため)。変数ゾーン宣言を持つ
-    // コンポーネントが条件分岐ブランチに来た場合、ルートスコープへ黙って
-    // 昇格させると本来インスタンスごとのはずの状態がモジュールスコープで
-    // 共有されてしまうため、明示的に拒否する。
+  it('ローカル状態を持つコンポーネントを条件分岐ブランチへインライン化できる', () => {
     const source = `
 export function App() {
   const show = signal(true);
@@ -507,9 +503,8 @@ function Foo() {
   render(<button onClick={() => count(count() + 1)}>click</button>);
 }
 `
-    expect(() => compile(source)).toThrow(
-      /variable-zone declarations into a conditional branch.*scope limit/,
-    )
+    const { code } = compile(source)
+    expect(code).toContain('let count = 0;')
   })
 
   it('状態を持たないコンポーネントを条件分岐ブランチへインライン化するのは許可する(回帰確認)', async () => {

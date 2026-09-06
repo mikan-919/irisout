@@ -438,7 +438,7 @@ export function App() {
     expect(() => compile(source)).toThrow(/key.*scope limit/s)
   })
 
-  it('rejects a tracked signal referenced inside a list item body', () => {
+  it('resolves a tracked root signal referenced inside a list item body', async () => {
     const source = `
 export function App() {
   const items = signal([{ id: 1 }]);
@@ -446,7 +446,11 @@ export function App() {
   render(<ul>{items().map((item) => <li key={item.id}>{label()}</li>)}</ul>);
 }
 `
-    expect(() => compile(source)).toThrow(/referencing a tracked signal.*scope limit/)
+    const { code } = compile(source)
+    const mod = await loadGenerated(code)
+    const container = createContainer()
+    ;(mod.mountComponent as (container: Element) => unknown)(container)
+    expect(container.querySelector('li')?.textContent).toBe('x')
   })
 
   it('owns only its range when static siblings share the same parent', async () => {

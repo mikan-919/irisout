@@ -275,10 +275,9 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
 ## 既知の制約(現時点のcodegenの限界)
 
 2026-09-06のヒートマップ調査で、非同期ハンドラから`async`が落ちて不正な生成物に
-なる問題と、ハンドラ内のPromiseコールバックによる状態更新がDOMへ反映されない問題を
-再現した。`onMount`のブロック本体からのPromise更新は動作したため、経路を区別する。
-また、派生値を参照する`derived`は`derived-of-derived`として拒否される。これらは未修正で、
-ロードマップ第2段階以降の対象である。
+なる問題、ハンドラ内のPromiseコールバックによる状態更新がDOMへ反映されない問題、
+派生値を参照する`derived`が拒否される問題を再現した。第2段階で非同期更新を、第3段階で
+派生値の連鎖を実装し、回帰試験と代表アプリで確認した。
 
 ロードマップ第1段階の検査と編集反映は実装済みである。`bun run check`と`bun run typecheck`
 が`apps/examples/tsconfig.json`のJSX型検査を実行し、`@irisout/vite-plugin`が
@@ -307,19 +306,17 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
 - 静的host属性はM4、動的(式コンテナ)host属性値はADR-0012(change
   `dynamic-attribute-bindings`)で実装済み。attribute/property の使い分けは
   固定表(`checked` = booleanプロパティ、`value` = 文字列プロパティ、他は
-  `setAttribute`)。ユニット内の属性式が**ルート**signalを参照するのは
-  テキストと同じく `scope limit`。同一unitまたは祖先unitで宣言された
-  local signalへの依存は`recursive-structural-authoring`で許可し、所有者
-  factoryのupdateへ接続する(UNRESOLVED-04解消)。
+  `setAttribute`)。リスト・条件分岐内の属性式がルートsignal/derivedを参照する
+  場合は、依存を親markerへ持ち上げて所有者factoryのupdateへ接続する。同一unitまたは
+  祖先unitで宣言されたlocal signalへの依存も接続する(UNRESOLVED-04解消)。
 - **リスト(`.map()`)・条件分岐(三項/`&&`)は再帰的に実装済み**
   (change `recursive-structural-authoring`)。構造unitは任意の深さでfactoryへ
   展開され、各instanceがDOM範囲、local state、binding cache、Listのkeyed Map、
   update処理を所有する。現在または祖先unitのlocal signalを条件式・配列式・
   handler・bindingから使う場合は、所有者factoryのupdateへ接続する。
   - リストアイテム本体・条件分岐ブランチ本体の直接テキスト/属性で**ルート**
-    signal/derivedを参照することは`scope limit`。item要素のフィールド参照は
-    追跡対象外なので素通りする。ネストunitの条件式・配列式でroot signalを
-    参照する依存は外側markerへ合流する。
+    signal/derivedを参照できる。item要素のフィールド参照は追跡対象外なので素通りする。
+    ネストunitの条件式・配列式でroot signalを参照する依存も外側markerへ合流する。
   - 字句スコープ外の別unit local signalをネストunitが参照する場合は、
     `compile: ... (scope limit)`で拒否する。local DeclIdをrootの
     `signalToMarkers`へ漏らさない。
@@ -398,12 +395,9 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
     `scope limit`(展開中コンポーネント名のvisited集合で検出)。
   - propsは`function Foo({ a, b })`形のshorthand分割代入のみ対応。
     非shorthand(`{ a: x }`)・複数仮引数・spread propsは`scope limit`。
-  - コンポーネントを構造ユニット(list item)へインライン化できるのは
-    `.map()`アイテムの位置のみ。条件分岐ブランチへのインライン化は、
-    対象コンポーネントが変数ゾーン宣言(ローカルsignalになる宣言)を
-    一切持たない場合のみ動作する ― 条件分岐ブランチは三項/`&&`の式
-    位置でブロック文を置けないため、ローカルsignal付きコンポーネントの
-    ブランチへのインライン化は現状未対応(実装は同一ユニットのみ)。
+  - コンポーネントを構造ユニット(list item)と条件分岐ブランチへインライン化できる。
+    条件分岐内の状態付き子部品は、ブランチ全体を0引数arrowのblockへ包み、
+    ローカルsignalとライフサイクルをbranch factoryへ移す。children/slotは対象外。
   - propsは`function Foo({ a, b })`形のshorthand分割代入のみ対応する。参照の
     bindingがpropsに対応する場合、実引数が識別子・メンバー式・添字式・呼び出し式
     のいずれでも、三項演算子・二項演算子・メンバー式・呼び出し式・ハンドラの

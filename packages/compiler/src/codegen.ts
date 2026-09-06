@@ -72,6 +72,8 @@ export interface StructuralUnitBodyOutput {
   localAttrBindings: AttrBinding[]
   /** same-file-component-composition: このユニット直下のローカルsignal宣言。 */
   localDecls: LocalDecl[]
+  /** ルートsignal/derivedを読むため、親unitから更新を受ける依存。 */
+  rootDeps: Set<DeclId>
 }
 
 export interface ListMarkerOutput {
@@ -356,6 +358,31 @@ function markersHaveList(markers: MarkerOutput[]): boolean {
   })
 }
 
+function bodyHasReactiveBindings(body: StructuralUnitBodyOutput): boolean {
+  const hasLocalRefreshSource = body.localDecls.length > 0 || body.rootDeps.size > 0
+  return (
+    (hasLocalRefreshSource && (bodyTexts(body).length > 0 || body.localAttrBindings.length > 0)) ||
+    bodyUnits(body).some((unit) => {
+      if (unit.kind === 'list') return bodyHasReactiveBindings(unit.body)
+      return unit.branches.some(
+        (branch) => branch.body != null && bodyHasReactiveBindings(branch.body),
+      )
+    })
+  )
+}
+
+function markersHaveReactiveBindings(markers: MarkerOutput[]): boolean {
+  return markers.some((marker) => {
+    if (marker.kind === 'list') return bodyHasReactiveBindings(marker.body)
+    if (marker.kind === 'conditional') {
+      return marker.branches.some(
+        (branch) => branch.body != null && bodyHasReactiveBindings(branch.body),
+      )
+    }
+    return false
+  })
+}
+
 // ブランチ factory が update() を返すか。ネストしたユニットを含む場合と、
 // 外側に item 仮引数があってテキストの再描画が要る場合のみ true ―
 // それ以外のブランチは M5 と同じ set-once + { el } のまま(ADR-0004:
@@ -365,6 +392,8 @@ function branchHasUpdate(body: StructuralUnitBodyOutput, inItemScope: boolean): 
     bodyUnits(body).length > 0 ||
     body.localActions.length > 0 ||
     body.localEffects.length > 0 ||
+    body.rootDeps.size > 0 ||
+    body.localDecls.length > 0 ||
     (inItemScope && (bodyTexts(body).length > 0 || body.localAttrBindings.length > 0))
   )
 }
@@ -395,8 +424,12 @@ function generateFactoryLegacy(
   const texts = bodyTexts(body)
   const units = bodyUnits(body)
   const childScope = inItemScope || itemParam != null
-  const refreshTexts = (itemParam != null || inItemScope) && texts.length > 0
-  const refreshAttrs = (itemParam != null || inItemScope) && body.localAttrBindings.length > 0
+  const refreshTexts =
+    (itemParam != null || inItemScope || body.rootDeps.size > 0 || body.localDecls.length > 0) &&
+    texts.length > 0
+  const refreshAttrs =
+    (itemParam != null || inItemScope || body.rootDeps.size > 0 || body.localDecls.length > 0) &&
+    body.localAttrBindings.length > 0
   const hasLocalSelfUpdate = body.localHandlers.some((h) => h.localUpdateLevels.includes(0))
   const needsUpdate =
     itemParam != null || refreshTexts || refreshAttrs || units.length > 0 || hasLocalSelfUpdate
@@ -614,8 +647,12 @@ function generateLifecycleFactory(
   const ownMounts = body.localMounts
   const ownEffects = body.localEffects
   const childScope = inItemScope || itemParam != null
-  const refreshTexts = (itemParam != null || inItemScope) && texts.length > 0
-  const refreshAttrs = (itemParam != null || inItemScope) && body.localAttrBindings.length > 0
+  const refreshTexts =
+    (itemParam != null || inItemScope || body.rootDeps.size > 0 || body.localDecls.length > 0) &&
+    texts.length > 0
+  const refreshAttrs =
+    (itemParam != null || inItemScope || body.rootDeps.size > 0 || body.localDecls.length > 0) &&
+    body.localAttrBindings.length > 0
   const hasLocalSelfUpdate = body.localHandlers.some((h) => h.localUpdateLevels.includes(0))
   const needsUpdate =
     itemParam != null ||
@@ -1257,6 +1294,8 @@ export function generateModule({
       'reconcileList as __reconcileList__',
       'updateListBinding as __updateListBinding__',
     )
+  } else if (markersHaveReactiveBindings(markers)) {
+    runtimeImports.push('updateListBinding as __updateListBinding__')
   }
   if (markersHaveLifecycleList(markers)) {
     runtimeImports.push(
@@ -1581,15 +1620,66 @@ export function generateModule({
     '',
   )
 
-  // signal declId -> それに直接依存する derived declId の一覧。M1 では
-  // derived-of-derived を禁止しているので、これはフラットな逆引きで足りる。
-  const signalToDerivedRecomputes = new Map<DeclId, DeclId[]>()
-  for (const [derivedId, deps] of derivedDeps) {
-    for (const dep of deps) {
-      const list = signalToDerivedRecomputes.get(dep) ?? []
-      list.push(derivedId)
-      signalToDerivedRecomputes.set(dep, list)
+  // root signal/collection -> それに(直接・間接)依存する derived declId の
+  // 一覧。derived は依存先より先に再計算する必要があるため、全体の
+  // トポロジカル順序を作ってからrootごとの到達集合へ絞り込む。
+  const derivedOrder: DeclId[] = []
+  const visitingDerived = new Set<DeclId>()
+  const visitedDerived = new Set<DeclId>()
+  const visitDerived = (derivedId: DeclId): void => {
+    if (visitedDerived.has(derivedId)) return
+    if (visitingDerived.has(derivedId)) {
+      throw new Error(`compile: derived dependency cycle includes "${derivedId}"`)
     }
+    visitingDerived.add(derivedId)
+    for (const dependency of derivedDeps.get(derivedId) ?? []) {
+      if (derivedDeps.has(dependency)) visitDerived(dependency)
+    }
+    visitingDerived.delete(derivedId)
+    visitedDerived.add(derivedId)
+    derivedOrder.push(derivedId)
+  }
+  for (const derivedId of derivedDeps.keys()) visitDerived(derivedId)
+
+  const directDerivedChildren = new Map<DeclId, DeclId[]>()
+  for (const [derivedId, deps] of derivedDeps) {
+    for (const dependency of deps) {
+      const children = directDerivedChildren.get(dependency) ?? []
+      children.push(derivedId)
+      directDerivedChildren.set(dependency, children)
+    }
+  }
+
+  const signalToDerivedRecomputes = new Map<DeclId, DeclId[]>()
+  const collectDerivedDescendants = (rootId: DeclId): Set<DeclId> => {
+    const descendants = new Set<DeclId>()
+    const visit = (dependency: DeclId): void => {
+      for (const child of directDerivedChildren.get(dependency) ?? []) {
+        if (descendants.has(child)) continue
+        descendants.add(child)
+        visit(child)
+      }
+    }
+    visit(rootId)
+    return descendants
+  }
+  for (const dependency of directDerivedChildren.keys()) {
+    if (derivedDeps.has(dependency)) continue
+    const descendants = collectDerivedDescendants(dependency)
+    signalToDerivedRecomputes.set(
+      dependency,
+      derivedOrder.filter((derivedId) => descendants.has(derivedId)),
+    )
+  }
+  const orderedDerivedIds = (ids: Set<DeclId>): DeclId[] =>
+    derivedOrder.filter((derivedId) => ids.has(derivedId))
+
+  const derivedForRoots = (rootIds: Iterable<DeclId>): DeclId[] => {
+    const ids = new Set<DeclId>()
+    for (const rootId of rootIds) {
+      for (const derivedId of signalToDerivedRecomputes.get(rootId) ?? []) ids.add(derivedId)
+    }
+    return orderedDerivedIds(ids)
   }
 
   // ADR-0012: marker id -> トップレベル動的属性の逆引き(update_* 生成用)。
@@ -1690,12 +1780,7 @@ export function generateModule({
   // 既存の update_<name>() は互換性のため残し、batch は内部の呼び出し先に
   // とどめる(公開 subscription/scheduler は導入しない)。
   for (const batch of updateBatches) {
-    const derivedIds = new Set<DeclId>()
-    for (const signalId of batch.signalIds) {
-      for (const derivedId of signalToDerivedRecomputes.get(signalId) ?? []) {
-        derivedIds.add(derivedId)
-      }
-    }
+    const derivedIds = derivedForRoots(batch.signalIds)
     instanceLines.push(`function ${batch.name}() {`)
     instanceLines.push('  if (!__mounted__ || __unmounted__) return;')
     for (const derivedId of derivedIds) {

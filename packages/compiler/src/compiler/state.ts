@@ -110,6 +110,8 @@ export interface StructuralUnitBody {
   localAttrBindings: AttrBinding[]
   /** same-file-component-composition: このユニット直下のローカルsignal宣言。 */
   localDecls: LocalDecl[]
+  /** 親のsignal/derivedに依存する本文・属性・入れ子unitの依存。 */
+  rootDeps: Set<DeclId>
 }
 
 // リストアイテムの key(item から導出、素の式なのでラップしない)は、

@@ -84,6 +84,7 @@ bun run build:inspect
 | ------------------------ | ------------------------------------------------ | ---------------------------------------------------------- |
 | `bun run dev:list`       | キー付きリストの追加、更新、並べ替え、削除       | [`list.jsx`](./apps/examples/list.jsx)                     |
 | `bun run dev:notes`      | フォーム、タブ、局所状態、条件分岐、入れ子リスト | [`notes.jsx`](./apps/examples/notes.jsx)                   |
+| `bun run dev:heatmap`    | 本文入力、指標切り替え、段落一覧、全体地図       | [`heatmap.jsx`](./apps/examples/heatmap.jsx)               |
 | `bun run dev:todomvc`    | TodoMVCの操作                                    | [`todomvc.jsx`](./apps/examples/todomvc.jsx)               |
 | `bun run dev:multi-file` | 相対モジュールによるファイル分割                 | [`multi-file/App.jsx`](./apps/examples/multi-file/App.jsx) |
 
