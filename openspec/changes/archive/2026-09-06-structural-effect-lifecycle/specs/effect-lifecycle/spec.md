@@ -1,12 +1,4 @@
-# effect-lifecycle Specification
-
-## Purpose
-
-root componentと構造unitのsignal依存副作用を生成instance/factoryへ接続し、再実行前と
-破棄時のcleanupを明示的に所有する。汎用schedulerを追加せず、未使用componentの生成物を
-増やさない。
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: root effect lifecycle
 
@@ -29,27 +21,6 @@ its body changes, and call the previous cleanup before rerunning.
 
 - **WHEN** a conditional branch creates an inline child with an effect cleanup
 - **THEN** the branch factory runs the effect once and destroys it when the branch is removed
-
-### Requirement: cleanup ownership
-
-The generated component instance SHALL retain a function returned by an effect callback, call the
-current function once before each rerun and once at unmount, and call multiple unmount cleanups in
-reverse registration order.
-
-#### Scenario: unmount cleanup
-
-- **WHEN** an instance with an effect cleanup is unmounted twice
-- **THEN** the cleanup runs only during the first unmount
-
-### Requirement: write boundary
-
-The compiler SHALL reject effect bodies that write tracked signals or derived values. It SHALL NOT
-introduce an implicit scheduler or reentrant effect queue.
-
-#### Scenario: reject effect signal write
-
-- **WHEN** an effect body calls a tracked signal setter
-- **THEN** compilation fails with a scope-limit error
 
 ### Requirement: generated output boundary
 

@@ -610,6 +610,8 @@ interface RenderElementOpts {
   localDeclIds?: Set<DeclId>
   /** 構造unit factoryが所有する`onMount` callbackの収集先。 */
   localMountHooks?: MountHooks
+  /** 構造unit factoryが所有する`effect` callbackの収集先。 */
+  localEffectHooks?: EffectHooks
 }
 
 function renderElement(
@@ -702,6 +704,7 @@ function renderElement(
           insideUnit,
           localDeclIds: opts.localDeclIds,
           localMountHooks: opts.localMountHooks,
+          localEffectHooks: opts.localEffectHooks,
         })
         continue
       }
@@ -730,6 +733,16 @@ function renderElement(
           )
         }
         opts.localMountHooks.push(mountHook)
+        continue
+      }
+      const effectHook = resolveEffectExpression(exprPath as NodePath<t.Expression>)
+      if (effectHook) {
+        if (!opts.localEffectHooks) {
+          throw new Error(
+            'compile: effect() in JSX must be inside a structural unit (scope limit)',
+          )
+        }
+        opts.localEffectHooks.push(effectHook)
         continue
       }
       const kind = classifyStructuralExpr(exprPath)
@@ -773,7 +786,9 @@ function renderElement(
     if (!c.isJSXExpressionContainer() || c.get('expression').isJSXEmptyExpression()) return false
     const expression = c.get('expression') as NodePath<t.Expression>
     return (
-      !resolveOnMountExpression(expression) && !resolveContextProviderExpression(ctx, expression)
+      !resolveOnMountExpression(expression) &&
+      !resolveEffectExpression(expression) &&
+      !resolveContextProviderExpression(ctx, expression)
     )
   })
 
@@ -786,6 +801,7 @@ function renderElement(
           insideUnit,
           localDeclIds: opts.localDeclIds,
           localMountHooks: opts.localMountHooks,
+          localEffectHooks: opts.localEffectHooks,
         })
       else if (child.isJSXExpressionContainer() && child.get('expression').isJSXEmptyExpression())
         continue
@@ -812,6 +828,18 @@ function renderElement(
             )
           }
           opts.localMountHooks.push(mountHook)
+          continue
+        }
+        const effectHook = resolveEffectExpression(
+          child.get('expression') as NodePath<t.Expression>,
+        )
+        if (effectHook) {
+          if (!opts.localEffectHooks) {
+            throw new Error(
+              'compile: effect() in JSX must be inside a structural unit (scope limit)',
+            )
+          }
+          opts.localEffectHooks.push(effectHook)
           continue
         }
         throw new Error('compile: unsupported JSX child (scope limit)')
@@ -845,6 +873,16 @@ function renderElement(
           )
         }
         opts.localMountHooks.push(mountHook)
+        continue
+      }
+      const effectHook = resolveEffectExpression(expression)
+      if (effectHook) {
+        if (!opts.localEffectHooks) {
+          throw new Error(
+            'compile: effect() in JSX must be inside a structural unit (scope limit)',
+          )
+        }
+        opts.localEffectHooks.push(effectHook)
         continue
       }
       runPaths.push(child)
@@ -953,6 +991,7 @@ function resolveUnitBodySource(
   localDeclStmts: NodePath<t.VariableDeclaration>[]
   localMovementFns: HandlerFns
   localMountHooks: MountHooks
+  localEffectHooks: EffectHooks
   localContextProviders: ContextProvider[]
 } {
   if (bodyPath.isJSXElement()) {
@@ -961,6 +1000,7 @@ function resolveUnitBodySource(
       localDeclStmts: [],
       localMovementFns: new Map(),
       localMountHooks: [],
+      localEffectHooks: [],
       localContextProviders: [],
     }
   }
@@ -981,6 +1021,7 @@ function resolveUnitBodySource(
   const localDeclStmts: NodePath<t.VariableDeclaration>[] = []
   const localMovementFns: HandlerFns = new Map()
   const localMountHooks: MountHooks = []
+  const localEffectHooks: EffectHooks = []
   const localContextProviders: ContextProvider[] = []
   for (const s of stmts.slice(0, -1)) {
     const contextProvider = resolveContextProvider(ctx, s)
@@ -991,6 +1032,11 @@ function resolveUnitBodySource(
     const mountHook = resolveOnMountHook(s)
     if (mountHook) {
       localMountHooks.push(mountHook)
+      continue
+    }
+    const effectHook = resolveEffectHook(s)
+    if (effectHook) {
+      localEffectHooks.push(effectHook)
       continue
     }
     if (s.isFunctionDeclaration() && s.node.id) {
@@ -1004,7 +1050,7 @@ function resolveUnitBodySource(
     }
     if (!s.isVariableDeclaration()) {
       throw new Error(
-        'compile: only signal()/derived() declarations, onMount() calls, and function declarations are allowed before the return in a list item block body (scope limit)',
+      'compile: only signal()/derived() declarations, onMount()/effect() calls, and function declarations are allowed before the return in a list item block body (scope limit)',
       )
     }
     localDeclStmts.push(s)
@@ -1014,6 +1060,7 @@ function resolveUnitBodySource(
     localDeclStmts,
     localMovementFns,
     localMountHooks,
+    localEffectHooks,
     localContextProviders,
   }
 }
@@ -1028,6 +1075,7 @@ function renderStructuralUnitBody(
   ancestorLocalDeclIds: Set<DeclId> = new Set(),
   localMovementFns: HandlerFns = new Map(),
   localMountHooks: MountHooks = [],
+  localEffectHooks: EffectHooks = [],
   localContextProviders: ContextProvider[] = [],
 ): { body: StructuralUnitBody; nestedDeps: Set<DeclId> } {
   // same-file-component-composition (design.md D5/D6): このユニット直下の
@@ -1052,6 +1100,8 @@ function renderStructuralUnitBody(
 
   const collectedMountHooks = [...localMountHooks]
   const localMounts: MountDecl[] = []
+  const collectedEffectHooks = [...localEffectHooks]
+  const localEffects: EffectDecl[] = []
 
   const markersBefore = ctx.markers.length
   const handlersBefore = ctx.handlers.length
@@ -1081,6 +1131,7 @@ function renderStructuralUnitBody(
       insideUnit: true,
       localDeclIds: accessibleLocalDeclIds,
       localMountHooks: collectedMountHooks,
+      localEffectHooks: collectedEffectHooks,
     })
     for (const callbackPath of collectedMountHooks) {
       const analysis = analyzeMountBody(ctx, callbackPath, instanceId)
@@ -1089,6 +1140,14 @@ function renderStructuralUnitBody(
         finalizeCleanup: analysis.finalizeCleanup,
         writeDeclIds: analysis.writeDeclIds,
         directCollectionWriteDeclIds: analysis.directCollectionWriteDeclIds,
+      })
+    }
+    for (const callbackPath of collectedEffectHooks) {
+      const analysis = analyzeEffectBody(ctx, callbackPath, instanceId)
+      localEffects.push({
+        finalizeBody: analysis.finalizeBody,
+        finalizeCleanup: analysis.finalizeCleanup,
+        readDeclIds: analysis.readDeclIds,
       })
     }
   } finally {
@@ -1120,6 +1179,16 @@ function renderStructuralUnitBody(
       if (ctx.localDeclIds.has(dep) && !accessibleLocalDeclIds.has(dep)) {
         throw new Error(
           'compile: an action result references a local signal outside its lexical scope (scope limit)',
+        )
+      }
+      if (!accessibleLocalDeclIds.has(dep)) nestedDeps.add(dep)
+    }
+  }
+  for (const effect of localEffects) {
+    for (const dep of effect.readDeclIds) {
+      if (ctx.localDeclIds.has(dep) && !accessibleLocalDeclIds.has(dep)) {
+        throw new Error(
+          'compile: an effect references a local signal outside its lexical scope (scope limit)',
         )
       }
       if (!accessibleLocalDeclIds.has(dep)) nestedDeps.add(dep)
@@ -1159,6 +1228,7 @@ function renderStructuralUnitBody(
       localHandlers,
       localActions,
       localMounts,
+      localEffects,
       localAttrBindings,
       localDecls,
     },
@@ -1195,6 +1265,7 @@ function renderListUnit(
     localDeclStmts,
     localMovementFns,
     localMountHooks,
+    localEffectHooks,
     localContextProviders,
   } = resolveUnitBodySource(ctx, arrowPath.get('body'))
 
@@ -1230,6 +1301,7 @@ function renderListUnit(
     ancestorLocalDeclIds,
     localMovementFns,
     localMountHooks,
+    localEffectHooks,
     localContextProviders,
   )
   // M5.5: ネストしたユニットの依存はこのリストマーカーの依存に合流させる。
@@ -1361,7 +1433,12 @@ function resolveEffectHook(
   stmt: NodePath<t.Statement>,
 ): NodePath<t.ArrowFunctionExpression> | null {
   if (!stmt.isExpressionStatement()) return null
-  const expression = stmt.get('expression')
+  return resolveEffectExpression(stmt.get('expression') as NodePath<t.Expression>)
+}
+
+function resolveEffectExpression(
+  expression: NodePath<t.Expression>,
+): NodePath<t.ArrowFunctionExpression> | null {
   if (!expression.isCallExpression()) return null
   const callee = expression.node.callee
   if (callee.type !== 'Identifier' || callee.name !== 'effect') return null

@@ -62,6 +62,8 @@ export interface StructuralUnitBodyOutput {
   localActions: ActionOutput[]
   /** このfactory instanceが所有するonMount callback。 */
   localMounts: MountOutput[]
+  /** このfactory instanceが所有するeffect callback。 */
+  localEffects: LocalEffectOutput[]
   /** ADR-0012: このユニット専有の動的属性バインディング。 */
   localAttrBindings: AttrBinding[]
   /** same-file-component-composition: このユニット直下のローカルsignal宣言。 */
@@ -121,6 +123,15 @@ export interface ActionOutput {
 export interface MountOutput {
   bodyRendered: string
   cleanupRendered: string | null
+}
+
+// 構造unit内effectは依存を外側markerへ合流した後、factory自身のupdateへ
+// 接続する。signal idはcompiler側の依存解決専用なので出力には保持しない。
+export interface LocalEffectOutput {
+  bodyRendered: string
+  cleanupRendered: string | null
+  /** root/derived依存がこのfactory更新を起動する出力名。 */
+  signalNames: string[]
 }
 
 // ルートcomponentのeffect callback。signalIdsはcallback本体のreadをroot
@@ -224,6 +235,7 @@ function bodyHasLifecycle(body: StructuralUnitBodyOutput): boolean {
   return (
     body.localActions.length > 0 ||
     body.localMounts.length > 0 ||
+    body.localEffects.length > 0 ||
     bodyUnits(body).some((unit) => {
       if (unit.kind === 'list') return bodyHasLifecycle(unit.body)
       return unit.branches.some((branch) => branch.body != null && bodyHasLifecycle(branch.body))
@@ -254,6 +266,29 @@ function markerHasLifecycle(marker: ListMarkerOutput | ConditionalMarkerOutput):
   return marker.kind === 'list'
     ? bodyHasLifecycle(marker.body)
     : marker.branches.some((branch) => branch.body != null && bodyHasLifecycle(branch.body))
+}
+
+function bodyHasEffects(body: StructuralUnitBodyOutput): boolean {
+  return (
+    body.localEffects.length > 0 ||
+    bodyUnits(body).some((unit) => {
+      if (unit.kind === 'list') return bodyHasEffects(unit.body)
+      return unit.branches.some((branch) => branch.body != null && bodyHasEffects(branch.body))
+    })
+  )
+}
+
+function markerHasEffects(marker: ListMarkerOutput | ConditionalMarkerOutput): boolean {
+  return marker.kind === 'list'
+    ? bodyHasEffects(marker.body)
+    : marker.branches.some((branch) => branch.body != null && bodyHasEffects(branch.body))
+}
+
+function markersHaveStructuralEffects(markers: MarkerOutput[]): boolean {
+  return markers.some((marker) => {
+    if (marker.kind === 'list' || marker.kind === 'conditional') return markerHasEffects(marker)
+    return false
+  })
 }
 
 function markersHaveResultActions(markers: MarkerOutput[]): boolean {
@@ -307,6 +342,7 @@ function branchHasUpdate(body: StructuralUnitBodyOutput, inItemScope: boolean): 
   return (
     bodyUnits(body).length > 0 ||
     body.localActions.length > 0 ||
+    body.localEffects.length > 0 ||
     (inItemScope && (bodyTexts(body).length > 0 || body.localAttrBindings.length > 0))
   )
 }
@@ -554,6 +590,7 @@ function generateLifecycleFactory(
   const units = bodyUnits(body)
   const ownActions = body.localActions
   const ownMounts = body.localMounts
+  const ownEffects = body.localEffects
   const childScope = inItemScope || itemParam != null
   const refreshTexts = (itemParam != null || inItemScope) && texts.length > 0
   const refreshAttrs = (itemParam != null || inItemScope) && body.localAttrBindings.length > 0
@@ -564,10 +601,13 @@ function generateLifecycleFactory(
     refreshAttrs ||
     units.length > 0 ||
     hasLocalSelfUpdate ||
-    ownActions.length > 0
+    ownActions.length > 0 ||
+    ownEffects.length > 0
   const updateName = `${factoryName}update__`
   const bindingStateExpr = itemParam != null ? '__item__' : '__unit_state__'
-  const selfUpdateExpr = itemParam != null ? `${updateName}(${itemParam})` : `${updateName}()`
+  const selfUpdateExpr = itemParam
+    ? `${updateName}(${itemParam}, null, true)`
+    : `${updateName}(null, true)`
   const localUpdateExprs = [selfUpdateExpr, ...ancestorUpdateExprs]
   const lines: string[] = []
   const params = itemParam ? `${itemParam}, __item__` : ''
@@ -575,6 +615,7 @@ function generateLifecycleFactory(
   lines.push(`function ${factoryName}(${params}) {`)
   lines.push(`  const __node__ = ${templateVar}.content.cloneNode(true);`)
   lines.push('  const __el__ = __node__.firstElementChild;')
+  if (itemParam) lines.push(`  let __current_item__ = ${itemParam};`)
   if (itemParam == null && (refreshTexts || refreshAttrs)) {
     lines.push('  const __unit_state__ = { bindings: new Map() };')
   }
@@ -590,7 +631,14 @@ function generateLifecycleFactory(
   for (const [index, mount] of ownMounts.entries()) {
     if (mount.cleanupRendered) lines.push(`  let __unit_mount_cleanup_${index}__;`)
   }
+  for (const [index, effect] of ownEffects.entries()) {
+    if (effect.cleanupRendered) lines.push(`  let __unit_effect_cleanup_${index}__;`)
+  }
   lines.push('  let __unit_mounted__ = false;', '  let __unit_destroyed__ = false;')
+
+  for (const [index, effect] of ownEffects.entries()) {
+    lines.push(...renderLocalEffectRunner(effect, index).map((line) => `  ${line}`))
+  }
 
   for (const m of body.localMarkers) {
     if (m.kind === 'text') {
@@ -659,9 +707,17 @@ function generateLifecycleFactory(
     for (const b of attrs) lines.push(`  ${renderAttrSet(`__${b.markerId}__`, b)}`)
   }
 
-  lines.push(`  function ${updateName}(${itemParam ? '__next__' : ''}) {`)
+  lines.push(
+    `  function ${updateName}(${itemParam ? '__next__, ' : ''}__effect_trigger__ = null, __force_effects__ = false) {`,
+  )
   lines.push('    if (__unit_destroyed__) return;')
-  if (itemParam) lines.push(`    ${itemParam} = __next__;`)
+  if (itemParam) {
+    lines.push('    const __item_changed__ = !Object.is(__current_item__, __next__);')
+    lines.push('    __current_item__ = __next__;')
+    lines.push(`    ${itemParam} = __next__;`)
+  } else {
+    lines.push('    const __item_changed__ = false;')
+  }
   if (refreshTexts) {
     for (const m of texts) {
       const valueVar = `__value_${m.id}__`
@@ -684,7 +740,13 @@ function generateLifecycleFactory(
   for (const u of units) {
     if (u.kind === 'list') {
       lines.push(
-        ...generateListUpdate(u, `__range_${u.id}__`, '__unit_mounted__').map((l) => `  ${l}`),
+        ...generateListUpdate(
+          u,
+          `__range_${u.id}__`,
+          '__unit_mounted__',
+          '__effect_trigger__',
+          '__force_effects__',
+        ).map((l) => `  ${l}`),
       )
     } else {
       lines.push(
@@ -693,6 +755,8 @@ function generateLifecycleFactory(
           `__range_${u.id}__`,
           condDispatchesUpdate(u, childScope),
           '__unit_mounted__',
+          '__effect_trigger__',
+          '__force_effects__',
         ).map((l) => `  ${l}`),
       )
     }
@@ -701,6 +765,15 @@ function generateLifecycleFactory(
     if (action.resultRendered) {
       lines.push(`    if (__use_update_${action.markerId}__) __use_update_${action.markerId}__();`)
     }
+  }
+  for (const [index, effect] of ownEffects.entries()) {
+    const triggerNames = effect.signalNames.map((name) => JSON.stringify(name)).join(', ')
+    const triggerCheck = effect.signalNames.length
+      ? `(__effect_trigger__ && [${triggerNames}].some((__name__) => __effect_trigger__.has(__name__)))`
+      : 'false'
+    lines.push(
+      `    if (__force_effects__ || __item_changed__ || ${triggerCheck}) __run_unit_effect_${index}__();`,
+    )
   }
   lines.push('  }')
   if (needsUpdate) lines.push(`  ${updateName}(${itemParam ?? ''});`)
@@ -725,6 +798,7 @@ function generateLifecycleFactory(
   }
   lines.push(
     '      __unit_mounted__ = true;',
+    ...ownEffects.map((_effect, index) => `      __run_unit_effect_${index}__();`),
     '    } catch (__error__) {',
     '      try { __destroy_unit__(); } catch (__cleanup_error__) {}',
     '      throw __error__;',
@@ -770,6 +844,14 @@ function generateLifecycleFactory(
     if (mount.cleanupRendered) {
       lines.push(
         `    try { if (__unit_mount_cleanup_${mountIndex}__) { const __cleanup__ = __unit_mount_cleanup_${mountIndex}__; __unit_mount_cleanup_${mountIndex}__ = null; __cleanup__(); } } catch (__error__) { __destroy_error__ ??= __error__; }`,
+      )
+    }
+  }
+  for (const [index, effect] of [...ownEffects].reverse().entries()) {
+    const effectIndex = ownEffects.length - 1 - index
+    if (effect.cleanupRendered) {
+      lines.push(
+        `    try { if (__unit_effect_cleanup_${effectIndex}__) { const __cleanup__ = __unit_effect_cleanup_${effectIndex}__; __unit_effect_cleanup_${effectIndex}__ = null; __cleanup__(); } } catch (__error__) { __destroy_error__ ??= __error__; }`,
       )
     }
   }
@@ -916,17 +998,20 @@ function generateListUpdate(
   marker: ListMarkerOutput,
   elExpr: string,
   mountExpr = 'true',
+  effectTriggerExpr = 'null',
+  effectForceExpr = 'false',
 ): string[] {
   const hasLifecycle = bodyHasLifecycle(marker.body)
   const usesSharedUpdater =
     bodyUnits(marker.body).length === 0 &&
     marker.body.localDecls.length === 0 &&
     marker.body.localActions.length === 0 &&
-    marker.body.localMounts.length === 0
+    marker.body.localMounts.length === 0 &&
+    marker.body.localEffects.length === 0
   const updaterArg = usesSharedUpdater
     ? `, __create_${marker.id}__update__`
     : hasLifecycle
-      ? ', undefined'
+      ? `, (__handle__, __next__) => __handle__.update?.(__next__, ${effectTriggerExpr}, ${effectForceExpr})`
       : ''
   const keyOf = marker.collectionOutputName
     ? `(${marker.itemParam}) => { const __key__ = ${marker.keyRendered}; if (!Object.is(__collection_${marker.collectionOutputName}__.keyOf(${marker.itemParam}), __key__)) throw new Error("collection List key does not match collection identity"); return __key__; }`
@@ -950,6 +1035,8 @@ function generateConditionalUpdate(
   elExpr: string,
   dispatchUpdate: boolean,
   mountExpr = 'true',
+  effectTriggerExpr = 'null',
+  effectForceExpr = 'false',
 ): string[] {
   const hasLifecycle = markerHasLifecycle(marker)
   const hasConsequent = marker.branches[0]?.body != null
@@ -999,7 +1086,7 @@ function generateConditionalUpdate(
   if (dispatchUpdate) {
     lines.push(
       `    } else if (${handleVar} && ${handleVar}.update) {`,
-      `      ${handleVar}.update();`,
+      `      ${handleVar}.update(${effectTriggerExpr}, ${effectForceExpr});`,
       '    }',
     )
   } else {
@@ -1088,6 +1175,28 @@ function renderEffectRunner(e: EffectOutput, index: number): string[] {
   return lines
 }
 
+// 構造unit内effectはrootの状態変数を共有せず、factory instanceの
+// mount/update/destroyへ閉じ込める。runnerを使わないunitにはこの関数も
+// cleanup slotも生成しない。
+function renderLocalEffectRunner(e: LocalEffectOutput, index: number): string[] {
+  const body = e.bodyRendered ? `${e.bodyRendered};` : ''
+  const callback = `(function() { ${body}${e.cleanupRendered ? ` return ${e.cleanupRendered};` : ''} })()`
+  const lines = [
+    `function __run_unit_effect_${index}__() {`,
+    '  if (!__unit_mounted__ || __unit_destroyed__) return;',
+  ]
+  if (e.cleanupRendered) {
+    lines.push(
+      `  if (__unit_effect_cleanup_${index}__) { const __cleanup__ = __unit_effect_cleanup_${index}__; __unit_effect_cleanup_${index}__ = null; __cleanup__(); }`,
+      `  __unit_effect_cleanup_${index}__ = ${callback};`,
+    )
+  } else {
+    lines.push(`  ${callback};`)
+  }
+  lines.push('}')
+  return lines
+}
+
 export function generateModule({
   supportStatements,
   declStatements,
@@ -1111,6 +1220,7 @@ export function generateModule({
   const hasStructuralUnits = markers.some(
     (marker) => marker.kind === 'list' || marker.kind === 'conditional',
   )
+  const hasStructuralEffects = markersHaveStructuralEffects(markers)
   const runtimeImports = hasStructuralUnits
     ? ['mountWithRanges as __mount__', 'hydrateWithRanges as __hydrate__']
     : ['mount as __mount__', 'hydrate as __hydrate__']
@@ -1382,6 +1492,7 @@ export function generateModule({
     'let __container__;',
     'let __mounted__ = false;',
     'let __unmounted__ = false;',
+    ...(hasStructuralEffects ? ['let __effect_trigger__ = null;'] : []),
     ...(effects.length > 0 ? ['let __initializing__ = false;'] : []),
     'function mount(container) {',
     '  if (__mounted__ || __unmounted__) throw new Error("component instance can only be mounted or hydrated once");',
@@ -1467,7 +1578,11 @@ export function generateModule({
     }
   }
 
-  const appendMarkerUpdate = (lines: string[], mId: MarkerId): void => {
+  const appendMarkerUpdate = (
+    lines: string[],
+    mId: MarkerId,
+    effectTriggerExpr = 'null',
+  ): void => {
     // 動的属性の再設定(属性のみの marker id は markers に実体を持たない
     // ため、marker 解決より先に処理する)。
     const bindings = attrsByMarker.get(mId)
@@ -1486,7 +1601,14 @@ export function generateModule({
         lines.push(`  if (__use_update_${mId}__) __use_update_${mId}__();`)
       }
     } else if (marker.kind === 'list') {
-      lines.push(...generateListUpdate(marker, `__ranges__.get(${JSON.stringify(marker.id)})`))
+      lines.push(
+        ...generateListUpdate(
+          marker,
+          `__ranges__.get(${JSON.stringify(marker.id)})`,
+          'true',
+          effectTriggerExpr,
+        ),
+      )
     } else if (marker.kind === 'action') {
       lines.push(`  if (__use_update_${mId}__) __use_update_${mId}__();`)
     } else {
@@ -1495,6 +1617,8 @@ export function generateModule({
           marker,
           `__ranges__.get(${JSON.stringify(marker.id)})`,
           condDispatchesUpdate(marker, false),
+          'true',
+          effectTriggerExpr,
         ),
       )
     }
@@ -1507,7 +1631,15 @@ export function generateModule({
     for (const derivedId of signalToDerivedRecomputes.get(signalId) ?? []) {
       instanceLines.push(`  ${declOutputName.get(derivedId)} = ${derivedRecompute.get(derivedId)};`)
     }
-    for (const mId of markerIds) appendMarkerUpdate(instanceLines, mId)
+    if (hasStructuralEffects) {
+      instanceLines.push(`  const __previous_effect_trigger__ = __effect_trigger__;`)
+      instanceLines.push(`  __effect_trigger__ = new Set([${JSON.stringify(name)}]);`)
+      instanceLines.push('  try {')
+      for (const mId of markerIds) appendMarkerUpdate(instanceLines, mId, '__effect_trigger__')
+      instanceLines.push('  } finally {', '    __effect_trigger__ = __previous_effect_trigger__;', '  }')
+    } else {
+      for (const mId of markerIds) appendMarkerUpdate(instanceLines, mId)
+    }
     appendEffectUpdates(instanceLines, [signalId])
     instanceLines.push('}', '')
   }
@@ -1529,7 +1661,19 @@ export function generateModule({
     for (const derivedId of derivedIds) {
       instanceLines.push(`  ${declOutputName.get(derivedId)} = ${derivedRecompute.get(derivedId)};`)
     }
-    for (const markerId of batch.markerIds) appendMarkerUpdate(instanceLines, markerId)
+    if (hasStructuralEffects) {
+      instanceLines.push('  const __previous_effect_trigger__ = __effect_trigger__;')
+      instanceLines.push(
+        `  __effect_trigger__ = new Set(${JSON.stringify(batch.signalIds.map((id) => declOutputName.get(id)))})`,
+      )
+      instanceLines.push('  try {')
+      for (const markerId of batch.markerIds) {
+        appendMarkerUpdate(instanceLines, markerId, '__effect_trigger__')
+      }
+      instanceLines.push('  } finally {', '    __effect_trigger__ = __previous_effect_trigger__;', '  }')
+    } else {
+      for (const markerId of batch.markerIds) appendMarkerUpdate(instanceLines, markerId)
+    }
     appendEffectUpdates(instanceLines, batch.signalIds)
     instanceLines.push('}', '')
   }
@@ -1554,13 +1698,14 @@ export function generateModule({
     for (const mId of signalToMarkers.get(collectionId) ?? []) {
       const direct = directLists.find((marker) => marker.id === mId)
       if (!direct) {
-        appendMarkerUpdate(directUpdateLines, mId)
+        appendMarkerUpdate(directUpdateLines, mId, hasStructuralEffects ? '__effect_trigger__' : 'null')
         continue
       }
       const usesSharedUpdater =
         bodyUnits(direct.body).length === 0 &&
         direct.body.localDecls.length === 0 &&
-        direct.body.localActions.length === 0
+        direct.body.localActions.length === 0 &&
+        direct.body.localEffects.length === 0
       const updaterArg = usesSharedUpdater ? `, __create_${direct.id}__update__` : ''
       directUpdateLines.push(
         `  __updateListItem__(__list_${direct.id}__, __key__, __next__${updaterArg});`,

@@ -25,6 +25,7 @@ import type {
   EffectOutput,
   HandlerOutput,
   ListMarkerOutput,
+  LocalEffectOutput,
   MarkerOutput,
   MountOutput,
   StructuralUnitBodyOutput,
@@ -409,6 +410,18 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
       cleanupRendered: m.finalizeCleanup ? m.finalizeCleanup() : null,
     }
   }
+  const convertLocalEffect = (effect: (typeof ctx.effects)[number]): LocalEffectOutput => ({
+    bodyRendered: effect.finalizeBody(() => ({ code: '', needsCollectionBatch: false })),
+    cleanupRendered: effect.finalizeCleanup ? effect.finalizeCleanup() : null,
+    signalNames: [
+      ...new Set(
+        [...effect.readDeclIds]
+          .flatMap((dep) => [...resolveToSignals(ctx, dep, new Set())])
+          .map((id) => ctx.declOutputName.get(id))
+          .filter((name): name is string => name != null),
+      ),
+    ],
+  })
   const handlerOutputs = ctx.handlers.map((h) => convertHandler(h))
 
   // M5.5: ネストした構造ユニット(body.localMarkers 内の list/conditional)の
@@ -445,6 +458,7 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
       localHandlers: body.localHandlers.map((h) => convertHandler(h, localScopes)),
       localActions: body.localActions.map((a) => convertAction(a, localScopes)),
       localMounts: body.localMounts.map((m) => convertMount(m, localScopes)),
+      localEffects: body.localEffects.map(convertLocalEffect),
       localAttrBindings: body.localAttrBindings,
       localDecls: body.localDecls,
     }

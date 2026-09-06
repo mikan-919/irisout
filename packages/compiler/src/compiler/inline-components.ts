@@ -386,14 +386,6 @@ function expandComponentRef(
   substituteProps(clonedFnPath, jsxPath, tagName)
   const zones = splitComponentZones(clonedFnPath)
 
-  // onMountはruntime component instance境界がまだ存在しないroot component
-  // だけのAPI。コンパイル時inline化される子componentへ暗黙に昇格させると
-  // 子のmount順・所有権が不明確になるため、構造unitを含めて明示的に拒否する。
-  if (zones.effectHooks.length > 0) {
-    clonedFnPath.remove()
-    throw new Error('compile: effect() is supported only in the root component (scope limit)')
-  }
-
   const enclosingArrow = findEnclosingListItemArrow(jsxPath)
   // 呼び出し箇所そのものがarrow本体全体(concise body)である場合、
   // ensureUnitArrowBlockBodyのreplaceWithがjsxPathの指すノードを直接
@@ -416,6 +408,9 @@ function expandComponentRef(
     const mountHookNodes = zones.mountHooks.map(
       (p) => p.parentPath!.parentPath!.node as t.ExpressionStatement,
     )
+    const effectHookNodes = zones.effectHooks.map(
+      (p) => p.parentPath!.parentPath!.node as t.ExpressionStatement,
+    )
     const renderJsxNode = zones.renderJsxPath.node
     markTransformedPath(clonedFnPath, transformedNodes)
     clonedFnPath.remove()
@@ -431,6 +426,10 @@ function expandComponentRef(
     if (mountHookNodes.length > 0) {
       const bodyStmts = blockPath.get('body') as NodePath<t.Statement>[]
       bodyStmts[bodyStmts.length - 1]!.insertBefore(mountHookNodes)
+    }
+    if (effectHookNodes.length > 0) {
+      const bodyStmts = blockPath.get('body') as NodePath<t.Statement>[]
+      bodyStmts[bodyStmts.length - 1]!.insertBefore(effectHookNodes)
     }
     if (jsxIsWholeArrowBody) {
       const stmts = blockPath.get('body') as NodePath<t.Statement>[]
@@ -470,12 +469,21 @@ function expandComponentRef(
     const mountHookNodes = zones.mountHooks.map(
       (p) => p.parentPath!.parentPath!.node as t.ExpressionStatement,
     )
+    const effectHookNodes = zones.effectHooks.map(
+      (p) => p.parentPath!.parentPath!.node as t.ExpressionStatement,
+    )
     const renderJsxNode = zones.renderJsxPath.node
-    if (conditionalBranch && (contextProviderNodes.length > 0 || zones.mountHooks.length > 0)) {
+    if (
+      conditionalBranch &&
+      (contextProviderNodes.length > 0 || zones.mountHooks.length > 0 || zones.effectHooks.length > 0)
+    ) {
       renderJsxNode.children.unshift(
         ...contextProviderNodes,
         ...zones.mountHooks.map((callback) =>
           t.jsxExpressionContainer(t.callExpression(t.identifier('onMount'), [callback.node])),
+        ),
+        ...zones.effectHooks.map((callback) =>
+          t.jsxExpressionContainer(t.callExpression(t.identifier('effect'), [callback.node])),
         ),
       )
     }
@@ -490,6 +498,9 @@ function expandComponentRef(
     }
     if (mountHookNodes.length > 0 && !conditionalBranch) {
       componentPath.get('body').pushContainer('body', mountHookNodes)
+    }
+    if (effectHookNodes.length > 0 && !conditionalBranch) {
+      componentPath.get('body').pushContainer('body', effectHookNodes)
     }
     finalJsxPath = jsxPath
     finalJsxPath.replaceWith(renderJsxNode)

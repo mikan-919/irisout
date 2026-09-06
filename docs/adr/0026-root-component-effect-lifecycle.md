@@ -2,8 +2,8 @@
 
 ## ステータス
 
-**決定済み・実装中**(2026-09-06)。ルートinstanceへ依存信号による副作用の再実行と
-cleanupを接続する。構造unit・子componentのeffect、汎用schedulerは対象外とする。
+**決定済み・実装済み**(2026-09-06)。ルートinstanceと構造unit factoryへ依存信号による
+副作用の再実行とcleanupを接続する。汎用schedulerは対象外とする。
 
 ## コンテキスト
 
@@ -15,7 +15,7 @@ cleanupを接続する。構造unit・子componentのeffect、汎用schedulerは
 
 ### authored API
 
-ルートcomponentの動きゾーンで次の形を受理する。
+ルートcomponentの動きゾーン、またはlist/conditionalのunit本体で次の形を受理する。
 
 ```jsx
 effect(() => {
@@ -39,6 +39,8 @@ effect(() => {
 - 初期化中に`onMount`が依存signalを書き換えても、effectの初回実行前の再実行は抑止し、
   現在値に対して初回だけ実行する。
 - 依存signalの専用`update_*()`がmarkerを更新した後、該当effectを登録順に再実行する。
+- 構造unitでは、unit local signalの所有factory update、item値の変更、root signalから
+  合流したmarker updateが該当effectを再実行する。
 - 再実行前に前回cleanupを一度実行し、返り値がない場合は保持値を空にする。
 - unmountでは`onMount` cleanupを先に、effect cleanupをその登録順の逆順に実行し、例外が
   あっても残りのcleanupとDOM解放を続けて最初の例外を再送出する。
@@ -48,8 +50,8 @@ effect(() => {
 
 - effectを使わない生成物へeffect専用変数・依存配線・runtime importを出力しない。
 - effectは生成instance内の専用関数として出力し、汎用runtime scheduler/registryは追加しない。
-- 構造unitとinline化される子componentのeffectは、component instance境界が明示されて
-  いないためscope limitで拒否する。
+- 構造unit内のeffectはunit factoryが所有する。inline子componentのcallbackはroot、list
+  item、conditional branchのinline先へ収集する。runtime child objectは生成しない。
 
 ## 検討した代替案
 

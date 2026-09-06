@@ -100,6 +100,8 @@ export interface StructuralUnitBody {
   localActions: ActionDecl[]
   /** 構造unit内の`onMount`。factory instanceが初期化と破棄を所有する。 */
   localMounts: MountDecl[]
+  /** 構造unit内の`effect`。factory instanceが再実行と破棄を所有する。 */
+  localEffects: EffectDecl[]
   /** ADR-0012: このユニット専有の動的属性バインディング。 */
   localAttrBindings: AttrBinding[]
   /** same-file-component-composition: このユニット直下のローカルsignal宣言。 */

@@ -23,8 +23,8 @@ when the handle is destroyed.
 ### Requirement: root inline child ownership
 
 The compiler SHALL move callbacks from a root-scope inline child into the root component instance.
-It SHALL reject child `effect` callbacks outside the root effect scope and SHALL NOT emit a generic
-hook registry.
+It SHALL collect child `effect` callbacks into the owning root or structural factory according to
+the inline scope, and SHALL NOT emit a generic hook registry.
 
 #### Scenario: root child unmount
 
