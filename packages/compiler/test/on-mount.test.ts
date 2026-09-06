@@ -130,18 +130,17 @@ export function App() {
     expect(code).not.toContain('onMount(')
   })
 
-  it('rejects onMount in an inlined child component', () => {
-    expect(() =>
-      compile(`
+  it('owns onMount in an inlined root-scope child from the root instance', () => {
+    const { code } = compile(`
 function Child() {
   render(<span>child</span>);
-  onMount(() => {});
+  onMount(() => () => {});
 }
 export function App() {
   render(<div><Child /></div>);
 }
-`),
-    ).toThrow(/onMount\(\) is supported only in the root component.*scope limit/)
+`)
+    expect(code).toContain('__on_mount_cleanup_')
   })
 
   it('rejects callbacks with parameters or non-function cleanup values', () => {

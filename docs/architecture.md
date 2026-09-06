@@ -118,7 +118,8 @@ triage手続きで捌く — コンパイラの受理条件自体を場当たり
   handler配線・構造unit初期化・`use=` action初期化の後に一度実行する。callbackが返す
   0引数cleanupはinstanceが保持し、unmount時に登録順の逆順で一度だけ実行する。
   初期化失敗時は登録済みcleanupを回収し、構造unit/actionと同じ例外回収規則を使う。
-  構造unit内とinline化される子componentの`onMount`はscope limitで拒否する。
+  構造unit内の`onMount`はunit factoryが所有し、inline化された子componentのcallbackは
+  rootまたは現在のunitへ静的に収集する。runtime child objectは生成しない。
 - **root `effect` lifecycle**(ADR-0026): 動きゾーンの0引数callbackが直接読むroot
   signal/derivedを専用`update_*()`へ接続し、初回実行・依存更新前のcleanup・unmountの
   cleanupを生成instanceが所有する。汎用schedulerは導入せず、effect本体から追跡signalへ

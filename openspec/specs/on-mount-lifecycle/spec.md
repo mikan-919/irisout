@@ -1,7 +1,7 @@
 ## Purpose
 
-ルートcomponentの要素に紐付かない初期化処理を`onMount`で記述し、component instanceの
-unmountへcleanupを接続する。`effect`、context、構造unit内hookは対象外とする。
+ルートcomponentや構造unitに要素へ紐付かない初期化処理を`onMount`で記述し、rootまたは
+unit instanceのunmountへcleanupを接続する。`effect`とcontextは対象外とする。
 
 ## Requirements
 
@@ -51,10 +51,11 @@ cleanupを実行しなければならない(SHALL)。残りのcleanupとinstance
 ### Requirement: output boundary
 
 onMountを使わないcomponentの生成物に、onMount専用のcleanup変数・配線・runtime importを
-出力してはならない(SHALL)。構造unit内とinline化される子componentのonMountはscope limit
-で拒否しなければならない(SHALL)。
+出力してはならない(SHALL)。構造unit内のonMountはunit factoryが所有し、root scopeの
+inline childはroot instanceへ、list/conditional scopeのinline childは現在のunit factoryへ
+静的に収集しなければならない(SHALL)。
 
 #### Scenario: 未使用生成物に専用コードを出力しない
 
-- **WHEN** componentが`onMount`を含まない
+- **WHEN** componentと構造unitが`onMount`を含まない
 - **THEN** 生成codeにonMount専用の識別子・配線が含まれない

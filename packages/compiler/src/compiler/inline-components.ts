@@ -379,13 +379,9 @@ function expandComponentRef(
   // onMountはruntime component instance境界がまだ存在しないroot component
   // だけのAPI。コンパイル時inline化される子componentへ暗黙に昇格させると
   // 子のmount順・所有権が不明確になるため、構造unitを含めて明示的に拒否する。
-  if (zones.mountHooks.length > 0 || zones.effectHooks.length > 0) {
+  if (zones.effectHooks.length > 0) {
     clonedFnPath.remove()
-    const unsupported = [
-      ...(zones.mountHooks.length > 0 ? ['onMount()'] : []),
-      ...(zones.effectHooks.length > 0 ? ['effect()'] : []),
-    ].join(' and ')
-    throw new Error(`compile: ${unsupported} is supported only in the root component (scope limit)`)
+    throw new Error('compile: effect() is supported only in the root component (scope limit)')
   }
 
   const enclosingArrow = findEnclosingListItemArrow(jsxPath)
@@ -407,6 +403,9 @@ function expandComponentRef(
     // use=/on* の本体解決をそのitemインスタンスの字句範囲へ閉じ込める。
     const varZoneNodes = zones.varZoneStmts.map((s) => s.node)
     const movementFnNodes = [...zones.movementZoneFns.values()].map((p) => p.node)
+    const mountHookNodes = zones.mountHooks.map(
+      (p) => p.parentPath!.parentPath!.node as t.ExpressionStatement,
+    )
     const renderJsxNode = zones.renderJsxPath.node
     markTransformedPath(clonedFnPath, transformedNodes)
     clonedFnPath.remove()
@@ -418,6 +417,10 @@ function expandComponentRef(
     if (movementFnNodes.length > 0) {
       const bodyStmts = blockPath.get('body') as NodePath<t.Statement>[]
       bodyStmts[bodyStmts.length - 1]!.insertBefore(movementFnNodes)
+    }
+    if (mountHookNodes.length > 0) {
+      const bodyStmts = blockPath.get('body') as NodePath<t.Statement>[]
+      bodyStmts[bodyStmts.length - 1]!.insertBefore(mountHookNodes)
     }
     if (jsxIsWholeArrowBody) {
       const stmts = blockPath.get('body') as NodePath<t.Statement>[]
@@ -447,7 +450,18 @@ function expandComponentRef(
     renameCollidingMovementFns(clonedFnPath, zones.movementZoneFns, componentPath, tagName)
     const varZoneNodes = zones.varZoneStmts.map((s) => s.node)
     const movementFnNodes = [...zones.movementZoneFns.values()].map((p) => p.node)
+    const mountHookNodes = zones.mountHooks.map(
+      (p) => p.parentPath!.parentPath!.node as t.ExpressionStatement,
+    )
     const renderJsxNode = zones.renderJsxPath.node
+    const conditionalBranch = isInsideConditionalBranch(jsxPath)
+    if (conditionalBranch && zones.mountHooks.length > 0) {
+      renderJsxNode.children.unshift(
+        ...zones.mountHooks.map((callback) =>
+          t.jsxExpressionContainer(t.callExpression(t.identifier('onMount'), [callback.node])),
+        ),
+      )
+    }
     markTransformedPath(clonedFnPath, transformedNodes)
     clonedFnPath.remove()
 
@@ -456,6 +470,9 @@ function expandComponentRef(
     }
     if (movementFnNodes.length > 0) {
       componentPath.get('body').pushContainer('body', movementFnNodes)
+    }
+    if (mountHookNodes.length > 0 && !conditionalBranch) {
+      componentPath.get('body').pushContainer('body', mountHookNodes)
     }
     finalJsxPath = jsxPath
     finalJsxPath.replaceWith(renderJsxNode)

@@ -60,6 +60,8 @@ export interface StructuralUnitBodyOutput {
   localHandlers: HandlerOutput[]
   /** このfactory instanceが所有するaction。 */
   localActions: ActionOutput[]
+  /** このfactory instanceが所有するonMount callback。 */
+  localMounts: MountOutput[]
   /** ADR-0012: このユニット専有の動的属性バインディング。 */
   localAttrBindings: AttrBinding[]
   /** same-file-component-composition: このユニット直下のローカルsignal宣言。 */
@@ -218,12 +220,13 @@ function bodyHasList(body: StructuralUnitBodyOutput): boolean {
   })
 }
 
-function bodyHasActions(body: StructuralUnitBodyOutput): boolean {
+function bodyHasLifecycle(body: StructuralUnitBodyOutput): boolean {
   return (
     body.localActions.length > 0 ||
+    body.localMounts.length > 0 ||
     bodyUnits(body).some((unit) => {
-      if (unit.kind === 'list') return bodyHasActions(unit.body)
-      return unit.branches.some((branch) => branch.body != null && bodyHasActions(branch.body))
+      if (unit.kind === 'list') return bodyHasLifecycle(unit.body)
+      return unit.branches.some((branch) => branch.body != null && bodyHasLifecycle(branch.body))
     })
   )
 }
@@ -242,15 +245,15 @@ function bodyHasResultActions(body: StructuralUnitBodyOutput): boolean {
 
 function bodyHasLifecycleList(body: StructuralUnitBodyOutput): boolean {
   return bodyUnits(body).some((unit) => {
-    if (unit.kind === 'list') return bodyHasActions(unit.body)
+    if (unit.kind === 'list') return bodyHasLifecycle(unit.body)
     return unit.branches.some((branch) => branch.body != null && bodyHasLifecycleList(branch.body))
   })
 }
 
-function markerHasActions(marker: ListMarkerOutput | ConditionalMarkerOutput): boolean {
+function markerHasLifecycle(marker: ListMarkerOutput | ConditionalMarkerOutput): boolean {
   return marker.kind === 'list'
-    ? bodyHasActions(marker.body)
-    : marker.branches.some((branch) => branch.body != null && bodyHasActions(branch.body))
+    ? bodyHasLifecycle(marker.body)
+    : marker.branches.some((branch) => branch.body != null && bodyHasLifecycle(branch.body))
 }
 
 function markersHaveResultActions(markers: MarkerOutput[]): boolean {
@@ -268,9 +271,9 @@ function markersHaveResultActions(markers: MarkerOutput[]): boolean {
 
 function markersHaveStructuralActions(markers: MarkerOutput[]): boolean {
   return markers.some((marker) => {
-    if (marker.kind === 'list') return bodyHasActions(marker.body)
+    if (marker.kind === 'list') return bodyHasLifecycle(marker.body)
     if (marker.kind === 'conditional') {
-      return marker.branches.some((branch) => branch.body != null && bodyHasActions(branch.body))
+      return marker.branches.some((branch) => branch.body != null && bodyHasLifecycle(branch.body))
     }
     return false
   })
@@ -278,7 +281,7 @@ function markersHaveStructuralActions(markers: MarkerOutput[]): boolean {
 
 function markersHaveLifecycleList(markers: MarkerOutput[]): boolean {
   return markers.some((marker) => {
-    if (marker.kind === 'list') return bodyHasActions(marker.body)
+    if (marker.kind === 'list') return bodyHasLifecycle(marker.body)
     if (marker.kind === 'conditional') {
       return marker.branches.some(
         (branch) => branch.body != null && bodyHasLifecycleList(branch.body),
@@ -550,6 +553,7 @@ function generateLifecycleFactory(
   const texts = bodyTexts(body)
   const units = bodyUnits(body)
   const ownActions = body.localActions
+  const ownMounts = body.localMounts
   const childScope = inItemScope || itemParam != null
   const refreshTexts = (itemParam != null || inItemScope) && texts.length > 0
   const refreshAttrs = (itemParam != null || inItemScope) && body.localAttrBindings.length > 0
@@ -582,6 +586,9 @@ function generateLifecycleFactory(
         `  let __use_destroy_${action.markerId}__;`,
       )
     }
+  }
+  for (const [index, mount] of ownMounts.entries()) {
+    if (mount.cleanupRendered) lines.push(`  let __unit_mount_cleanup_${index}__;`)
   }
   lines.push('  let __unit_mounted__ = false;', '  let __unit_destroyed__ = false;')
 
@@ -703,15 +710,18 @@ function generateLifecycleFactory(
   lines.push('    try {')
   for (const u of units) {
     if (u.kind === 'list') {
-      if (bodyHasActions(u.body)) {
+      if (bodyHasLifecycle(u.body)) {
         lines.push(`      __mountListRuntime__(__list_${u.id}__);`)
       }
-    } else if (markerHasActions(u)) {
+    } else if (markerHasLifecycle(u)) {
       lines.push(`      if (__cond_${u.id}_handle__?.mount) __cond_${u.id}_handle__.mount();`)
     }
   }
   for (const action of ownActions) {
     lines.push(`      ${renderActionCall(action, `__${action.markerId}__`, localUpdateExprs)}`)
+  }
+  for (const [index, mount] of ownMounts.entries()) {
+    lines.push(`      ${renderMountCall(mount, index, localUpdateExprs, '__unit_mount_cleanup_')}`)
   }
   lines.push(
     '      __unit_mounted__ = true;',
@@ -735,12 +745,12 @@ function generateLifecycleFactory(
   })
   for (const u of units) {
     if (u.kind === 'list') {
-      if (bodyHasActions(u.body)) {
+      if (bodyHasLifecycle(u.body)) {
         lines.push(
           `    try { __destroyListRuntime__(__list_${u.id}__); } catch (__error__) { __destroy_error__ ??= __error__; }`,
         )
       }
-    } else if (markerHasActions(u)) {
+    } else if (markerHasLifecycle(u)) {
       lines.push(
         `    try { if (__cond_${u.id}_handle__) { const __handle__ = __cond_${u.id}_handle__; try { __handle__.destroy?.(); } catch (__unit_destroy_error__) { __destroy_error__ ??= __unit_destroy_error__; } try { __handle__.el.remove(); } catch (__unit_remove_error__) { __destroy_error__ ??= __unit_remove_error__; } } } catch (__error__) { __destroy_error__ ??= __error__; }`,
         `    __cond_${u.id}_handle__ = null;`,
@@ -752,6 +762,14 @@ function generateLifecycleFactory(
     if (action.resultRendered) {
       lines.push(
         `    try { if (__use_destroy_${action.markerId}__) { const __destroy__ = __use_destroy_${action.markerId}__; __use_destroy_${action.markerId}__ = null; __use_update_${action.markerId}__ = null; __destroy__(); } else { __use_update_${action.markerId}__ = null; } } catch (__error__) { __destroy_error__ ??= __error__; }`,
+      )
+    }
+  }
+  for (const [index, mount] of [...ownMounts].reverse().entries()) {
+    const mountIndex = ownMounts.length - 1 - index
+    if (mount.cleanupRendered) {
+      lines.push(
+        `    try { if (__unit_mount_cleanup_${mountIndex}__) { const __cleanup__ = __unit_mount_cleanup_${mountIndex}__; __unit_mount_cleanup_${mountIndex}__ = null; __cleanup__(); } } catch (__error__) { __destroy_error__ ??= __error__; }`,
       )
     }
   }
@@ -771,7 +789,7 @@ function generateFactory(
   inItemScope: boolean,
   ancestorUpdateExprs: (string | null)[] = [],
 ): string[] {
-  return bodyHasActions(body)
+  return bodyHasLifecycle(body)
     ? generateLifecycleFactory(
         factoryName,
         templateVar,
@@ -899,21 +917,22 @@ function generateListUpdate(
   elExpr: string,
   mountExpr = 'true',
 ): string[] {
-  const hasActions = bodyHasActions(marker.body)
+  const hasLifecycle = bodyHasLifecycle(marker.body)
   const usesSharedUpdater =
     bodyUnits(marker.body).length === 0 &&
     marker.body.localDecls.length === 0 &&
-    marker.body.localActions.length === 0
+    marker.body.localActions.length === 0 &&
+    marker.body.localMounts.length === 0
   const updaterArg = usesSharedUpdater
     ? `, __create_${marker.id}__update__`
-    : hasActions
+    : hasLifecycle
       ? ', undefined'
       : ''
   const keyOf = marker.collectionOutputName
     ? `(${marker.itemParam}) => { const __key__ = ${marker.keyRendered}; if (!Object.is(__collection_${marker.collectionOutputName}__.keyOf(${marker.itemParam}), __key__)) throw new Error("collection List key does not match collection identity"); return __key__; }`
     : `(${marker.itemParam}) => ${marker.keyRendered}`
   return [
-    hasActions
+    hasLifecycle
       ? `  __reconcileListWithLifecycle__(__list_${marker.id}__, ${elExpr}, ${marker.arrayRendered}, ${keyOf}, __create_${marker.id}__${updaterArg}, ${mountExpr});`
       : `  __reconcileList__(__list_${marker.id}__, ${elExpr}, ${marker.arrayRendered}, ${keyOf}, __create_${marker.id}__${updaterArg});`,
   ]
@@ -932,7 +951,7 @@ function generateConditionalUpdate(
   dispatchUpdate: boolean,
   mountExpr = 'true',
 ): string[] {
-  const hasActions = markerHasActions(marker)
+  const hasLifecycle = markerHasLifecycle(marker)
   const hasConsequent = marker.branches[0]?.body != null
   const hasAlternate = !marker.isLogical && marker.branches[1]?.body != null
   const targetExpr = marker.isLogical
@@ -951,7 +970,7 @@ function generateConditionalUpdate(
         : null,
     )
     .filter((l): l is string => l !== null)
-  const lines = hasActions
+  const lines = hasLifecycle
     ? [
         '  {',
         `    const __target__ = ${targetExpr};`,
@@ -986,7 +1005,7 @@ function generateConditionalUpdate(
   } else {
     lines.push('    }')
   }
-  if (hasActions) lines.push('    if (__conditional_error__) throw __conditional_error__;')
+  if (hasLifecycle) lines.push('    if (__conditional_error__) throw __conditional_error__;')
   lines.push('  }')
   return lines
 }
@@ -1023,11 +1042,28 @@ function renderActionCall(
 // 呼び出す。cleanupを返す形だけ生成変数へ保持し、登録順の逆順でunmountする。
 // callbackの戻り値形は解析段階で検証済みなので、action用の汎用runtime helperを
 // importしない。
-function renderMountCall(m: MountOutput, index: number): string {
-  const body = m.bodyRendered ? `${m.bodyRendered};` : ''
+function renderMountCall(
+  m: MountOutput,
+  index: number,
+  localUpdateExprs: (string | null)[] = [],
+  cleanupPrefix = '__on_mount_cleanup_',
+): string {
+  const bodyRendered = m.bodyRendered.replace(
+    /__LOCAL_(SELF_UPDATE|ANCESTOR_(\d+))__\(\);?/g,
+    (_match, kind, levelText) => {
+      const level = kind === 'SELF_UPDATE' ? 0 : Number(levelText)
+      const updateExpr = localUpdateExprs[level]
+      if (!updateExpr) {
+        throw new Error(`codegen: missing local update expression for mount at level ${level}`)
+      }
+      return `${updateExpr};`
+    },
+  )
+  const body = bodyRendered ? `${bodyRendered};` : ''
   const callback = `(function() { ${body}${m.cleanupRendered ? ` return ${m.cleanupRendered};` : ''} })()`
   if (!m.cleanupRendered) return `${callback};`
-  return `{ const __mount_cleanup_result__ = ${callback}; __on_mount_cleanup_${index}__ = __mount_cleanup_result__; }`
+  const cleanupName = `${cleanupPrefix}${index}__`
+  return `{ const __mount_cleanup_result__ = ${callback}; ${cleanupName} = __mount_cleanup_result__; }`
 }
 
 // effect callbackはinstance専用runnerへ固定する。再実行時は前回cleanupを
@@ -1274,7 +1310,7 @@ export function generateModule({
   const listCleanupLines = markers
     .filter((marker): marker is ListMarkerOutput => marker.kind === 'list')
     .flatMap((marker) => {
-      if (bodyHasActions(marker.body)) {
+      if (bodyHasLifecycle(marker.body)) {
         structuralDestroyOperations.push(
           `if (__list_${marker.id}__) __destroyListRuntime__(__list_${marker.id}__)`,
         )
@@ -1288,7 +1324,7 @@ export function generateModule({
   const conditionalCleanupLines = markers
     .filter((marker): marker is ConditionalMarkerOutput => marker.kind === 'conditional')
     .flatMap((marker) => {
-      if (markerHasActions(marker)) {
+      if (markerHasLifecycle(marker)) {
         structuralDestroyOperations.push(
           `if (__cond_${marker.id}_handle__) { const __handle__ = __cond_${marker.id}_handle__; try { __handle__.destroy?.(); } catch (__structural_destroy_error__) { __destroy_error__ ??= __structural_destroy_error__; } try { __handle__.el.remove(); } catch (__structural_remove_error__) { __destroy_error__ ??= __structural_remove_error__; } }`,
         )

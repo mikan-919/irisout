@@ -322,6 +322,34 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
       resultRendered: a.finalizeResult ? a.finalizeResult(resolveActionUpdateCall) : null,
     }
   }
+  const convertMount = (m: MountDecl, localScopes: Set<DeclId>[] = []): MountOutput => {
+    const resolveMountUpdateCall = (
+      ids: Set<DeclId>,
+      directCollectionWriteDeclIds: Set<DeclId> = new Set(),
+    ) => {
+      const plan = resolveUpdateCall(ids, directCollectionWriteDeclIds)
+      const localUpdateLevels = localScopes.flatMap((scope, level) =>
+        [...ids].some((id) => scope.has(id)) ? [level] : [],
+      )
+      const localUpdateCalls = [
+        ...new Set(
+          localUpdateLevels.map((level) =>
+            level === 0 ? '__LOCAL_SELF_UPDATE__' : `__LOCAL_ANCESTOR_${level}__`,
+          ),
+        ),
+      ]
+        .map((name) => `${name}();`)
+        .join(' ')
+      return {
+        code: [plan.code, localUpdateCalls].filter(Boolean).join(' '),
+        needsCollectionBatch: plan.needsCollectionBatch,
+      }
+    }
+    return {
+      bodyRendered: m.finalizeBody(resolveMountUpdateCall),
+      cleanupRendered: m.finalizeCleanup ? m.finalizeCleanup() : null,
+    }
+  }
   const handlerOutputs = ctx.handlers.map((h) => convertHandler(h))
 
   // M5.5: ネストした構造ユニット(body.localMarkers 内の list/conditional)の
@@ -357,6 +385,7 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
       ),
       localHandlers: body.localHandlers.map((h) => convertHandler(h, localScopes)),
       localActions: body.localActions.map((a) => convertAction(a, localScopes)),
+      localMounts: body.localMounts.map((m) => convertMount(m, localScopes)),
       localAttrBindings: body.localAttrBindings,
       localDecls: body.localDecls,
     }
@@ -375,10 +404,7 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
   // ADR-0025: onMount callback本体だけはcomponent mount直後の更新を許し、
   // cleanup本体へは更新呼び出しを挿入しない。root component専用なので
   // structural unitのlocal scope変換は不要である。
-  const mountOutputs: MountOutput[] = ctx.mounts.map((m: MountDecl) => ({
-    bodyRendered: m.finalizeBody(resolveUpdateCall),
-    cleanupRendered: m.finalizeCleanup ? m.finalizeCleanup() : null,
-  }))
+  const mountOutputs: MountOutput[] = ctx.mounts.map((m: MountDecl) => convertMount(m))
   const effectOutputs: EffectOutput[] = ctx.effects.map((effect) => ({
     bodyRendered: effect.finalizeBody(resolveUpdateCall),
     cleanupRendered: effect.finalizeCleanup ? effect.finalizeCleanup() : null,

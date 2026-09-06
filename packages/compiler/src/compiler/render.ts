@@ -563,6 +563,8 @@ interface RenderElementOpts {
   insideUnit?: boolean
   /** この位置から参照できる構造ユニットの局所宣言。 */
   localDeclIds?: Set<DeclId>
+  /** 構造unit factoryが所有する`onMount` callbackの収集先。 */
+  localMountHooks?: MountHooks
 }
 
 function renderElement(
@@ -654,6 +656,7 @@ function renderElement(
         inner += renderElement(ctx, child, instanceId, handlerFns, {
           insideUnit,
           localDeclIds: opts.localDeclIds,
+          localMountHooks: opts.localMountHooks,
         })
         continue
       }
@@ -662,6 +665,16 @@ function renderElement(
       }
       const exprPath = child.get('expression') as NodePath<t.Expression | t.JSXEmptyExpression>
       if (exprPath.isJSXEmptyExpression()) continue
+      const mountHook = resolveOnMountExpression(exprPath as NodePath<t.Expression>)
+      if (mountHook) {
+        if (!opts.localMountHooks) {
+          throw new Error(
+            'compile: onMount() in JSX must be inside a structural unit (scope limit)',
+          )
+        }
+        opts.localMountHooks.push(mountHook)
+        continue
+      }
       const kind = classifyStructuralExpr(exprPath)
       if (!kind) {
         throw new Error(
@@ -699,9 +712,10 @@ function renderElement(
     return `<${tagName}${attrs}${dynBake} data-iris-id="${markerId}">${inner}</${tagName}>`
   }
 
-  const hasDirectExpr = children.some(
-    (c) => c.isJSXExpressionContainer() && !c.get('expression').isJSXEmptyExpression(),
-  )
+  const hasDirectExpr = children.some((c) => {
+    if (!c.isJSXExpressionContainer() || c.get('expression').isJSXEmptyExpression()) return false
+    return !resolveOnMountExpression(c.get('expression') as NodePath<t.Expression>)
+  })
 
   if (!hasDirectExpr) {
     let inner = ''
@@ -711,10 +725,25 @@ function renderElement(
         inner += renderElement(ctx, child, instanceId, handlerFns, {
           insideUnit,
           localDeclIds: opts.localDeclIds,
+          localMountHooks: opts.localMountHooks,
         })
       else if (child.isJSXExpressionContainer() && child.get('expression').isJSXEmptyExpression())
         continue
-      else throw new Error('compile: unsupported JSX child (scope limit)')
+      else if (child.isJSXExpressionContainer()) {
+        const mountHook = resolveOnMountExpression(
+          child.get('expression') as NodePath<t.Expression>,
+        )
+        if (mountHook) {
+          if (!opts.localMountHooks) {
+            throw new Error(
+              'compile: onMount() in JSX must be inside a structural unit (scope limit)',
+            )
+          }
+          opts.localMountHooks.push(mountHook)
+          continue
+        }
+        throw new Error('compile: unsupported JSX child (scope limit)')
+      } else throw new Error('compile: unsupported JSX child (scope limit)')
     }
     if (handlerAttrs.length === 0 && !actionAttr && dynAttrs.length === 0) {
       return `<${tagName}${attrs}>${inner}</${tagName}>`
@@ -732,8 +761,20 @@ function renderElement(
 
   const runPaths: NodePath<t.JSXText | t.JSXExpressionContainer>[] = []
   for (const child of children) {
-    if (child.isJSXText() || child.isJSXExpressionContainer()) runPaths.push(child)
-    else
+    if (child.isJSXText()) runPaths.push(child)
+    else if (child.isJSXExpressionContainer()) {
+      const mountHook = resolveOnMountExpression(child.get('expression') as NodePath<t.Expression>)
+      if (mountHook) {
+        if (!opts.localMountHooks) {
+          throw new Error(
+            'compile: onMount() in JSX must be inside a structural unit (scope limit)',
+          )
+        }
+        opts.localMountHooks.push(mountHook)
+        continue
+      }
+      runPaths.push(child)
+    } else
       throw new Error(
         'compile: mixing elements into a reactive text unit is not supported yet (scope limit)',
       )
@@ -834,9 +875,15 @@ function resolveUnitBodySource(bodyPath: NodePath<t.BlockStatement | t.Expressio
   jsxPath: NodePath<t.JSXElement>
   localDeclStmts: NodePath<t.VariableDeclaration>[]
   localMovementFns: HandlerFns
+  localMountHooks: MountHooks
 } {
   if (bodyPath.isJSXElement()) {
-    return { jsxPath: bodyPath, localDeclStmts: [], localMovementFns: new Map() }
+    return {
+      jsxPath: bodyPath,
+      localDeclStmts: [],
+      localMovementFns: new Map(),
+      localMountHooks: [],
+    }
   }
   if (!bodyPath.isBlockStatement()) {
     throw new Error(
@@ -854,7 +901,13 @@ function resolveUnitBodySource(bodyPath: NodePath<t.BlockStatement | t.Expressio
   }
   const localDeclStmts: NodePath<t.VariableDeclaration>[] = []
   const localMovementFns: HandlerFns = new Map()
+  const localMountHooks: MountHooks = []
   for (const s of stmts.slice(0, -1)) {
+    const mountHook = resolveOnMountHook(s)
+    if (mountHook) {
+      localMountHooks.push(mountHook)
+      continue
+    }
     if (s.isFunctionDeclaration() && s.node.id) {
       if (localMovementFns.has(s.node.id.name)) {
         throw new Error(
@@ -866,7 +919,7 @@ function resolveUnitBodySource(bodyPath: NodePath<t.BlockStatement | t.Expressio
     }
     if (!s.isVariableDeclaration()) {
       throw new Error(
-        'compile: only signal()/derived() declarations and function declarations are allowed before the return in a list item block body (scope limit)',
+        'compile: only signal()/derived() declarations, onMount() calls, and function declarations are allowed before the return in a list item block body (scope limit)',
       )
     }
     localDeclStmts.push(s)
@@ -875,6 +928,7 @@ function resolveUnitBodySource(bodyPath: NodePath<t.BlockStatement | t.Expressio
     jsxPath: returnArg,
     localDeclStmts,
     localMovementFns,
+    localMountHooks,
   }
 }
 
@@ -887,6 +941,7 @@ function renderStructuralUnitBody(
   localDeclStmts: NodePath<t.VariableDeclaration>[] = [],
   ancestorLocalDeclIds: Set<DeclId> = new Set(),
   localMovementFns: HandlerFns = new Map(),
+  localMountHooks: MountHooks = [],
 ): { body: StructuralUnitBody; nestedDeps: Set<DeclId> } {
   // same-file-component-composition (design.md D5/D6): このユニット直下の
   // ローカルsignal/derived宣言を先に処理する。以後のテキスト/属性の
@@ -907,6 +962,8 @@ function renderStructuralUnitBody(
   const previousMovementFns = ctx.movementFns
   ctx.movementFns = unitHandlerFns
 
+  const collectedMountHooks = [...localMountHooks]
+
   const markersBefore = ctx.markers.length
   const handlersBefore = ctx.handlers.length
   const attrsBefore = ctx.attrBindings.length
@@ -917,6 +974,7 @@ function renderStructuralUnitBody(
       skipAttrName,
       insideUnit: true,
       localDeclIds: accessibleLocalDeclIds,
+      localMountHooks: collectedMountHooks,
     })
   } finally {
     ctx.movementFns = previousMovementFns
@@ -928,6 +986,15 @@ function renderStructuralUnitBody(
   )[]
   const localHandlers = ctx.handlers.splice(handlersBefore)
   const localActions = ctx.actions.splice(actionsBefore) as ActionDecl[]
+  const localMounts = collectedMountHooks.map((callbackPath) => {
+    const analysis = analyzeMountBody(ctx, callbackPath, instanceId)
+    return {
+      finalizeBody: analysis.finalizeBody,
+      finalizeCleanup: analysis.finalizeCleanup,
+      writeDeclIds: analysis.writeDeclIds,
+      directCollectionWriteDeclIds: analysis.directCollectionWriteDeclIds,
+    } satisfies MountDecl
+  })
   // ADR-0012 決定5: ユニット内の属性式が追跡signalを参照するのは、依存先が
   // 現在または祖先のローカルsignalである場合に限り許可する。ルートsignalや
   // 別の構造単位のローカルsignalは、字句的な所有範囲の外なので拒否する。
@@ -984,6 +1051,7 @@ function renderStructuralUnitBody(
       localMarkers,
       localHandlers,
       localActions,
+      localMounts,
       localAttrBindings,
       localDecls,
     },
@@ -1019,6 +1087,7 @@ function renderListUnit(
     jsxPath: itemPath,
     localDeclStmts,
     localMovementFns,
+    localMountHooks,
   } = resolveUnitBodySource(arrowPath.get('body'))
 
   const keyAttrPath = itemPath
@@ -1052,6 +1121,7 @@ function renderListUnit(
     localDeclStmts,
     ancestorLocalDeclIds,
     localMovementFns,
+    localMountHooks,
   )
   // M5.5: ネストしたユニットの依存はこのリストマーカーの依存に合流させる。
   // 該当 signal の update_* がリストの keyed diff を再実行し、既存アイテムの
@@ -1152,11 +1222,9 @@ export interface ComponentZones {
   effectHooks: EffectHooks
 }
 
-function resolveOnMountHook(
-  stmt: NodePath<t.Statement>,
+function resolveOnMountExpression(
+  expression: NodePath<t.Expression>,
 ): NodePath<t.ArrowFunctionExpression> | null {
-  if (!stmt.isExpressionStatement()) return null
-  const expression = stmt.get('expression')
   if (!expression.isCallExpression()) return null
   const callee = expression.node.callee
   if (callee.type !== 'Identifier' || callee.name !== 'onMount') return null
@@ -1171,6 +1239,13 @@ function resolveOnMountHook(
     throw new Error('compile: onMount() callback must not take parameters (scope limit)')
   }
   return callback
+}
+
+export function resolveOnMountHook(
+  stmt: NodePath<t.Statement>,
+): NodePath<t.ArrowFunctionExpression> | null {
+  if (!stmt.isExpressionStatement()) return null
+  return resolveOnMountExpression(stmt.get('expression') as NodePath<t.Expression>)
 }
 
 function resolveEffectHook(
@@ -1281,6 +1356,8 @@ export function compileComponent(
     const mount: MountDecl = {
       finalizeBody: analysis.finalizeBody,
       finalizeCleanup: analysis.finalizeCleanup,
+      writeDeclIds: analysis.writeDeclIds,
+      directCollectionWriteDeclIds: analysis.directCollectionWriteDeclIds,
     }
     ctx.mounts.push(mount)
   }

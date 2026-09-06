@@ -96,6 +96,8 @@ export interface StructuralUnitBody {
   localHandlers: HandlerDecl[]
   /** 構造unit内の`use=`。factory instanceが初期化と破棄を所有する。 */
   localActions: ActionDecl[]
+  /** 構造unit内の`onMount`。factory instanceが初期化と破棄を所有する。 */
+  localMounts: MountDecl[]
   /** ADR-0012: このユニット専有の動的属性バインディング。 */
   localAttrBindings: AttrBinding[]
   /** same-file-component-composition: このユニット直下のローカルsignal宣言。 */
@@ -171,6 +173,8 @@ export interface ActionDecl {
 export interface MountDecl {
   finalizeBody: (resolveUpdateCall: ResolveUpdateCall) => string
   finalizeCleanup: (() => string) | null
+  writeDeclIds: Set<DeclId>
+  directCollectionWriteDeclIds: Set<DeclId>
 }
 
 // ルートcomponentの`effect(() => ...)` 1個ぶんの解析結果。依存は本体の

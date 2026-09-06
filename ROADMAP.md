@@ -35,7 +35,8 @@ update closureの意味を維持し、外部resourceの解除は`{ update?, dest
 mount/hydrate完了後に一度実行し、返り値のcleanupをunmount時に逆順で呼ぶ。ルートcomponent
 の`effect`とcleanupも実装済み(ADR-0026)。依存root signalの専用`update_*()`へ接続し、
 再実行前とunmount時にcleanupを呼ぶ。汎用lifecycle runtime、構造unit内・子componentの
-onMount/effect、同instance再mountは引き続き対象外。
+effect、同instance再mountは引き続き対象外。構造unit内・inline子componentの`onMount`は
+unit/root instance所有へ拡張済み。
 
 **第2段階実装済み(ADR-0020)**: 同一ハンドラ/action/追跡関数のwrite setに複数root
 があり、同じmarkerへ依存する場合だけ、コンパイル時に専用同期batchを生成する。
@@ -295,9 +296,8 @@ transition/animation、portal、error boundary、async/resource
     1. **優先度P1: context**。複数ファイルcomponentはpropsで接続できるが、深い
        component treeの共有依存はprops drillingになる。module scope stateを導入する
        前に、instance単位の所有権とcleanupを決める必要がある。
-    2. **優先度P2: 構造unit/子componentのlifecycle**。component instance境界が
-       compile-time inlineで消えるため、onMount/effectをどのfactoryが所有するかを
-       決めてから実装する。
+    2. **優先度P2: 構造unit/子componentのlifecycle**。`onMount`のroot/unit所有は実装済み。
+       effectのunit所有、非同期scheduler、明示的なcomponent instance境界は別契約とする。
     3. **優先度P2: component propsとhandlerの型検査**。現行の`types/jsx.d.ts`は
        intrinsic要素と共通属性を検査するが、componentごとのprops型・イベント対象の
        絞り込みは弱い。module分割後の名前間違いとprops形状をbuild前に検出するために

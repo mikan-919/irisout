@@ -1372,6 +1372,7 @@ export interface MountBodyAnalysis {
   finalizeBody: (resolveUpdateCall: ResolveUpdateCall) => string
   readDeclIds: Set<DeclId>
   writeDeclIds: Set<DeclId>
+  directCollectionWriteDeclIds: Set<DeclId>
   /** `onMount` callbackが返す、unmount時だけ呼ぶcleanup。 */
   finalizeCleanup: (() => string) | null
 }
@@ -1429,6 +1430,7 @@ export function analyzeMountBody(
     finalizeBody: analysis.finalizeBody,
     readDeclIds: analysis.readDeclIds,
     writeDeclIds: analysis.writeDeclIds,
+    directCollectionWriteDeclIds: analysis.directCollectionWriteDeclIds,
     finalizeCleanup: analysis.result
       ? () => analysis.result!.finalize(NO_MOUNT_CLEANUP_UPDATE)
       : null,

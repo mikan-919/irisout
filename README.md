@@ -122,8 +122,9 @@ instanceが所有し、keyed reorderでは再初期化せず、item削除・bran
 root `unmount()`でdestroyします。ルートcomponentの動きゾーンでは
 `onMount(() => void | (() => void))`を使えます。callbackはmount/hydrate完了後に一度だけ
 実行され、返り値のcleanupはunmount時に逆順で一度だけ実行されます。再mount、
-構造unit内・子componentの`onMount`はscope limit/非対応です。ルートcomponentの動き
-ゾーンでは`effect(() => void | (() => void))`も使えます。callback本体が読むsignal/
+構造unit内の`onMount`とinline化される子componentの`onMount`は、rootまたはunitの
+instanceが所有します。ルートcomponentの動きゾーンでは`effect(() => void | (() => void))`
+も使えます。callback本体が読むsignal/
 derivedの更新時に再実行され、返り値のcleanupは再実行前とunmount時に呼ばれます。
 effect本体から追跡signalへ書き込むこと、構造unit内・子componentでeffectを使うことは
 scope limitです。

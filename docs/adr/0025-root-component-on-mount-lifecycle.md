@@ -51,9 +51,14 @@ onMount(() => {
 
 - onMountを使わない生成物にはcleanup変数・callback配線・専用runtime importを出力
   しない。
-- 構造unit内のonMountと、inline化される子componentのonMountは対象外である。
-  runtime component instance境界がないまま暗黙にrootへ昇格させることを防ぐため、
-  `compile: ... (scope limit)`で拒否する。
+- 構造unit内のonMountは、そのunitのfactory instanceが所有する。list itemのblock文と、
+  inline化された子componentのcallbackをunitのmount時に登録し、item削除・branch切替・
+  root unmountでcleanupを呼ぶ。
+- inline化された子componentがroot scopeにある場合は、子のcallbackをroot instanceへ
+  静的に移動する。これは既存のcompile-time inline境界をそのまま使う明示的な変換であり、
+  runtime child objectや暗黙のregistryを生成しない。
+- 構造unitのJSX式へ現れるinline childのcallbackも同じunit factoryへ収集する。effectは
+  引き続きroot component専用で、子componentへ暗黙に昇格させない。
 - `effect`、context、SSR、再mount、汎用lifecycle registryはこのADRの対象外である。
 
 ## 検討した代替案
@@ -62,5 +67,6 @@ onMount(() => {
   要素契約を拡張するため却下した。
 - runtimeの汎用hook registryを追加する案: root instanceの既存cleanup列で十分で、
   未使用生成物の固定費を増やすため却下した。
-- 子componentのhookをrootへ自動昇格する案: compile-time inline化でcomponent instance
-  境界が消えるため、mount順と所有権を説明できず、明示拒否を採用した。
+- 子componentのhookをruntime childへ保持する案: compile-time inline化でcomponent instance
+  境界が消えるため、不要なruntime objectとregistryを追加する。root scopeはrootへ静的に
+  移動し、構造unit内はfactoryへ収集する最小変換を採用した。
