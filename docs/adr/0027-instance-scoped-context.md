@@ -49,7 +49,8 @@ render(<Card />)
 - provider値が現在unitまたは祖先unitのlocal signalを読むことは許可する。unit外のlocal
   signalを読む場合はscope limitで拒否する。
 - context APIを使わないcomponentにはcontext宣言、Map、runtime importを出力しない。
-- effect、動的provider tree、async context、module共有mutable stateは対象外とする。
+- 構造unitの動的provider treeはADR-0028の境界で実装する。runtime component object間の
+  provider伝播、非同期context、module共有mutable stateは対象外とする。
 
 ## 検討した代替案
 

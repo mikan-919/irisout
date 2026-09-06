@@ -119,6 +119,26 @@ export function App() {
     instance.unmount()
   })
 
+  it('switches a provider tree with conditional branches', async () => {
+    const { code } = compile(`
+const Theme = createContext('default');
+function Child() { render(<span>{useContext(Theme)}</span>); }
+export function App() {
+  const dark = signal(false);
+  render(<main><button onClick={toggle}>toggle</button>{dark() ? <section>{provideContext(Theme, 'dark')}<Child /></section> : <section>{provideContext(Theme, 'light')}<Child /></section>}</main>);
+  function toggle() { dark(!dark()); }
+}
+`)
+    const mod = await loadGenerated(code)
+    const container = createContainer()
+    const instance = (mod.mountComponent as (container: Element) => { unmount(): void })(container)
+    expect(container.textContent).toBe('togglelight')
+    const EventCtor = container.ownerDocument.defaultView!.Event
+    container.querySelector('button')!.dispatchEvent(new EventCtor('click', { bubbles: true }))
+    expect(container.textContent).toBe('toggledark')
+    instance.unmount()
+  })
+
   it('does not emit context machinery when unused', () => {
     const { code } = compile('export function App() { render(<div>ready</div>); }')
     expect(code).not.toContain('createContext')
