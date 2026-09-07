@@ -5,7 +5,7 @@ JSXから、静的に解決できるものを消し込み、必要最小限の�
 `docs/architecture.md`を参照。ここでは**複数コンポーネント合成**
 (2026-07-21のgrillingで決定、ADR-0014・change
 `same-file-component-composition`で同一ファイル内に限り実装済み、
-ROADMAP.md §4/§5)に関わる語彙のうち、実装コード上の概念(DeclId・
+[旧ロードマップ](./docs/history/roadmap-through-2026-09-07.md) §4/§5)に関わる語彙のうち、実装コード上の概念(DeclId・
 MarkerId・ゾーン等)とは別に、著者向けの語彙として固めておく必要が
 あるものを記す。実装済みの制約の詳細はSTATUS.mdを参照。
 

@@ -149,6 +149,8 @@ SVGは`svg`以下の要素を既存のJSXで記述できます。通常の動的
 
 ## 開発
 
+今後は、情報量ヒートマップで記述と動作を検証し、作者以外が別のリポジトリへ導入できる試用版を目指します。診断と対応範囲の整備、部品分割と非同期更新の検証、初期化処理の改善、外部導入の順に進めます。判断の根拠は[開発方針](./docs/project-direction.md)、各段階の完了条件は[ロードマップ](./ROADMAP.md)に記載しています。
+
 ```bash
 bun install
 bun run check
@@ -179,14 +181,15 @@ export default {
 
 ## 資料
 
-| ファイル                                         | 内容                           |
-| ------------------------------------------------ | ------------------------------ |
-| [`CONCEPT.v3.md`](./CONCEPT.v3.md)               | 目的と設計原則                 |
-| [`STATUS.md`](./STATUS.md)                       | 対応状況と制約                 |
-| [`ROADMAP.md`](./ROADMAP.md)                     | 設計判断が必要な論点と次の作業 |
-| [`docs/architecture.md`](./docs/architecture.md) | コンパイラの構成と処理         |
-| [`docs/adr/`](./docs/adr/)                       | 設計判断と却下案               |
-| [`openspec/specs/`](./openspec/specs/)           | 実装対象の受け入れ条件と仕様   |
+| ファイル                                                   | 内容                         |
+| ---------------------------------------------------------- | ---------------------------- |
+| [`CONCEPT.v3.md`](./CONCEPT.v3.md)                         | 目的と設計原則               |
+| [`docs/project-direction.md`](./docs/project-direction.md) | 今後の開発方針と判断の根拠   |
+| [`STATUS.md`](./STATUS.md)                                 | 対応状況と制約               |
+| [`ROADMAP.md`](./ROADMAP.md)                               | 開発順序と各段階の完了条件   |
+| [`docs/architecture.md`](./docs/architecture.md)           | コンパイラの構成と処理       |
+| [`docs/adr/`](./docs/adr/)                                 | 設計判断と却下案             |
+| [`openspec/specs/`](./openspec/specs/)                     | 実装対象の受け入れ条件と仕様 |
 
 ## ライセンス
 
