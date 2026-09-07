@@ -33,7 +33,9 @@
     "bench:todomvc-compiler": "vp run @irisout/bench#bench:todomvc-compiler",
     "bench:list-runtime": "vp run @irisout/bench#bench:list-runtime",
     "bench:listener-strategy": "vp run @irisout/bench#bench:listener-strategy",
-    "prepare": "husky"
+    "build:packages": "node scripts/build-packages.mjs",
+    "pack:smoke": "node scripts/pack-smoke.mjs",
+    "prepare": "node scripts/build-packages.mjs && husky"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

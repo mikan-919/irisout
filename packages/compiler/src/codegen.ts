@@ -240,6 +240,50 @@ function renderHandlerCall(
   return `${h.async ? 'async ' : ''}(${params}) => { ${scopedBody}${h.updatesInRendered ? '' : ';'}${tail ? ` ${tail}` : ''} }`
 }
 
+// itemごとのlistenerは直接配線のまま、callback関数だけをfactory単位で共有する。
+// event.currentTargetはlistenerを登録したitem要素のままなのでnative semanticsを
+// 変えず、初回List生成時のclosure割当を件数からhandler種類数へ減らせる。
+function renderSharedItemHandlerCall(
+  h: HandlerOutput,
+  itemParam: string,
+  handleMap: string,
+  localUpdateExprs: (string | null)[] = [],
+): string {
+  const updateCalls = h.updateBatchName
+    ? `${h.updateBatchName}();`
+    : h.updateNames.map((name) => `update_${name}();`).join(' ')
+  const localUpdateCalls = [
+    ...new Set(
+      h.localUpdateLevels
+        .map((level) => localUpdateExprs[level])
+        .filter((expr): expr is string => expr != null),
+    ),
+  ]
+    .map((expr) => `${expr};`)
+    .join(' ')
+  const replaceLocalUpdates = (source: string): string =>
+    source.replace(/__LOCAL_(SELF_UPDATE|ANCESTOR_(\d+))__\(\);?/g, (_match, kind, levelText) => {
+      const level = kind === 'SELF_UPDATE' ? 0 : Number(levelText)
+      const updateExpr = localUpdateExprs[level]
+      if (!updateExpr) {
+        throw new Error(
+          `codegen: missing local update expression for handler ${h.markerId} at level ${level}`,
+        )
+      }
+      return `${updateExpr};`
+    })
+  const body = replaceLocalUpdates(h.rendered)
+  const scopedBody =
+    !h.updatesInRendered && h.updateBatchNeedsCollection
+      ? `__update_batch_depth__++; try { ${body} } finally { __update_batch_depth__--; }`
+      : body
+  const tail = h.updatesInRendered
+    ? ''
+    : `${updateCalls}${localUpdateCalls ? ` ${localUpdateCalls}` : ''}`
+  const eventBinding = h.param ? `const ${h.param} = __args[0]; ` : ''
+  return `${h.async ? 'async ' : ''}(...__args) => { const __handle__ = ${handleMap}.get(__args[0]?.currentTarget); if (!__handle__) return; let ${itemParam} = __handle__.value; ${eventBinding}${scopedBody}${h.updatesInRendered ? '' : ';'}${tail ? ` ${tail}` : ''} }`
+}
+
 // ADR-0012 決定2: 動的属性1個ぶんの設定文。boolProp/prop はプロパティ代入、
 // それ以外は setAttribute(update_* と factory の両方で使う)。
 function renderAttrSet(elExpr: string, b: AttrBinding): string {
@@ -496,8 +540,21 @@ function generateFactoryLegacy(
       `  const __handle__ = { el: __el__, item: __item__, value: ${itemParam}, refs: { ${refs} } };`,
     )
     for (const h of body.localHandlers) {
+      if (h.param === itemParam) {
+        lines.push(
+          `  __${h.markerId}__.addEventListener(${JSON.stringify(h.eventName)}, ${renderHandlerCall(h, itemParam, `${itemParam} = __handle__.value; `, [null, ...ancestorUpdateExprs])});`,
+        )
+        continue
+      }
+      const handleMap = `__item_handles_${h.markerId}__`
+      const handlerName = `__item_handler_${h.markerId}__`
+      lines.unshift(
+        `const ${handleMap} = new WeakMap();`,
+        `const ${handlerName} = ${renderSharedItemHandlerCall(h, itemParam, handleMap, [null, ...ancestorUpdateExprs])};`,
+      )
       lines.push(
-        `  __${h.markerId}__.addEventListener(${JSON.stringify(h.eventName)}, ${renderHandlerCall(h, itemParam, `${itemParam} = __handle__.value; `, [null, ...ancestorUpdateExprs])});`,
+        `  ${handleMap}.set(__${h.markerId}__, __handle__);`,
+        `  __${h.markerId}__.addEventListener(${JSON.stringify(h.eventName)}, ${handlerName});`,
       )
     }
     lines.push(`  ${updateName}(__handle__, ${itemParam});`)

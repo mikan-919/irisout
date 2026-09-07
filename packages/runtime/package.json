@@ -1,13 +1,16 @@
 {
   "name": "@irisout/runtime",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
   "license": "Apache-2.0",
   "files": [
-    "src"
+    "dist",
+    "README.md"
   ],
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
   }
 }

@@ -36,13 +36,23 @@ self.onmessage = (event) => {
   try {
     const source = String(message.source ?? '')
     const startedAt = performance.now()
-    const tokens = analyzer.analyze(source)
+    const paragraphs = source.split(/\n\s*\n/)
+    const paragraphResults = paragraphs.map((text, index) => {
+      const tokens = analyzer.analyze(text)
+      return {
+        id: index + 1,
+        tokenCount: tokens.length,
+        reason: `Worker解析で${tokens.length}語を検出`,
+      }
+    })
+    const tokens = paragraphResults.reduce((total, paragraph) => total + paragraph.tokenCount, 0)
     const elapsedMs = performance.now() - startedAt
     const dictionaryHits = dictionaryTerms.filter((term) => source.includes(term)).length
     self.postMessage({
       type: 'result',
       requestId,
-      tokenCount: tokens.length,
+      tokenCount: tokens,
+      paragraphs: paragraphResults,
       dictionaryHits,
       elapsedMs,
     })

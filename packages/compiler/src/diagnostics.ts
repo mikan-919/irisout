@@ -2,6 +2,15 @@ export interface DiagnosticOptions {
   filePath: string
   source: string
   offset?: number
+  /** compileProject()の連結後ソースを元モジュールへ戻す範囲。 */
+  origins?: DiagnosticOrigin[]
+}
+
+export interface DiagnosticOrigin {
+  generatedStart: number
+  generatedEnd: number
+  filePath: string
+  source: string
 }
 
 export interface DiagnosticPosition {
@@ -28,11 +37,51 @@ function sourcePosition(source: string, offset: number): { line: number; column:
   return { line, column: safeOffset - lastNewline }
 }
 
+function sourceOffset(source: string, line: number, column: number): number {
+  if (line <= 1) return Math.max(0, column - 1)
+  let offset = 0
+  let currentLine = 1
+  while (currentLine < line) {
+    const next = source.indexOf('\n', offset)
+    if (next < 0) return source.length
+    offset = next + 1
+    currentLine += 1
+  }
+  return Math.min(source.length, offset + Math.max(0, column - 1))
+}
+
+function mapOrigin(
+  source: string,
+  line: number,
+  column: number,
+  origins: DiagnosticOrigin[] | undefined,
+): DiagnosticPosition | null {
+  if (!origins || origins.length === 0) return null
+  const generatedOffset = sourceOffset(source, line, column)
+  const origin = origins.find(
+    (candidate) =>
+      generatedOffset >= candidate.generatedStart && generatedOffset <= candidate.generatedEnd,
+  )
+  if (!origin) return null
+  const relativeOffset = Math.max(0, generatedOffset - origin.generatedStart)
+  const generatedBefore = source.slice(origin.generatedStart, generatedOffset)
+  const relativeLine = generatedBefore.split('\n').length
+  const originalLines = origin.source.split('\n')
+  const originalLine = Math.min(Math.max(1, relativeLine), Math.max(1, originalLines.length))
+  const originalLineText = originalLines[originalLine - 1] ?? ''
+  const originalColumn = Math.min(
+    Math.max(1, relativeLine === 1 ? relativeOffset : generatedBefore.lastIndexOf('\n') + 1),
+    Math.max(1, originalLineText.length + 1),
+  )
+  return { filePath: origin.filePath, line: originalLine, column: originalColumn }
+}
+
 function locationFromValue(
   value: unknown,
   source: string,
 ): { line: number; column: number } | null {
-  const record = asRecord(value) as SourceLocationLike | null
+  const outer = asRecord(value)
+  const record = (asRecord(outer?.start) ?? outer) as SourceLocationLike | null
   if (!record) return null
   const line = typeof record.line === 'number' ? record.line : null
   const column = typeof record.column === 'number' ? record.column : null
@@ -83,7 +132,12 @@ export function diagnosticPosition(error: unknown, options: DiagnosticOptions): 
             options.source,
           ) ?? 0,
         ))
-  return { filePath: options.filePath, ...location }
+  return (
+    mapOrigin(options.source, location.line, location.column, options.origins) ?? {
+      filePath: options.filePath,
+      ...location,
+    }
+  )
 }
 
 export class CompileDiagnostic extends Error {

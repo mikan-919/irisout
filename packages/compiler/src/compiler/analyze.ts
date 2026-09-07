@@ -186,6 +186,17 @@ function tryHandleTrackedCallee(
   const binding = idPath.scope.getBinding(name)
   if (!binding) return // グローバル → 素通し(従来どおり)
   if (ctx.supportNames.has(name)) return // linked moduleの補助関数/const
+  // onMount/actionが保持する外部ヘルパーの戻り値は、cleanup時に呼び出す
+  // 不透明な関数として扱う。呼び出し先の本体を追跡できなくても、signalの
+  // 書き込みを隠していない限り、生成側は元の呼び出しをそのまま保持できる。
+  if (
+    binding.path.isVariableDeclarator() &&
+    binding.path.node.init?.type === 'CallExpression' &&
+    binding.path.node.init.callee.type === 'Identifier' &&
+    ctx.supportNames.has(binding.path.node.init.callee.name)
+  ) {
+    return
+  }
   const fn = ctx.movementFns.get(name)
   if (!fn || binding.path.node !== fn.node) {
     throw new Error(

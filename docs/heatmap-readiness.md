@@ -83,11 +83,11 @@ function run() {
 | 編集の反映         | `apps/examples/vite.config.ts`は設定評価時に一度だけ`compileProject`を呼ぶ。プラグイン生成後に入口ファイルを書き換えても`transformIndexHtml`は旧HTMLを返した        | 入口と相対依存を監視し、HTMLとJSを同じ再コンパイル結果へ更新する。まずページ全体の再読み込みでよい                        |
 | 依存ファイルの取得 | `CompileResult`は依存ファイル一覧を返さず、リンカーが内部でファイルを読む                                                                                           | ビルド連携側が依存を監視できる公開結果または同等の仕組みを設ける                                                          |
 | JSXの型検査        | 一時的に`types/test/`へ`signal(1)`に文字列を書き込むJSXを追加した。`bun run typecheck`は成功し、`bun run typecheck:tsc`はTS2345で失敗した。再現用ファイルは削除済み | 通常の検査手順にJSX専用の型検査を含め、誤ったpropsとイベント値も検出する                                                  |
-| 利用者用の型定義   | `@irisout/compiler/jsx`を`apps/examples`と別アプリの設定から参照する。各packageはGit/workspace配布のprivate package                                                 | 型定義のpackage入口と別アプリの設定例を用意する。npm等への公開は別計画とする                                              |
+| 利用者用の型定義   | `@irisout/compiler/jsx`を`apps/examples`と別アプリの設定から参照する。packageはworkspaceと`0.1.0`のtarballで検証する                                                | 型定義のpackage入口と梱包検査を用意する。npm等への公開は別計画とする                                                      |
 | エラー位置         | `CompileDiagnostic`が対象moduleの元ファイル・行・列をメッセージへ付ける。生成結果にソースマップはない                                                               | 診断を実装済みとし、生成コードから原文へ戻るソースマップは後続で検討する                                                  |
 | 型と対応範囲の差   | 任意属性はunknownで許容され、型定義のコメントには構造内onMountを未対応とする記述が残る                                                                              | 実装とコメントを揃え、型が通ってもコンパイルできない境界を説明する。SVGは型一覧に含まれないが、初期地図はHTML要素で作れる |
 | 実ブラウザの検証   | 通常の試験対象はcompiler配下。ブラウザ用計測スクリプトはあるが、ヒートマップの操作試験はない                                                                        | 入力、移動、フォーカス、日本語入力中の再解析、長文での操作性をブラウザで確認する                                          |
-| 自動検査と公開準備 | `.github/workflows/ci.yml`で型検査・試験・buildを実行し、別アプリのbuild試験を持つ。コードはApache-2.0、packageはprivate workspace                                  | Git/workspaceの導入手順を`examples/consumer-app/README.md`へ記載し、npm等への公開は別計画とする                           |
+| 自動検査と公開準備 | `.github/workflows/ci.yml`で型検査・試験・buildを実行し、別アプリのbuild試験とtarball導入検査を持つ。コードはApache-2.0                                             | Git/workspaceの導入手順と`bun run pack:smoke`を記載し、npm等への公開と手動試用は別計画とする                              |
 
 注: ソースマップは生成コードの位置と元のソースの位置を結び付ける情報である。
 開発サーバーは調査環境の待受制限(EPERM)により起動できなかったため、編集反映は
@@ -184,5 +184,7 @@ Worker連携、要求競合、文字確定、日本語入力、段落移動、�
 を実行し、初期HTMLと生成JavaScriptを確認した。回帰試験にも同じbuildを登録した。`.github/workflows/ci.yml`
 へ`bun run check`、`bun run test`、`bun run build`を登録した。
 
-配布形式はGit/workspaceとし、npm等への公開は行わない。コードのライセンスをApache License 2.0とし、
-ルートの`LICENSE`、root/packageの`license`欄、READMEへ記載した。生成コードのソースマップは後続の検討とした。
+開発中の配布形式はGit/workspaceで、compiler、runtime、Vite連携は`0.1.0`のtarballを作れる。
+`bun run pack:smoke`でworkspace外の導入とVite buildを確認するが、npm等への公開と手動試用は
+行っていない。コードのライセンスをApache License 2.0とし、ルートの`LICENSE`、root/packageの
+`license`欄、READMEへ記載した。生成コードのソースマップは後続の検討とした。

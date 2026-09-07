@@ -60,12 +60,12 @@
     },
     "packages/compiler": {
       "name": "@irisout/compiler",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "@babel/generator": "^8.0.0",
         "@babel/parser": "^8.0.0",
         "@babel/traverse": "^8.0.0",
-        "@irisout/runtime": "workspace:*",
+        "@irisout/runtime": "^0.1.0",
       },
       "devDependencies": {
         "@babel/types": "^8.0.0",
@@ -75,13 +75,13 @@
     },
     "packages/runtime": {
       "name": "@irisout/runtime",
-      "version": "0.0.0",
+      "version": "0.1.0",
     },
     "packages/vite-plugin": {
       "name": "@irisout/vite-plugin",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
-        "@irisout/compiler": "workspace:*",
+        "@irisout/compiler": "^0.1.0",
       },
       "devDependencies": {
         "vite-plus": "0.3.0",

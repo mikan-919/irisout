@@ -9,7 +9,7 @@ import { parse } from '@babel/parser'
 import type { NodePath } from '@babel/traverse'
 import traverseImport from '@babel/traverse'
 import * as t from '@babel/types'
-import { withCompileDiagnostic } from '../diagnostics.ts'
+import { withCompileDiagnostic, type DiagnosticOrigin } from '../diagnostics.ts'
 
 const traverse =
   (traverseImport as unknown as { default?: typeof traverseImport }).default ?? traverseImport
@@ -51,6 +51,8 @@ export interface LinkedProject {
   externalImports: string[]
   /** compileProject()の利用側が相対moduleを監視できる絶対pathの一覧。 */
   dependencies: string[]
+  /** 連結後ソースの範囲と元モジュールの対応。診断位置の復元に使う。 */
+  origins: DiagnosticOrigin[]
 }
 
 function compileError(message: string): Error {
@@ -658,13 +660,25 @@ export function linkProject(entryPath: string): LinkedProject {
 
   const { order } = linkGraph(absoluteEntry)
   const sourceParts: string[] = []
+  const origins: DiagnosticOrigin[] = []
   const supportStatements: string[] = []
   const supportNames = new Set<string>()
   const externalImports: string[] = []
   const dependencies = new Set<string>()
 
   for (const record of order) {
-    sourceParts.push(generate(record.ast, { comments: false }).code)
+    // 元ASTの行を保つことで、連結後のcompile errorを元モジュールの行へ
+    // 戻せる。生成module向けのsupport statementとは異なり、ここは診断位置
+    // のための中間ソースである。
+    const generated = generate(record.ast, { comments: false, retainLines: true }).code
+    const generatedStart = sourceParts.length === 0 ? 0 : sourceParts.join('\n').length + 1
+    sourceParts.push(generated)
+    origins.push({
+      generatedStart,
+      generatedEnd: generatedStart + generated.length,
+      filePath: record.filePath,
+      source: record.source,
+    })
     externalImports.push(...record.externalStatements)
     dependencies.add(record.filePath)
     for (const resourcePath of record.resourceDependencies) dependencies.add(resourcePath)
@@ -693,5 +707,6 @@ export function linkProject(entryPath: string): LinkedProject {
     supportNames,
     externalImports: [...new Set(externalImports)],
     dependencies: [...dependencies],
+    origins,
   }
 }

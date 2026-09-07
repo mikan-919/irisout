@@ -14,7 +14,7 @@ irisoutは、JSXの記述方法を保ちながら、ブラウザで動く処理�
 更新するコードへ変換します。
 
 > [!WARNING]
-> 現時点の配布形式はGitリポジトリのworkspaceです。npm等へは公開していません。
+> 現時点の配布形式はGitリポジトリのworkspaceと、検証用のpackage tarballです。npm等へは公開していません。
 > 実製品へ導入する場合は、対応範囲と依存パッケージのライセンスを確認してください。
 
 ## 30秒で把握する
@@ -156,6 +156,8 @@ bun install
 bun run check
 bun run test
 bun run build
+bun run build:packages
+bun run pack:smoke
 ```
 
 `check`は整形、静的検査、TypeScriptとauthored JSXの型検査を実行します。examplesと別アプリの
@@ -176,8 +178,10 @@ export default {
 入口と相対`.js`/`.jsx`の編集時は、開発サーバーを再起動せずに初期HTMLと生成JavaScriptを
 再生成し、ページ全体を再読み込みします。
 
-このリポジトリのパッケージは`private`なworkspaceとして管理しています。利用者が導入手順を
-確認できる状態を先に作り、npm等への公開は別の計画で扱います。
+開発中はworkspaceで導入します。配布入口のJavaScriptと型定義は`bun run build:packages`で
+生成し、`bun run pack:smoke`で一時ディレクトリへ梱包物を導入してVite buildを確認できます。
+packageは`0.1.0`として梱包できますが、npm等への登録と作者以外による手動試用は未実施です。
+梱包方針は[ADR-0043](./docs/adr/0043-package-bundles-and-pack-smoke.md)に記載しています。
 
 ## 資料
 

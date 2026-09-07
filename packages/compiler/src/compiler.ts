@@ -823,9 +823,12 @@ export function compile(source: string): CompileResult {
 export function compileProject(entryPath: string): CompileResult {
   const diagnosticFilePath = path.resolve(entryPath)
   let diagnosticSource = ''
+  let diagnosticOrigins: import('./diagnostics.ts').DiagnosticOrigin[] | undefined
   try {
     diagnosticSource = readFileSync(diagnosticFilePath, 'utf8')
     const linked = linkProject(entryPath)
+    diagnosticSource = linked.source
+    diagnosticOrigins = linked.origins
     return compileSource(linked.source, {
       allowModuleSupport: true,
       supportStatements: linked.supportStatements,
@@ -834,6 +837,10 @@ export function compileProject(entryPath: string): CompileResult {
       dependencies: linked.dependencies,
     })
   } catch (error) {
-    throw withCompileDiagnostic(error, { filePath: diagnosticFilePath, source: diagnosticSource })
+    throw withCompileDiagnostic(error, {
+      filePath: diagnosticFilePath,
+      source: diagnosticSource,
+      origins: diagnosticOrigins,
+    })
   }
 }

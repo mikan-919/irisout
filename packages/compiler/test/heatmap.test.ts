@@ -44,7 +44,14 @@ class IrisM0_HeatmapWorker {
 
 function heatmapExecutableCode(): string {
   const { code } = compileProject(ENTRY)
-  return `${HEATMAP_TEST_STUBS}
+  const workerName = code.match(/IrisM\d+_HeatmapWorker/)?.[0] ?? 'IrisM0_HeatmapWorker'
+  const dictionaryName =
+    code.match(/IrisM\d+_analysisDictionaryUrl/)?.[0] ?? 'IrisM0_analysisDictionaryUrl'
+  const stubs = HEATMAP_TEST_STUBS.replaceAll('IrisM0_HeatmapWorker', workerName).replaceAll(
+    'IrisM0_analysisDictionaryUrl',
+    dictionaryName,
+  )
+  return `${stubs}
 ${code
   .split('\n')
   .filter((line) => !line.startsWith('import ') || line.includes("'@irisout/runtime'"))
@@ -62,6 +69,17 @@ function click(container: Element, selector: string): void {
 }
 
 describe('apps/examples/heatmap.jsx', () => {
+  it('keeps model, component, and worker helpers as linked modules', () => {
+    const result = compileProject(ENTRY)
+    expect(result.dependencies).toEqual(
+      expect.arrayContaining([
+        path.resolve('apps/examples/heatmap-model.js'),
+        path.resolve('apps/examples/heatmap-components.jsx'),
+        path.resolve('apps/examples/heatmap-worker-client.js'),
+      ]),
+    )
+  })
+
   it('connects input, metric selection, paragraph selection, and overview links', async () => {
     const mod = await loadGenerated(heatmapExecutableCode())
     const container = createContainer()
@@ -140,9 +158,20 @@ describe('apps/examples/heatmap.jsx', () => {
       expect(firstInputRequest?.requestId).toBe(2)
       expect(secondInputRequest?.requestId).toBe(3)
 
-      worker.emit({ type: 'result', requestId: 3, tokenCount: 12, elapsedMs: 2 })
+      worker.emit({
+        type: 'result',
+        requestId: 3,
+        tokenCount: 12,
+        elapsedMs: 2,
+        paragraphs: [{ id: 1, tokenCount: 8, reason: 'Worker解析で8語を検出' }],
+      })
       expect(container.querySelector('.analysis-status')?.textContent).toContain('単語数 12')
       expect(container.querySelector('.analysis-status')?.textContent).toContain('解析完了')
+      click(container, '.metric-controls button:nth-of-type(3)')
+      expect(container.querySelector('.paragraph-score')?.textContent).toContain('解析語数')
+      expect(container.querySelector('#paragraph-1 .paragraph-reason')?.textContent).toContain(
+        'Worker解析',
+      )
       worker.emit({ type: 'result', requestId: 2, tokenCount: 1, elapsedMs: 1 })
       expect(container.querySelector('.analysis-status')?.textContent).toContain('単語数 12')
 
@@ -180,6 +209,44 @@ describe('apps/examples/heatmap.jsx', () => {
       if (hadDocument) globalWithDocument.document = previousDocument
       else Reflect.deleteProperty(globalWithDocument, 'document')
     }
+  })
+
+  it('keeps state independent when the generated heatmap is mounted twice', async () => {
+    const mod = await loadGenerated(heatmapExecutableCode())
+    const first = createContainer()
+    const second = createContainer()
+    const firstInstance = (mod.mountComponent as (container: Element) => { unmount(): void })(first)
+    const secondInstance = (mod.mountComponent as (container: Element) => { unmount(): void })(
+      second,
+    )
+
+    click(first, '.metric-controls button:nth-of-type(2)')
+    expect(first.querySelector('.metric-controls .active')?.textContent).toContain('割合')
+    expect(second.querySelector('.metric-controls .active')?.textContent).toContain('長さ')
+    click(second, '.overview a:nth-of-type(2)')
+    expect(second.querySelector('#paragraph-2')?.className).toContain('selected')
+    expect(first.querySelector('#paragraph-1')?.className).toContain('selected')
+
+    await flushAsync()
+    const workers = (
+      globalThis as typeof globalThis & {
+        __irisoutHeatmapWorkers: {
+          messages: { type: string; source?: string }[]
+          emit(data: unknown): void
+        }[]
+      }
+    ).__irisoutHeatmapWorkers
+    expect(workers).toHaveLength(2)
+    workers.forEach((worker) => worker.emit({ type: 'ready' }))
+    const firstTextarea = first.querySelector('textarea') as HTMLTextAreaElement
+    firstTextarea.value = 'first instance'
+    firstTextarea.dispatchEvent(new firstTextarea.ownerDocument.defaultView!.Event('input'))
+    expect(workers[0]?.messages.at(-1)).toMatchObject({ type: 'analyze', source: 'first instance' })
+    expect(workers[1]?.messages.filter((message) => message.type === 'analyze')).toHaveLength(1)
+
+    firstInstance.unmount()
+    secondInstance.unmount()
+    await flushAsync()
   })
 
   it('builds library, dictionary URL, CSS, and worker assets under a base path', () => {

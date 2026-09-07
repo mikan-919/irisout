@@ -1,24 +1,33 @@
 {
   "name": "@irisout/compiler",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
   "license": "Apache-2.0",
   "files": [
-    "src",
-    "types"
+    "dist",
+    "types",
+    "README.md"
   ],
   "type": "module",
   "exports": {
-    ".": "./src/compiler.ts",
-    "./state": "./src/compiler/state.ts",
-    "./diagnostics": "./src/diagnostics.ts",
+    ".": {
+      "types": "./dist/compiler.d.ts",
+      "import": "./dist/compiler.js"
+    },
+    "./state": {
+      "types": "./dist/compiler/state.d.ts",
+      "import": "./dist/state.js"
+    },
+    "./diagnostics": {
+      "types": "./dist/diagnostics.d.ts",
+      "import": "./dist/diagnostics.js"
+    },
     "./jsx": "./types/jsx.d.ts"
   },
   "dependencies": {
     "@babel/generator": "^8.0.0",
     "@babel/parser": "^8.0.0",
     "@babel/traverse": "^8.0.0",
-    "@irisout/runtime": "workspace:*"
+    "@irisout/runtime": "^0.1.0"
   },
   "devDependencies": {
     "@babel/types": "^8.0.0",

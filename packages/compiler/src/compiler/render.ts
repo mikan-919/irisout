@@ -526,6 +526,12 @@ function resolveHandlerBody(
   )
 }
 
+function compileErrorAtNode(message: string, node: t.Node): Error {
+  const error = new Error(message)
+  if (node.loc) Object.defineProperty(error, 'loc', { value: node.loc, configurable: true })
+  return error
+}
+
 function collectAttrs(
   ctx: CompilerState,
   elementPath: NodePath<t.JSXElement>,
@@ -546,7 +552,10 @@ function collectAttrs(
   for (const attr of elementPath.get('openingElement').get('attributes')) {
     if (!attr.isJSXAttribute()) {
       // JSXSpreadAttribute({...props})は引き続き拒否する。
-      throw new Error('compile: host element attributes are not supported yet (scope limit)')
+      throw compileErrorAtNode(
+        'compile: host element attributes are not supported yet (scope limit)',
+        attr.node,
+      )
     }
     const attrName = attr.node.name
     // M5: リストアイテムの `key={...}` はkeyed reuseの索引専用で、host
@@ -1650,6 +1659,24 @@ export function compileComponent(
   instanceId: number,
   out: RenderOutput,
 ): string {
+  try {
+    return compileComponentUnchecked(ctx, componentPath, instanceId, out)
+  } catch (error) {
+    // 連結後ソースのAST位置を保持する。compileProject()側でこの位置を
+    // 元モジュールの範囲へ戻すため、子componentの失敗を入口へ誤表示しない。
+    if (error instanceof Error && !('loc' in error)) {
+      Object.defineProperty(error, 'loc', { value: componentPath.node.loc, configurable: true })
+    }
+    throw error
+  }
+}
+
+function compileComponentUnchecked(
+  ctx: CompilerState,
+  componentPath: NodePath<t.FunctionDeclaration>,
+  instanceId: number,
+  out: RenderOutput,
+): string {
   const { varZoneStmts, renderJsxPath, movementZoneFns, mountHooks, effectHooks } =
     splitComponentZones(componentPath)
 
@@ -1701,5 +1728,12 @@ export function compileComponent(
     ctx.effects.push(effect)
   }
 
-  return renderElement(ctx, renderJsxPath, instanceId, movementZoneFns)
+  try {
+    return renderElement(ctx, renderJsxPath, instanceId, movementZoneFns)
+  } catch (error) {
+    if (error instanceof Error && !('loc' in error)) {
+      Object.defineProperty(error, 'loc', { value: renderJsxPath.node.loc, configurable: true })
+    }
+    throw error
+  }
 }

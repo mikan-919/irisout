@@ -49,4 +49,41 @@ export function App() { render(<div>{missing}</div>) }`,
     expect(diagnostic.message).toContain(`cannot resolve relative import`)
     expect(diagnostic.message).toMatch(new RegExp(`\\[${entry}:1:\\d+\\]$`))
   })
+
+  it('points compiler errors in a linked child module to the child JSX location', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'irisout-child-diagnostics-'))
+    const entry = path.join(root, 'main.jsx')
+    const child = path.join(root, 'Child.jsx')
+    mkdirSync(root, { recursive: true })
+    writeFileSync(
+      entry,
+      `import Child from './Child.jsx'
+export function App() {
+  render(<Child />)
+}`,
+    )
+    writeFileSync(
+      child,
+      `export default function Child() {
+  const count = signal(0)
+  render(
+    <div {...{ class: 'unsupported' }}>{count()}</div>,
+  )
+}`,
+    )
+
+    let caught: unknown
+    try {
+      compileProject(entry)
+    } catch (error) {
+      caught = error
+    }
+
+    expect(caught).toBeInstanceOf(CompileDiagnostic)
+    const diagnostic = caught as CompileDiagnostic
+    expect(diagnostic.filePath).toBe(child)
+    expect(diagnostic.line).toBe(4)
+    expect(diagnostic.column).toBeGreaterThan(4)
+    expect(diagnostic.message).toContain('host element attributes')
+  })
 })
