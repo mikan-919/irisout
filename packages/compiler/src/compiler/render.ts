@@ -27,7 +27,6 @@ import {
   analyzeHandlerExpr,
   analyzeEffectBody,
   analyzeMountBody,
-  resolveDeclId,
 } from './analyze.ts'
 import type {
   CompilerState,
@@ -457,11 +456,6 @@ interface HandlerAttr {
   async: boolean
 }
 
-interface ValueBinding {
-  targetId: DeclId
-  targetPath: NodePath<t.Identifier>
-}
-
 interface HandlerBody {
   /** 第1仮引数(イベントオブジェクト)の authored 名。なければ null。 */
   param: string | null
@@ -532,42 +526,6 @@ function resolveHandlerBody(
   )
 }
 
-function createValueBindingHandler(ctx: CompilerState, targetId: DeclId): HandlerAttr {
-  const outputName = ctx.declOutputName.get(targetId)
-  if (!outputName) {
-    throw new Error('compile: bind:value target has no generated name (scope limit)')
-  }
-  const rendered = ctx.sharedDeclIds.has(targetId)
-    ? `${outputName}(event.currentTarget.value)`
-    : `${outputName} = event.currentTarget.value`
-  return {
-    eventName: 'input',
-    rendered,
-    finalize: (resolveUpdateCall) => {
-      const update = resolveUpdateCall(new Set([targetId]))
-      if (!update.code) return rendered
-      if (update.needsCollectionBatch) {
-        return `{ __update_batch_depth__++; try { ${rendered}; } finally { __update_batch_depth__--; } ${update.code} }`
-      }
-      return `${rendered}; ${update.code}`
-    },
-    writeDeclIds: new Set([targetId]),
-    directCollectionWriteDeclIds: new Set(),
-    param: 'event',
-    async: false,
-  }
-}
-
-function isBindValueAttribute(attrName: t.JSXAttribute['name']): boolean {
-  return (
-    attrName.type === 'JSXNamespacedName' &&
-    attrName.namespace.type === 'JSXIdentifier' &&
-    attrName.namespace.name === 'bind' &&
-    attrName.name.type === 'JSXIdentifier' &&
-    attrName.name.name === 'value'
-  )
-}
-
 function collectAttrs(
   ctx: CompilerState,
   elementPath: NodePath<t.JSXElement>,
@@ -580,15 +538,11 @@ function collectAttrs(
   staticAttrs: StaticAttr[]
   actionAttr: HandlerBody | null
   dynamicAttrPaths: { name: string; exprPath: NodePath<t.Expression> }[]
-  valueBindings: ValueBinding[]
 } {
   const handlerAttrs: HandlerAttr[] = []
   const staticAttrs: StaticAttr[] = []
   const dynamicAttrPaths: { name: string; exprPath: NodePath<t.Expression> }[] = []
-  const valueBindings: ValueBinding[] = []
   let actionAttr: HandlerBody | null = null
-  let hasValueAttribute = false
-  let hasInputHandler = false
   for (const attr of elementPath.get('openingElement').get('attributes')) {
     if (!attr.isJSXAttribute()) {
       // JSXSpreadAttribute({...props})は引き続き拒否する。
@@ -601,7 +555,7 @@ function collectAttrs(
       continue
     }
     const valueNode = attr.node.value
-    if (attrName.type === 'JSXNamespacedName' && !isBindValueAttribute(attrName)) {
+    if (attrName.type === 'JSXNamespacedName') {
       const namespace = attrName.namespace.name
       if (!svgElement || !['xlink', 'xml', 'xmlns'].includes(namespace)) {
         throw new Error(
@@ -610,37 +564,13 @@ function collectAttrs(
       }
       if (valueNode?.type !== 'StringLiteral') {
         throw new Error(
-          `compile: SVG namespace attribute "${namespace}:${attrName.name.name}" must have a static string value (scope limit)`,
+          `compile: SVG namespace attribute "${namespace}:{attrName.name.name}" must have a static string value (scope limit)`,
         )
       }
       staticAttrs.push({
         name: `${namespace}:${attrName.name.name}`,
         value: valueNode.value,
       })
-      continue
-    }
-    if (isBindValueAttribute(attrName)) {
-      if (valueBindings.length > 0) {
-        throw new Error(
-          'compile: an element can only have one `bind:value` attribute (scope limit)',
-        )
-      }
-      if (valueNode?.type !== 'JSXExpressionContainer') {
-        throw new Error('compile: `bind:value` must be an expression (scope limit)')
-      }
-      const targetPath = attr.get('value.expression') as NodePath<t.Expression>
-      if (!targetPath.isIdentifier()) {
-        throw new Error(
-          'compile: `bind:value` target must be a signal identifier, not a call or member expression (scope limit)',
-        )
-      }
-      const targetId = resolveDeclId(ctx, targetPath, instanceId)
-      if (!targetId || ctx.declKind.get(targetId) !== 'signal') {
-        throw new Error(
-          'compile: `bind:value` target must resolve to a signal declaration (scope limit)',
-        )
-      }
-      valueBindings.push({ targetId, targetPath })
       continue
     }
     // ADR-0011: `use={fn}` は第3分類(ハンドラ/静的のどちらでもない)。
@@ -661,9 +591,6 @@ function collectAttrs(
       // ハンドラ以外: 属性名が JSXIdentifier で、値が文字列リテラルまたは
       // 値なしなら静的属性、式コンテナなら動的属性バインディング(ADR-0012)。
       // JSXNamespacedName は引き続き拒否する。
-      if (attrName.type === 'JSXIdentifier' && attrName.name === 'value') {
-        hasValueAttribute = true
-      }
       if (attrName.type === 'JSXIdentifier' && valueNode == null) {
         staticAttrs.push({ name: attrName.name, valueless: true })
         continue
@@ -689,7 +616,6 @@ function collectAttrs(
       throw new Error(`compile: handler "${attrName.name}" must be an expression (scope limit)`)
     }
     const exprPath = attr.get('value.expression') as NodePath<t.Expression>
-    if (attrName.name === 'onInput') hasInputHandler = true
     const { param, async: isAsync, body } = resolveHandlerBody(exprPath, attrName.name, handlerFns)
     const eventName = attrName.name.slice(2).toLowerCase()
     const analysis = Array.isArray(body)
@@ -705,16 +631,7 @@ function collectAttrs(
       async: isAsync,
     })
   }
-  if (valueBindings.length > 0 && hasValueAttribute) {
-    throw new Error('compile: `bind:value` cannot be combined with `value` (scope limit)')
-  }
-  if (valueBindings.length > 0 && hasInputHandler) {
-    throw new Error('compile: `bind:value` cannot be combined with `onInput` (scope limit)')
-  }
-  for (const binding of valueBindings) {
-    handlerAttrs.push(createValueBindingHandler(ctx, binding.targetId))
-  }
-  return { handlerAttrs, staticAttrs, actionAttr, dynamicAttrPaths, valueBindings }
+  return { handlerAttrs, staticAttrs, actionAttr, dynamicAttrPaths }
 }
 
 // design.md Decision 4/5: action本体の解析(ADR-0009の機械+ネストした関数への
@@ -789,7 +706,7 @@ function renderElement(
       `compile: component references (<${tagName}/>) are not supported yet (scope limit)`,
     )
   }
-  const { handlerAttrs, staticAttrs, actionAttr, dynamicAttrPaths, valueBindings } = collectAttrs(
+  const { handlerAttrs, staticAttrs, actionAttr, dynamicAttrPaths } = collectAttrs(
     ctx,
     elementPath,
     instanceId,
@@ -798,33 +715,15 @@ function renderElement(
     svgElement,
   )
   const insideUnit = opts.insideUnit ?? false
-  if (valueBindings.length > 0 && !['input', 'select', 'textarea'].includes(tagName)) {
-    throw new Error(
-      'compile: `bind:value` is supported only on input, select, and textarea elements (scope limit)',
-    )
-  }
   const attrs = renderStaticAttrs(staticAttrs)
 
   // ADR-0012: 動的属性バインディング。トップレベルのみビルド時実行で初期値を
   // 焼き込む(design D3 — ユニット内のテンプレートは innerHTML に生で渡る
   // ため `${...}` を属性位置に置けない。factory 側の設定行が初期値を兼ねる)。
-  const dynAttrs = [
-    ...dynamicAttrPaths.map((d) => ({
-      name: d.name,
-      ...analyzeExpr(ctx, d.exprPath, instanceId),
-    })),
-    ...valueBindings.map((binding) => {
-      const analyzed = analyzeExpr(ctx, binding.targetPath, instanceId)
-      return {
-        name: 'value',
-        ...analyzed,
-        rendered: ctx.sharedDeclIds.has(binding.targetId)
-          ? `${analyzed.rendered}()`
-          : analyzed.rendered,
-        sourceRendered: `${analyzed.sourceRendered}()`,
-      }
-    }),
-  ]
+  const dynAttrs = dynamicAttrPaths.map((d) => ({
+    name: d.name,
+    ...analyzeExpr(ctx, d.exprPath, instanceId),
+  }))
   const dynBake = !insideUnit
     ? dynAttrs
         .map((a) =>

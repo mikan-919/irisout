@@ -302,10 +302,6 @@ namespace/side-effect/dynamic import、re-export、循環依存は`compile:`エ�
   `const name = collection(initial, keyOf)`を`compileProject`のmodule共有stateとして実装済み。
   参照された生成物だけが出力され、signal/collectionがinstance購読を持つ。collectionのList
   DOM状態はinstanceごとに保持する。永続化、request単位SSR分離、汎用storeは対象外。
-- **`bind:value`的な双方向バインディング糖衣**: **実装済み(ADR-0040)**。
-  `input`、`textarea`、`select`のvalue propertyと文字列signalを接続し、
-  入力イベントからsignalへ書き戻す。対象はsignal識別子、value属性、onInputとの
-  併用はscope limitで検査する。
 - **component children slot**: **実装済み(ADR-0041)**。`children`をshorthand分割代入
   した同一ファイルcomponentへ、呼び出し側の子ノードを直接のJSX子位置へコンパイル時に
   展開する。実行時slot runtimeは生成せず、既存render-treeの制約は維持する。
@@ -431,12 +427,10 @@ transition/animation、portal、error boundary、async/resource
     3. ~~**module共有collection**~~ — **完了**(ADR-0039)。collection accessorとkey selectorを
        module scopeへ一度だけ出力し、各instanceのList更新経路へ同期通知する。List DOM状態は
        instanceごとに保持し、永続化とrequest単位SSR分離は別契約へ分ける。
-    4. ~~**`bind:value`**~~ — **完了**(ADR-0040)。文字列signalと入力欄のvalue propertyを
-       inputイベントへ接続し、root・構造unit・module共有signalを同じ更新経路で扱う。
-    5. ~~**component children slot**~~ — **完了**(ADR-0041)。同一ファイルcomponentの
+    4. ~~**component children slot**~~ — **完了**(ADR-0041)。同一ファイルcomponentの
        `children` propへ呼び出し側の子ノードをコンパイル時に展開し、共通パネルの
        authoringを受理する。fragment、spread child、直接子位置以外の参照は対象外。
-    6. ~~**SVG authoring**~~ — **完了**(ADR-0042)。SVG要素、静的namespace属性、
+    5. ~~**SVG authoring**~~ — **完了**(ADR-0042)。SVG要素、静的namespace属性、
        `foreignObject`、通常の動的属性更新を既存経路へ接続した。動的namespace属性と
        SVG専用property変換は対象外。
 

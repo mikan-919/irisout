@@ -39,8 +39,7 @@ compileComponent()           ── 4. render ツリーを深さ優先で走査(
   │    ・signal()/derived() 宣言 → declId 発行 + 出力文生成
   │    ・JSX 式 → マーカー発行 + 依存(deps)収集(packages/compiler/src/compiler/analyze.ts)
   │    ・AST変換済みの式 → ASTコード生成、未変更の式 → 位置編集
-  │    ・`bind:value` → value propertyとinput eventの既存更新経路へ接続(ADR-0040)
-  │    ・SVG → 名前空間を保った初期HTML、通常属性のsetAttribute更新、静的名前空間属性(ADR-0042)
+  │    ・`SVG → 名前空間を保った初期HTML、通常属性のsetAttribute更新、静的名前空間属性(ADR-0042)
   │    ・onXxx ハンドラ → 書き込み先 signal(writeDeclIds)収集
   ▼
 new Function() でビルド時実行 ── 5. 計装済みスクリプトを Node 上で1回実行し、
@@ -153,10 +152,6 @@ triage手続きで捌く — コンパイラの受理条件自体を場当たり
   複数rootのwrite setにmarker集合の交差がある場合だけ、その和集合を一度ずつ
   更新するinstance内同期batchを生成する(ADR-0020)。microtask schedulerや
   汎用subscription graphは持たない。
-- **入力値の双方向結合**(ADR-0040): `bind:value={signal}`はvalue propertyの動的属性と
-  inputイベントの直接listenerへ分解する。ローカルsignalは生成変数へ代入し、module共有
-  signalは共有accessorを呼び出す。対象要素とsignal識別子をコンパイル時に検査し、
-  新しい入力registryやschedulerは生成しない。
 - **List更新アドレス**(ADR-0015): コンパイル時のList marker ID、key式のitem ID、
   item内marker由来のbinding IDを分離して保持する。共有ランタイムはkey照合と
   DOM順序、生成factoryはbinding単位の直接DOM更新を担当する。

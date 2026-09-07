@@ -153,40 +153,6 @@ describe('compileProject: static multi-file module composition', () => {
     secondInstance.unmount()
   })
 
-  it('binds a shared module signal across component instances', async () => {
-    const entry = writeProject({
-      'main.jsx': `import { text } from './state.js'; export function App() { render(<div><input bind:value={text} /><p>{text()}</p></div>); }`,
-      'state.js': `export const text = signal('start');`,
-    })
-    const { code, initialHtml } = compileProject(entry)
-    expect(initialHtml).toContain('value="start"')
-    expect(code).toContain('sharedSignal as __sharedSignal__')
-    expect(code).toContain('IrisM0_text(event.currentTarget.value)')
-    expect(code).toContain('.subscribe(update_IrisM0_text)')
-
-    const mod = await loadGenerated(code)
-    const first = createContainer()
-    const second = createContainer()
-    const firstInstance = (mod.mountComponent as (container: Element) => { unmount(): void })(first)
-    const secondInstance = (mod.mountComponent as (container: Element) => { unmount(): void })(
-      second,
-    )
-    const firstInput = first.querySelector('input') as HTMLInputElement
-    expect(firstInput.value).toBe('start')
-    expect((second.querySelector('input') as HTMLInputElement).value).toBe('start')
-
-    firstInput.value = 'changed'
-    const EventCtor = first.ownerDocument.defaultView!.Event
-    firstInput.dispatchEvent(new EventCtor('input'))
-    expect(firstInput.value).toBe('changed')
-    expect(first.querySelector('p')?.textContent).toBe('changed')
-    expect((second.querySelector('input') as HTMLInputElement).value).toBe('changed')
-    expect(second.querySelector('p')?.textContent).toBe('changed')
-
-    firstInstance.unmount()
-    secondInstance.unmount()
-  })
-
   it('shares a module derived value and recomputes it through the shared signal', async () => {
     const entry = writeProject({
       'main.jsx': `import { count, quadrupled } from './state.js'; export function App() { render(<div><button onClick={increment}>inc</button><span>{quadrupled()}</span></div>); function increment() { count(count() + 1); } }`,

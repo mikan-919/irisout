@@ -114,7 +114,6 @@ Worker入口を読み込みます。配信先に接頭辞がある場合は`IRIS
 - `signal`と`derived`
 - `collection`によるキー付きリスト
 - テキストと属性の更新
-- `bind:value`による文字列signalと入力欄の双方向結合
 - イベント処理
 - キー付きリストと条件分岐
 - 同一ファイルと相対モジュールのコンポーネント合成
@@ -127,10 +126,6 @@ Worker入口を読み込みます。配信先に接頭辞がある場合は`IRIS
 `compileProject()`では、直接のmodule共有`signal`、`derived`、`collection`を受理します。
 共有collectionの配列は複数のcomponent instanceで共有され、ListのDOM状態はinstanceごとに
 保持されます。module共有stateのrequest単位SSR分離と永続化は対応範囲に含めません。
-
-`bind:value={text}`は`input`、`textarea`、`select`の`value` propertyと文字列signalを
-結びます。入力イベントの直接listenerがsignalへ書き戻し、通常の更新経路で表示を更新します。
-対象はsignal識別子に限り、`value`または`onInput`との併用は拒否します(ADR-0040)。
 
 SVGは`svg`以下の要素を既存のJSXで記述できます。通常の動的属性は`setAttribute`で更新し、
 `xlink:*`、`xml:*`、`xmlns:*`の名前空間属性は静的文字列に限ります(ADR-0042)。

@@ -46,11 +46,6 @@ irisout は React の代替ではありません。
 この3原則も目的ではなく、APIの一貫性を守る現在の判断です。実用性や生成物の
 品質を妨げる具体例が得られた場合は、ADRで改訂できます。
 
-入力値の双方向結合は`bind:value={text}`で表す。これは`input`、`textarea`、`select`の
-`value` propertyと文字列signalを接続する専用の省略記法であり、コンパイラが
-value propertyの読み取り、inputイベントの書き戻し、既存の更新経路を確定する
-(ADR-0040)。任意のsetterやメンバー式を実行時に推測する汎用機構は導入しない。
-
 同一ファイルcomponentの`children` propは、`<Panel>...</Panel>`の子ノードを
 component本体のJSX要素にある`{children}`へコンパイル時に展開する。実行時のprops
 objectやslot runtimeは追加せず、展開後の子ノードを既存のrender-tree解析へ渡す。

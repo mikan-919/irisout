@@ -8,7 +8,7 @@ export function App() {
     <main>
       <label>
         本文
-        <textarea bind:value={text} />
+        <textarea value={text()} onInput={(event) => text(event.currentTarget.value)} />
       </label>
       <p>{text()}</p>
       <output>文字数: {characterCount()}</output>
