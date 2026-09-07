@@ -205,6 +205,23 @@ fixtureでは同時に、常時表示していたinputを条件分岐へ変更�
 `createListRuntime`、`reconcileList`、`updateListBinding`である。production JavaScript
 にcompiler本体は含まれない。
 
+## R3同一条件の基準比較(2026-09-07)
+
+R3の対象をList初期化へ限定するため、計測用compiler variantではListと無関係な
+`setupNewTodoInput`の`focus()` actionを除いた。実アプリの生成物と機能試験ではactionを
+残している。Chromium 152.0.7977.82、予熱3回後15回、N=10,000の中央値で、初期化経路の
+最適化を無効にした同一生成物を基準にした。
+
+| 経路                                          | 初期化中央値 | 基準からの差 |
+| --------------------------------------------- | -----------: | -----------: |
+| 最適化前（初回`Set`とDOM一括挿入を無効化）    |       82.7ms |            — |
+| 現行（初回`Set`省略と`DocumentFragment`挿入） |       77.8ms |     5.9%短縮 |
+
+現行の他操作は`toggleOne` 2.4ms、`textEdit` 2.3ms、`addOne` 2.5ms、`removeOne` 2.2ms、
+`filter` 59.0msであった。20%短縮の条件は満たしていないため、R3は追加改善または目標
+改訂の判断待ちとする。`focus()`を含む従来値との比較は初期化対象が異なるため、完了判定へ
+使わない。
+
 ## 制約
 
 - 単一のNixOS Chromiumでの相対比較であり、絶対時間を他環境へ外挿しない。

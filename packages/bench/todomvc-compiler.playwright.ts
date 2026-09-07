@@ -274,13 +274,17 @@ async function buildGeneratedProduction(generated: CompileResult): Promise<Produ
 }
 
 function compileBenchVariant(source: string): CompileResult {
+  // 初期List生成の費用を比較するため、Listと無関係な入力要素のfocus actionは
+  // 計測用variantから除く。実アプリ版(generatedActual)と機能試験ではactionを残す。
+  const withoutInitialFocus = source.replace(/\n\s+use=\{setupNewTodoInput\}/, '')
+  if (withoutInitialFocus === source) throw new Error('could not remove initial focus action')
   const startToken = 'const todos = signal(['
-  const start = source.indexOf(startToken)
+  const start = withoutInitialFocus.indexOf(startToken)
   if (start < 0) throw new Error('could not locate TodoMVC initial signal')
-  const end = source.indexOf('  ])', start)
+  const end = withoutInitialFocus.indexOf('  ])', start)
   if (end < 0) throw new Error('could not locate TodoMVC initial signal end')
   const replacement = 'const todos = signal(globalThis.__IRISOUT_BENCH_INITIAL_TODOS__)'
-  const benchSource = `${source.slice(0, start)}${replacement}${source.slice(end + '  ])'.length)}`
+  const benchSource = `${withoutInitialFocus.slice(0, start)}${replacement}${withoutInitialFocus.slice(end + '  ])'.length)}`
   const globalState = globalThis as typeof globalThis & {
     __IRISOUT_BENCH_INITIAL_TODOS__?: Todo[]
   }
