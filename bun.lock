@@ -11,6 +11,19 @@
         "vite-plus": "0.3.0",
       },
     },
+    "app/web": {
+      "name": "@irisout/web",
+      "version": "0.0.0",
+      "dependencies": {
+        "@irisout/runtime": "workspace:*",
+      },
+      "devDependencies": {
+        "@irisout/compiler": "workspace:*",
+        "@irisout/vite-plugin": "workspace:*",
+        "typescript": "^5.9.0",
+        "vite-plus": "0.3.0",
+      },
+    },
     "apps/examples": {
       "name": "@irisout/examples",
       "version": "0.0.0",
@@ -85,6 +98,9 @@
       },
       "devDependencies": {
         "vite-plus": "0.3.0",
+      },
+      "peerDependencies": {
+        "vite-plus": ">=0.3.0",
       },
     },
   },
@@ -202,6 +218,8 @@
     "@irisout/runtime": ["@irisout/runtime@workspace:packages/runtime"],
 
     "@irisout/vite-plugin": ["@irisout/vite-plugin@workspace:packages/vite-plugin"],
+
+    "@irisout/web": ["@irisout/web@workspace:app/web"],
 
     "@jridgewell/gen-mapping": ["@jridgewell/gen-mapping@0.3.13", "", { "dependencies": { "@jridgewell/sourcemap-codec": "^1.5.0", "@jridgewell/trace-mapping": "^0.3.24" } }, "sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA=="],
 

@@ -4,6 +4,7 @@
   "private": true,
   "license": "Apache-2.0",
   "workspaces": [
+    "app/*",
     "apps/*",
     "examples/*",
     "packages/*"
@@ -11,12 +12,14 @@
   "type": "module",
   "scripts": {
     "dev": "vp -C apps/examples dev",
+    "dev:web": "vp -C app/web dev",
     "dev:list": "IRISOUT_ENTRY=list.jsx vp -C apps/examples dev",
     "dev:notes": "IRISOUT_ENTRY=notes.jsx vp -C apps/examples dev",
     "dev:heatmap": "IRISOUT_ENTRY=heatmap.jsx vp -C apps/examples dev",
     "dev:todomvc": "IRISOUT_ENTRY=todomvc.jsx vp -C apps/examples dev",
     "dev:multi-file": "IRISOUT_ENTRY=multi-file/App.jsx vp -C apps/examples dev",
     "build": "vp -C apps/examples build",
+    "build:web": "vp -C app/web build",
     "build:inspect": "IRISOUT_MINIFY=false vp -C apps/examples build",
     "start": "bun run build && vp -C apps/examples preview",
     "check": "vp check && bun run typecheck:tsc",
@@ -25,7 +28,8 @@
     "typecheck": "vp check --no-fmt --no-lint && bun run typecheck:tsc",
     "typecheck:jsx": "tsc --noEmit -p apps/examples/tsconfig.json",
     "typecheck:consumer": "tsc --noEmit -p examples/consumer-app/tsconfig.json",
-    "typecheck:tsc": "tsc --noEmit && bun run typecheck:jsx && bun run typecheck:consumer",
+    "typecheck:web": "tsc --noEmit -p app/web/tsconfig.json",
+    "typecheck:tsc": "tsc --noEmit && bun run typecheck:jsx && bun run typecheck:consumer && bun run typecheck:web",
     "test": "vp test --run",
     "bench": "vp run @irisout/bench#bench",
     "bench:browser": "vp run @irisout/bench#bench:browser",

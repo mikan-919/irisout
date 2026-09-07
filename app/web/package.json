@@ -1,0 +1,20 @@
+{
+  "name": "@irisout/web",
+  "version": "0.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "build": "vp build",
+    "dev": "vp dev"
+  },
+  "dependencies": {
+    "@irisout/runtime": "workspace:*"
+  },
+  "devDependencies": {
+    "@irisout/compiler": "workspace:*",
+    "@irisout/vite-plugin": "workspace:*",
+    "typescript": "^5.9.0",
+    "vite-plus": "0.3.0"
+  }
+}
