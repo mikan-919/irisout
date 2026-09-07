@@ -226,38 +226,56 @@ export function reconcileList<T>(
   update?: ListItemUpdater<T>,
 ): void {
   const initiallyEmpty = runtime.items.size === 0
-  const seen = initiallyEmpty ? null : new Set<unknown>()
   const ordered: ListRecord<T>[] = []
 
-  for (const value of values) {
-    const itemId = keyOf(value)
-    let record = runtime.items.get(itemId)
-    if (seen ? seen.has(itemId) : record !== undefined) {
-      throw new Error(`reconcileList: duplicate key ${String(itemId)} in list ${runtime.listId}`)
-    }
-    seen?.add(itemId)
-    if (record) {
-      if (update) update(record.handle, value)
-      else if (record.handle.update) record.handle.update(value)
-      else
-        throw new Error(
-          `reconcileList: no updater for item ${String(itemId)} in list ${runtime.listId}`,
-        )
-    } else {
+  // 初回は既存keyの削除走査と全体Setを省き、Map存在確認だけを残す。
+  // 更新経路は下の従来分岐でkeyed reuseと削除を処理する。
+  if (initiallyEmpty) {
+    for (const value of values) {
+      const itemId = keyOf(value)
+      if (runtime.items.get(itemId) !== undefined) {
+        throw new Error(`reconcileList: duplicate key ${String(itemId)} in list ${runtime.listId}`)
+      }
       const state: ListItemState = {
         listId: runtime.listId,
         itemId,
         bindings: new Map(),
       }
-      record = { state, handle: create(value, state) }
+      const record = { state, handle: create(value, state) }
       runtime.items.set(itemId, record)
+      ordered.push(record)
     }
-    ordered.push(record)
-  }
-
-  if (!initiallyEmpty) {
+  } else {
+    const seen = new Set<unknown>()
+    for (const value of values) {
+      const itemId = keyOf(value)
+      if (seen.has(itemId)) {
+        throw new Error(`reconcileList: duplicate key ${String(itemId)} in list ${runtime.listId}`)
+      }
+      seen.add(itemId)
+      const record = runtime.items.get(itemId)
+      if (record) {
+        if (update) update(record.handle, value)
+        else if (record.handle.update) record.handle.update(value)
+        else
+          throw new Error(
+            `reconcileList: no updater for item ${String(itemId)} in list ${runtime.listId}`,
+          )
+      } else {
+        const state: ListItemState = {
+          listId: runtime.listId,
+          itemId,
+          bindings: new Map(),
+        }
+        const created = { state, handle: create(value, state) }
+        runtime.items.set(itemId, created)
+        ordered.push(created)
+        continue
+      }
+      ordered.push(record)
+    }
     for (const [itemId, record] of runtime.items) {
-      if (seen!.has(itemId)) continue
+      if (seen.has(itemId)) continue
       record.handle.el.remove()
       runtime.items.delete(itemId)
     }

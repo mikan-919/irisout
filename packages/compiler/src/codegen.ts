@@ -186,7 +186,10 @@ export interface GenerateModuleInput {
 // クローンしたテンプレート内から data-iris-id を持つ要素を探す。ルート
 // 要素自身がマーカーの場合(item/branch の直接の子に marker が付く形)は
 // querySelector が自分自身を対象にしないので、先に自分自身を確認する。
-const FIND_HELPER = `function __find__(root, id) { return root.getAttribute("data-iris-id") === id ? root : root.querySelector(\`[data-iris-id="\${id}"]\`); }`
+// List item templateは小さな要素木なので、selector parserを毎回起動する
+// querySelectorの代わりに要素だけを深さ優先でたどる。root自身を先に見るため、
+// item root markerにも従来どおり対応する。
+const FIND_HELPER = `function __find__(root, id) { if (root.getAttribute("data-iris-id") === id) return root; const visit = (node) => { for (let child = node.firstElementChild; child; child = child.nextElementSibling) { if (child.getAttribute("data-iris-id") === id) return child; const found = visit(child); if (found) return found; } return null; }; return visit(root); }`
 
 // Structural units are represented by comment pairs instead of wrapper
 // elements. Emit this lookup only for modules that contain a structural unit;
