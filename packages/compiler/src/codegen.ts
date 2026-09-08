@@ -9,10 +9,12 @@
 // root signal の update_* 内で先に再計算してからマーカーを更新する。
 //
 // M5(ADR-0005): リスト/条件分岐は「そのユニット専用の factory 関数」を
-// 生成する。テンプレートは <template>+cloneNode(true) でスタンプし
+// 生成する。通常のテンプレートは <template>+cloneNode(true) でスタンプし
 // (renderElement 側では初期 HTML に埋め込まない ― mount/hydrate 直後に
-// 一度 update_<name>() を呼んで populate する)、item/branch 内のローカル
-// marker は __markers__ に登録せず、factory のクロージャに閉じ込める。
+// 一度 update_<name>() を呼んで populate する)、静的に安全なリスト項目の
+// 初期条件分岐だけは選択枝を項目テンプレートへ含めてfactoryが引き取る(ADR-0045)。
+// item/branch 内のローカルmarkerは __markers__ に登録せず、factoryのクロージャに
+// 閉じ込める。
 //
 // M5.5: ネストした構造ユニットは、同じ factory 生成規則を外側 factory の
 // クロージャ内へ深さ制限なしで再帰適用する(<template> だけは静的なので
@@ -459,6 +461,64 @@ function condDispatchesUpdate(marker: ConditionalMarkerOutput, inItemScope: bool
   return marker.branches.some((b) => b.body != null && branchHasUpdate(b.body, inItemScope))
 }
 
+// ADR-0045: リスト項目の初回生成だけ、条件分岐の選択枝を項目テンプレートへ
+// 含めてbranch factoryに引き取らせる。対象をローカルsignalの単純な
+// 真偽値初期値へ限定することで、条件式の副作用・項目ごとの差・評価順を
+// 変えない。branch factory自身が状態を持つ場合、入れ子unit、lifecycle、
+// SVGを含む場合は従来のclone経路を使う。
+function initialConditionalBranch(
+  body: StructuralUnitBodyOutput,
+  marker: ConditionalMarkerOutput,
+  allowInitialAdoption: boolean,
+): number | null {
+  if (!allowInitialAdoption || bodyHasLifecycle(body) || marker.isLogical) return null
+  const range = `<!--irisout:start:${marker.id}--><!--irisout:end:${marker.id}-->`
+  if (!body.template.includes(range)) return null
+  let svgDepth = 0
+  for (const tag of body.template
+    .slice(0, body.template.indexOf(range))
+    .match(/<\/?svg(?:\s[^>]*)?>/gi) ?? []) {
+    if (tag.startsWith('</')) svgDepth = Math.max(0, svgDepth - 1)
+    else if (!tag.endsWith('/>')) svgDepth++
+  }
+  if (svgDepth > 0) return null
+  const condition = body.localDecls.find((decl) => decl.outputName === marker.condRendered.trim())
+  if (
+    !condition ||
+    condition.kind !== 'signal' ||
+    (condition.rendered !== 'true' && condition.rendered !== 'false')
+  ) {
+    return null
+  }
+  const target = condition.rendered === 'true' ? 0 : 1
+  const branch = marker.branches[target]
+  if (!branch?.body) return null
+  if (
+    bodyHasLifecycle(branch.body) ||
+    bodyUnits(branch.body).length > 0 ||
+    branch.body.localDecls.length > 0 ||
+    /<svg(?:\s|>)/i.test(branch.body.template)
+  ) {
+    return null
+  }
+  return target
+}
+
+// ADR-0045: 初回に引き取る枝だけを項目templateへ埋め込む。
+function initialTemplate(body: StructuralUnitBodyOutput, allowInitialAdoption: boolean): string {
+  let template = body.template
+  for (const unit of bodyUnits(body)) {
+    if (unit.kind !== 'conditional') continue
+    const branchIndex = initialConditionalBranch(body, unit, allowInitialAdoption)
+    const branchTemplate = branchIndex == null ? null : unit.branches[branchIndex]?.body?.template
+    if (branchTemplate == null) continue
+    const range = `<!--irisout:start:${unit.id}--><!--irisout:end:${unit.id}-->`
+    const replacement = `<!--irisout:start:${unit.id}-->${branchTemplate}<!--irisout:end:${unit.id}-->`
+    if (template.includes(range)) template = template.replace(range, () => replacement)
+  }
+  return template
+}
+
 // factory 関数本体:テンプレートのクローン取得・ローカル marker の解決・
 // ハンドラ登録・必要なupdate() クロージャをまとめて1関数にする(ADR-0005
 // 決定2)。itemがない条件分岐branchでも、祖先itemのitem値に依存するmarkerは
@@ -477,6 +537,7 @@ function generateFactoryLegacy(
   body: StructuralUnitBodyOutput,
   inItemScope: boolean,
   ancestorUpdateExprs: (string | null)[] = [],
+  adoptExisting = false,
 ): string[] {
   const texts = bodyTexts(body)
   const units = bodyUnits(body)
@@ -567,10 +628,15 @@ function generateFactoryLegacy(
   }
 
   const lines: string[] = []
-  const params = itemParam ? `${itemParam}, __item__` : ''
+  const params = itemParam ? `${itemParam}, __item__` : adoptExisting ? '__existing__' : ''
   lines.push(`function ${factoryName}(${params}) {`)
-  lines.push(`  const __node__ = ${templateVar}.content.cloneNode(true);`)
-  lines.push('  const __el__ = __node__.firstElementChild;')
+  if (adoptExisting) {
+    lines.push(`  const __node__ = __existing__ ?? ${templateVar}.content.cloneNode(true);`)
+    lines.push('  const __el__ = __existing__ ?? __node__.firstElementChild;')
+  } else {
+    lines.push(`  const __node__ = ${templateVar}.content.cloneNode(true);`)
+    lines.push('  const __el__ = __node__.firstElementChild;')
+  }
   if (itemParam == null && (refreshTexts || refreshAttrs)) {
     // 構造単位のfactory instanceごとにbinding cacheを持つ。分岐を再生成した
     // とき、祖先Listのcacheを共有すると同じ値を再設定せずtemplateの初期文字列
@@ -620,7 +686,9 @@ function generateFactoryLegacy(
         ).map((l) => `  ${l}`),
       )
     } else {
+      const initialBranch = initialConditionalBranch(body, u, itemParam != null || inItemScope)
       lines.push(`  let __cond_${u.id}__ = -1;`, `  let __cond_${u.id}_handle__ = null;`)
+      if (initialBranch != null) lines.push(`  let __cond_${u.id}_initial__ = true;`)
       u.branches.forEach((branch, i) => {
         if (!branch.body) return
         lines.push(
@@ -631,6 +699,7 @@ function generateFactoryLegacy(
             branch.body,
             childScope,
             localUpdateExprs,
+            initialBranch === i,
           ).map((l) => `  ${l}`),
         )
       })
@@ -686,6 +755,10 @@ function generateFactoryLegacy(
             u,
             `__range_${u.id}__`,
             condDispatchesUpdate(u, childScope),
+            'true',
+            'null',
+            'false',
+            initialConditionalBranch(body, u, itemParam != null || inItemScope),
           ).map((l) => `  ${l}`),
         )
       }
@@ -1047,22 +1120,22 @@ function generateStructuralUnits(
   // M5.5: ネストしたユニットの <template> はcomponent instanceに1つ置いて
   // その中のfactory間で共有する(keyed Map・状態変数・factory関数は外側
   // factoryのクロージャ内 ― generateFactory参照)。
-  const emitNestedUnitTemplates = (body: StructuralUnitBodyOutput): void => {
+  const emitNestedUnitTemplates = (body: StructuralUnitBodyOutput, inItemScope: boolean): void => {
     for (const u of bodyUnits(body)) {
       if (u.kind === 'list') {
         declLines.push(`let __tpl_${u.id}__;`)
         templateSetupLines.push(
-          `  __tpl_${u.id}__ = __doc__.createElement('template'); __tpl_${u.id}__.innerHTML = ${JSON.stringify(u.body.template)};`,
+          `  __tpl_${u.id}__ = __doc__.createElement('template'); __tpl_${u.id}__.innerHTML = ${JSON.stringify(initialTemplate(u.body, true))};`,
         )
-        emitNestedUnitTemplates(u.body)
+        emitNestedUnitTemplates(u.body, true)
       } else {
         u.branches.forEach((branch, i) => {
           if (!branch.body) return
           declLines.push(`let __tpl_${u.id}_b${i}__;`)
           templateSetupLines.push(
-            `  __tpl_${u.id}_b${i}__ = __doc__.createElement('template'); __tpl_${u.id}_b${i}__.innerHTML = ${JSON.stringify(branch.body.template)};`,
+            `  __tpl_${u.id}_b${i}__ = __doc__.createElement('template'); __tpl_${u.id}_b${i}__.innerHTML = ${JSON.stringify(initialTemplate(branch.body, inItemScope))};`,
           )
-          emitNestedUnitTemplates(branch.body)
+          emitNestedUnitTemplates(branch.body, inItemScope)
         })
       }
     }
@@ -1081,9 +1154,9 @@ function generateStructuralUnits(
         '',
       )
       templateSetupLines.push(
-        `  ${tplVar} = __doc__.createElement('template'); ${tplVar}.innerHTML = ${JSON.stringify(marker.body.template)};`,
+        `  ${tplVar} = __doc__.createElement('template'); ${tplVar}.innerHTML = ${JSON.stringify(initialTemplate(marker.body, true))};`,
       )
-      emitNestedUnitTemplates(marker.body)
+      emitNestedUnitTemplates(marker.body, true)
     } else if (marker.kind === 'conditional') {
       declLines.push(`let __cond_${marker.id}__ = -1;`, `let __cond_${marker.id}_handle__ = null;`)
       marker.branches.forEach((branch, i) => {
@@ -1093,9 +1166,9 @@ function generateStructuralUnits(
         declLines.push(`let ${tplVar};`)
         declLines.push(...generateFactory(factoryName, tplVar, null, branch.body, false), '')
         templateSetupLines.push(
-          `  ${tplVar} = __doc__.createElement('template'); ${tplVar}.innerHTML = ${JSON.stringify(branch.body.template)};`,
+          `  ${tplVar} = __doc__.createElement('template'); ${tplVar}.innerHTML = ${JSON.stringify(initialTemplate(branch.body, false))};`,
         )
-        emitNestedUnitTemplates(branch.body)
+        emitNestedUnitTemplates(branch.body, false)
       })
     }
   }
@@ -1171,6 +1244,7 @@ function generateConditionalUpdate(
   mountExpr = 'true',
   effectTriggerExpr = 'null',
   effectForceExpr = 'false',
+  initialBranch: number | null = null,
 ): string[] {
   const hasLifecycle = markerHasLifecycle(marker)
   const hasConsequent = marker.branches[0]?.body != null
@@ -1187,21 +1261,37 @@ function generateConditionalUpdate(
   const branchCreateLines = marker.branches
     .map((branch, i) =>
       branch.body
-        ? `        if (__target__ === ${i}) ${handleVar} = __create_${marker.id}_b${i}__();`
+        ? `        if (__target__ === ${i}) ${handleVar} = __create_${marker.id}_b${i}__(${initialBranch === i ? `(__initial__ ? ${elExpr}?.start.nextSibling : null)` : ''});`
         : null,
     )
     .filter((l): l is string => l !== null)
+  const initialStateLine =
+    initialBranch == null
+      ? []
+      : [
+          `    const __initial__ = __cond_${marker.id}_initial__;`,
+          `    __cond_${marker.id}_initial__ = false;`,
+        ]
+  const insertLine =
+    initialBranch == null
+      ? `        if (${handleVar}) { const __range__ = ${elExpr}; const __parent__ = __range__?.end.parentNode; if (__parent__) { __parent__.insertBefore(${handleVar}.el, __range__.end); if (${mountExpr} && ${handleVar}.mount) ${handleVar}.mount(); } }`
+      : `        if (${handleVar}) { const __range__ = ${elExpr}; const __parent__ = __range__?.end.parentNode; if (__parent__) { if (${handleVar}.el.parentNode !== __parent__ || ${handleVar}.el.nextSibling !== __range__.end) __parent__.insertBefore(${handleVar}.el, __range__.end); if (${mountExpr} && ${handleVar}.mount) ${handleVar}.mount(); } }`
+  const legacyInsertLine =
+    initialBranch == null
+      ? `      if (${handleVar}) { const __range__ = ${elExpr}; const __parent__ = __range__?.end.parentNode; if (__parent__) __parent__.insertBefore(${handleVar}.el, __range__.end); }`
+      : `      if (${handleVar}) { const __range__ = ${elExpr}; const __parent__ = __range__?.end.parentNode; if (__parent__ && (${handleVar}.el.parentNode !== __parent__ || ${handleVar}.el.nextSibling !== __range__.end)) __parent__.insertBefore(${handleVar}.el, __range__.end); }`
   const lines = hasLifecycle
     ? [
         '  {',
         `    const __target__ = ${targetExpr};`,
+        ...initialStateLine,
         '    let __conditional_error__;',
         `    if (__target__ !== ${stateVar}) {`,
         `      if (${handleVar}) { const __old_handle__ = ${handleVar}; try { __old_handle__.destroy?.(); } catch (__error__) { __conditional_error__ ??= __error__; } try { __old_handle__.el.remove(); } catch (__error__) { __conditional_error__ ??= __error__; } ${handleVar} = null; }`,
         `      ${stateVar} = __target__;`,
         '      try {',
         ...branchCreateLines,
-        `        if (${handleVar}) { const __range__ = ${elExpr}; const __parent__ = __range__?.end.parentNode; if (__parent__) { __parent__.insertBefore(${handleVar}.el, __range__.end); if (${mountExpr} && ${handleVar}.mount) ${handleVar}.mount(); } }`,
+        insertLine,
         '      } catch (__error__) {',
         '        __conditional_error__ ??= __error__;',
         `        if (${handleVar}) { const __failed_handle__ = ${handleVar}; try { __failed_handle__.destroy?.(); } catch (__cleanup_error__) { __conditional_error__ ??= __cleanup_error__; } try { __failed_handle__.el.remove(); } catch (__cleanup_error__) { __conditional_error__ ??= __cleanup_error__; } ${handleVar} = null; }`,
@@ -1211,11 +1301,12 @@ function generateConditionalUpdate(
     : [
         '  {',
         `    const __target__ = ${targetExpr};`,
+        ...initialStateLine,
         `    if (__target__ !== ${stateVar}) {`,
         `      if (${handleVar}) { ${handleVar}.el.remove(); ${handleVar} = null; }`,
         `      ${stateVar} = __target__;`,
         ...branchCreateLines,
-        `      if (${handleVar}) { const __range__ = ${elExpr}; const __parent__ = __range__?.end.parentNode; if (__parent__) __parent__.insertBefore(${handleVar}.el, __range__.end); }`,
+        legacyInsertLine,
       ]
   if (dispatchUpdate) {
     lines.push(

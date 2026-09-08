@@ -224,6 +224,70 @@ R3の対象をList初期化へ限定するため、計測用compiler variantで�
 JavaScriptヒープ増分はN=1,000で924,160 bytes、item markerの`querySelector`呼出しは0回
 だった。
 
+## R3追加計測: 初期条件分岐DOMの引き取り (2026-09-08)
+
+TodoItemの`editing = signal(false)`で初回に選択されるspan枝を、リスト項目templateへ
+含めてbranch factoryが引き取る実装を追加した。条件式が項目値を読む場合、lifecycle・
+入れ子構造・SVG名前空間を含む場合は従来のbranch clone経路を使う。初回枝のイベント登録、
+編集切替、同じkeyの更新は回帰試験で確認した。
+
+旧基準は親コミット`e645893`を`/tmp/irisout-r3-old-e645893`へ展開し、現作業木へ
+変更を戻さずに実行した。両方ともChromium 152.0.7977.82、計測入力、初期focus除外、
+予熱3回、15回の中央値、N=100/1,000/10,000、ヒープ5回である。最終実装の比較では
+旧版86.6ms、実装版74.0msとなった。同条件の前回候補計測は旧版78.3ms、候補版74.7ms
+だったため、環境ばらつきを含めて記録する。実行コマンドは次のとおりで、作業木と旧展開の
+それぞれで同じ値を指定した。
+
+```sh
+IRISOUT_TODOMVC_SIZES=100,1000,10000 \
+IRISOUT_TODOMVC_REPEATS=15 \
+IRISOUT_TODOMVC_WARMUPS=3 \
+IRISOUT_TODOMVC_HEAP_SIZE=1000 \
+IRISOUT_TODOMVC_HEAP_REPEATS=5 \
+IRISOUT_TODOMVC_JSON_PATH=/tmp/irisout-r3-adoption-final2-20260908.json \
+  bun run bench:todomvc-compiler
+```
+
+### 初期化と更新
+
+生成版の初期化中央値は次のとおりである。
+
+|      N | 旧基準 | 実装版 |   差分 |
+| -----: | -----: | -----: | -----: |
+|    100 |  0.9ms |  1.0ms | +11.1% |
+|  1,000 |  8.9ms |  8.1ms |  -9.0% |
+| 10,000 | 86.6ms | 74.0ms | -14.5% |
+
+N=10,000の通常更新は`toggleOne` 3.5ms→3.4ms、`textEdit` 3.5ms→3.4ms、
+`addOne` 3.6ms→3.2ms、`removeOne` 3.4ms→3.3ms、`filter` 62.4ms→50.5msだった。
+更新値には増減があり、同一環境の一回の計測結果なので初期化以外の効果は判定しない。
+
+### 転送量とヒープ
+
+| 指標                     |   旧基準 |   実装版 |  差分 |
+| ------------------------ | -------: | -------: | ----: |
+| 生成JavaScript           |   8,293B |   8,498B | +2.5% |
+| 生成JavaScript gzip      |   2,733B |   2,807B | +2.7% |
+| 初期HTML gzip            |     532B |     532B |     0 |
+| gzip合計                 |   3,265B |   3,339B | +2.3% |
+| N=1,000 mount後ヒープ    | 926,800B | 932,556B | +0.6% |
+| N=1,000 1件更新後ヒープ  | 943,928B | 949,660B | +0.6% |
+| N=1,000 全件削除後ヒープ | 197,456B | 197,776B | +0.2% |
+| N=1,000 unmount後ヒープ  | 188,968B | 189,300B | +0.2% |
+
+mount内部の生成版は旧基準・実装版ともN=10,000でlistener 30,004件、
+`querySelector` 0回だった。機能試験は両版の生成・手書き・Reactで通過した。
+20%短縮は未達であり、この計測だけでR3完了や目標達成を宣言しない。以前の82.7msは
+今回再実行していない過去値なので、新旧比較には使わない。限定適用は正しさと初期化
+短縮の根拠があるため採用するが、20%目標達成とは扱わない。
+
+生データの絶対パスは次のとおりである。
+
+- 旧基準（最終比較）: `/tmp/irisout-r3-adoption-old-e645893-final-20260908.json`
+- 実装版（最終比較）: `/tmp/irisout-r3-adoption-final2-20260908.json`
+- 前回候補比較: `/tmp/irisout-r3-adoption-old-e645893-20260908.json`、`/tmp/irisout-r3-adoption-final-20260908.json`
+- 初期化内訳の実装版（最終コード、予熱10回・100回）: `/tmp/irisout-r3-adoption-breakdown-final2-20260908.json`
+
 ## 制約
 
 - 単一のNixOS Chromiumでの相対比較であり、絶対時間を他環境へ外挿しない。

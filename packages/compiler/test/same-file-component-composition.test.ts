@@ -29,6 +29,14 @@ async function mount(code: string): Promise<Element> {
   return container
 }
 
+async function hydrate(code: string, initialHtml: string): Promise<Element> {
+  const mod = await loadGenerated(code)
+  const container = createContainer()
+  container.innerHTML = initialHtml
+  ;(mod.hydrateComponent as (c: Element) => void)(container)
+  return container
+}
+
 describe('same-file-component-composition: ローカルsignal(リストアイテムのブロック本体)', () => {
   const TODO_SOURCE = `
 export function App() {
@@ -97,6 +105,246 @@ export function App() {
     const lis2 = container2.querySelectorAll('li')
     dispatch(container2, lis2[0]!.querySelector('span'), 'click')
     expect([...lis2].map((li) => li.className)).toEqual(['editing', ''])
+  })
+
+  it('初期条件分岐のDOMを項目テンプレートから引き取り、イベントと再切替を維持する', async () => {
+    const source = `
+export function App() {
+  const todos = signal([{ id: 1, text: 'a' }]);
+  render(
+    <div>
+      <button class="rename" onClick={() => todos([{ id: 1, text: 'b' }])}>r</button>
+      <ul>
+        {todos().map((todo) => {
+          const editing = signal(false);
+          return (
+            <li key={todo.id}>
+              {editing() ? (
+                <input class="edit-input" onBlur={() => editing(false)} />
+              ) : (
+                <span class="display" onDblClick={() => editing(true)}>{todo.text}</span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+`
+    const { code } = compile(source)
+    expect(code).toMatch(
+      /__tpl_m\d+__\.innerHTML = "<li><!--irisout:start:m\d+--><span class=\\"display\\"/,
+    )
+    expect(code).toMatch(/function __create_m\d+_b\d+__\(__existing__\)/)
+
+    const container = await mount(code)
+    const li = container.querySelector('li')!
+    expect(li.querySelector('.display')?.textContent).toBe('a')
+
+    dispatch(container, li.querySelector('.display'), 'dblclick')
+    expect(li.querySelector('.edit-input')).not.toBeNull()
+    dispatch(container, li.querySelector('.edit-input'), 'blur')
+    expect(li.querySelector('.display')?.textContent).toBe('a')
+
+    dispatch(container, container.querySelector('.rename'), 'click')
+    expect(li.querySelector('.display')?.textContent).toBe('b')
+  })
+
+  it('項目ごとに異なる初期値の条件分岐は従来のbranch生成を使う', async () => {
+    const source = `
+export function App() {
+  const todos = signal([{ id: 1 }, { id: 2 }]);
+  render(
+    <ul>
+      {todos().map((todo) => {
+        const editing = signal(todo.id === 1);
+        return (
+          <li key={todo.id}>
+            {editing() ? <input class="edit-input" /> : <span class="display">{todo.id}</span>}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+`
+    const { code } = compile(source)
+    expect(code).not.toContain('__existing__')
+    const container = await mount(code)
+    const lis = container.querySelectorAll('li')
+    expect(lis[0]!.querySelector('.edit-input')).not.toBeNull()
+    expect(lis[1]!.querySelector('.display')?.textContent).toBe('2')
+  })
+
+  it('入れ子構造またはSVGを含む初期枝は従来のbranch生成を使う', () => {
+    const nested = `
+export function App() {
+  const todos = signal([{ id: 1 }]);
+  render(<ul>{todos().map((todo) => {
+    const editing = signal(true);
+    return <li key={todo.id}>
+      {editing() ? <div>{editing() ? <span>nested</span> : <span>other</span>}</div> : <i>off</i>}
+    </li>;
+  })}</ul>);
+}
+`
+    const svg = `
+export function App() {
+  const todos = signal([{ id: 1 }]);
+  render(<ul>{todos().map((todo) => {
+    const editing = signal(true);
+    return <li key={todo.id}>
+      {editing() ? <svg><circle /></svg> : <i>off</i>}
+    </li>;
+  })}</ul>);
+}
+`
+    const svgParent = `
+export function App() {
+  const todos = signal([{ id: 1 }]);
+  render(<ul>{todos().map((todo) => {
+    const editing = signal(true);
+    return <svg key={todo.id}>{editing() ? <circle /> : <rect />}</svg>;
+  })}</ul>);
+}
+`
+    expect(compile(nested).code).not.toContain('__existing__')
+    expect(compile(svg).code).not.toContain('__existing__')
+    const svgParentCode = compile(svgParent).code
+    expect(svgParentCode).not.toContain('__existing__')
+    expect(svgParentCode).not.toContain('nextSibling !==')
+  })
+
+  it('初期真偽値の枝をmount/hydrateし、空枝から再表示しても終了アンカーを引き取らない', async () => {
+    const source = `
+export function App() {
+  const todos = signal([{ id: 1, text: 'a' }]);
+  render(<ul>{todos().map((todo) => {
+    const visible = signal(true);
+    const editing = signal(false);
+    return <li key={todo.id}>
+      <button class="hide" onClick={() => visible(false)}>hide</button>
+      <button class="show" onClick={() => visible(true)}>show</button>
+      {visible() ? <span class="visible">{todo.text}</span> : null}
+      {editing() ? <input class="editing" onBlur={() => editing(false)} /> : <button class="edit" onClick={() => editing(true)}>edit</button>}
+    </li>;
+  })}</ul>);
+}
+`
+    const { code, initialHtml } = compile(source)
+    expect(code).toMatch(/let __cond_m\d+_initial__ = true/)
+
+    const exercise = async (container: Element): Promise<void> => {
+      const li = container.querySelector('li')!
+      expect(li.querySelector('.visible')?.textContent).toBe('a')
+      expect(li.querySelector('.edit')).not.toBeNull()
+
+      dispatch(container, li.querySelector('.hide'), 'click')
+      expect(li.querySelector('.visible')).toBeNull()
+      dispatch(container, li.querySelector('.show'), 'click')
+      expect(li.querySelector('.visible')?.textContent).toBe('a')
+
+      dispatch(container, li.querySelector('.edit'), 'click')
+      expect(li.querySelector('.editing')).not.toBeNull()
+      dispatch(container, li.querySelector('.editing'), 'blur')
+      expect(li.querySelector('.editing')).toBeNull()
+      expect(li.querySelector('.edit')).not.toBeNull()
+    }
+
+    await exercise(await mount(code))
+    await exercise(await hydrate(code, initialHtml))
+  })
+
+  it('初期枝のテキストと属性にある置換特殊文字をmount/hydrateで保持する', async () => {
+    const source = [
+      'export function App() {',
+      '  const todos = signal([{ id: 1 }]);',
+      '  render(<ul>{todos().map((todo) => {',
+      '    const editing = signal(false);',
+      '    const special = signal("$& $` $\' $$");',
+      '    return <li key={todo.id}>{editing() ? <input /> : <span data-special={special()} data-static="$& $\' $$">text $& $\' $$ {special()}</span>}</li>;',
+      '  })}</ul>);',
+      '}',
+    ].join('\n')
+    const { code, initialHtml } = compile(source)
+    const expected = "$& $` $' $$"
+
+    for (const container of [await mount(code), await hydrate(code, initialHtml)]) {
+      const span = container.querySelector('span')!
+      expect(span.getAttribute('data-special')).toBe(expected)
+      expect(span.getAttribute('data-static')).toBe("$& $' $$")
+      expect(span.textContent).toBe(`text $& $' $$ ${expected}`)
+    }
+  })
+
+  it('初期枝の引き取り後も追加・並べ替え・削除でkeyed DOMを再利用する', async () => {
+    const source = `
+export function App() {
+  const todos = signal([{ id: 1, text: 'a' }, { id: 2, text: 'b' }]);
+  render(
+    <div>
+      <button class="add" onClick={add}>add</button>
+      <button class="reorder" onClick={reorder}>reorder</button>
+      <button class="remove" onClick={removeTwo}>remove</button>
+      <ul>{todos().map((todo) => {
+        const visible = signal(true);
+        const editing = signal(false);
+        return <li key={todo.id} data-id={todo.id}>
+          <button class="hide" onClick={() => visible(false)}>hide</button>
+          <button class="show" onClick={() => visible(true)}>show</button>
+          {visible() ? <span class="visible">{todo.text}</span> : null}
+          {editing() ? <input class="editing" onBlur={() => editing(false)} /> : <button class="edit" onClick={() => editing(true)}>edit</button>}
+        </li>;
+      })}</ul>
+    </div>
+  );
+  function add() { todos([...todos(), { id: 3, text: 'c' }]); }
+  function reorder() { todos([...todos()].reverse()); }
+  function removeTwo() { todos(todos().filter((todo) => todo.id !== 2)); }
+}
+`
+    const { code } = compile(source)
+    const container = await mount(code)
+    const before = new Map(
+      [...container.querySelectorAll('li')].map((li) => [li.dataset.id, li] as const),
+    )
+    dispatch(container, container.querySelector('.add'), 'click')
+    expect([...container.querySelectorAll('li')].map((li) => li.dataset.id)).toEqual([
+      '1',
+      '2',
+      '3',
+    ])
+    dispatch(container, container.querySelector('.reorder'), 'click')
+    expect([...container.querySelectorAll('li')].map((li) => li.dataset.id)).toEqual([
+      '3',
+      '2',
+      '1',
+    ])
+    expect(container.querySelector('li[data-id="1"]')).toBe(before.get('1'))
+    expect(container.querySelector('li[data-id="2"]')).toBe(before.get('2'))
+    dispatch(container, container.querySelector('.remove'), 'click')
+    expect([...container.querySelectorAll('li')].map((li) => li.dataset.id)).toEqual(['3', '1'])
+    expect(container.querySelector('li[data-id="2"]')).toBeNull()
+
+    const row = container.querySelector('li[data-id="3"]')!
+    dispatch(container, row.querySelector('.hide'), 'click')
+    expect(row.querySelector('.visible')).toBeNull()
+    dispatch(container, row.querySelector('.show'), 'click')
+    expect(row.querySelector('.visible')?.textContent).toBe('c')
+  })
+
+  it('リスト外の条件分岐は初期枝の引き取り対象外である', async () => {
+    const source = `
+export function App() {
+  const visible = signal(true);
+  render(<main>{visible() ? <p class="shown">shown</p> : <p>hidden</p>}</main>);
+}
+`
+    const { code } = compile(source)
+    expect(code).not.toContain('__existing__')
+    const container = await mount(code)
+    expect(container.querySelector('.shown')?.textContent).toBe('shown')
   })
 
   it('ネストした条件分岐が祖先のローカルsignalを読み書きできる', async () => {
