@@ -36,14 +36,21 @@ R3基準として記録された82.7msとは異なる。
 イベント契約を変えずに得た改善として採用した。100件の+0.1ms、gzip合計の+74B、
 N=1,000のmount後ヒープの+5,756Bを記録し、許容した。原因分析、再現方法、通常更新、
 転送量、ヒープ、回帰確認が揃ったためR3を完了とする。Reactは初期HTMLの扱いと初期化方式が
-異なるため、初期化時間を参考値として扱い、R3の完了条件には使わない。次はR4の作者以外に
-よる手動導入試用である。
+異なるため、初期化時間を参考値として扱い、R3の完了条件には使わない。次はR4の隔離試用で
+見つかった停止要因を扱う。
 
 R4では、compiler、runtime、Vite連携、JSX型定義を単一の`irisout` 0.1.0へまとめた。
 内部三パッケージは非公開とし、生成コードは`irisout/runtime`を参照する。
 `bun run pack:smoke`は親workspaceの外で一つのtarballを導入し、`bun install`、型検査、
 Vite build、初期HTML、生成JavaScript、workspace指定の不存在を確認する。`irisout` 0.1.0は
 2026-09-09にnpmへ公開した。作者以外による手動試用は未実施である。
+
+2026-09-09に三つのサブエージェントを使い、実装を参照しない隔離試用を行った。npm公開版の
+導入、型検査、本番ビルド、開発サーバー、初期HTML、入力、状態、派生値、イベント、条件分岐、
+キー付きリスト、ファイル分割、診断からの修正を確認した。人間によるブラウザ操作、編集時の
+再生成、ルート部品の破棄は未確認である。試用で見つかった公開版開始手順と型設定の不足を
+文書へ追加し、未対応の`try`と`for`が原因と異なる位置を示す問題を修正した。実行時例外の
+ソースマップはADR-0049で次の実装候補とした。
 
 次期方針は[開発方針](./docs/project-direction.md)、作業順序は[ROADMAP.md](./ROADMAP.md)を参照する。以下の過去の記録にあるロードマップの節番号と第1〜6段階は、[旧ロードマップ](./docs/history/roadmap-through-2026-09-07.md)の番号である。
 
@@ -325,29 +332,29 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
 
 ## マイルストーン表
 
-| M         | 内容                                                                           | 状態       | 備考                                                                                                                                                                                                                             |
-| --------- | ------------------------------------------------------------------------------ | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| M1        | スキャフォールド、signal/derived、テキストマーカー                             | **DONE**   | `0155e85`                                                                                                                                                                                                                        |
-| M2        | イベントハンドラ、書き込みトリガー更新                                         | **DONE**   | `810bc83`→`645a820`                                                                                                                                                                                                              |
-| M3        | ブラウザビルドターゲット(hydrate/mount分割 + `apps/examples/vite.config.ts`)   | **DONE**   | `a2905c8`、Vite+移行後はADR-0016のbuild経路                                                                                                                                                                                      |
-| M4        | 静的host要素属性                                                               | **DONE**   | `9829f88`、change `m4-static-host-attributes`                                                                                                                                                                                    |
-| M4.5      | authoring APIゾーン化(ADR-0008)                                                | **DONE**   | change `authoring-api-zones`。render()マーカー・識別子参照ハンドラ・ゾーン配置強制                                                                                                                                               |
-| M5        | list/conditional factory closures、1階層のみ(ADR-0005の新実装)                 | **DONE**   | change `m5-list-conditional-factory-closures`。ネストした構造ユニット(06/07)は据え置き                                                                                                                                           |
-| M5.5      | ネストした構造ユニット(条件分岐の中のリスト/リストアイテムの中の条件分岐)      | **DONE**   | change `recursive-structural-authoring`。任意の深さ、unitごとの状態/cache、祖先local signalの更新接続                                                                                                                            |
-| `use=`    | 要素へのaction接続(ADR-0011)                                                   | **DONE**   | `use-action-impl` + `structural-unit-use-actions` + ADR-0022。top-level、list item、conditional branchをfactory単位で初期化・更新・破棄。関数updateと`{ update?, destroy? }`、component `unmount()`を実装                        |
-| M6        | 全マイルストーン横断のno-wrapper検証                                           | **DONE**   | change `m6-no-wrapper-verification`。全機能同居フィクスチャで no-wrapper・import面・実DOM動作を固定(`test/no-wrapper.test.ts`)。サイズ予算係数はADR-0022のlifecycle固定費を含む5.5x(実測5.33x)。締め直しはminify最適化時に再検討 |
-| 合成      | 同一ファイル内の複数コンポーネント合成(ADR-0014/0041)                          | **DONE**   | change `same-file-component-composition` + `component-children-slot`。コンパイル時ASTインライン化、root scope + list item、直接children slotを実装。再帰は未対応                                                                 |
-| SVG       | SVG要素、名前空間属性、foreignObject(ADR-0042)                                 | **DONE**   | change `svg-authoring`。既存HTML parser・setAttribute経路、SVG intrinsic型、静的`xlink:*`/`xml:*`/`xmlns:*`を実装。動的namespace属性は対象外                                                                                     |
-| 分割      | 相対moduleの複数ファイル合成(ADR-0024)                                         | **DONE**   | `compileProject(entryPath)`、AST bindingリンク、依存順、静的import検証、Vite fixtureを実装。外部module・dynamic import・cycle・re-exportは対象外                                                                                 |
-| Batch     | 同期スコープ内の共有marker更新(ADR-0020)                                       | **DONE**   | 複数root write時だけ専用batchを生成。公開batch API・scheduler・collection構造操作は対象外。イベント配線はADR-0021でdirectを採用                                                                                                  |
-| Context   | instance単位context(ADR-0027)                                                  | **DONE**   | `createContext`/`provideContext`/`useContext`を静的置換。root・list item・conditional branchの所有単位へ接続し、未使用時の生成物は増やさない                                                                                     |
-| Heatmap 3 | 同期解析の派生値連鎖・構造unitのroot依存・条件分岐内の状態付き子部品(ADR-0033) | **DONE**   | `apps/examples/heatmap.jsx`、回帰試験を追加                                                                                                                                                                                      |
-| Heatmap 4 | 外部解析依存、CSS・辞書URL・Worker資源のVite境界(ADR-0034)                     | **DONE**   | `@libraz/suzume`、接頭辞付き本番build、未使用外部binding除外を確認                                                                                                                                                               |
-| Heatmap 5 | Worker解析、連続入力、文字確定、キーボード移動、性能測定(ADR-0035)             | **DONE**   | 300段落・24,790文字の実Chromium測定、対応範囲と完了基準を`packages/bench/heatmap.results.md`へ記録                                                                                                                               |
-| Heatmap 6 | 診断、型定義、別アプリ導入、自動検査、配布形式(ADR-0036)                       | **DONE**   | 元ファイル・行・列付き診断、`@irisout/compiler/jsx`、別workspaceアプリのbuild試験、CI、Apache-2.0を追加                                                                                                                          |
-| R1〜R4    | 次期方針の診断、ヒートマップ、初期化、外部梱包検査                             | **進行中** | R1/R2/R3とR4のtarball build検査は完了。R4は作者以外の手動試用を残す                                                                                                                                                              |
-| Shared 1  | module共有derivedの受理と依存更新(ADR-0037)                                    | **DONE**   | 共有signalの通知経路、derived依存グラフ、未使用出力の除外、読み取り専用検査を追加                                                                                                                                                |
-| Shared 2  | module共有collectionの受理とList更新(ADR-0039)                                 | **DONE**   | 共有accessor、key selector、instance購読、List key照合、未使用出力の除外を追加                                                                                                                                                   |
+| M         | 内容                                                                           | 状態     | 備考                                                                                                                                                                                                                             |
+| --------- | ------------------------------------------------------------------------------ | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M1        | スキャフォールド、signal/derived、テキストマーカー                             | **DONE** | `0155e85`                                                                                                                                                                                                                        |
+| M2        | イベントハンドラ、書き込みトリガー更新                                         | **DONE** | `810bc83`→`645a820`                                                                                                                                                                                                              |
+| M3        | ブラウザビルドターゲット(hydrate/mount分割 + `apps/examples/vite.config.ts`)   | **DONE** | `a2905c8`、Vite+移行後はADR-0016のbuild経路                                                                                                                                                                                      |
+| M4        | 静的host要素属性                                                               | **DONE** | `9829f88`、change `m4-static-host-attributes`                                                                                                                                                                                    |
+| M4.5      | authoring APIゾーン化(ADR-0008)                                                | **DONE** | change `authoring-api-zones`。render()マーカー・識別子参照ハンドラ・ゾーン配置強制                                                                                                                                               |
+| M5        | list/conditional factory closures、1階層のみ(ADR-0005の新実装)                 | **DONE** | change `m5-list-conditional-factory-closures`。ネストした構造ユニット(06/07)は据え置き                                                                                                                                           |
+| M5.5      | ネストした構造ユニット(条件分岐の中のリスト/リストアイテムの中の条件分岐)      | **DONE** | change `recursive-structural-authoring`。任意の深さ、unitごとの状態/cache、祖先local signalの更新接続                                                                                                                            |
+| `use=`    | 要素へのaction接続(ADR-0011)                                                   | **DONE** | `use-action-impl` + `structural-unit-use-actions` + ADR-0022。top-level、list item、conditional branchをfactory単位で初期化・更新・破棄。関数updateと`{ update?, destroy? }`、component `unmount()`を実装                        |
+| M6        | 全マイルストーン横断のno-wrapper検証                                           | **DONE** | change `m6-no-wrapper-verification`。全機能同居フィクスチャで no-wrapper・import面・実DOM動作を固定(`test/no-wrapper.test.ts`)。サイズ予算係数はADR-0022のlifecycle固定費を含む5.5x(実測5.33x)。締め直しはminify最適化時に再検討 |
+| 合成      | 同一ファイル内の複数コンポーネント合成(ADR-0014/0041)                          | **DONE** | change `same-file-component-composition` + `component-children-slot`。コンパイル時ASTインライン化、root scope + list item、直接children slotを実装。再帰は未対応                                                                 |
+| SVG       | SVG要素、名前空間属性、foreignObject(ADR-0042)                                 | **DONE** | change `svg-authoring`。既存HTML parser・setAttribute経路、SVG intrinsic型、静的`xlink:*`/`xml:*`/`xmlns:*`を実装。動的namespace属性は対象外                                                                                     |
+| 分割      | 相対moduleの複数ファイル合成(ADR-0024)                                         | **DONE** | `compileProject(entryPath)`、AST bindingリンク、依存順、静的import検証、Vite fixtureを実装。外部module・dynamic import・cycle・re-exportは対象外                                                                                 |
+| Batch     | 同期スコープ内の共有marker更新(ADR-0020)                                       | **DONE** | 複数root write時だけ専用batchを生成。公開batch API・scheduler・collection構造操作は対象外。イベント配線はADR-0021でdirectを採用                                                                                                  |
+| Context   | instance単位context(ADR-0027)                                                  | **DONE** | `createContext`/`provideContext`/`useContext`を静的置換。root・list item・conditional branchの所有単位へ接続し、未使用時の生成物は増やさない                                                                                     |
+| Heatmap 3 | 同期解析の派生値連鎖・構造unitのroot依存・条件分岐内の状態付き子部品(ADR-0033) | **DONE** | `apps/examples/heatmap.jsx`、回帰試験を追加                                                                                                                                                                                      |
+| Heatmap 4 | 外部解析依存、CSS・辞書URL・Worker資源のVite境界(ADR-0034)                     | **DONE** | `@libraz/suzume`、接頭辞付き本番build、未使用外部binding除外を確認                                                                                                                                                               |
+| Heatmap 5 | Worker解析、連続入力、文字確定、キーボード移動、性能測定(ADR-0035)             | **DONE** | 300段落・24,790文字の実Chromium測定、対応範囲と完了基準を`packages/bench/heatmap.results.md`へ記録                                                                                                                               |
+| Heatmap 6 | 診断、型定義、別アプリ導入、自動検査、配布形式(ADR-0036)                       | **DONE** | 元ファイル・行・列付き診断、`@irisout/compiler/jsx`、別workspaceアプリのbuild試験、CI、Apache-2.0を追加                                                                                                                          |
+| R1〜R4    | 次期方針の診断、ヒートマップ、初期化、外部梱包検査                             | **DONE** | R1/R2/R3、R4の梱包検査、npm公開版検査、サブエージェントによる隔離試用を完了。人間による試用は公開後の確認項目として残す                                                                                                          |
+| Shared 1  | module共有derivedの受理と依存更新(ADR-0037)                                    | **DONE** | 共有signalの通知経路、derived依存グラフ、未使用出力の除外、読み取り専用検査を追加                                                                                                                                                |
+| Shared 2  | module共有collectionの受理とList更新(ADR-0039)                                 | **DONE** | 共有accessor、key selector、instance購読、List key照合、未使用出力の除外を追加                                                                                                                                                   |
 
 ## 既知の制約(現時点のcodegenの限界)
 
@@ -436,8 +443,8 @@ JSX型定義は`irisout/jsx`として公開パッケージから参照できる�
 `docs/adr/0047-single-public-package.md`で確認できる。
 
 AI向けの`irisout-development` Skillは、公開入口、記述範囲、診断、検証手順とVite+アプリの
-雛形を含むAgent Pluginとして作成した。Skillとプラグインの検証は通過した。外部公開先は
-未確定である。
+雛形を含む。GitHubリポジトリを公開元とし、`npx skills`による検出と導入を確認した。
+別のエージェントプラグインとしては包装しない(ADR-0048)。
 
 - **ルートコンポーネントは1つだけ**: `compile()`は「他から一度も参照
   されないトップレベル関数」がちょうど1つであることを要求し、そうで
