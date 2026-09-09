@@ -17,6 +17,10 @@ export default defineConfig({
 
 The HTML container contains `<!--irisout-html-->`. The browser entry imports `virtual:irisout-entry`. For authored `.jsx` checking, use `allowJs`, `checkJs`, `jsx: "preserve"`, `moduleResolution: "bundler"`, and `types: ["irisout/jsx"]`.
 
+Static hosts and build-time values appear in the generated initial HTML. Lists and conditional
+branches place range comments in initial HTML and insert their contents during browser hydration.
+Do not present this client-build contract as per-request server rendering.
+
 ## Component shape
 
 - Export one unreferenced root component whose body calls `render(<JSX />)`.
@@ -59,6 +63,10 @@ export function Counter() {
 - Handler control flow such as unsupported `try/catch/finally`, loops, or switches may be rejected when update placement cannot be determined statically.
 - Request cancellation, stale-result selection, Worker protocols, persistence, routing, and external-service behavior belong to application code.
 - Server rendering per request, portals, animation systems, and component-level error recovery are not part of the current contract.
+- The generated component supports `unmount()`, but the 0.1.0 Vite virtual entry hydrates it
+  automatically and does not expose that handle to application code. Exercise action cleanup by
+  removing a conditional branch or keyed list item; do not claim that root unmount is available
+  through the standard Vite entry.
 
 ## Verification
 

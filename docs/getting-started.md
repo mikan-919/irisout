@@ -156,3 +156,69 @@ npm run dev
 
 対応機能と制約の全体は[`STATUS.md`](../STATUS.md)を参照する。不具合を報告するときは、
 元のJSX、生成物、`irisout`とブラウザの版、再現手順を残す。
+
+## 初期HTMLの範囲
+
+通常の要素と、ビルド時に評価できるテキストや属性は`dist/index.html`へ入る。一方、
+`.map()`のリストと三項演算子または`&&`の条件分岐は、開始・終了を示すコメントだけを
+初期HTMLへ入れ、ブラウザで初期化するときに内容を挿入する。
+
+```jsx
+render(
+  <main>
+    {visible() && (
+      <ul>
+        {items().map((item) => (
+          <li>{item.label}</li>
+        ))}
+      </ul>
+    )}
+  </main>,
+)
+```
+
+この例では`main`と構造範囲のコメントが初期HTMLへ入り、`ul`と`li`はブラウザで
+`hydrate`するときに作られる。`hydrate`は、初期HTMLの要素へイベントと状態更新を
+接続する処理である。irisout 0.1.0は要求ごとに全画面のHTMLを生成するサーバー描画を
+提供しないため、JavaScript実行前からリストや条件分岐の内容が必要な用途には使えない。
+
+## 破棄を確認する
+
+条件分岐やリストから要素を外したときの破棄は、`use=`が返す`destroy`で確認できる。
+
+```jsx
+export function App() {
+  const visible = signal(true)
+
+  render(
+    <main>
+      <button type="button" onClick={toggle}>
+        切り替え
+      </button>
+      {visible() && <p use={observe}>破棄対象</p>}
+    </main>,
+  )
+
+  function toggle() {
+    visible(!visible())
+  }
+
+  function observe(element) {
+    console.log('初期化', element)
+    return {
+      destroy() {
+        console.log('破棄', element)
+      },
+    }
+  }
+}
+```
+
+開発者道具のコンソールを開いて`切り替え`を押す。段落が消えるときに`破棄`が一度だけ
+表示されれば、条件分岐が所有する処理は解放されている。キー付きリストでは、項目を削除
+したときも同じ方法で確認できる。
+
+生成部品自体は`unmount()`を持つが、0.1.0の`irisout/vite`は仮想モジュールを読み込むと
+自動で`hydrate`し、その戻り値をアプリへ公開しない。このため、通常のVite+入口から
+ルート部品の`unmount()`を呼ぶ方法は公開契約に含まれない。上の確認は条件分岐または
+リストが所有する範囲の破棄を対象とし、ルート部品全体の破棄試験ではない。
