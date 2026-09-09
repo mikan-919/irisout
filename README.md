@@ -56,14 +56,11 @@ export function Counter() {
 
 ## 5分で試す
 
-別のVite+アプリへ導入する場合は、次を実行します。
+空のディレクトリへnpm公開版を導入してアプリを作る場合は、
+[`npm公開版から始める`](./docs/getting-started.md)に従ってください。必要なファイル、
+型検査、開発サーバー、本番ビルドまでを一続きで記載しています。
 
-```bash
-npm install irisout vite-plus
-```
-
-必要なものは[Git](https://git-scm.com/)と
-[Bun 1.3.13](https://bun.sh/docs/installation)です。Vite+の全体インストールは不要です。
+irisoutのソースリポジトリにある利用例を動かす場合は、次を実行します。
 
 ```bash
 git clone https://github.com/mikan-919/irisout.git
@@ -211,6 +208,7 @@ Skillを導入するコマンドです。利用可能なSkillだけを確認す�
 | ---------------------------------------------------------- | ---------------------------- |
 | [`CONCEPT.v3.md`](./CONCEPT.v3.md)                         | 目的と設計原則               |
 | [`docs/project-direction.md`](./docs/project-direction.md) | 今後の開発方針と判断の根拠   |
+| [`docs/getting-started.md`](./docs/getting-started.md)     | npm公開版による新規導入手順  |
 | [`STATUS.md`](./STATUS.md)                                 | 対応状況と制約               |
 | [`ROADMAP.md`](./ROADMAP.md)                               | 開発順序と各段階の完了条件   |
 | [`docs/architecture.md`](./docs/architecture.md)           | コンパイラの構成と処理       |

@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "build": "vp build",
-    "dev": "vp dev"
+    "dev": "vp dev",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "irisout": "workspace:*"
