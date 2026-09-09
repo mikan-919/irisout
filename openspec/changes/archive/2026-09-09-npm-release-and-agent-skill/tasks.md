@@ -7,6 +7,6 @@
 
 - [x] irisoutの公開入口、記述範囲、診断、検証を扱うSkillを作る。
 - [x] 参照資料とVite+アプリ雛形を追加する。
-- [x] 可搬プラグインとCodex互換マニフェストを追加する。
-- [x] Skillとプラグインの公式検証処理を通す。
-- [ ] 公開先を確定し、Skillプラグインを外部公開する。
+- [x] Skillを`skills/irisout-development`へ配置する。
+- [x] Skill検証と`npx skills`による検出、導入を確認する。
+- [ ] GitHubリポジトリへ反映し、skills.shへの掲載を確認する。

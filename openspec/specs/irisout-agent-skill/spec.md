@@ -3,7 +3,7 @@
 ## Purpose
 
 AIがirisout固有の公開入口、記述範囲、診断、検証方法に従ってアプリを扱うSkillと、
-その配布用Agent Pluginを規定する。
+GitHubリポジトリからの導入方法を規定する。
 
 ## Requirements
 
@@ -17,12 +17,14 @@ SkillはirisoutをReact互換として扱わず、公開パッケージ入口、
 - **WHEN** AIがirisoutアプリの作成を依頼される
 - **THEN** `irisout/vite`、`irisout/jsx`、`virtual:irisout-entry`を使い、型検査と本番構築を行う
 
-### Requirement: 配布可能なプラグイン
+### Requirement: npx skillsによる配布
 
-Skillはルート`plugin.json`を持つ可搬Agent Pluginに含め、Codex互換マニフェストからも
-発見できなければならない(SHALL)。雛形はnpm公開版だけに依存しなければならない(SHALL)。
+Skillは`skills/irisout-development/SKILL.md`に置き、`npx skills`がGitHubリポジトリから
+発見して導入できなければならない(SHALL)。雛形はnpm公開版だけに依存しなければならない
+(SHALL)。
 
-#### Scenario: Skillプラグインの検証
+#### Scenario: Skillの検出と導入
 
 - **WHEN** 配布前の検証を実行する
-- **THEN** Skillとプラグインのマニフェストが検証を通り、未完了の雛形文言を含まない
+- **THEN** `npx skills`が`irisout-development`を一覧に表示して一時ディレクトリへ導入でき、
+  Skill検証が通り、未完了の雛形文言を含まない

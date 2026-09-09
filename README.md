@@ -193,9 +193,17 @@ export default {
 
 ## AI向けSkill
 
-`plugins/irisout-development`に、AIがirisoutアプリを作成、診断、検証するための
-`irisout-development` Agent Pluginを置いています。公開入口、記述範囲、Vite+アプリの
-雛形を含みます。irisout本体とは別の配布物として公開する予定です。
+`skills/irisout-development`に、AIがirisoutアプリを作成、診断、検証するためのSkillを
+置いています。公開入口、記述範囲、Vite+アプリの雛形を含みます。GitHub上のこの
+リポジトリから次のコマンドで導入できます。
+
+```sh
+npx skills add mikan-919/irisout --skill irisout-development
+```
+
+注: `skills`はリポジトリ内の`skills/<名前>/SKILL.md`を検出し、対応するAI実行環境へ
+Skillを導入するコマンドです。利用可能なSkillだけを確認する場合は
+`npx skills add mikan-919/irisout --list`を使います。
 
 ## 資料
 
