@@ -1,0 +1,17 @@
+{
+  "name": "irisout-app",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vp build",
+    "dev": "vp dev",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "irisout": "^0.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.0",
+    "vite-plus": "0.3.0"
+  }
+}

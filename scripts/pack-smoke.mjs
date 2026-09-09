@@ -23,7 +23,8 @@ function run(command, args, cwd) {
   })
 }
 
-run('node', [path.join(repoRoot, 'scripts/build-packages.mjs')], repoRoot)
+const registryPackage = process.env.IRISOUT_PACKAGE_SPEC
+if (!registryPackage) run('node', [path.join(repoRoot, 'scripts/build-packages.mjs')], repoRoot)
 
 function pack() {
   const packageDir = path.join(repoRoot, 'packages', 'irisout')
@@ -35,7 +36,7 @@ function pack() {
   return path.resolve(output.split('\n').at(-1))
 }
 
-const tarball = pack()
+const packageSpec = registryPackage ?? `file:${pack()}`
 mkdirSync(path.join(fixtureDir, 'src'))
 const packageJson = {
   name: 'irisout-pack-smoke-consumer',
@@ -43,10 +44,10 @@ const packageJson = {
   type: 'module',
   scripts: { build: 'vp build', typecheck: 'tsc --noEmit' },
   dependencies: {
-    irisout: `file:${tarball}`,
+    irisout: packageSpec,
   },
   overrides: {
-    irisout: `file:${tarball}`,
+    irisout: packageSpec,
   },
   devDependencies: { typescript: '^5.9.0', 'vite-plus': '0.3.0' },
 }

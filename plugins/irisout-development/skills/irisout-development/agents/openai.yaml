@@ -1,0 +1,4 @@
+interface:
+  display_name: 'irisout Development'
+  short_description: 'Build and maintain apps with the irisout JSX compiler'
+  default_prompt: 'Use $irisout-development to build an irisout application from this request.'

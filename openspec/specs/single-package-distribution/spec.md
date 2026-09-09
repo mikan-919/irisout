@@ -38,3 +38,14 @@
 
 - **WHEN** 梱包検査を実行する
 - **THEN** 一つの`irisout` tarballと`vite-plus`だけを宣言した利用アプリの構築が通る
+
+### Requirement: npm公開版の導入検査
+
+npmへ公開した版は、版番号を固定して作業領域外へ導入し、型検査とVite構築を確認しなければ
+ならない(SHALL)。ローカルtarballの検査を公開版の検査として扱ってはならない(SHALL NOT)。
+
+#### Scenario: 公開した0.1.0の検査
+
+- **WHEN** npm公開版の検査を実行する
+- **THEN** `irisout@0.1.0`がnpmから導入され、`irisout/vite`と`irisout/jsx`を使うアプリの
+  型検査と本番構築が通る

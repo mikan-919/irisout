@@ -14,7 +14,7 @@ irisoutは、JSXの記述方法を保ちながら、ブラウザで動く処理�
 更新するコードへ変換します。
 
 > [!WARNING]
-> 現時点の配布形式はGitリポジトリのworkspaceと、検証用のpackage tarballです。npm等へは公開していません。
+> `irisout` 0.1.0をnpmで公開しています。試用版のため、対応範囲を確認してください。
 > 実製品へ導入する場合は、対応範囲と依存パッケージのライセンスを確認してください。
 
 ## 30秒で把握する
@@ -55,6 +55,12 @@ export function Counter() {
 など、実行時の管理が必要な機能だけが共有処理を使用します。
 
 ## 5分で試す
+
+別のVite+アプリへ導入する場合は、次を実行します。
+
+```bash
+npm install irisout vite-plus
+```
 
 必要なものは[Git](https://git-scm.com/)と
 [Bun 1.3.13](https://bun.sh/docs/installation)です。Vite+の全体インストールは不要です。
@@ -180,9 +186,16 @@ export default {
 
 開発中はworkspaceで導入します。配布入口のJavaScriptと型定義は`bun run build:packages`で
 生成し、`bun run pack:smoke`で一時ディレクトリへ梱包物を導入してVite buildを確認できます。
-公開単位は一つの`irisout`パッケージです。`0.1.0`として梱包できますが、npmへの登録と
+公開単位は一つの`irisout`パッケージです。`bun run registry:smoke`はnpmで公開した
+`irisout@0.1.0`を別ディレクトリへ導入し、型検査とVite buildを確認します。
 作者以外による手動試用は未実施です。
 梱包方針は[ADR-0047](./docs/adr/0047-single-public-package.md)に記載しています。
+
+## AI向けSkill
+
+`plugins/irisout-development`に、AIがirisoutアプリを作成、診断、検証するための
+`irisout-development` Agent Pluginを置いています。公開入口、記述範囲、Vite+アプリの
+雛形を含みます。irisout本体とは別の配布物として公開する予定です。
 
 ## 資料
 

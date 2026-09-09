@@ -1,0 +1,22 @@
+{
+  "name": "irisout-development",
+  "version": "0.1.0",
+  "description": "Agent Plugin for building applications with the irisout JSX compiler.",
+  "homepage": "https://github.com/mikan-919/irisout/tree/main/plugins/irisout-development",
+  "license": "Apache-2.0",
+  "author": "mikan-919",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mikan-919/irisout.git",
+    "directory": "plugins/irisout-development"
+  },
+  "files": [
+    "plugin.json",
+    ".codex-plugin",
+    "skills",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "allowJs": true,
+    "checkJs": true,
+    "jsx": "preserve",
+    "types": ["irisout/jsx"],
+    "skipLibCheck": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "strict": false
+  },
+  "include": ["src/**/*.jsx"]
+}

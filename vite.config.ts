@@ -23,7 +23,12 @@ export default defineConfig({
     semi: false,
   },
   lint: {
-    ignorePatterns: ['legacy/**', '**/dist/**', '**/dist-size-test/**'],
+    ignorePatterns: [
+      'legacy/**',
+      '**/dist/**',
+      '**/dist-size-test/**',
+      'plugins/**/skills/**/assets/**',
+    ],
     options: {
       typeAware: true,
       typeCheck: true,

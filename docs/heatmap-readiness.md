@@ -185,6 +185,6 @@ Worker連携、要求競合、文字確定、日本語入力、段落移動、�
 へ`bun run check`、`bun run test`、`bun run build`を登録した。
 
 開発中の配布形式はGit/workspaceで、compiler、runtime、Vite連携は単一の`irisout` 0.1.0
-tarballにまとめる。`bun run pack:smoke`でworkspace外の導入とVite buildを確認するが、npmへの公開と手動試用は
-行っていない。コードのライセンスをApache License 2.0とし、ルートの`LICENSE`、root/packageの
+tarballにまとめる。`bun run pack:smoke`でworkspace外の導入とVite buildを確認し、
+`irisout` 0.1.0をnpmへ公開した。手動試用は行っていない。コードのライセンスをApache License 2.0とし、ルートの`LICENSE`、root/packageの
 `license`欄、READMEへ記載した。生成コードのソースマップは後続の検討とした。

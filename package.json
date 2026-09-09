@@ -39,6 +39,7 @@
     "bench:listener-strategy": "vp run @irisout/bench#bench:listener-strategy",
     "build:packages": "node scripts/build-packages.mjs",
     "pack:smoke": "node scripts/pack-smoke.mjs",
+    "registry:smoke": "IRISOUT_PACKAGE_SPEC=0.1.0 node scripts/pack-smoke.mjs",
     "prepare": "node scripts/build-packages.mjs && husky"
   },
   "devDependencies": {

@@ -42,8 +42,8 @@ N=1,000のmount後ヒープの+5,756Bを記録し、許容した。原因分析�
 R4では、compiler、runtime、Vite連携、JSX型定義を単一の`irisout` 0.1.0へまとめた。
 内部三パッケージは非公開とし、生成コードは`irisout/runtime`を参照する。
 `bun run pack:smoke`は親workspaceの外で一つのtarballを導入し、`bun install`、型検査、
-Vite build、初期HTML、生成JavaScript、workspace指定の不存在を確認する。npmへの登録と
-作者以外による手動試用は未実施である。
+Vite build、初期HTML、生成JavaScript、workspace指定の不存在を確認する。`irisout` 0.1.0は
+2026-09-09にnpmへ公開した。作者以外による手動試用は未実施である。
 
 次期方針は[開発方針](./docs/project-direction.md)、作業順序は[ROADMAP.md](./ROADMAP.md)を参照する。以下の過去の記録にあるロードマップの節番号と第1〜6段階は、[旧ロードマップ](./docs/history/roadmap-through-2026-09-07.md)の番号である。
 
@@ -429,11 +429,15 @@ JSX型定義は`irisout/jsx`として公開パッケージから参照できる�
 `bun run test`には別ディレクトリのVite build試験が含まれる。GitHub Actionsの`.github/workflows/ci.yml`
 では`bun install --frozen-lockfile`、`bun run check`、`bun run test`、`bun run build`を実行する。
 
-開発中の導入形式はGitリポジトリ内のworkspaceである。単一の`irisout` 0.1.0 tarballを
-作れるが、npmへの公開は行わない。コードのライセンスはApache License 2.0で、
+開発中の導入形式はGitリポジトリ内のworkspaceである。単一の`irisout` 0.1.0をnpmへ
+公開し、公開版の導入、型検査、Vite buildを確認した。コードのライセンスはApache License 2.0で、
 ルートの`LICENSE`と公開packageの`license`欄に記載する。外部解析依存のライセンスは
 依存元の記載に従う。導入手順は`examples/consumer-app/README.md`、梱包検査は
 `docs/adr/0047-single-public-package.md`で確認できる。
+
+AI向けの`irisout-development` Skillは、公開入口、記述範囲、診断、検証手順とVite+アプリの
+雛形を含むAgent Pluginとして作成した。Skillとプラグインの検証は通過した。外部公開先は
+未確定である。
 
 - **ルートコンポーネントは1つだけ**: `compile()`は「他から一度も参照
   されないトップレベル関数」がちょうど1つであることを要求し、そうで
