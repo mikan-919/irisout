@@ -48,6 +48,8 @@
 ## 検証
 
 - `packages/compiler/test/diagnostics.test.ts`でparser失敗と相対module解決失敗のファイル・行・列を確認した。
+- 2026-09-09の隔離試用で、未対応の`try`と`for`が`render()`付近の代替位置を示す問題を
+  確認した。拒否した文の構文木位置を診断へ渡し、文の先頭を示す回帰試験を追加した。
 - `packages/compiler/test/consumer-app.test.ts`で別ディレクトリからVite buildを実行し、初期HTMLと生成JavaScriptを確認した。
 - `bun run check`でroot、examples、consumer exampleの型検査を実行した。
 - `bun run test`と`bun run build`を実行した。

@@ -99,7 +99,12 @@ signal への書き込みより後ろに現れる `return` を、`compile:` で�
 #### Scenario: ループを含む本体の拒否
 - **WHEN** ハンドラ本体が `for` / `while` などのループ文を含む
 - **THEN** コンパイラは `compile:` で始まり `(scope limit)` を末尾に含む
-  エラーを投げる
+  エラーを投げ、ファイル、行、列は拒否したループ文の先頭を示す
+
+#### Scenario: try文を含む本体の拒否
+- **WHEN** ハンドラ本体が `try` / `catch` を含む
+- **THEN** コンパイラは `compile:` で始まり `(scope limit)` を末尾に含む
+  エラーを投げ、ファイル、行、列は拒否した`try`文の先頭を示す
 
 #### Scenario: var 宣言の拒否
 - **WHEN** ハンドラ本体が `var x = 1` を含む

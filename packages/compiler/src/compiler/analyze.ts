@@ -874,6 +874,14 @@ function eachBranchStatement(branch: NodePath<t.Statement>): NodePath<t.Statemen
   return branch.isBlockStatement() ? (branch.get('body') as NodePath<t.Statement>[]) : [branch]
 }
 
+function compileErrorAtStatement(message: string, stmt: NodePath<t.Statement>): Error {
+  const error = new Error(message)
+  if (stmt.node.loc) {
+    Object.defineProperty(error, 'loc', { value: stmt.node.loc, configurable: true })
+  }
+  return error
+}
+
 // ADR-0009 D2/質問2: 4文種(式文 / const・let / if / 裸の return)以外・
 // var・値を返す return を compile error で拒否する。if の枝は再帰検証する。
 // allowValueReturn: ADR-0011 design D4-1。action本体にネストした関数式/arrow
@@ -889,22 +897,27 @@ function validateHandlerStatement(
   if (stmt.isExpressionStatement()) return
   if (stmt.isVariableDeclaration()) {
     if (stmt.node.kind === 'var') {
-      throw new Error(
+      throw compileErrorAtStatement(
         'compile: `var` declarations are not supported in handler bodies, use `const`/`let` (scope limit)',
+        stmt,
       )
     }
     return
   }
   if (stmt.isReturnStatement()) {
     if (stmt.node.argument != null && !allowValueReturn) {
-      throw new Error('compile: a handler `return` must not return a value (scope limit)')
+      throw compileErrorAtStatement(
+        'compile: a handler `return` must not return a value (scope limit)',
+        stmt,
+      )
     }
     return
   }
   if (stmt.isThrowStatement()) {
     if (!allowThrow) {
-      throw new Error(
+      throw compileErrorAtStatement(
         `compile: handler statement "${stmt.node.type}" is not supported yet (scope limit)`,
+        stmt,
       )
     }
     return
@@ -921,8 +934,9 @@ function validateHandlerStatement(
     }
     return
   }
-  throw new Error(
+  throw compileErrorAtStatement(
     `compile: handler statement "${stmt.node.type}" is not supported yet (scope limit)`,
+    stmt,
   )
 }
 

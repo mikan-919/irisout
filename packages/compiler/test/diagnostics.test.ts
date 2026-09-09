@@ -86,4 +86,31 @@ export function App() {
     expect(diagnostic.column).toBeGreaterThan(4)
     expect(diagnostic.message).toContain('host element attributes')
   })
+
+  it.each([
+    ['TryStatement', '    try {\n      count(count() + 1)\n    } catch {}'],
+    ['ForStatement', '    for (let index = 0; index < 1; index++) {\n      count(index)\n    }'],
+  ])('points unsupported %s handler syntax to the rejected statement', (statement, body) => {
+    const source = `export function App() {
+  const count = signal(0)
+  render(<button onClick={update}>{count()}</button>)
+  function update() {
+${body}
+  }
+}`
+
+    let caught: unknown
+    try {
+      compile(source)
+    } catch (error) {
+      caught = error
+    }
+
+    expect(caught).toBeInstanceOf(CompileDiagnostic)
+    const diagnostic = caught as CompileDiagnostic
+    expect(diagnostic.filePath).toBe('<source>')
+    expect(diagnostic.line).toBe(5)
+    expect(diagnostic.column).toBe(5)
+    expect(diagnostic.message).toContain(`handler statement "${statement}"`)
+  })
 })
