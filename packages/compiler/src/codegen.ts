@@ -1490,7 +1490,7 @@ export function generateModule({
     runtimeImports.push('sharedCollection as __sharedCollection__')
   }
   if (externalImports.length > 0) moduleLines.push(...externalImports, '')
-  moduleLines.push(`import { ${runtimeImports.join(', ')} } from '@irisout/runtime';`, '')
+  moduleLines.push(`import { ${runtimeImports.join(', ')} } from 'irisout/runtime';`, '')
   if (supportStatements.length > 0) moduleLines.push(...supportStatements, '')
   if (sharedStatements.length > 0) moduleLines.push(...sharedStatements, '')
   if (sharedDerivedStatements.length > 0) moduleLines.push(...sharedDerivedStatements, '')

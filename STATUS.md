@@ -39,10 +39,11 @@ N=1,000のmount後ヒープの+5,756Bを記録し、許容した。原因分析�
 異なるため、初期化時間を参考値として扱い、R3の完了条件には使わない。次はR4の作者以外に
 よる手動導入試用である。
 
-R4では、compiler、runtime、Vite連携を`0.1.0`の梱包対象とし、JavaScriptと型定義を
-生成する`bun run build:packages`を追加した。`bun run pack:smoke`は親workspaceの外で
-tarballを導入し、`bun install`、Vite build、初期HTML、生成JavaScript、workspace指定の
-不存在を確認する。npm等への登録と作者以外による手動試用は未実施である。
+R4では、compiler、runtime、Vite連携、JSX型定義を単一の`irisout` 0.1.0へまとめた。
+内部三パッケージは非公開とし、生成コードは`irisout/runtime`を参照する。
+`bun run pack:smoke`は親workspaceの外で一つのtarballを導入し、`bun install`、型検査、
+Vite build、初期HTML、生成JavaScript、workspace指定の不存在を確認する。npmへの登録と
+作者以外による手動試用は未実施である。
 
 次期方針は[開発方針](./docs/project-direction.md)、作業順序は[ROADMAP.md](./ROADMAP.md)を参照する。以下の過去の記録にあるロードマップの節番号と第1〜6段階は、[旧ロードマップ](./docs/history/roadmap-through-2026-09-07.md)の番号である。
 
@@ -420,19 +421,19 @@ state所有とhydrate引き継ぎを別のADRとOpenSpecで定める。
 ## 現在地(2026-09-06・利用者向け開発環境)
 
 コンパイル時の失敗を`CompileDiagnostic`へまとめ、入口または対象moduleのファイル名、行、列を
-エラーメッセージへ付ける。公開入口は`@irisout/compiler/diagnostics`であり、Vite連携の失敗も
+エラーメッセージへ付ける。公開入口は`irisout/diagnostics`であり、Vite連携の失敗も
 同じ形式を使う。生成コードから元コードへ戻るソースマップは未実装である。
 
-JSX型定義は`@irisout/compiler/jsx`としてcompiler packageから参照できる。`apps/examples`と
+JSX型定義は`irisout/jsx`として公開パッケージから参照できる。`apps/examples`と
 `examples/consumer-app`の`tsconfig.json`がこの入口を使う。`bun run check`には両方の型検査が含まれ、
 `bun run test`には別ディレクトリのVite build試験が含まれる。GitHub Actionsの`.github/workflows/ci.yml`
 では`bun install --frozen-lockfile`、`bun run check`、`bun run test`、`bun run build`を実行する。
 
-開発中の導入形式はGitリポジトリ内のworkspaceである。三つの配布対象packageは`0.1.0`の
-tarballを作れるが、npm等への公開は行わない。コードのライセンスはApache License 2.0で、
-ルートの`LICENSE`と各配布対象packageの`license`欄に記載する。外部解析依存のライセンスは
+開発中の導入形式はGitリポジトリ内のworkspaceである。単一の`irisout` 0.1.0 tarballを
+作れるが、npmへの公開は行わない。コードのライセンスはApache License 2.0で、
+ルートの`LICENSE`と公開packageの`license`欄に記載する。外部解析依存のライセンスは
 依存元の記載に従う。導入手順は`examples/consumer-app/README.md`、梱包検査は
-`docs/adr/0043-package-bundles-and-pack-smoke.md`で確認できる。
+`docs/adr/0047-single-public-package.md`で確認できる。
 
 - **ルートコンポーネントは1つだけ**: `compile()`は「他から一度も参照
   されないトップレベル関数」がちょうど1つであることを要求し、そうで

@@ -1,7 +1,7 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
 exports[`golden: 生成コードの構造スナップショット > ADR-0009 ブロック本体ハンドラの code を固定する 1`] = `
-"import { mount as __mount__, hydrate as __hydrate__ } from '@irisout/runtime';
+"import { mount as __mount__, hydrate as __hydrate__ } from 'irisout/runtime';
 
 export function createComponent() {
   let count = 0;
@@ -68,7 +68,7 @@ export function hydrateComponent(container) {
 `;
 
 exports[`golden: 生成コードの構造スナップショット > M1 フィクスチャの code と initialHtml を固定する 1`] = `
-"import { mount as __mount__, hydrate as __hydrate__ } from '@irisout/runtime';
+"import { mount as __mount__, hydrate as __hydrate__ } from 'irisout/runtime';
 
 export function createComponent() {
   let count = 0;
@@ -132,7 +132,7 @@ export function hydrateComponent(container) {
 exports[`golden: 生成コードの構造スナップショット > M1 フィクスチャの code と initialHtml を固定する 2`] = `"<div data-iris-id="m0">0</div>"`;
 
 exports[`golden: 生成コードの構造スナップショット > M2 フィクスチャの code を固定する 1`] = `
-"import { mount as __mount__, hydrate as __hydrate__ } from '@irisout/runtime';
+"import { mount as __mount__, hydrate as __hydrate__ } from 'irisout/runtime';
 
 export function createComponent() {
   let count = 0;

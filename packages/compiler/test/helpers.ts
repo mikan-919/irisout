@@ -18,6 +18,6 @@ export async function loadGenerated(code: string): Promise<Record<string, unknow
     path.resolve(import.meta.dirname, '../../runtime/src/index.ts'),
   )
   const file = path.join(tmpdir(), `irisout-${Date.now()}-${Math.random()}.mjs`)
-  writeFileSync(file, code.replace("'@irisout/runtime'", runtimePath))
+  writeFileSync(file, code.replace("'irisout/runtime'", runtimePath))
   return import(file)
 }

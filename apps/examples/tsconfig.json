@@ -20,9 +20,9 @@
     "jsx": "preserve",
     // node_modules/@types配下(@types/reactなど)を自動包含させない ―
     // 既定だと@types/reactの`declare global JSX`が本プロジェクト独自の
-    // @irisout/compiler/jsxの`JSX`namespaceを踏み上書きする可能性がある(実際に
+    // irisout/jsxの`JSX`namespaceを踏み上書きする可能性がある(実際に
     // DetailedHTMLProps等React型のエラーが出て発覚した)。
-    "types": ["@irisout/compiler/jsx"],
+    "types": ["irisout/jsx"],
     "skipLibCheck": true,
     "noEmit": true,
     "isolatedModules": true,

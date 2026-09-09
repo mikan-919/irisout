@@ -12,7 +12,6 @@ import os from 'node:os'
 import path from 'node:path'
 
 const repoRoot = path.resolve(import.meta.dirname, '..')
-const packageDirs = ['runtime', 'compiler', 'vite-plugin']
 const packDir = mkdtempSync(path.join(os.tmpdir(), 'irisout-pack-'))
 const fixtureDir = mkdtempSync(path.join(os.tmpdir(), 'irisout-consumer-'))
 
@@ -26,8 +25,8 @@ function run(command, args, cwd) {
 
 run('node', [path.join(repoRoot, 'scripts/build-packages.mjs')], repoRoot)
 
-function pack(name) {
-  const packageDir = path.join(repoRoot, 'packages', name)
+function pack() {
+  const packageDir = path.join(repoRoot, 'packages', 'irisout')
   const output = execFileSync('bun', ['pm', 'pack', '--destination', packDir, '--quiet'], {
     cwd: packageDir,
     env: process.env,
@@ -36,24 +35,20 @@ function pack(name) {
   return path.resolve(output.split('\n').at(-1))
 }
 
-const tarballs = Object.fromEntries(packageDirs.map((name) => [name, pack(name)]))
+const tarball = pack()
 mkdirSync(path.join(fixtureDir, 'src'))
 const packageJson = {
   name: 'irisout-pack-smoke-consumer',
   private: true,
   type: 'module',
-  scripts: { build: 'vp build' },
+  scripts: { build: 'vp build', typecheck: 'tsc --noEmit' },
   dependencies: {
-    '@irisout/compiler': `file:${tarballs.compiler}`,
-    '@irisout/runtime': `file:${tarballs.runtime}`,
-    '@irisout/vite-plugin': `file:${tarballs['vite-plugin']}`,
+    irisout: `file:${tarball}`,
   },
   overrides: {
-    '@irisout/compiler': `file:${tarballs.compiler}`,
-    '@irisout/runtime': `file:${tarballs.runtime}`,
-    '@irisout/vite-plugin': `file:${tarballs['vite-plugin']}`,
+    irisout: `file:${tarball}`,
   },
-  devDependencies: { 'vite-plus': '0.3.0' },
+  devDependencies: { typescript: '^5.9.0', 'vite-plus': '0.3.0' },
 }
 writeFileSync(path.join(fixtureDir, 'package.json'), `${JSON.stringify(packageJson, null, 2)}\n`)
 writeFileSync(
@@ -76,7 +71,7 @@ writeFileSync(
         allowJs: true,
         checkJs: true,
         jsx: 'preserve',
-        types: ['@irisout/compiler/jsx'],
+        types: ['irisout/jsx'],
         noEmit: true,
         skipLibCheck: true,
       },
@@ -88,11 +83,15 @@ writeFileSync(
 )
 writeFileSync(
   path.join(fixtureDir, 'vite.config.ts'),
-  `import { defineConfig } from 'vite-plus';\nimport { irisout } from '@irisout/vite-plugin';\nexport default defineConfig({ plugins: [irisout({ entry: 'src/App.jsx' })] });\n`,
+  `import { defineConfig } from 'vite-plus';\nimport { irisout } from 'irisout/vite';\nexport default defineConfig({ plugins: [irisout({ entry: 'src/App.jsx' })] });\n`,
 )
 
 try {
   run('bun', ['install', '--no-progress'], fixtureDir)
+  if (!existsSync(path.join(fixtureDir, 'node_modules/irisout/dist/LICENSE'))) {
+    throw new Error('pack smoke: license missing')
+  }
+  run('bun', ['run', 'typecheck'], fixtureDir)
   run('bun', ['run', 'build'], fixtureDir)
   const dist = path.join(fixtureDir, 'dist')
   if (!existsSync(path.join(dist, 'index.html'))) throw new Error('pack smoke: index.html missing')

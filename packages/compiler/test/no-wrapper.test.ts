@@ -78,7 +78,7 @@ describe('M6: cross-milestone no-wrapper verification (ADR-0006)', () => {
     const { code } = compile(ALL_FEATURES_SOURCE)
     const imports = code.match(/^import .*$/gm) ?? []
     expect(imports).toEqual([
-      "import { mountWithRanges as __mount__, hydrateWithRanges as __hydrate__, normalizeUseActionResult as __normalizeUseActionResult__, createListRuntime as __createListRuntime__, reconcileList as __reconcileList__, updateListBinding as __updateListBinding__ } from '@irisout/runtime';",
+      "import { mountWithRanges as __mount__, hydrateWithRanges as __hydrate__, normalizeUseActionResult as __normalizeUseActionResult__, createListRuntime as __createListRuntime__, reconcileList as __reconcileList__, updateListBinding as __updateListBinding__ } from 'irisout/runtime';",
     ])
 
     const withoutList = compile(`
@@ -88,7 +88,7 @@ describe('M6: cross-milestone no-wrapper verification (ADR-0006)', () => {
       }
     `).code
     expect(withoutList.match(/^import .*$/gm)).toEqual([
-      "import { mount as __mount__, hydrate as __hydrate__ } from '@irisout/runtime';",
+      "import { mount as __mount__, hydrate as __hydrate__ } from 'irisout/runtime';",
     ])
 
     const withoutAction = compile(`

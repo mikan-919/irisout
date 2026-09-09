@@ -54,7 +54,7 @@ function heatmapExecutableCode(): string {
   return `${stubs}
 ${code
   .split('\n')
-  .filter((line) => !line.startsWith('import ') || line.includes("'@irisout/runtime'"))
+  .filter((line) => !line.startsWith('import ') || line.includes("'irisout/runtime'"))
   .join('\n')}`
 }
 

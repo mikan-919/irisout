@@ -1,6 +1,6 @@
 // authored JSXを再利用可能なirisout Vite連携へ渡すexamples設定。
 import { defineConfig } from 'vite-plus'
-import { irisout } from '@irisout/vite-plugin'
+import { irisout } from 'irisout/vite'
 
 export default defineConfig(() => {
   return {

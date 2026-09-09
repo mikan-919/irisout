@@ -168,7 +168,7 @@ bun run pack:smoke
 workspaceでの導入例は[`examples/consumer-app/`](./examples/consumer-app/)です。
 
 ```ts
-import { irisout } from '@irisout/vite-plugin'
+import { irisout } from 'irisout/vite'
 
 export default {
   plugins: [irisout({ entry: 'src/App.jsx', container: '#app' })],
@@ -180,8 +180,9 @@ export default {
 
 開発中はworkspaceで導入します。配布入口のJavaScriptと型定義は`bun run build:packages`で
 生成し、`bun run pack:smoke`で一時ディレクトリへ梱包物を導入してVite buildを確認できます。
-packageは`0.1.0`として梱包できますが、npm等への登録と作者以外による手動試用は未実施です。
-梱包方針は[ADR-0043](./docs/adr/0043-package-bundles-and-pack-smoke.md)に記載しています。
+公開単位は一つの`irisout`パッケージです。`0.1.0`として梱包できますが、npmへの登録と
+作者以外による手動試用は未実施です。
+梱包方針は[ADR-0047](./docs/adr/0047-single-public-package.md)に記載しています。
 
 ## 資料
 

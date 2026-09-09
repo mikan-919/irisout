@@ -1,0 +1,36 @@
+{
+  "name": "irisout",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./vite": {
+      "types": "./dist/vite.d.ts",
+      "import": "./dist/vite.js"
+    },
+    "./runtime": {
+      "types": "./dist/runtime.d.ts",
+      "import": "./dist/runtime.js"
+    },
+    "./diagnostics": {
+      "types": "./dist/diagnostics.d.ts",
+      "import": "./dist/diagnostics.js"
+    },
+    "./state": {
+      "types": "./dist/compiler/state.d.ts",
+      "import": "./dist/state.js"
+    },
+    "./jsx": "./dist/jsx.d.ts"
+  },
+  "peerDependencies": {
+    "vite-plus": ">=0.3.0"
+  }
+}
