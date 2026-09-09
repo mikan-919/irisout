@@ -62,6 +62,14 @@ async function flushAsync(): Promise<void> {
   for (let index = 0; index < 8; index += 1) await Promise.resolve()
 }
 
+async function waitFor(condition: () => boolean): Promise<void> {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    if (condition()) return
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  }
+  throw new Error('condition was not met before timeout')
+}
+
 function click(container: Element, selector: string): void {
   const element = container.querySelector(selector) as HTMLElement | null
   if (!element) throw new Error(`element not found: ${selector}`)
@@ -130,7 +138,6 @@ describe('apps/examples/heatmap.jsx', () => {
       const instance = (mod.mountComponent as (container: Element) => { unmount(): void })(
         container,
       )
-      await flushAsync()
 
       type WorkerStub = {
         messages: { type: string; requestId?: number; source?: string }[]
@@ -141,6 +148,7 @@ describe('apps/examples/heatmap.jsx', () => {
       const worker = (globalThis as typeof globalThis & { __irisoutHeatmapWorkers: WorkerStub[] })
         .__irisoutHeatmapWorkers[0]
       if (!worker) throw new Error('heatmap worker stub was not created')
+      await waitFor(() => worker.messages.length > 0)
       expect(worker.messages[0]).toMatchObject({ type: 'initialize', terms: ['情報量'] })
 
       worker.emit({ type: 'ready' })
@@ -227,7 +235,6 @@ describe('apps/examples/heatmap.jsx', () => {
     expect(second.querySelector('#paragraph-2')?.className).toContain('selected')
     expect(first.querySelector('#paragraph-1')?.className).toContain('selected')
 
-    await flushAsync()
     const workers = (
       globalThis as typeof globalThis & {
         __irisoutHeatmapWorkers: {
@@ -237,6 +244,7 @@ describe('apps/examples/heatmap.jsx', () => {
       }
     ).__irisoutHeatmapWorkers
     expect(workers).toHaveLength(2)
+    await waitFor(() => workers.every((worker) => worker.messages.length > 0))
     workers.forEach((worker) => worker.emit({ type: 'ready' }))
     const firstTextarea = first.querySelector('textarea') as HTMLTextAreaElement
     firstTextarea.value = 'first instance'
