@@ -21,3 +21,5 @@ import { irisout } from 'irisout/vite'
 ```
 
 コンパイラは`irisout`、診断型は`irisout/diagnostics`から参照できます。
+
+版ごとの差分は[`CHANGELOG.md`](./CHANGELOG.md)を参照してください。

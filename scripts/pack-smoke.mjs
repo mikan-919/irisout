@@ -10,6 +10,7 @@ import {
 } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { TraceMap, originalPositionFor } from '@jridgewell/trace-mapping'
 
 const repoRoot = path.resolve(import.meta.dirname, '..')
 const packDir = mkdtempSync(path.join(os.tmpdir(), 'irisout-pack-'))
@@ -33,7 +34,20 @@ function pack() {
     env: process.env,
     encoding: 'utf8',
   }).trim()
-  return path.resolve(output.split('\n').at(-1))
+  const tarball = path.resolve(output.split('\n').at(-1))
+  const files = execFileSync('tar', ['-tzf', tarball], { encoding: 'utf8' }).trim().split('\n')
+  for (const expected of [
+    'package/package.json',
+    'package/README.md',
+    'package/CHANGELOG.md',
+    'package/dist/LICENSE',
+    'package/dist/index.js',
+    'package/dist/vite.js',
+    'package/dist/jsx.d.ts',
+  ]) {
+    if (!files.includes(expected)) throw new Error(`pack smoke: ${expected} missing from tarball`)
+  }
+  return tarball
 }
 
 const packageSpec = registryPackage ?? `file:${pack()}`
@@ -58,7 +72,7 @@ writeFileSync(
 )
 writeFileSync(
   path.join(fixtureDir, 'src/App.jsx'),
-  `export function App() {\n  const count = signal(0);\n  render(<button onClick={() => count(count() + 1)}>{count()}</button>);\n}\n`,
+  `export function App() {\n  const count = signal(0);\n  render(<button onClick={increment}>{count()}</button>);\n  function increment() {\n    console.log('irisout-pack-source-map');\n    count(count() + 1);\n  }\n}\n`,
 )
 writeFileSync(path.join(fixtureDir, 'src/main.js'), "import 'virtual:irisout-entry'\n")
 writeFileSync(
@@ -84,7 +98,7 @@ writeFileSync(
 )
 writeFileSync(
   path.join(fixtureDir, 'vite.config.ts'),
-  `import { defineConfig } from 'vite-plus';\nimport { irisout } from 'irisout/vite';\nexport default defineConfig({ plugins: [irisout({ entry: 'src/App.jsx' })] });\n`,
+  `import { defineConfig } from 'vite-plus';\nimport { irisout } from 'irisout/vite';\nexport default defineConfig({ plugins: [irisout({ entry: 'src/App.jsx' })], build: { sourcemap: true, minify: false } });\n`,
 )
 
 try {
@@ -106,6 +120,33 @@ try {
   }
   const lockfile = readFileSync(path.join(fixtureDir, 'bun.lock'), 'utf8')
   if (lockfile.includes('workspace:')) throw new Error('pack smoke: workspace dependency leaked')
+  const packageVersion = JSON.parse(
+    readFileSync(path.join(fixtureDir, 'node_modules/irisout/package.json'), 'utf8'),
+  ).version
+  if (!registryPackage && packageVersion !== '0.1.1') {
+    throw new Error(`pack smoke: expected irisout 0.1.1, received ${packageVersion}`)
+  }
+  const assetNames = readdirSync(path.join(dist, 'assets'))
+  const jsName = assetNames.find((name) => name.endsWith('.js'))
+  const mapName = assetNames.find((name) => name.endsWith('.js.map'))
+  if (!jsName || !mapName) throw new Error('pack smoke: production source map missing')
+  const code = readFileSync(path.join(dist, 'assets', jsName), 'utf8')
+  const needle = 'irisout-pack-source-map'
+  const offset = code.indexOf(needle)
+  if (offset < 0) throw new Error('pack smoke: mapped handler statement missing')
+  const before = code.slice(0, offset)
+  const original = originalPositionFor(
+    new TraceMap(JSON.parse(readFileSync(path.join(dist, 'assets', mapName), 'utf8'))),
+    {
+      line: before.split('\n').length,
+      column: offset - before.lastIndexOf('\n') - 1,
+    },
+  )
+  if (!original.source?.endsWith('src/App.jsx') || original.line !== 5) {
+    throw new Error(
+      `pack smoke: expected handler source src/App.jsx:5, received ${original.source}:${original.line}`,
+    )
+  }
   console.log(`pack smoke passed: ${fixtureDir}`)
 } finally {
   if (process.env.IRISOUT_PACK_SMOKE_KEEP !== '1') {

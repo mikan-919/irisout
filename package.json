@@ -43,6 +43,7 @@
     "prepare": "node scripts/build-packages.mjs && husky"
   },
   "devDependencies": {
+    "@jridgewell/trace-mapping": "^0.3.31",
     "@types/node": "^24.0.0",
     "husky": "^9.1.7",
     "typescript": "^5.9.0",

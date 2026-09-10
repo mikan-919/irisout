@@ -5,6 +5,7 @@
     "": {
       "name": "irisout-workspace",
       "devDependencies": {
+        "@jridgewell/trace-mapping": "^0.3.31",
         "@types/node": "^24.0.0",
         "husky": "^9.1.7",
         "typescript": "^5.9.0",
@@ -86,7 +87,7 @@
     },
     "packages/irisout": {
       "name": "irisout",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "peerDependencies": {
         "vite-plus": ">=0.3.0",
       },
