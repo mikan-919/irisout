@@ -16,7 +16,7 @@ bun --cwd examples/consumer-app run dev
 `irisout/jsx`を`tsconfig.json`の`types`へ指定します。
 
 workspaceを使わない検査には二種類ある。`bun run pack:smoke`は一時ディレクトリへ
-ローカル梱包物を導入し、`bun run registry:smoke`はnpm公開版`irisout@0.1.0`を導入する。
+ローカル梱包物を導入し、`bun run registry:smoke`はnpm公開版`irisout@0.1.1`を導入する。
 どちらも型検査、本番ビルド、生成HTMLとJavaScriptを確認する。
 
 ## R4手動試用

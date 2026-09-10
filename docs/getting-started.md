@@ -1,6 +1,6 @@
 # npm公開版から始める
 
-この手順は、空のディレクトリへ`irisout` 0.1.0を導入し、JSXの型検査、開発サーバー、
+この手順は、空のディレクトリへ`irisout` 0.1.1を導入し、JSXの型検査、開発サーバー、
 本番ビルドを確認するまでを扱う。irisoutのソースリポジトリやworkspaceは使用しない。
 
 必要なものはNode.js、npm、Gitである。Bunを使う場合は、以下の`npm`を`bun`、
@@ -12,7 +12,7 @@
 mkdir irisout-app
 cd irisout-app
 npm init -y
-npm install irisout@0.1.0 vite-plus@0.3.0
+npm install irisout@0.1.1 vite-plus@0.3.0
 npm install --save-dev typescript@5.9
 ```
 
@@ -30,7 +30,7 @@ npm install --save-dev typescript@5.9
 ```
 
 注: `vite-plus`は開発サーバー、JSX変換、本番ビルドを行う開発道具である。
-0.1.0で確認済みの組み合わせは`vite-plus` 0.3.0とTypeScript 5.9である。
+0.1.1で確認済みの組み合わせは`vite-plus` 0.3.0とTypeScript 5.9である。
 
 ## 2. ファイルを作る
 
@@ -179,7 +179,7 @@ render(
 
 この例では`main`と構造範囲のコメントが初期HTMLへ入り、`ul`と`li`はブラウザで
 `hydrate`するときに作られる。`hydrate`は、初期HTMLの要素へイベントと状態更新を
-接続する処理である。irisout 0.1.0は要求ごとに全画面のHTMLを生成するサーバー描画を
+接続する処理である。irisout 0.1.1は要求ごとに全画面のHTMLを生成するサーバー描画を
 提供しないため、JavaScript実行前からリストや条件分岐の内容が必要な用途には使えない。
 
 ## 破棄を確認する
@@ -218,7 +218,7 @@ export function App() {
 表示されれば、条件分岐が所有する処理は解放されている。キー付きリストでは、項目を削除
 したときも同じ方法で確認できる。
 
-生成部品自体は`unmount()`を持つが、0.1.0の`irisout/vite`は仮想モジュールを読み込むと
+生成部品自体は`unmount()`を持つが、0.1.1の`irisout/vite`は仮想モジュールを読み込むと
 自動で`hydrate`し、その戻り値をアプリへ公開しない。このため、通常のVite+入口から
 ルート部品の`unmount()`を呼ぶ方法は公開契約に含まれない。上の確認は条件分岐または
 リストが所有する範囲の破棄を対象とし、ルート部品全体の破棄試験ではない。

@@ -19,7 +19,7 @@ irisoutを、文章処理、フォーム、一覧操作などのブラウザ内�
 | ヒートマップの色付けは段落長と数値の割合を使い、Workerの解析結果は単語数などの集計値を返す | 段落ごとの解析結果と表示を結び、非同期処理と部品分割を検証する                  | [画面](../apps/examples/heatmap.jsx)、[解析処理](../apps/examples/heatmap.worker.js)                                   |
 | TodoMVCの1万件の初期化は生成版326.6ms、手書き46.4ms、React67.6msだった                     | 初期化処理を測定し、改善の対象を決める                                          | [2026-09-05の計測](../packages/bench/todomvc-compiler.results.md)、[ADR-0044](./adr/0044-list-initialization-costs.md) |
 | ヒートマップは300段落・24,790文字で入力から解析完了表示まで850.8msだった                   | 当面は既存の300段落・25,000文字の範囲を使い、指標追加後に再計測する             | [2026-09-06の計測](../packages/bench/heatmap.results.md)                                                               |
-| packageはworkspaceだけを前提にし、梱包物からの導入を確認していない                         | `0.1.0`の梱包物を作り、別ディレクトリのbuildでworkspace依存がないことを確認する | [package設定](../packages/compiler/package.json)、[梱包検査](./adr/0043-package-bundles-and-pack-smoke.md)             |
+| packageはworkspaceだけを前提にし、梱包物からの導入を確認していない                         | `0.1.1`の梱包物を作り、別ディレクトリのbuildでworkspace依存がないことを確認する | [package設定](../packages/irisout/package.json)、[梱包検査](./adr/0043-package-bundles-and-pack-smoke.md)              |
 | 診断と対象を限定した実行時ソースマップが元ファイルの位置を保持する                         | 未対応の生成処理を誤った元位置へ割り当てず、利用例で必要な範囲から対応する      | [診断処理](../packages/compiler/src/diagnostics.ts)、[ADR-0049](./adr/0049-isolated-trial-and-runtime-source-maps.md)  |
 
 計測値は記載日の環境と入力に限る。TodoMVCは生成版の初期HTML構築を計時外とし、手書き版とReact版は空の要素から生成しているため、ページ表示全体の比較値ではない。ヒートマップの値は単一のLinux・Chromium環境での中央値であり、WorkerのメモリとDOMの内部メモリを含まない。現行版の性能改善に着手するときは基準値を取り直す。
@@ -62,4 +62,4 @@ PDF抽出、学習済みモデル、要求ごとのサーバー描画、汎用�
 
 ## 方針を見直す時点
 
-ロードマップの各段階を終えたときに、利用例で回避している制約、再現できる不具合、性能値、導入試験の結果を確認する。外部試用で別の問題が開発を妨げると分かった場合は、後続段階の順序を更新する。`irisout` 0.1.0はnpmへ公開済みで、手動試用は行っていない。安定版の互換性保証は、作者以外の外部導入の検証後に決める。
+ロードマップの各段階を終えたときに、利用例で回避している制約、再現できる不具合、性能値、導入試験の結果を確認する。外部試用で別の問題が開発を妨げると分かった場合は、後続段階の順序を更新する。`irisout` 0.1.1はnpmへ公開済みで、手動試用は行っていない。安定版の互換性保証は、作者以外の外部導入の検証後に決める。
