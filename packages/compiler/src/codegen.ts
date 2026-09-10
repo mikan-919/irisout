@@ -33,6 +33,7 @@ import type {
   TextMarker,
 } from './compiler/state.ts'
 import { attrBindingKind, innerTemplateSource } from './template.ts'
+import { mappedSource } from './source-map.ts'
 
 // M2/ADR-0020: compiler.ts が writeDeclIds をマーカーを持つroot signalへ
 // 解決し、通常は updateNames、共有markerがあるときは updateBatchNameへ
@@ -55,6 +56,7 @@ export interface HandlerOutput {
   /** 同じ構造単位または祖先の局所signalへ書き込む場合に呼ぶ更新の
    * 字句スコープ位置。0はこのbody、1以降は祖先bodyを示す。 */
   localUpdateLevels: number[]
+  sourceStart: number
 }
 
 // M5: StructuralUnitBody(state.ts)のハンドラを HandlerDecl から
@@ -125,6 +127,8 @@ export interface ActionOutput {
   bodyRendered: string
   /** 返り値(function または { update?, destroy? })。無ければ null。 */
   resultRendered: string | null
+  bodySourceStart: number
+  resultSourceStart: number | null
 }
 
 // ルートcomponentのonMount callback。callback本体はmount直後、cleanupは
@@ -132,6 +136,8 @@ export interface ActionOutput {
 export interface MountOutput {
   bodyRendered: string
   cleanupRendered: string | null
+  bodySourceStart: number
+  cleanupSourceStart: number | null
 }
 
 // 構造unit内effectは依存を外側markerへ合流した後、factory自身のupdateへ
@@ -141,6 +147,8 @@ export interface LocalEffectOutput {
   cleanupRendered: string | null
   /** root/derived依存がこのfactory更新を起動する出力名。 */
   signalNames: string[]
+  bodySourceStart: number
+  cleanupSourceStart: number | null
 }
 
 // ルートcomponentのeffect callback。signalIdsはcallback本体のreadをroot
@@ -149,6 +157,8 @@ export interface EffectOutput {
   bodyRendered: string
   cleanupRendered: string | null
   signalIds: DeclId[]
+  bodySourceStart: number
+  cleanupSourceStart: number | null
 }
 
 export interface GenerateModuleInput {
@@ -232,7 +242,7 @@ function renderHandlerCall(
       }
       return `${updateExpr};`
     })
-  const body = `${prelude}${replaceLocalUpdates(h.rendered)}`
+  const body = `${prelude}${mappedSource(replaceLocalUpdates(h.rendered), h.sourceStart)}`
   const scopedBody =
     !h.updatesInRendered && h.updateBatchNeedsCollection
       ? `__update_batch_depth__++; try { ${body} } finally { __update_batch_depth__--; }`
@@ -277,7 +287,7 @@ function renderSharedItemHandlerCall(
       }
       return `${updateExpr};`
     })
-  const body = replaceLocalUpdates(h.rendered)
+  const body = mappedSource(replaceLocalUpdates(h.rendered), h.sourceStart)
   const scopedBody =
     !h.updatesInRendered && h.updateBatchNeedsCollection
       ? `__update_batch_depth__++; try { ${body} } finally { __update_batch_depth__--; }`
@@ -1341,7 +1351,7 @@ function renderActionCall(
       }
       return `${updateExpr};`
     })
-  const bodyRendered = replaceLocalUpdates(a.bodyRendered)
+  const bodyRendered = mappedSource(replaceLocalUpdates(a.bodyRendered), a.bodySourceStart)
   const resultRendered = a.resultRendered ? replaceLocalUpdates(a.resultRendered) : null
   const fn = `function(${a.elParam ?? ''}) {${bodyRendered}${resultRendered ? ` return ${resultRendered};` : ''}}`
   const call = `(${fn})(${elementExpr})`
@@ -1360,19 +1370,23 @@ function renderMountCall(
   localUpdateExprs: (string | null)[] = [],
   cleanupPrefix = '__on_mount_cleanup_',
 ): string {
-  const bodyRendered = m.bodyRendered.replace(
-    /__LOCAL_(SELF_UPDATE|ANCESTOR_(\d+))__\(\);?/g,
-    (_match, kind, levelText) => {
-      const level = kind === 'SELF_UPDATE' ? 0 : Number(levelText)
-      const updateExpr = localUpdateExprs[level]
-      if (!updateExpr) {
-        throw new Error(`codegen: missing local update expression for mount at level ${level}`)
-      }
-      return `${updateExpr};`
-    },
+  const bodyRendered = mappedSource(
+    m.bodyRendered.replace(
+      /__LOCAL_(SELF_UPDATE|ANCESTOR_(\d+))__\(\);?/g,
+      (_match, kind, levelText) => {
+        const level = kind === 'SELF_UPDATE' ? 0 : Number(levelText)
+        const updateExpr = localUpdateExprs[level]
+        if (!updateExpr) {
+          throw new Error(`codegen: missing local update expression for mount at level ${level}`)
+        }
+        return `${updateExpr};`
+      },
+    ),
+    m.bodySourceStart,
   )
   const body = bodyRendered ? `${bodyRendered};` : ''
-  const callback = `(function() { ${body}${m.cleanupRendered ? ` return ${m.cleanupRendered};` : ''} })()`
+  const cleanupRendered = m.cleanupRendered
+  const callback = `(function() { ${body}${cleanupRendered ? ` return ${cleanupRendered};` : ''} })()`
   if (!m.cleanupRendered) return `${callback};`
   const cleanupName = `${cleanupPrefix}${index}__`
   return `{ const __mount_cleanup_result__ = ${callback}; ${cleanupName} = __mount_cleanup_result__; }`
@@ -1382,8 +1396,9 @@ function renderMountCall(
 // 先に空にしてからcallbackを呼ぶため、callbackが例外を投げても同じcleanupを
 // unmountで二重に呼ばない。
 function renderEffectRunner(e: EffectOutput, index: number): string[] {
-  const body = e.bodyRendered ? `${e.bodyRendered};` : ''
-  const callback = `(function() { ${body}${e.cleanupRendered ? ` return ${e.cleanupRendered};` : ''} })()`
+  const body = e.bodyRendered ? `${mappedSource(e.bodyRendered, e.bodySourceStart)};` : ''
+  const cleanupRendered = e.cleanupRendered
+  const callback = `(function() { ${body}${cleanupRendered ? ` return ${cleanupRendered};` : ''} })()`
   const lines = [
     `function __run_effect_${index}__() {`,
     '  if (!__mounted__ || __unmounted__) return;',
@@ -1404,8 +1419,9 @@ function renderEffectRunner(e: EffectOutput, index: number): string[] {
 // mount/update/destroyへ閉じ込める。runnerを使わないunitにはこの関数も
 // cleanup slotも生成しない。
 function renderLocalEffectRunner(e: LocalEffectOutput, index: number): string[] {
-  const body = e.bodyRendered ? `${e.bodyRendered};` : ''
-  const callback = `(function() { ${body}${e.cleanupRendered ? ` return ${e.cleanupRendered};` : ''} })()`
+  const body = e.bodyRendered ? `${mappedSource(e.bodyRendered, e.bodySourceStart)};` : ''
+  const cleanupRendered = e.cleanupRendered
+  const callback = `(function() { ${body}${cleanupRendered ? ` return ${cleanupRendered};` : ''} })()`
   const lines = [
     `function __run_unit_effect_${index}__() {`,
     '  if (!__unit_mounted__ || __unit_destroyed__) return;',

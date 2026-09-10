@@ -55,16 +55,19 @@ describe('irisout Vite連携', () => {
 
     const resolveId = plugin.resolveId as unknown as (id: string) => string | null
     const resolvedId = resolveId('virtual:test-entry')
-    expect(resolvedId).toBe('\0virtual:test-entry')
+    expect(resolvedId).toBe(path.join(project.root, '.irisout-virtual%3Atest-entry.js'))
 
     const transformIndexHtml = plugin.transformIndexHtml as unknown as (html: string) => string
     expect(transformIndexHtml('<div id="target"><!--irisout-html--></div>')).toContain(
       '<span data-iris-id="m0">before</span>',
     )
 
-    const load = plugin.load as unknown as (id: string) => string | null
+    const load = plugin.load as unknown as (
+      id: string,
+    ) => { code: string; map: { version: number } } | null
     const initialModule = load(resolvedId!)
-    expect(initialModule).toContain('document.querySelector("#target")')
+    expect(initialModule?.code).toContain('document.querySelector("#target")')
+    expect(initialModule?.map.version).toBe(3)
 
     writeFileSync(helperPath, `export const label = 'after'`)
     const handleHotUpdate = plugin.handleHotUpdate as unknown as (context: {

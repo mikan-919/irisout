@@ -75,9 +75,11 @@
         "@babel/parser": "^8.0.0",
         "@babel/traverse": "^8.0.0",
         "@irisout/runtime": "^0.1.0",
+        "@jridgewell/gen-mapping": "^0.3.13",
       },
       "devDependencies": {
         "@babel/types": "^8.0.0",
+        "@jridgewell/trace-mapping": "^0.3.31",
         "@types/jsdom": "^28.0.3",
         "jsdom": "^29.1.1",
       },

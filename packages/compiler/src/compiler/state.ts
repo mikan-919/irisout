@@ -63,6 +63,7 @@ export interface HandlerDecl {
   param: string | null
   /** authored handlerがasync関数またはasync arrowか。 */
   async: boolean
+  sourceStart: number
 }
 
 // ADR-0012: 動的属性バインディング1個ぶん。要素のマーカー id に相乗りする
@@ -174,6 +175,8 @@ export interface ActionDecl {
   /** action本体・返り値のupdateが書く宣言。字句範囲検証に使う。 */
   writeDeclIds: Set<DeclId>
   directCollectionWriteDeclIds: Set<DeclId>
+  bodySourceStart: number
+  resultSourceStart: number | null
 }
 
 // ルートcomponentの`onMount(() => ...)` 1個ぶんの解析結果。actionと同じ
@@ -185,6 +188,8 @@ export interface MountDecl {
   finalizeCleanup: (() => string) | null
   writeDeclIds: Set<DeclId>
   directCollectionWriteDeclIds: Set<DeclId>
+  bodySourceStart: number
+  cleanupSourceStart: number | null
 }
 
 // ルートcomponentの`effect(() => ...)` 1個ぶんの解析結果。依存は本体の
@@ -195,6 +200,8 @@ export interface EffectDecl {
   finalizeBody: (resolveUpdateCall: ResolveUpdateCall) => string
   finalizeCleanup: (() => string) | null
   readDeclIds: Set<DeclId>
+  bodySourceStart: number
+  cleanupSourceStart: number | null
 }
 
 export interface ContextDecl {

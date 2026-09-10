@@ -51,6 +51,9 @@ import type {
 import { assignOutputName, createCompilerState, toContextId, toDeclId } from './compiler/state.ts'
 import { linkProject } from './compiler/module-linker.ts'
 import { withCompileDiagnostic } from './diagnostics.ts'
+import type { DiagnosticOrigin } from './diagnostics.ts'
+import { finalizeSourceMap } from './source-map.ts'
+import type { IrisoutSourceMap } from './source-map.ts'
 export { CompileDiagnostic } from './diagnostics.ts'
 import { collection, derived, registry, signal } from '@irisout/runtime'
 
@@ -59,6 +62,7 @@ const traverse =
 
 export interface CompileResult {
   code: string
+  map: IrisoutSourceMap
   initialHtml: string
   markers: ReturnType<typeof createCompilerState>['markers']
   signalToMarkers: Map<DeclId, Set<MarkerId>>
@@ -366,6 +370,8 @@ interface CompileOptions {
   supportNames?: Set<string>
   externalImports?: string[]
   dependencies?: string[]
+  sourceMapFilePath?: string
+  sourceMapOrigins?: DiagnosticOrigin[]
 }
 
 function compileSource(source: string, options: CompileOptions = {}): CompileResult {
@@ -539,6 +545,7 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
       updateBatchName: plan.updateBatchName,
       updateBatchNeedsCollection: plan.needsCollectionBatch,
       localUpdateLevels,
+      sourceStart: h.sourceStart,
     }
   }
 
@@ -573,6 +580,8 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
       elParam: a.elParam,
       bodyRendered: a.finalizeBody(resolveActionUpdateCall),
       resultRendered: a.finalizeResult ? a.finalizeResult(resolveActionUpdateCall) : null,
+      bodySourceStart: a.bodySourceStart,
+      resultSourceStart: a.resultSourceStart,
     }
   }
   const convertMount = (m: MountDecl, localScopes: Set<DeclId>[] = []): MountOutput => {
@@ -601,11 +610,15 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
     return {
       bodyRendered: m.finalizeBody(resolveMountUpdateCall),
       cleanupRendered: m.finalizeCleanup ? m.finalizeCleanup() : null,
+      bodySourceStart: m.bodySourceStart,
+      cleanupSourceStart: m.cleanupSourceStart,
     }
   }
   const convertLocalEffect = (effect: (typeof ctx.effects)[number]): LocalEffectOutput => ({
     bodyRendered: effect.finalizeBody(() => ({ code: '', needsCollectionBatch: false })),
     cleanupRendered: effect.finalizeCleanup ? effect.finalizeCleanup() : null,
+    bodySourceStart: effect.bodySourceStart,
+    cleanupSourceStart: effect.cleanupSourceStart,
     signalNames: [
       ...new Set(
         [...effect.readDeclIds]
@@ -676,6 +689,8 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
   const effectOutputs: EffectOutput[] = ctx.effects.map((effect) => ({
     bodyRendered: effect.finalizeBody(resolveUpdateCall),
     cleanupRendered: effect.finalizeCleanup ? effect.finalizeCleanup() : null,
+    bodySourceStart: effect.bodySourceStart,
+    cleanupSourceStart: effect.cleanupSourceStart,
     signalIds: [
       ...new Set(
         [...effect.readDeclIds].flatMap((dep) => [...resolveToSignals(ctx, dep, new Set())]),
@@ -756,7 +771,7 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
     async: f.async,
   }))
 
-  const code = generateModule({
+  const markedCode = generateModule({
     supportStatements: options.supportStatements ?? [],
     externalImports: options.externalImports ?? [],
     sharedStatements: ctx.sharedDecls
@@ -798,9 +813,15 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
     emittedFns,
     initialHtml,
   })
+  const { code, map } = finalizeSourceMap(markedCode, {
+    filePath: options.sourceMapFilePath ?? '<source>',
+    source,
+    origins: options.sourceMapOrigins,
+  })
 
   return {
     code,
+    map,
     initialHtml,
     markers: ctx.markers,
     signalToMarkers,
@@ -835,6 +856,8 @@ export function compileProject(entryPath: string): CompileResult {
       supportNames: linked.supportNames,
       externalImports: linked.externalImports,
       dependencies: linked.dependencies,
+      sourceMapFilePath: diagnosticFilePath,
+      sourceMapOrigins: linked.origins,
     })
   } catch (error) {
     throw withCompileDiagnostic(error, {

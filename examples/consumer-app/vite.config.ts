@@ -6,5 +6,7 @@ export default defineConfig({
   build: {
     outDir: process.env.IRISOUT_OUT_DIR ?? 'dist',
     emptyOutDir: true,
+    sourcemap: process.env.IRISOUT_SOURCEMAP === 'true',
+    minify: process.env.IRISOUT_SOURCEMAP === 'true' ? false : undefined,
   },
 })

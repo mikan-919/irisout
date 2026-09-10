@@ -50,7 +50,8 @@ Vite build、初期HTML、生成JavaScript、workspace指定の不存在を確�
 キー付きリスト、ファイル分割、診断からの修正を確認した。人間によるブラウザ操作、編集時の
 再生成、ルート部品の破棄は未確認である。試用で見つかった公開版開始手順と型設定の不足を
 文書へ追加し、未対応の`try`と`for`が原因と異なる位置を示す問題を修正した。実行時例外の
-ソースマップはADR-0049で次の実装候補とした。
+実行時ソースマップはADR-0049の最初の対象を実装した。イベント処理、`use=`、`onMount`、
+`effect`の処理文を元の`.js`または`.jsx`へ対応付け、本番Vite+ビルドでも確認した。
 
 次期方針は[開発方針](./docs/project-direction.md)、作業順序は[ROADMAP.md](./ROADMAP.md)を参照する。以下の過去の記録にあるロードマップの節番号と第1〜6段階は、[旧ロードマップ](./docs/history/roadmap-through-2026-09-07.md)の番号である。
 
@@ -429,7 +430,10 @@ state所有とhydrate引き継ぎを別のADRとOpenSpecで定める。
 
 コンパイル時の失敗を`CompileDiagnostic`へまとめ、入口または対象moduleのファイル名、行、列を
 エラーメッセージへ付ける。公開入口は`irisout/diagnostics`であり、Vite連携の失敗も
-同じ形式を使う。生成コードから元コードへ戻るソースマップは未実装である。
+同じ形式を使う。`compile()`と`compileProject()`はSource Map v3形式の`map`を返す。
+イベント処理、`use=`の初期化・更新・破棄、`onMount`と`effect`の実行・片付けを元の
+処理文へ対応付ける。Vite連携は開発時とソースマップを有効にした本番ビルドへ引き継ぐ。
+共有実行時処理、DOM探索、一覧照合、条件分岐管理、自動生成した更新関数は対応対象外である。
 
 JSX型定義は`irisout/jsx`として公開パッケージから参照できる。`apps/examples`と
 `examples/consumer-app`の`tsconfig.json`がこの入口を使う。`bun run check`には両方の型検査が含まれ、

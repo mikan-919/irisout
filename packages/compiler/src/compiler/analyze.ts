@@ -19,6 +19,7 @@ import type {
   TrackedFn,
 } from './state.ts'
 import { declKey } from './state.ts'
+import { mappedSource, stripSourceMapMarkers } from '../source-map.ts'
 
 interface Edit {
   start: number
@@ -649,6 +650,8 @@ export interface HandlerAnalysis {
   /** このハンドラが書き込む root signal の declId 集合(推移解決済み)。 */
   writeDeclIds: Set<DeclId>
   directCollectionWriteDeclIds: Set<DeclId>
+  /** 連結済み入力ソースにおける本体先頭。 */
+  sourceStart: number
 }
 
 // ハンドラ本体専用の解析。analyzeExpr と同じ識別子巡回を行うが、追跡済み
@@ -849,7 +852,7 @@ export function analyzeHandlerExpr(
         })
         if (ast) {
           ast.replace(child.node, child.parent, child.depth, () =>
-            parseGeneratedFunctionBody(childCode),
+            parseGeneratedFunctionBody(stripSourceMapMarkers(childCode)),
           )
         }
       }
@@ -865,6 +868,7 @@ export function analyzeHandlerExpr(
     },
     writeDeclIds: allWriteDeclIds,
     directCollectionWriteDeclIds: allCollectionWriteDeclIds,
+    sourceStart: exprPath.node.start!,
   }
 }
 
@@ -974,6 +978,7 @@ export function analyzeHandlerBody(
       finalize: () => '',
       writeDeclIds: new Set(),
       directCollectionWriteDeclIds: new Set(),
+      sourceStart: 0,
     }
   }
   // handlerはactionと同じ関数境界解析を使うが、値を返すreturn・throw・
@@ -985,6 +990,7 @@ export function analyzeHandlerBody(
     finalize: scope.finalize,
     writeDeclIds: scope.writeDeclIds,
     directCollectionWriteDeclIds: scope.allCollectionWriteDeclIds,
+    sourceStart: stmts[0]!.node.start!,
   }
 }
 
@@ -1295,7 +1301,7 @@ function analyzeActionStatements(
         })
         if (ast) {
           ast.replace(child.node, child.parent, child.depth, () =>
-            parseGeneratedFunctionBody(childCode),
+            parseGeneratedFunctionBody(stripSourceMapMarkers(childCode)),
           )
         }
       }
@@ -1414,7 +1420,7 @@ function analyzeActionExprScope(
         })
         if (ast) {
           ast.replace(child.node, child.parent, child.depth, () =>
-            parseGeneratedFunctionBody(childCode),
+            parseGeneratedFunctionBody(stripSourceMapMarkers(childCode)),
           )
         }
       }
@@ -1489,7 +1495,8 @@ function analyzeFunctionBodyScope(
       directCollectionWriteDeclIds: inner.directCollectionWriteDeclIds,
       writeDeclIds: inner.writeDeclIds,
       allCollectionWriteDeclIds: inner.allCollectionWriteDeclIds,
-      finalize: (resolveUpdateCall) => `{${inner.finalize(resolveUpdateCall)}}`,
+      finalize: (resolveUpdateCall) =>
+        `{${mappedSource(inner.finalize(resolveUpdateCall), stmts[0]?.node.start ?? bodyPath.node.start!)}}`,
     }
   }
   const exprScope = analyzeActionExprScope(
@@ -1505,7 +1512,8 @@ function analyzeFunctionBodyScope(
     node: bodyPath.node,
     parent: fnPath.node,
     depth: pathDepth(bodyPath as NodePath<t.Node>),
-    finalize: exprScope.finalize,
+    finalize: (resolveUpdateCall) =>
+      mappedSource(exprScope.finalize(resolveUpdateCall), bodyPath.node.start!),
     readDeclIds: exprScope.readDeclIds,
     directWriteDeclIds: exprScope.directWriteDeclIds,
     directCollectionWriteDeclIds: exprScope.directCollectionWriteDeclIds,

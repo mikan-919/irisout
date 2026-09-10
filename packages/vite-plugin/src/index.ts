@@ -33,12 +33,17 @@ function normalizePath(filePath: string): string {
  */
 export function irisout(options: IrisoutPluginOptions): Plugin {
   const virtualModuleId = options.virtualModuleId ?? DEFAULT_VIRTUAL_MODULE_ID
-  const resolvedVirtualModuleId = `\0${virtualModuleId}`
   const htmlMarker = options.htmlMarker ?? DEFAULT_HTML_MARKER
   const containerSelector = options.container ?? DEFAULT_CONTAINER
 
   let root = process.cwd()
   let entryPath = normalizePath(path.resolve(root, options.entry))
+  // NUL始まりの仮想識別子はVite+の本番ビルドで変換地図の入力元から除かれる。
+  // Vite root内の仮想pathを使い、通常のmoduleとして地図とpackage解決を連鎖させる。
+  let resolvedVirtualModuleId = path.join(
+    root,
+    `.irisout-${encodeURIComponent(virtualModuleId)}.js`,
+  )
   let result: CompileResult | null = null
   let dependencies = new Set<string>()
 
@@ -73,6 +78,10 @@ export function irisout(options: IrisoutPluginOptions): Plugin {
     configResolved(config: ResolvedConfig) {
       root = config.root
       entryPath = normalizePath(path.resolve(root, options.entry))
+      resolvedVirtualModuleId = path.join(
+        root,
+        `.irisout-${encodeURIComponent(virtualModuleId)}.js`,
+      )
       result = null
       dependencies = new Set()
     },
@@ -90,7 +99,10 @@ export function irisout(options: IrisoutPluginOptions): Plugin {
     load(id: string) {
       if (id !== resolvedVirtualModuleId) return null
       const current = ensureCompiled()
-      return `${current.code}\n${hydrateSource()}`
+      return {
+        code: `${current.code}\n${hydrateSource()}`,
+        map: current.map,
+      }
     },
     transformIndexHtml(html: string) {
       if (!html.includes(htmlMarker)) return html

@@ -454,6 +454,7 @@ interface HandlerAttr {
   directCollectionWriteDeclIds: Set<DeclId>
   param: string | null
   async: boolean
+  sourceStart: number
 }
 
 interface HandlerBody {
@@ -638,6 +639,7 @@ function collectAttrs(
       directCollectionWriteDeclIds: analysis.directCollectionWriteDeclIds,
       param,
       async: isAsync,
+      sourceStart: analysis.sourceStart,
     })
   }
   return { handlerAttrs, staticAttrs, actionAttr, dynamicAttrPaths }
@@ -677,6 +679,21 @@ function registerAction(
     resultDeps: result?.deps ?? new Set<DeclId>(),
     writeDeclIds,
     directCollectionWriteDeclIds,
+    bodySourceStart: Array.isArray(action.body)
+      ? (action.body[0]?.node.start ?? 0)
+      : (action.body.node.start ?? 0),
+    resultSourceStart: Array.isArray(action.body)
+      ? (() => {
+          const last = action.body.at(-1)
+          return last?.isReturnStatement() && last.node.argument
+            ? (last.node.argument.start ?? null)
+            : null
+        })()
+      : action.body.isFunctionExpression() ||
+          action.body.isArrowFunctionExpression() ||
+          action.body.isObjectExpression()
+        ? (action.body.node.start ?? null)
+        : null,
   })
 }
 
@@ -1243,6 +1260,7 @@ function renderStructuralUnitBody(
         finalizeCleanup: analysis.finalizeCleanup,
         writeDeclIds: analysis.writeDeclIds,
         directCollectionWriteDeclIds: analysis.directCollectionWriteDeclIds,
+        ...callbackSourceStarts(callbackPath),
       })
     }
     for (const callbackPath of collectedEffectHooks) {
@@ -1251,6 +1269,7 @@ function renderStructuralUnitBody(
         finalizeBody: analysis.finalizeBody,
         finalizeCleanup: analysis.finalizeCleanup,
         readDeclIds: analysis.readDeclIds,
+        ...callbackSourceStarts(callbackPath),
       })
     }
   } finally {
@@ -1590,6 +1609,29 @@ function resolveEffectExpression(
   return callback
 }
 
+function callbackSourceStarts(callbackPath: NodePath<t.ArrowFunctionExpression>): {
+  bodySourceStart: number
+  cleanupSourceStart: number | null
+} {
+  const body = callbackPath.node.body
+  if (body.type !== 'BlockStatement') {
+    return {
+      bodySourceStart: body.start ?? callbackPath.node.start ?? 0,
+      cleanupSourceStart:
+        body.type === 'ArrowFunctionExpression' || body.type === 'FunctionExpression'
+          ? (body.start ?? null)
+          : null,
+    }
+  }
+  const first = body.body[0]
+  const last = body.body.at(-1)
+  return {
+    bodySourceStart: first?.start ?? body.start ?? callbackPath.node.start ?? 0,
+    cleanupSourceStart:
+      last?.type === 'ReturnStatement' && last.argument ? (last.argument.start ?? null) : null,
+  }
+}
+
 // ADR-0008のゾーン構造(変数ゾーン→render()→動きゾーン)を、ctx を触らず
 // 純粋に位置だけで特定する。same-file-component-composition: この特定
 // ロジックはインライン化パス(compileComponent が動く前)からも同じ形で
@@ -1714,6 +1756,7 @@ function compileComponentUnchecked(
       finalizeCleanup: analysis.finalizeCleanup,
       writeDeclIds: analysis.writeDeclIds,
       directCollectionWriteDeclIds: analysis.directCollectionWriteDeclIds,
+      ...callbackSourceStarts(callbackPath),
     }
     ctx.mounts.push(mount)
   }
@@ -1724,6 +1767,7 @@ function compileComponentUnchecked(
       finalizeBody: analysis.finalizeBody,
       finalizeCleanup: analysis.finalizeCleanup,
       readDeclIds: analysis.readDeclIds,
+      ...callbackSourceStarts(callbackPath),
     }
     ctx.effects.push(effect)
   }

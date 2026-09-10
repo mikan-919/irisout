@@ -169,7 +169,7 @@ describe('Vite+ example build end to end', () => {
         },
       },
     )
-    expect(result.status).toBe(0)
+    expect(result.status, `${result.stdout.toString()}\n${result.stderr.toString()}`).toBe(0)
 
     const html = readFileSync(path.join(outDir, 'index.html'), 'utf8')
     expect(html).toContain('<div id="app">')

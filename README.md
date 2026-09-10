@@ -139,6 +139,14 @@ SVGは`svg`以下の要素を既存のJSXで記述できます。通常の動的
 コンパイラは未対応の構文を`compile: ... (scope limit)`
 として拒否します。対応状況と制約は[`STATUS.md`](./STATUS.md)を参照してください。
 
+`compile()`と`compileProject()`は生成JavaScriptとSource Map v3形式の`map`を返します。
+イベント処理、`use=`の初期化・更新・破棄、`onMount`と`effect`の実行・片付けを、元の
+`.js`または`.jsx`の処理文へ対応付けます。Vite連携は開発時と`build.sourcemap: true`の
+本番ビルドへこの対応を引き継ぎます。共有実行時処理、DOM探索、一覧照合、条件分岐管理、
+自動生成した更新関数には一対一の元構文がないため、元のJSXへ対応付けません。
+
+注: Source Mapは、生成JavaScriptの行・列を変換前のファイルの行・列へ戻す情報である。
+
 ## 性能計測
 
 現行コンパイラの生成物、手書き実装、Reactの製品用ビルドを同じChromiumで計測して
