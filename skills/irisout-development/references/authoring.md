@@ -24,7 +24,7 @@ Do not present this client-build contract as per-request server rendering.
 ## Component shape
 
 - Export one unreferenced root component whose body calls `render(<JSX />)`.
-- Declare local `signal`, `derived`, and `collection` state before `render()`.
+- Declare local `signal` and `derived` state before `render()`.
 - Put event handlers and lifecycle calls in the component's behavior zone after `render()`.
 - Same-file and relative `.js`/`.jsx` components are compile-time composition, not runtime component objects.
 - Component props use shorthand object destructuring. Spread props, aliased destructuring, recursive components, and arbitrary component values are outside the supported boundary.
@@ -50,7 +50,7 @@ export function Counter() {
 
 - Dynamic text and ordinary attributes.
 - Direct DOM event handlers, including block-bodied handlers within the accepted statement set.
-- Keyed lists written as direct `.map()` expressions. Use `collection(initial, keyOf)` when keyed item updates are needed.
+- Keyed lists written as direct `.map()` expressions. Use `signal(initial, keyOf)` when keyed item updates are needed.
 - Ternary and `&&` conditional rendering, including nested structural units.
 - `use=` actions with optional update and destroy behavior.
 - `onMount`, `effect`, instance context, module-shared state, component children slots, and SVG.

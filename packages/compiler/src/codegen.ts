@@ -1231,7 +1231,7 @@ function generateListUpdate(
       ? `__collection_${marker.collectionOutputName}__`
       : null
   const keyOf = collectionRef
-    ? `(${marker.itemParam}) => { const __key__ = ${marker.keyRendered}; if (!Object.is(${collectionRef}.keyOf(${marker.itemParam}), __key__)) throw new Error("collection List key does not match collection identity"); return __key__; }`
+    ? `(${marker.itemParam}) => { const __key__ = ${marker.keyRendered}; if (!Object.is(${collectionRef}.keyOf(${marker.itemParam}), __key__)) throw new Error("keyed signal List key does not match signal identity"); return __key__; }`
     : `(${marker.itemParam}) => ${marker.keyRendered}`
   return [
     hasLifecycle

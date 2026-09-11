@@ -184,10 +184,10 @@ describe('compileProject: static multi-file module composition', () => {
     secondInstance.unmount()
   })
 
-  it('shares a module collection across component instances and unsubscribes on unmount', async () => {
+  it('shares a module keyed signal across component instances and unsubscribes on unmount', async () => {
     const entry = writeProject({
       'main.jsx': `import { items } from './state.js'; export function App() { render(<div><button class="update" onClick={update}>update</button><button class="replace" onClick={replace}>replace</button><p>{items().map((item) => item.text).join(',')}</p><ul>{items().map((item) => <li key={item.id}>{item.text}</li>)}</ul></div>); function update() { items.update(1, (item) => ({ ...item, text: item.text + '!' })); } function replace() { items([...items(), { id: 3, text: 'c' }]); } }`,
-      'state.js': `export const items = collection([{ id: 1, text: 'a' }, { id: 2, text: 'b' }], (item) => item.id);`,
+      'state.js': `export const items = signal([{ id: 1, text: 'a' }, { id: 2, text: 'b' }], (item) => item.id);`,
     })
     const { code } = compileProject(entry)
     expect(code).toContain('sharedCollection as __sharedCollection__')
@@ -327,10 +327,10 @@ describe('compileProject: module boundary errors', () => {
     expect(() => compileProject(unresolved)).toThrow(/cannot resolve relative import.*scope limit/)
 
     const moduleState = writeProject({
-      'main.jsx': `const items = collection([], (item) => { return item.id }); export function App() { render(<div />) }`,
+      'main.jsx': `const items = signal([], (item) => { return item.id }); export function App() { render(<div />) }`,
     })
     expect(() => compileProject(moduleState)).toThrow(
-      /cannot declare module-scope collection.*scope limit/,
+      /cannot declare module-scope signal.*scope limit/,
     )
 
     const readOnlyDerived = writeProject({

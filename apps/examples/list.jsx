@@ -1,7 +1,7 @@
 // List最小ランタイムのplayground。追加・binding更新・並べ替え・削除を通して、
 // keyに対応するDOM要素を再利用しながら必要な箇所だけを更新する。
 export function ListPlayground() {
-  const items = collection(
+  const items = signal(
     [
       { id: 1, text: 'alpha' },
       { id: 2, text: 'beta' },

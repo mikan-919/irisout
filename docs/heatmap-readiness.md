@@ -128,7 +128,7 @@ Worker連携は第5段階へ残す。
 
 ## 第3段階の実装結果(2026-09-06)
 
-ルートのsignal、derived、collectionを解析前に登録し、derivedの依存グラフを循環検査
+ルートのsignalとderivedを解析前に登録し、キー付きsignalを区別してderivedの依存グラフを循環検査
 するようにした。入力から派生値を依存順に再計算し、複数入力を同じhandlerで更新した
 場合も中間値を一度ずつ更新する。循環は`derived dependency cycle`としてコンパイル時に
 拒否する。

@@ -126,9 +126,9 @@ function parseModuleUnchecked(filePath: string, source: string): ModuleRecord {
       const stateCall = findModuleStateCall(declarator.init)
       if (stateCall) {
         const isSharedState =
-          (stateCall === 'signal' && isSharedSignalDeclarator(declarator)) ||
-          (stateCall === 'derived' && isSharedDerivedDeclarator(declarator)) ||
-          (stateCall === 'collection' && isSharedCollectionDeclarator(declarator))
+          (stateCall === 'signal' &&
+            (isSharedSignalDeclarator(declarator) || isSharedCollectionDeclarator(declarator))) ||
+          (stateCall === 'derived' && isSharedDerivedDeclarator(declarator))
         if (!isSharedState) {
           throw compileError(
             `module "${filePath}" cannot declare module-scope ${stateCall}() state`,
@@ -350,10 +350,7 @@ function findModuleStateCall(node: t.Node): string | null {
   traverse(wrapper, {
     CallExpression(path: NodePath<t.CallExpression>) {
       const callee = path.node.callee
-      if (
-        callee.type === 'Identifier' &&
-        (callee.name === 'signal' || callee.name === 'derived' || callee.name === 'collection')
-      ) {
+      if (callee.type === 'Identifier' && (callee.name === 'signal' || callee.name === 'derived')) {
         stateCall = callee.name
         path.stop()
       }
@@ -409,7 +406,7 @@ function isSharedCollectionDeclarator(declarator: t.VariableDeclarator): boolean
     declarator.id.type === 'Identifier' &&
     init?.type === 'CallExpression' &&
     init.callee.type === 'Identifier' &&
-    init.callee.name === 'collection' &&
+    init.callee.name === 'signal' &&
     args.length === 2 &&
     args[0]?.type !== 'SpreadElement' &&
     key?.type === 'ArrowFunctionExpression' &&

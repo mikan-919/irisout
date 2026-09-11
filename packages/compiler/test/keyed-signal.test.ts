@@ -16,7 +16,7 @@ function dispatchClick(container: Element, selector: string): void {
 
 const SOURCE = `
 export function App() {
-  const items = collection(
+  const items = signal(
     [
       { id: 1, text: 'a' },
       { id: 2, text: 'b' },
@@ -39,7 +39,7 @@ export function App() {
 }
 `
 
-describe('collection item updates', () => {
+describe('keyed signal item updates', () => {
   it('updates one keyed item directly across multiple Lists and refreshes non-List dependents', async () => {
     const { code } = compile(SOURCE)
     expect(code).toContain('function update_items_item(__key__, __updater__)')
@@ -82,43 +82,51 @@ describe('collection item updates', () => {
     const state = createCollectionState([{ id: 1, text: 'a' }], (item) => item.id)
 
     expect(() => updateCollectionItem(state, 2, (item) => item)).toThrow(
-      'collection.update: unknown key 2',
+      'signal.update: unknown key 2',
     )
     expect(() => updateCollectionItem(state, 1, (item) => ({ ...item, id: 2 }))).toThrow(
-      'collection.update: key must remain 1, received 2',
+      'signal.update: key must remain 1, received 2',
     )
   })
 
   it('keeps the previous values when a replacement has duplicate identities', () => {
     const state = createCollectionState([{ id: 1 }], (item) => item.id)
     expect(() => replaceCollection(state, [{ id: 2 }, { id: 2 }])).toThrow(
-      'collection: duplicate key 2',
+      'signal: duplicate key 2',
     )
     expect(state.values).toEqual([{ id: 1 }])
   })
 
-  it('rejects a List key that differs from the collection identity', async () => {
+  it('rejects a List key that differs from the signal identity', async () => {
     const source = `
 export function App() {
-  const items = collection([{ id: 1, other: 'x' }], (item) => item.id);
+  const items = signal([{ id: 1, other: 'x' }], (item) => item.id);
   render(<ul>{items().map((item) => <li key={item.other}>{item.id}</li>)}</ul>);
 }
 `
     const mod = await loadGenerated(compile(source).code)
     const container = createContainer()
     expect(() => (mod.mountComponent as (container: Element) => void)(container)).toThrow(
-      'collection List key does not match collection identity',
+      'keyed signal List key does not match signal identity',
     )
   })
 
-  it('rejects duplicate collection identities during instance creation', async () => {
+  it('rejects duplicate signal identities during instance creation', async () => {
     const source = `
 export function App() {
-  const items = collection([{ id: 1 }, { id: 1 }], (item) => item.id);
+  const items = signal([{ id: 1 }, { id: 1 }], (item) => item.id);
   render(<ul>{items().map((item) => <li key={item.id}>{item.id}</li>)}</ul>);
 }
 `
     const mod = await loadGenerated(compile(source).code)
-    expect(() => (mod.createComponent as () => unknown)()).toThrow('collection: duplicate key 1')
+    expect(() => (mod.createComponent as () => unknown)()).toThrow('signal: duplicate key 1')
+  })
+
+  it('rejects the removed collection declaration', () => {
+    expect(() =>
+      compile(
+        `export function App() { const items = collection([], (item) => item.id); render(<div />); }`,
+      ),
+    ).toThrow(/only top-level `signal\(\)`\/`derived\(\)` declarations.*scope limit/)
   })
 })

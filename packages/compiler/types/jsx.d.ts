@@ -73,17 +73,19 @@ type IrisSvgAttributes<El extends SVGElement> = IrisCommonAttributes<El> & {
   'xmlns:xlink'?: string
 }
 
-interface IrisCollection<T, K> {
+interface IrisSignal<T> {
+  (): T
+  (next: T): T
+}
+
+interface IrisKeyedSignal<T, K> extends IrisSignal<readonly T[]> {
   (): readonly T[]
   (next: readonly T[]): readonly T[]
   update(key: K, updater: (current: T) => T): T
 }
 
-declare function signal<T>(initial: T): (...args: [] | [T]) => T
-declare function collection<T, K>(
-  initial: readonly T[],
-  keyOf: (item: T) => K,
-): IrisCollection<T, K>
+declare function signal<T>(initial: T): IrisSignal<T>
+declare function signal<T, K>(initial: readonly T[], keyOf: (item: T) => K): IrisKeyedSignal<T, K>
 declare function derived<T>(compute: () => T): () => T
 declare function render(element: JSX.Element): void
 // componentのmount/hydrate完了後に一度だけ呼ばれ、返り値のcleanupは

@@ -1,9 +1,9 @@
-// signal()/derived()/collection() のauthoring accessorはビルド時専用
+// signal()/derived() のauthoring accessorはビルド時専用
 // (ADR-0006/0019):コンパイル中に Node 上で実行され、リアクティブ状態の発見に
 // 使われるだけ。生成される出力コードはプレーン変数と専用stateを使うので、
 // これらの関数は生成モジュールから一切 import
 // されない。`declId` はビルド時 discovery のためだけにコンパイラが注入する
-// もので、コンポーネント作者が使う公開 signal/derived/collection API の一部ではない
+// もので、コンポーネント作者が使う公開 signal/derived API の一部ではない
 // (docs/adr/0006-generated-output-drops-runtime-signal-wrapper.md 参照)。
 //
 // mount()/hydrate() と List helper は生成モジュールから必要時に import される、
@@ -128,7 +128,7 @@ function buildCollectionIndex<T, K>(values: readonly T[], keyOf: (value: T) => K
   const index = new Map<K, number>()
   values.forEach((value, position) => {
     const key = keyOf(value)
-    if (index.has(key)) throw new Error(`collection: duplicate key ${String(key)}`)
+    if (index.has(key)) throw new Error(`signal: duplicate key ${String(key)}`)
     index.set(key, position)
   })
   return index
@@ -157,13 +157,11 @@ export function updateCollectionItem<T, K>(
   updater: (current: T) => T,
 ): T {
   const index = state.index.get(key)
-  if (index === undefined) throw new Error(`collection.update: unknown key ${String(key)}`)
+  if (index === undefined) throw new Error(`signal.update: unknown key ${String(key)}`)
   const next = updater(state.values[index]!)
   const nextKey = state.keyOf(next)
   if (!Object.is(nextKey, key)) {
-    throw new Error(
-      `collection.update: key must remain ${String(key)}, received ${String(nextKey)}`,
-    )
+    throw new Error(`signal.update: key must remain ${String(key)}, received ${String(nextKey)}`)
   }
   state.values[index] = next
   return next
@@ -454,15 +452,40 @@ function isDomRange(value: Element | DomRange): value is DomRange {
 
 export const registry = new Map<DeclId, { kind: DeclKind }>()
 
-export function signal<T>(initial: T, declId?: DeclId): (...args: [] | [T]) => T {
-  let value = initial
+export interface SignalAccessor<T> {
+  (): T
+  (next: T): T
+}
+
+export interface KeyedSignalAccessor<T, K> extends SignalAccessor<readonly T[]> {
+  update(key: K, updater: (current: T) => T): T
+  readonly keyOf: (value: T) => K
+}
+
+export function signal<T>(initial: T, keyOf?: undefined, declId?: DeclId): SignalAccessor<T>
+export function signal<T, K>(
+  initial: readonly T[],
+  keyOf: (value: T) => K,
+  declId?: DeclId,
+): KeyedSignalAccessor<T, K>
+export function signal<T, K>(
+  initial: T | readonly T[],
+  keyOf?: (value: T) => K,
+  declId?: DeclId,
+): SignalAccessor<T> | KeyedSignalAccessor<T, K> {
+  if (keyOf) {
+    const accessor = createKeyedSignal(initial as readonly T[], keyOf)
+    if (declId) registry.set(declId, { kind: 'collection' })
+    return accessor
+  }
+  let value = initial as T
   function accessor(...args: [] | [T]): T {
     if (args.length === 0) return value
     value = args[0] as T
     return value
   }
   if (declId) registry.set(declId, { kind: 'signal' })
-  return accessor
+  return accessor as SignalAccessor<T>
 }
 
 // compileProjectのmodule scopeで使う共有signal。component instanceごとの購読だけを
@@ -500,46 +523,35 @@ export function derived<T>(compute: () => T, declId?: DeclId): () => T {
   return compute
 }
 
-export interface CollectionAccessor<T, K> {
-  (): readonly T[]
-  (next: readonly T[]): readonly T[]
-  update(key: K, updater: (current: T) => T): T
-  readonly keyOf: (value: T) => K
-}
-
-export function collection<T, K>(
+function createKeyedSignal<T, K>(
   initial: readonly T[],
   keyOf: (value: T) => K,
-  declId?: DeclId,
-): CollectionAccessor<T, K> {
+): KeyedSignalAccessor<T, K> {
   let values = Array.from(initial)
   const accessor = ((...args: [] | [readonly T[]]): readonly T[] => {
     if (args.length === 0) return values
     values = Array.from(args[0]!)
     return values
-  }) as CollectionAccessor<T, K>
+  }) as KeyedSignalAccessor<T, K>
   Object.defineProperty(accessor, 'keyOf', { value: keyOf })
   accessor.update = (key, updater) => {
     const index = values.findIndex((value) => Object.is(keyOf(value), key))
-    if (index < 0) throw new Error(`collection.update: unknown key ${String(key)}`)
+    if (index < 0) throw new Error(`signal.update: unknown key ${String(key)}`)
     const next = updater(values[index]!)
     const nextKey = keyOf(next)
     if (!Object.is(nextKey, key)) {
-      throw new Error(
-        `collection.update: key must remain ${String(key)}, received ${String(nextKey)}`,
-      )
+      throw new Error(`signal.update: key must remain ${String(key)}, received ${String(nextKey)}`)
     }
     values[index] = next
     return next
   }
-  if (declId) registry.set(declId, { kind: 'collection' })
   return accessor
 }
 
 // compileProjectのmodule scopeで使う共有collection。値とkey indexは生成moduleの
 // module scopeに一つだけ置き、各component instanceのupdate関数へ同期通知する。
 // Listのkeyed DOM状態はinstanceごとに残し、collection accessorだけを共有する。
-export interface SharedCollection<T, K> extends CollectionAccessor<T, K> {
+export interface SharedCollection<T, K> extends KeyedSignalAccessor<T, K> {
   subscribe(listener: () => void): () => void
 }
 

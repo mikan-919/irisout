@@ -135,7 +135,7 @@ function emitSignal(
   out.declStatements.push(`let ${outputName} = ${rendered};`)
   // ビルド時実行専用: registry 検証のため本物の signal() を declId 付きで呼ぶ。
   out.instrumentedDeclStatements.push(
-    `const ${outputName} = signal(${sourceRendered}, ${JSON.stringify(id)});`,
+    `const ${outputName} = signal(${sourceRendered}, undefined, ${JSON.stringify(id)});`,
   )
   return id
 }
@@ -164,7 +164,7 @@ function emitCollection(
     `let ${outputName} = __collection_${outputName}__.values;`,
   )
   out.instrumentedDeclStatements.push(
-    `const ${outputName} = collection(${sourceRendered}, ${keySourceRendered}, ${JSON.stringify(id)});`,
+    `const ${outputName} = signal(${sourceRendered}, ${keySourceRendered}, ${JSON.stringify(id)});`,
   )
   return id
 }
@@ -257,7 +257,7 @@ interface ParsedSignalDecl {
 // (same-file-component-composition: 構造ユニットのローカル宣言も同じ形)。
 function parseSignalDeclStatement(stmt: NodePath<t.Statement>): ParsedSignalDecl {
   const scopeLimit = new Error(
-    'compile: only top-level `signal()`/`derived()`/`collection()` declarations are supported in this milestone (scope limit)',
+    'compile: only top-level `signal()`/`derived()` declarations are supported in this milestone (scope limit)',
   )
   if (!stmt.isVariableDeclaration() || stmt.node.declarations.length !== 1) {
     throw scopeLimit
@@ -267,9 +267,7 @@ function parseSignalDeclStatement(stmt: NodePath<t.Statement>): ParsedSignalDecl
   if (
     init?.type !== 'CallExpression' ||
     init.callee.type !== 'Identifier' ||
-    (init.callee.name !== 'signal' &&
-      init.callee.name !== 'derived' &&
-      init.callee.name !== 'collection')
+    (init.callee.name !== 'signal' && init.callee.name !== 'derived')
   ) {
     throw scopeLimit
   }
@@ -283,14 +281,14 @@ function parseSignalDeclStatement(stmt: NodePath<t.Statement>): ParsedSignalDecl
   }
 
   const args = stmt.get('declarations.0.init.arguments') as NodePath<t.Expression>[]
-  if (init.callee.name === 'collection' && args.length !== 2) {
-    throw new Error('compile: collection() takes exactly an initial array and a key selector')
+  if (init.callee.name === 'signal' && args.length !== 1 && args.length !== 2) {
+    throw new Error('compile: signal() takes an initial value and an optional key selector')
   }
-  if (init.callee.name !== 'collection' && args.length !== 1) {
+  if (init.callee.name === 'derived' && args.length !== 1) {
     throw new Error(`compile: ${init.callee.name}() takes exactly one argument`)
   }
   return {
-    kind: init.callee.name as 'signal' | 'derived' | 'collection',
+    kind: init.callee.name === 'signal' && args.length === 2 ? 'collection' : init.callee.name,
     naturalName: declarator.id.name,
     declaratorStart: declarator.start!,
     argPath: args[0]!,
@@ -316,7 +314,7 @@ function processDeclarationStatement(
       keyPath.get('body').isBlockStatement()
     ) {
       throw new Error(
-        'compile: collection() key selector must be a one-argument concise arrow function `(item) => key` (scope limit)',
+        'compile: signal() key selector must be a one-argument concise arrow function `(item) => key` (scope limit)',
       )
     }
     const initial = analyzeExpr(ctx, argPath, instanceId)
@@ -402,7 +400,7 @@ export function processLocalDeclarationStatement(
   }
   if (kind === 'collection') {
     throw new Error(
-      'compile: collection() is only supported in the root variable zone (scope limit)',
+      'compile: keyed signal() is only supported in the root variable zone (scope limit)',
     )
   }
   return emitLocalDerived(ctx, instanceId, declaratorStart, naturalName, argPath)

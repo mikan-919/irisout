@@ -57,7 +57,7 @@ export interface HandlerDecl {
   finalize?: (resolveUpdateCall: ResolveUpdateCall) => string
   writeDeclIds: Set<DeclId>
   /** collection.update() の直接通知経路で書き込むcollection。通常の
-   * collection(next) setterとは異なり、同一スコープのbatch時だけ遅延する。 */
+   * keyed signal(next) setterとは異なり、同一スコープのbatch時だけ遅延する。 */
   directCollectionWriteDeclIds: Set<DeclId>
   /** ADR-0009: 第1仮引数(イベントオブジェクト)の authored 名。なければ null。 */
   param: string | null
@@ -126,7 +126,7 @@ export interface ListMarker {
   arrayRendered: string
   /** `key={...}` の出力向けレンダー結果(item 仮引数を参照する式)。 */
   keyRendered: string
-  /** 配列式が直接 `collection()` を読んでいる場合の宣言ID。それ以外はnull。 */
+  /** 配列式が直接、キー付き`signal()`を読んでいる場合の宣言ID。それ以外はnull。 */
   collectionDeclId: DeclId | null
   body: StructuralUnitBody
 }

@@ -155,7 +155,7 @@ irisout は compiler-first なシステムです。
   ルートcomponentの明示的な`effect`はADR-0026に従い専用`update_*()`へ静的に接続する
   ため、この例外には含めない。
 - contextはADR-0027〜0029に従いコンパイル時に式置換して扱うため、専用のruntime registryを
-  追加しない。module共有stateはADR-0030/0037/0039の直接signal/derived/collectionに限り、
+  追加しない。module共有stateは直接signal/derivedに限り、キー付き配列はsignalの第2引数で指定し、
   参照された生成物へ出力する。汎用provider registry、非同期schedulerは対象外とする。
 
 責務は固定ではありません。同じ仕事を専用コードとして生成する場合と共有

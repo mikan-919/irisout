@@ -362,7 +362,7 @@ function analyzeHandlerStatementsCore(
     ) {
       if (memberCall.node.arguments.length !== 2) {
         throw new Error(
-          `compile: collection.update() takes exactly a key and an updater for "${idPath.node.name}"`,
+          `compile: signal.update() takes exactly a key and an updater for "${idPath.node.name}"`,
         )
       }
       const firstArg = memberCall.node.arguments[0]!
@@ -723,7 +723,7 @@ export function analyzeHandlerExpr(
     ) {
       if (memberCall.node.arguments.length !== 2) {
         throw new Error(
-          `compile: collection.update() takes exactly a key and an updater for "${idPath.node.name}"`,
+          `compile: signal.update() takes exactly a key and an updater for "${idPath.node.name}"`,
         )
       }
       const firstArg = memberCall.node.arguments[0]!
@@ -1065,7 +1065,7 @@ function analyzeActionIdentifier(
   ) {
     if (memberCall.node.arguments.length !== 2) {
       throw new Error(
-        `compile: collection.update() takes exactly a key and an updater for "${idPath.node.name}"`,
+        `compile: signal.update() takes exactly a key and an updater for "${idPath.node.name}"`,
       )
     }
     const firstArg = memberCall.node.arguments[0]!

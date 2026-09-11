@@ -55,7 +55,7 @@ import type { DiagnosticOrigin } from './diagnostics.ts'
 import { finalizeSourceMap } from './source-map.ts'
 import type { IrisoutSourceMap } from './source-map.ts'
 export { CompileDiagnostic } from './diagnostics.ts'
-import { collection, derived, registry, signal } from '@irisout/runtime'
+import { derived, registry, signal } from '@irisout/runtime'
 
 const traverse =
   (traverseImport as unknown as { default?: typeof traverseImport }).default ?? traverseImport
@@ -184,11 +184,13 @@ function collectSharedDeclarations(
       const init = path.node.init
       if (init?.type !== 'CallExpression' || init.callee.type !== 'Identifier') return
       const kind =
-        init.callee.name === 'signal' ||
-        init.callee.name === 'derived' ||
-        init.callee.name === 'collection'
-          ? init.callee.name
-          : null
+        init.callee.name === 'signal'
+          ? init.arguments.length === 2
+            ? 'collection'
+            : 'signal'
+          : init.callee.name === 'derived'
+            ? 'derived'
+            : null
       if (!kind) return
 
       if (kind === 'signal') {
@@ -216,7 +218,7 @@ function collectSharedDeclarations(
           init.arguments[1].body.type === 'BlockStatement')
       ) {
         throw new Error(
-          'compile: module-scope collection() key selector must be a one-argument concise arrow function `(item) => key` (scope limit)',
+          'compile: module-scope signal() key selector must be a one-argument concise arrow function `(item) => key` (scope limit)',
         )
       }
 
@@ -433,7 +435,7 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
       .sort()
     // collection.update() は専用の直接通知をすでに行うため、batch になら
     // ないスコープの末尾へ通常の update_<collection>() を足さない。ただし
-    // 同じスコープに通常の collection(next) setter もある場合は ids に
+    // 同じスコープに通常の keyed signal(next) setter もある場合は ids に
     // 残るので、最終状態の reconcile が必要になる。
     const updateNames = rootIds
       .filter(
@@ -703,12 +705,12 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
     ...(options.supportStatements ?? []),
     ...ctx.sharedDecls.map((decl) => {
       if (decl.kind === 'signal') {
-        return `const ${decl.outputName} = signal(${decl.sourceRendered}, ${JSON.stringify(decl.id)});`
+        return `const ${decl.outputName} = signal(${decl.sourceRendered}, undefined, ${JSON.stringify(decl.id)});`
       }
       if (decl.kind === 'derived') {
         return `const ${decl.outputName} = derived(${decl.sourceRendered}, ${JSON.stringify(decl.id)});`
       }
-      return `const ${decl.outputName} = collection(${decl.sourceRendered}, ${decl.keySourceRendered}, ${JSON.stringify(decl.id)});`
+      return `const ${decl.outputName} = signal(${decl.sourceRendered}, ${decl.keySourceRendered}, ${JSON.stringify(decl.id)});`
     }),
     ...out.instrumentedDeclStatements,
     `return \`${rootHtmlSource}\`;`,
@@ -720,14 +722,12 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
   const runComponent = new Function(
     'signal',
     'derived',
-    'collection',
     '__esc__',
     '__escAttr__',
     instrumentedBody,
   ) as (
     signalFn: typeof signal,
     derivedFn: typeof derived,
-    collectionFn: typeof collection,
     escFn: (v: unknown) => string,
     escAttrFn: (v: unknown) => string,
   ) => string
@@ -740,7 +740,7 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
   // 報告する安全網(scope-limit-coverage design D3)。元エラーは cause に保持。
   let initialHtml: string
   try {
-    initialHtml = runComponent(signal, derived, collection, escapeTextValue, escapeAttrTextValue)
+    initialHtml = runComponent(signal, derived, escapeTextValue, escapeAttrTextValue)
   } catch (e) {
     throw new Error(
       `compile: build-time execution failed: ${e instanceof Error ? e.message : String(e)}`,

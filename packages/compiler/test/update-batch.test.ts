@@ -323,10 +323,10 @@ export function App() {
     }
   })
 
-  it('defers collection.update direct notification when another root shares its marker', async () => {
+  it('defers signal.update direct notification when another root shares its marker', async () => {
     const source = `
 export function App() {
-  const items = collection([{ id: 1, text: 'a' }], (item) => item.id);
+  const items = signal([{ id: 1, text: 'a' }], (item) => item.id);
   const suffix = signal('');
   render(
     <div>
@@ -353,10 +353,10 @@ export function App() {
     }
   })
 
-  it('keeps collection.update direct behavior when it is the only write', async () => {
+  it('keeps signal.update direct behavior when it is the only write', async () => {
     const source = `
 export function App() {
-  const items = collection([{ id: 1, text: 'a' }], (item) => item.id);
+  const items = signal([{ id: 1, text: 'a' }], (item) => item.id);
   render(
     <div>
       <p>{items().map((item) => item.text).join(',')}</p>
@@ -376,10 +376,10 @@ export function App() {
     expect(container.querySelector('p')?.textContent).toBe('b')
   })
 
-  it('defers collection.update from an action closure in the same way', async () => {
+  it('defers signal.update from an action closure in the same way', async () => {
     const source = `
 export function App() {
-  const items = collection([{ id: 1, text: 'a' }], (item) => item.id);
+  const items = signal([{ id: 1, text: 'a' }], (item) => item.id);
   const suffix = signal('');
   render(
     <div>
@@ -406,10 +406,10 @@ export function App() {
     }
   })
 
-  it('keeps collection direct notification deferred when a setter registered the same batch first', async () => {
+  it('keeps keyed signal direct notification deferred when a setter registered the same batch first', async () => {
     const source = `
 export function App() {
-  const items = collection([{ id: 1, text: 'a' }], (item) => item.id);
+  const items = signal([{ id: 1, text: 'a' }], (item) => item.id);
   const suffix = signal('');
   render(
     <div>
