@@ -75,17 +75,10 @@ type IrisSvgAttributes<El extends SVGElement> = IrisCommonAttributes<El> & {
 
 interface IrisSignal<T> {
   (): T
-  (next: T): T
-}
-
-interface IrisKeyedSignal<T, K> extends IrisSignal<readonly T[]> {
-  (): readonly T[]
-  (next: readonly T[]): readonly T[]
-  update(key: K, updater: (current: T) => T): T
+  (next: T | ((previous: T) => T)): T
 }
 
 declare function signal<T>(initial: T): IrisSignal<T>
-declare function signal<T, K>(initial: readonly T[], keyOf: (item: T) => K): IrisKeyedSignal<T, K>
 declare function derived<T>(compute: () => T): () => T
 declare function render(element: JSX.Element): void
 // componentのmount/hydrate完了後に一度だけ呼ばれ、返り値のcleanupは

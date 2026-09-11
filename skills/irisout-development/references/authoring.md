@@ -50,7 +50,7 @@ export function Counter() {
 
 - Dynamic text and ordinary attributes.
 - Direct DOM event handlers, including block-bodied handlers within the accepted statement set.
-- Keyed lists written as direct `.map()` expressions. Use `signal(initial, keyOf)` when keyed item updates are needed.
+- Keyed lists written as direct `.map()` expressions. Update arrays with `signal((previous) => next)` and use JSX `key` for identity.
 - Ternary and `&&` conditional rendering, including nested structural units.
 - `use=` actions with optional update and destroy behavior.
 - `onMount`, `effect`, instance context, module-shared state, component children slots, and SVG.

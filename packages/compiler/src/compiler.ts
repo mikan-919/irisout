@@ -163,7 +163,7 @@ function collectSharedDeclarations(
   const pending: {
     path: NodePath<t.VariableDeclarator>
     id: DeclId
-    kind: 'signal' | 'derived' | 'collection'
+    kind: 'signal' | 'derived'
     outputName: string
   }[] = []
 
@@ -184,13 +184,7 @@ function collectSharedDeclarations(
       const init = path.node.init
       if (init?.type !== 'CallExpression' || init.callee.type !== 'Identifier') return
       const kind =
-        init.callee.name === 'signal'
-          ? init.arguments.length === 2
-            ? 'collection'
-            : 'signal'
-          : init.callee.name === 'derived'
-            ? 'derived'
-            : null
+        init.callee.name === 'signal' ? 'signal' : init.callee.name === 'derived' ? 'derived' : null
       if (!kind) return
 
       if (kind === 'signal') {
@@ -206,19 +200,6 @@ function collectSharedDeclarations(
       ) {
         throw new Error(
           'compile: module-scope derived() must be called with a zero-arg concise arrow function `() => expr` (scope limit)',
-        )
-      } else if (
-        kind === 'collection' &&
-        (init.arguments.length !== 2 ||
-          init.arguments[0]?.type === 'SpreadElement' ||
-          init.arguments[1]?.type === 'SpreadElement' ||
-          init.arguments[1]?.type !== 'ArrowFunctionExpression' ||
-          init.arguments[1].params.length !== 1 ||
-          init.arguments[1].params[0]?.type !== 'Identifier' ||
-          init.arguments[1].body.type === 'BlockStatement')
-      ) {
-        throw new Error(
-          'compile: module-scope signal() key selector must be a one-argument concise arrow function `(item) => key` (scope limit)',
         )
       }
 
@@ -248,23 +229,6 @@ function collectSharedDeclarations(
         outputName: declaration.outputName,
         rendered: sourceRendered,
         sourceRendered,
-      })
-      continue
-    }
-
-    if (declaration.kind === 'collection') {
-      const initialPath = argPath
-      const keyPath = args[1]!
-      const initial = analyzeExpr(ctx, initialPath, 0)
-      const key = analyzeExpr(ctx, keyPath, 0)
-      ctx.sharedDecls.push({
-        id: declaration.id,
-        kind: declaration.kind,
-        outputName: declaration.outputName,
-        rendered: initial.rendered,
-        sourceRendered: initial.sourceRendered,
-        keyRendered: key.rendered,
-        keySourceRendered: key.sourceRendered,
       })
       continue
     }
@@ -705,12 +669,12 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
     ...(options.supportStatements ?? []),
     ...ctx.sharedDecls.map((decl) => {
       if (decl.kind === 'signal') {
-        return `const ${decl.outputName} = signal(${decl.sourceRendered}, undefined, ${JSON.stringify(decl.id)});`
+        return `const ${decl.outputName} = signal(${decl.sourceRendered}, ${JSON.stringify(decl.id)});`
       }
       if (decl.kind === 'derived') {
         return `const ${decl.outputName} = derived(${decl.sourceRendered}, ${JSON.stringify(decl.id)});`
       }
-      return `const ${decl.outputName} = signal(${decl.sourceRendered}, ${decl.keySourceRendered}, ${JSON.stringify(decl.id)});`
+      throw new Error(`compile: unsupported shared declaration kind ${decl.kind}`)
     }),
     ...out.instrumentedDeclStatements,
     `return \`${rootHtmlSource}\`;`,
@@ -780,20 +744,12 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
     sharedDerivedStatements: ctx.sharedDecls
       .filter((decl) => decl.kind === 'derived' && ctx.usedSharedDeclIds.has(decl.id))
       .map((decl) => `const ${decl.outputName} = ${decl.rendered};`),
-    sharedCollectionStatements: ctx.sharedDecls
-      .filter((decl) => decl.kind === 'collection' && ctx.usedSharedDeclIds.has(decl.id))
-      .map(
-        (decl) =>
-          `const ${decl.outputName} = __sharedCollection__(${decl.rendered}, ${decl.keyRendered});`,
-      ),
+    sharedCollectionStatements: [],
     sharedSignalNames: [...signalToMarkers.keys()]
       .filter((id) => ctx.sharedDeclIds.has(id) && ctx.declKind.get(id) === 'signal')
       .map((id) => ctx.declOutputName.get(id)!)
       .filter((name): name is string => name != null),
-    sharedCollectionNames: [...signalToMarkers.keys()]
-      .filter((id) => ctx.sharedDeclIds.has(id) && ctx.declKind.get(id) === 'collection')
-      .map((id) => ctx.declOutputName.get(id)!)
-      .filter((name): name is string => name != null),
+    sharedCollectionNames: [],
     sharedDerivedIds: new Set(
       [...ctx.sharedDeclIds].filter((id) => ctx.declKind.get(id) === 'derived'),
     ),
@@ -804,7 +760,7 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
     declOutputName: ctx.declOutputName,
     derivedDeps: ctx.derivedDeps,
     derivedRecompute: ctx.derivedRecompute,
-    collectionKeyRendered: ctx.collectionKeyRendered,
+    collectionKeyRendered: new Map(),
     handlers: handlerOutputs,
     actions: actionOutputs,
     mounts: mountOutputs,

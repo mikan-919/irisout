@@ -3,12 +3,11 @@
 実装の「今」の状態(現在地・マイルストーン進捗・既知の制約)をまとめたもの。
 設計判断待ちの論点・次のアクションの計画は `ROADMAP.md` を参照。
 
-## 現在地(2026-09-11・0.2.0公開準備)
+## 現在地(2026-09-11・0.2.1公開準備)
 
-作者向け`collection()`を廃止し、キー付き配列状態を`signal(initial, keyOf)`へ統合した。
-読み取り、全体置換、`update(key, updater)`の項目直接更新、module共有、Listのキー照合を
-維持する。移行方法は`collection(initial, keyOf)`を`signal(initial, keyOf)`へ置き換える。
-公開済み版は0.1.1であり、ソース版0.2.0は未公開である。
+状態更新へ`signal((previous) => next)`を追加した。配列も通常のsignalとして扱い、
+`signal(initial, keyOf)`と`.update()`を削除した。一覧の識別と要素再利用はJSXの`key`が担当し、
+配列更新は全体再調整を使う。公開済み版は0.1.1であり、ソース版0.2.1は未公開である。
 
 ## 現在地(2026-09-09・R3完了判定)
 
@@ -209,7 +208,7 @@ moduleを依存順にASTリンクする。named importとdefault import、二段
 functionと初期化済み単純`const`は生成moduleのmodule scopeへ補助宣言として一度だけ出す。
 component function、props object、component runtimeは生成しない。直接のmodule scope
 `const name = signal(initial)`、`const name = derived(() => expression)`、
-`const name = signal(initial, keyOf)`はADR-0030/0037/0039/0051の共有stateとして参照時だけ生成する。
+配列を初期値とするsignalもADR-0030/0037/0051の共有stateとして参照時だけ生成する。
 
 `compile(source)`は単一文字列APIとして維持し、importは受理しない。`compileProject`の
 module scopeでは直接signal/derived以外のstate、副作用文、`let`/`var`、分割代入、外部specifier、未解決path、
@@ -233,11 +232,8 @@ CONCEPT.v3への移行に伴い、List更新を共有最小ランタイムへ切
 並べ替えは`reconcileList()`が担当し、順序が同じDOM要素は再挿入しない。
 Listを使わない生成物にはList helperのimport自体を出力しない。
 
-キー付き配列APIはADR-0051で`signal(initial, keyOf)`へ統合した。通常のsignalと同じ
-読み取り・全体setterに加えて`signal.update(key, updater)`を持つ。
-直接のキー付き`signal().map()`は変更itemのhandleをMapから引いてO(1)で通知し、同じsignalを
-描画する複数ListとList以外の依存markerも更新する。通常setter、派生した配列式、ネストListは
-従来どおり全体reconcileへフォールバックする。
+0.2.1では配列も通常のsignalとして扱い、`signal((previous) => next)`で更新する。
+直接の`signal().map()`はJSXの`key`で要素を照合し、全体reconcileを実行する。
 
 ## 現在地(2026-09-04・同期更新バッチ)
 
@@ -247,8 +243,7 @@ Listを使わない生成物にはList helperのimport自体を出力しない�
 重複なしで反映する。単一root・異なるmarker・同じsignalの複数回書き込みでは既存の
 `update_<name>()`を使い、未使用のbatch関数は出力しない。
 
-`signal.update()`のkeyed direct通知は維持し、別rootと共有markerを持つbatch内だけ
-instance専有の深さカウンタでdirect通知を遅延する。ローカルsignalのfactory
+関数形式のsignal設定も値形式と同じ更新batchへ入る。ローカルsignalのfactory
 `update()`、Listのkey照合/順序調整、公開batch APIやmicrotask schedulerは変更しない。
 イベント配線は実Chromiumで`direct`、`delegated`、`capture`、`adapter`を、
 `click`、`change`、`input`、`keydown`、`dblclick`、`blur`のfixtureで比較した
@@ -421,7 +416,7 @@ module共有derivedの呼び出しは読み取り専用で、引数付き呼び�
 
 ## 追加実装結果(2026-09-06・module共有キー付き状態、ADR-0039/0051)
 
-`compileProject()`は直接の`const name = signal(initial, (item) => key)`をmodule scopeの
+`compileProject()`は直接の`const name = signal(initial)`をmodule scopeの
 共有キー付きsignalとして受理する。参照されたsignalは生成moduleへ一つだけ出力し、配列の置換と
 `update(key, updater)`を現在のmounted instanceへ同期通知する。Listのkeyed DOM状態とbinding
 cacheは各instanceが所有し、unmount時に購読を解除する。直接形でないキー付きsignal宣言は

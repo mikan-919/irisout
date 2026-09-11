@@ -335,7 +335,6 @@ function analyzeHandlerStatementsCore(
     if (!outputName) return
 
     const parent = idPath.parentPath
-    const memberCall = parent?.isMemberExpression() ? parent.parentPath : null
     if (ctx.sharedDeclIds.has(id)) {
       if (parent?.isCallExpression() && parent.node.callee === idPath.node) {
         if (ctx.declKind.get(id) === 'derived' && parent.node.arguments.length > 0) {
@@ -349,43 +348,6 @@ function analyzeHandlerStatementsCore(
           )
         }
         if (parent.node.arguments.length === 1) noteWrite(parent.node.start!)
-      }
-      return
-    }
-    if (
-      ctx.declKind.get(id) === 'collection' &&
-      parent?.isMemberExpression() &&
-      !parent.node.computed &&
-      parent.get('property').isIdentifier({ name: 'update' }) &&
-      memberCall?.isCallExpression() &&
-      memberCall.node.callee === parent.node
-    ) {
-      if (memberCall.node.arguments.length !== 2) {
-        throw new Error(
-          `compile: signal.update() takes exactly a key and an updater for "${idPath.node.name}"`,
-        )
-      }
-      const firstArg = memberCall.node.arguments[0]!
-      edits.push({
-        start: idPath.node.start!,
-        end: firstArg.start!,
-        text: `update_${outputName}_item(`,
-      })
-      // collection.update() は専用の直接通知経路を持つ。別のroot writeと
-      // 同一スコープで実行される場合だけ、compiler.ts がこの集合をbatchへ
-      // 組み込む。
-      for (const sig of resolveToSignals(ctx, id, new Set())) {
-        directCollectionWriteDeclIds.add(sig)
-      }
-      noteWrite(memberCall.node.start!)
-      if (ast) {
-        const memberCallPath = memberCall as NodePath<t.CallExpression>
-        planAstReplacement(ast, memberCallPath, astRoot, (get) =>
-          t.callExpression(t.identifier(`update_${outputName}_item`), [
-            get(firstArg as t.Expression) as t.Expression,
-            get(memberCall.node.arguments[1] as t.Expression) as t.Expression,
-          ]),
-        )
       }
       return
     }
@@ -412,31 +374,23 @@ function analyzeHandlerStatementsCore(
         throw new Error(`compile: cannot write to derived "${idPath.node.name}"`)
       }
       const arg = parent.node.arguments[0]!
+      const functional = arg.type === 'ArrowFunctionExpression' || arg.type === 'FunctionExpression'
       edits.push({
         start: parent.node.start!,
         end: arg.start!,
-        text:
-          ctx.declKind.get(id) === 'collection'
-            ? `${outputName} = __replaceCollection__(__collection_${outputName}__, `
-            : `${outputName} = `,
+        text: `${outputName} = ${functional ? '(' : ''}`,
       })
       edits.push({
         start: arg.end!,
         end: parent.node.end!,
-        text: ctx.declKind.get(id) === 'collection' ? ')' : '',
+        text: functional ? `)(${outputName})` : '',
       })
       if (ast) {
         const callPath = parent as NodePath<t.CallExpression>
         planAstReplacement(ast, callPath, astRoot, (get) => {
           const arg = parent.node.arguments[0] as t.Expression
           const value = get(arg) as t.Expression
-          const rhs =
-            ctx.declKind.get(id) === 'collection'
-              ? t.callExpression(t.identifier('__replaceCollection__'), [
-                  t.identifier(`__collection_${outputName}__`),
-                  value,
-                ])
-              : value
+          const rhs = functional ? t.callExpression(value, [t.identifier(outputName)]) : value
           return t.assignmentExpression('=', t.identifier(outputName), rhs)
         })
       }
@@ -697,7 +651,6 @@ export function analyzeHandlerExpr(
     if (!outputName) return
 
     const parent = idPath.parentPath
-    const memberCall = parent?.isMemberExpression() ? parent.parentPath : null
     if (ctx.sharedDeclIds.has(id)) {
       if (parent?.isCallExpression() && parent.node.callee === idPath.node) {
         if (ctx.declKind.get(id) === 'derived' && parent.node.arguments.length > 0) {
@@ -710,39 +663,6 @@ export function analyzeHandlerExpr(
             `compile: signal writes take exactly one argument, got ${parent.node.arguments.length} for "${idPath.node.name}" (scope limit)`,
           )
         }
-      }
-      return
-    }
-    if (
-      ctx.declKind.get(id) === 'collection' &&
-      parent?.isMemberExpression() &&
-      !parent.node.computed &&
-      parent.get('property').isIdentifier({ name: 'update' }) &&
-      memberCall?.isCallExpression() &&
-      memberCall.node.callee === parent.node
-    ) {
-      if (memberCall.node.arguments.length !== 2) {
-        throw new Error(
-          `compile: signal.update() takes exactly a key and an updater for "${idPath.node.name}"`,
-        )
-      }
-      const firstArg = memberCall.node.arguments[0]!
-      edits.push({
-        start: idPath.node.start!,
-        end: firstArg.start!,
-        text: `update_${outputName}_item(`,
-      })
-      for (const sig of resolveToSignals(ctx, id, new Set())) {
-        directCollectionWriteDeclIds.add(sig)
-      }
-      if (ast) {
-        const memberCallPath = memberCall as NodePath<t.CallExpression>
-        planAstReplacement(ast, memberCallPath, exprPath.node, (get) =>
-          t.callExpression(t.identifier(`update_${outputName}_item`), [
-            get(firstArg as t.Expression) as t.Expression,
-            get(memberCall.node.arguments[1] as t.Expression) as t.Expression,
-          ]),
-        )
       }
       return
     }
@@ -769,31 +689,23 @@ export function analyzeHandlerExpr(
         throw new Error(`compile: cannot write to derived "${idPath.node.name}"`)
       }
       const arg = parent.node.arguments[0]!
+      const functional = arg.type === 'ArrowFunctionExpression' || arg.type === 'FunctionExpression'
       edits.push({
         start: parent.node.start!,
         end: arg.start!,
-        text:
-          ctx.declKind.get(id) === 'collection'
-            ? `${outputName} = __replaceCollection__(__collection_${outputName}__, `
-            : `${outputName} = `,
+        text: `${outputName} = ${functional ? '(' : ''}`,
       })
       edits.push({
         start: arg.end!,
         end: parent.node.end!,
-        text: ctx.declKind.get(id) === 'collection' ? ')' : '',
+        text: functional ? `)(${outputName})` : '',
       })
       if (ast) {
         const callPath = parent as NodePath<t.CallExpression>
         planAstReplacement(ast, callPath, exprPath.node, (get) => {
           const arg = parent.node.arguments[0] as t.Expression
           const value = get(arg) as t.Expression
-          const rhs =
-            ctx.declKind.get(id) === 'collection'
-              ? t.callExpression(t.identifier('__replaceCollection__'), [
-                  t.identifier(`__collection_${outputName}__`),
-                  value,
-                ])
-              : value
+          const rhs = functional ? t.callExpression(value, [t.identifier(outputName)]) : value
           return t.assignmentExpression('=', t.identifier(outputName), rhs)
         })
       }
@@ -1032,7 +944,6 @@ function analyzeActionIdentifier(
   if (!outputName) return
 
   const parent = idPath.parentPath
-  const memberCall = parent?.isMemberExpression() ? parent.parentPath : null
   if (ctx.sharedDeclIds.has(id)) {
     if (parent?.isCallExpression() && parent.node.callee === idPath.node) {
       if (ctx.declKind.get(id) === 'derived' && parent.node.arguments.length > 0) {
@@ -1052,40 +963,6 @@ function analyzeActionIdentifier(
       }
     } else {
       readDeclIds.add(id)
-    }
-    return
-  }
-  if (
-    ctx.declKind.get(id) === 'collection' &&
-    parent?.isMemberExpression() &&
-    !parent.node.computed &&
-    parent.get('property').isIdentifier({ name: 'update' }) &&
-    memberCall?.isCallExpression() &&
-    memberCall.node.callee === parent.node
-  ) {
-    if (memberCall.node.arguments.length !== 2) {
-      throw new Error(
-        `compile: signal.update() takes exactly a key and an updater for "${idPath.node.name}"`,
-      )
-    }
-    const firstArg = memberCall.node.arguments[0]!
-    edits.push({
-      start: idPath.node.start!,
-      end: firstArg.start!,
-      text: `update_${outputName}_item(`,
-    })
-    for (const sig of resolveToSignals(ctx, id, new Set())) {
-      directCollectionWriteDeclIds.add(sig)
-    }
-    onWrite(memberCall.node.start!)
-    if (ast) {
-      const memberCallPath = memberCall as NodePath<t.CallExpression>
-      planAstReplacement(ast, memberCallPath, root, (get) =>
-        t.callExpression(t.identifier(`update_${outputName}_item`), [
-          get(firstArg as t.Expression) as t.Expression,
-          get(memberCall.node.arguments[1] as t.Expression) as t.Expression,
-        ]),
-      )
     }
     return
   }
@@ -1113,30 +990,22 @@ function analyzeActionIdentifier(
       throw new Error(`compile: cannot write to derived "${idPath.node.name}"`)
     }
     const arg = parent.node.arguments[0]!
+    const functional = arg.type === 'ArrowFunctionExpression' || arg.type === 'FunctionExpression'
     edits.push({
       start: parent.node.start!,
       end: arg.start!,
-      text:
-        ctx.declKind.get(id) === 'collection'
-          ? `${outputName} = __replaceCollection__(__collection_${outputName}__, `
-          : `${outputName} = `,
+      text: `${outputName} = ${functional ? '(' : ''}`,
     })
     edits.push({
       start: arg.end!,
       end: parent.node.end!,
-      text: ctx.declKind.get(id) === 'collection' ? ')' : '',
+      text: functional ? `)(${outputName})` : '',
     })
     if (ast) {
       const callPath = parent as NodePath<t.CallExpression>
       planAstReplacement(ast, callPath, root, (get) => {
         const value = get(arg as t.Expression) as t.Expression
-        const rhs =
-          ctx.declKind.get(id) === 'collection'
-            ? t.callExpression(t.identifier('__replaceCollection__'), [
-                t.identifier(`__collection_${outputName}__`),
-                value,
-              ])
-            : value
+        const rhs = functional ? t.callExpression(value, [t.identifier(outputName)]) : value
         return t.assignmentExpression('=', t.identifier(outputName), rhs)
       })
     }

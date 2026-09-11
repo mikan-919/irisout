@@ -184,16 +184,15 @@ describe('compileProject: static multi-file module composition', () => {
     secondInstance.unmount()
   })
 
-  it('shares a module keyed signal across component instances and unsubscribes on unmount', async () => {
+  it('shares a module array signal across component instances and unsubscribes on unmount', async () => {
     const entry = writeProject({
-      'main.jsx': `import { items } from './state.js'; export function App() { render(<div><button class="update" onClick={update}>update</button><button class="replace" onClick={replace}>replace</button><p>{items().map((item) => item.text).join(',')}</p><ul>{items().map((item) => <li key={item.id}>{item.text}</li>)}</ul></div>); function update() { items.update(1, (item) => ({ ...item, text: item.text + '!' })); } function replace() { items([...items(), { id: 3, text: 'c' }]); } }`,
-      'state.js': `export const items = signal([{ id: 1, text: 'a' }, { id: 2, text: 'b' }], (item) => item.id);`,
+      'main.jsx': `import { items } from './state.js'; export function App() { render(<div><button class="update" onClick={update}>update</button><button class="replace" onClick={replace}>replace</button><p>{items().map((item) => item.text).join(',')}</p><ul>{items().map((item) => <li key={item.id}>{item.text}</li>)}</ul></div>); function update() { items((previous) => previous.map((item) => item.id === 1 ? { ...item, text: item.text + '!' } : item)); } function replace() { items((previous) => [...previous, { id: 3, text: 'c' }]); } }`,
+      'state.js': `export const items = signal([{ id: 1, text: 'a' }, { id: 2, text: 'b' }]);`,
     })
     const { code } = compileProject(entry)
-    expect(code).toContain('sharedCollection as __sharedCollection__')
+    expect(code).toContain('sharedSignal as __sharedSignal__')
     expect(code).toContain('.subscribe(update_IrisM0_items)')
-    expect(code).toContain('IrisM0_items.keyOf')
-    expect(code).not.toContain('__createCollectionState__')
+    expect(code).not.toContain('keyOf')
 
     const mod = await loadGenerated(code)
     const first = createContainer()

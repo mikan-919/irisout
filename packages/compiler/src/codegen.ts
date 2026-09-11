@@ -1443,7 +1443,7 @@ export function generateModule({
   externalImports,
   sharedStatements,
   sharedDerivedStatements,
-  sharedCollectionStatements,
+  sharedCollectionStatements: _sharedCollectionStatements,
   sharedSignalNames,
   sharedCollectionNames,
   sharedDerivedIds,
@@ -1454,7 +1454,7 @@ export function generateModule({
   declOutputName,
   derivedDeps,
   derivedRecompute,
-  collectionKeyRendered,
+  collectionKeyRendered: _collectionKeyRendered,
   handlers,
   actions,
   mounts,
@@ -1491,26 +1491,12 @@ export function generateModule({
       'destroyListRuntime as __destroyListRuntime__',
     )
   }
-  if (collectionKeyRendered.size > 0) {
-    runtimeImports.push(
-      'createCollectionState as __createCollectionState__',
-      'replaceCollection as __replaceCollection__',
-      'updateCollectionItem as __updateCollectionItem__',
-    )
-    if (markers.some((marker) => marker.kind === 'list' && marker.collectionDeclId !== null)) {
-      runtimeImports.push('updateListItem as __updateListItem__')
-    }
-  }
   if (sharedStatements.length > 0) runtimeImports.push('sharedSignal as __sharedSignal__')
-  if (sharedCollectionStatements.length > 0) {
-    runtimeImports.push('sharedCollection as __sharedCollection__')
-  }
   if (externalImports.length > 0) moduleLines.push(...externalImports, '')
   moduleLines.push(`import { ${runtimeImports.join(', ')} } from 'irisout/runtime';`, '')
   if (supportStatements.length > 0) moduleLines.push(...supportStatements, '')
   if (sharedStatements.length > 0) moduleLines.push(...sharedStatements, '')
   if (sharedDerivedStatements.length > 0) moduleLines.push(...sharedDerivedStatements, '')
-  if (sharedCollectionStatements.length > 0) moduleLines.push(...sharedCollectionStatements, '')
   instanceLines.push(...declStatements, '')
   // cross-function-handler-writes design D4: 追跡された動きゾーン関数をauthored
   // 名のままinstanceスコープへemitする(update_*()は本体に入れない — D3)。
@@ -2000,55 +1986,6 @@ export function generateModule({
       for (const markerId of batch.markerIds) appendMarkerUpdate(instanceLines, markerId)
     }
     appendEffectUpdates(instanceLines, batch.signalIds)
-    instanceLines.push('}', '')
-  }
-
-  for (const collectionId of collectionKeyRendered.keys()) {
-    const name = declOutputName.get(collectionId)!
-    const directLists = markers.filter(
-      (marker): marker is ListMarkerOutput =>
-        marker.kind === 'list' && marker.collectionDeclId === collectionId,
-    )
-    instanceLines.push(`function update_${name}_item(__key__, __updater__) {`)
-    instanceLines.push('  if (!__mounted__ || __unmounted__) return;')
-    instanceLines.push(
-      `  const __next__ = __updateCollectionItem__(__collection_${name}__, __key__, __updater__);`,
-    )
-    const directUpdateLines: string[] = []
-    for (const derivedId of signalToDerivedRecomputes.get(collectionId) ?? []) {
-      if (sharedDerivedIds.has(derivedId)) continue
-      directUpdateLines.push(
-        `  ${declOutputName.get(derivedId)} = ${derivedRecompute.get(derivedId)};`,
-      )
-    }
-    for (const mId of signalToMarkers.get(collectionId) ?? []) {
-      const direct = directLists.find((marker) => marker.id === mId)
-      if (!direct) {
-        appendMarkerUpdate(
-          directUpdateLines,
-          mId,
-          hasStructuralEffects ? '__effect_trigger__' : 'null',
-        )
-        continue
-      }
-      const usesSharedUpdater =
-        bodyUnits(direct.body).length === 0 &&
-        direct.body.localDecls.length === 0 &&
-        direct.body.localActions.length === 0 &&
-        direct.body.localEffects.length === 0
-      const updaterArg = usesSharedUpdater ? `, __create_${direct.id}__update__` : ''
-      directUpdateLines.push(
-        `  __updateListItem__(__list_${direct.id}__, __key__, __next__${updaterArg});`,
-      )
-    }
-    if (updateBatches.some((batch) => batch.containsCollection)) {
-      instanceLines.push('  if (__update_batch_depth__ === 0) {')
-      instanceLines.push(...directUpdateLines.map((line) => `  ${line}`))
-      instanceLines.push('  }')
-    } else {
-      instanceLines.push(...directUpdateLines)
-    }
-    appendEffectUpdates(instanceLines, [collectionId])
     instanceLines.push('}', '')
   }
 

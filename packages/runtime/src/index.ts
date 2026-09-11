@@ -11,7 +11,7 @@
 // ADR-0015の更新アドレスとkeyed DOM順序だけを管理する。
 
 type DeclId = string
-type DeclKind = 'signal' | 'derived' | 'collection'
+type DeclKind = 'signal' | 'derived'
 
 // CONCEPT.v3: List 全体を再描画せず、listId / itemId / bindingId の3段アドレスで
 // 更新先を特定する。文字列の連結やハッシュはホットパスで作らず、List と item は
@@ -116,55 +116,6 @@ export function updateListBinding(item: ListItemState, bindingId: string, value:
   }
   item.bindings.set(bindingId, value)
   return true
-}
-
-export interface CollectionState<T, K> {
-  values: T[]
-  readonly keyOf: (value: T) => K
-  readonly index: Map<K, number>
-}
-
-function buildCollectionIndex<T, K>(values: readonly T[], keyOf: (value: T) => K): Map<K, number> {
-  const index = new Map<K, number>()
-  values.forEach((value, position) => {
-    const key = keyOf(value)
-    if (index.has(key)) throw new Error(`signal: duplicate key ${String(key)}`)
-    index.set(key, position)
-  })
-  return index
-}
-
-export function createCollectionState<T, K>(
-  initial: readonly T[],
-  keyOf: (value: T) => K,
-): CollectionState<T, K> {
-  const values = Array.from(initial)
-  return { values, keyOf, index: buildCollectionIndex(values, keyOf) }
-}
-
-export function replaceCollection<T, K>(state: CollectionState<T, K>, next: readonly T[]): T[] {
-  const values = Array.from(next)
-  const index = buildCollectionIndex(values, state.keyOf)
-  state.values = values
-  state.index.clear()
-  for (const [key, position] of index) state.index.set(key, position)
-  return state.values
-}
-
-export function updateCollectionItem<T, K>(
-  state: CollectionState<T, K>,
-  key: K,
-  updater: (current: T) => T,
-): T {
-  const index = state.index.get(key)
-  if (index === undefined) throw new Error(`signal.update: unknown key ${String(key)}`)
-  const next = updater(state.values[index]!)
-  const nextKey = state.keyOf(next)
-  if (!Object.is(nextKey, key)) {
-    throw new Error(`signal.update: key must remain ${String(key)}, received ${String(nextKey)}`)
-  }
-  state.values[index] = next
-  return next
 }
 
 export function updateListItem<T>(
@@ -454,38 +405,19 @@ export const registry = new Map<DeclId, { kind: DeclKind }>()
 
 export interface SignalAccessor<T> {
   (): T
-  (next: T): T
+  (next: T | ((previous: T) => T)): T
 }
 
-export interface KeyedSignalAccessor<T, K> extends SignalAccessor<readonly T[]> {
-  update(key: K, updater: (current: T) => T): T
-  readonly keyOf: (value: T) => K
-}
-
-export function signal<T>(initial: T, keyOf?: undefined, declId?: DeclId): SignalAccessor<T>
-export function signal<T, K>(
-  initial: readonly T[],
-  keyOf: (value: T) => K,
-  declId?: DeclId,
-): KeyedSignalAccessor<T, K>
-export function signal<T, K>(
-  initial: T | readonly T[],
-  keyOf?: (value: T) => K,
-  declId?: DeclId,
-): SignalAccessor<T> | KeyedSignalAccessor<T, K> {
-  if (keyOf) {
-    const accessor = createKeyedSignal(initial as readonly T[], keyOf)
-    if (declId) registry.set(declId, { kind: 'collection' })
-    return accessor
-  }
-  let value = initial as T
-  function accessor(...args: [] | [T]): T {
+export function signal<T>(initial: T, declId?: DeclId): SignalAccessor<T> {
+  let value = initial
+  function accessor(...args: [] | [T | ((previous: T) => T)]): T {
     if (args.length === 0) return value
-    value = args[0] as T
+    const next = args[0]!
+    value = typeof next === 'function' ? (next as (previous: T) => T)(value) : next
     return value
   }
   if (declId) registry.set(declId, { kind: 'signal' })
-  return accessor as SignalAccessor<T>
+  return accessor
 }
 
 // compileProjectのmodule scopeで使う共有signal。component instanceごとの購読だけを
@@ -493,16 +425,17 @@ export function signal<T, K>(
 // ではなく、値の設定時に現在の購読者へ同期通知する専用境界である。
 export interface SharedSignal<T> {
   (): T
-  (next: T): T
+  (next: T | ((previous: T) => T)): T
   subscribe(listener: () => void): () => void
 }
 
 export function sharedSignal<T>(initial: T): SharedSignal<T> {
   let value = initial
   const listeners = new Set<() => void>()
-  const accessor = ((...args: [] | [T]): T => {
+  const accessor = ((...args: [] | [T | ((previous: T) => T)]): T => {
     if (args.length === 0) return value
-    value = args[0] as T
+    const next = args[0]!
+    value = typeof next === 'function' ? (next as (previous: T) => T)(value) : next
     for (const listener of Array.from(listeners)) listener()
     return value
   }) as SharedSignal<T>
@@ -521,71 +454,6 @@ export function sharedSignal<T>(initial: T): SharedSignal<T> {
 export function derived<T>(compute: () => T, declId?: DeclId): () => T {
   if (declId) registry.set(declId, { kind: 'derived' })
   return compute
-}
-
-function createKeyedSignal<T, K>(
-  initial: readonly T[],
-  keyOf: (value: T) => K,
-): KeyedSignalAccessor<T, K> {
-  let values = Array.from(initial)
-  const accessor = ((...args: [] | [readonly T[]]): readonly T[] => {
-    if (args.length === 0) return values
-    values = Array.from(args[0]!)
-    return values
-  }) as KeyedSignalAccessor<T, K>
-  Object.defineProperty(accessor, 'keyOf', { value: keyOf })
-  accessor.update = (key, updater) => {
-    const index = values.findIndex((value) => Object.is(keyOf(value), key))
-    if (index < 0) throw new Error(`signal.update: unknown key ${String(key)}`)
-    const next = updater(values[index]!)
-    const nextKey = keyOf(next)
-    if (!Object.is(nextKey, key)) {
-      throw new Error(`signal.update: key must remain ${String(key)}, received ${String(nextKey)}`)
-    }
-    values[index] = next
-    return next
-  }
-  return accessor
-}
-
-// compileProjectのmodule scopeで使う共有collection。値とkey indexは生成moduleの
-// module scopeに一つだけ置き、各component instanceのupdate関数へ同期通知する。
-// Listのkeyed DOM状態はinstanceごとに残し、collection accessorだけを共有する。
-export interface SharedCollection<T, K> extends KeyedSignalAccessor<T, K> {
-  subscribe(listener: () => void): () => void
-}
-
-export function sharedCollection<T, K>(
-  initial: readonly T[],
-  keyOf: (value: T) => K,
-): SharedCollection<T, K> {
-  const state = createCollectionState(initial, keyOf)
-  const listeners = new Set<() => void>()
-  const notify = (): void => {
-    for (const listener of Array.from(listeners)) listener()
-  }
-  const accessor = ((...args: [] | [readonly T[]]): readonly T[] => {
-    if (args.length === 0) return state.values
-    const values = replaceCollection(state, args[0]!)
-    notify()
-    return values
-  }) as SharedCollection<T, K>
-  Object.defineProperty(accessor, 'keyOf', { value: keyOf })
-  accessor.update = (key, updater) => {
-    const next = updateCollectionItem(state, key, updater)
-    notify()
-    return next
-  }
-  accessor.subscribe = (listener: () => void): (() => void) => {
-    listeners.add(listener)
-    let active = true
-    return () => {
-      if (!active) return
-      active = false
-      listeners.delete(listener)
-    }
-  }
-  return accessor
 }
 
 // すでに DOM 上に存在する(静的ビルドで焼き込み済みの)HTML から

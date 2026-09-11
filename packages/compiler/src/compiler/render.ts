@@ -135,36 +135,7 @@ function emitSignal(
   out.declStatements.push(`let ${outputName} = ${rendered};`)
   // ビルド時実行専用: registry 検証のため本物の signal() を declId 付きで呼ぶ。
   out.instrumentedDeclStatements.push(
-    `const ${outputName} = signal(${sourceRendered}, undefined, ${JSON.stringify(id)});`,
-  )
-  return id
-}
-
-function emitCollection(
-  ctx: CompilerState,
-  instanceId: number,
-  declaratorStart: number,
-  naturalName: string,
-  rendered: string,
-  sourceRendered: string,
-  keyRendered: string,
-  keySourceRendered: string,
-  out: RenderOutput,
-): DeclId {
-  const { id, outputName } = ensureRootDeclIdentity(
-    ctx,
-    instanceId,
-    declaratorStart,
-    naturalName,
-    'collection',
-  )
-  ctx.collectionKeyRendered.set(id, keyRendered)
-  out.declStatements.push(
-    `const __collection_${outputName}__ = __createCollectionState__(${rendered}, ${keyRendered});`,
-    `let ${outputName} = __collection_${outputName}__.values;`,
-  )
-  out.instrumentedDeclStatements.push(
-    `const ${outputName} = signal(${sourceRendered}, ${keySourceRendered}, ${JSON.stringify(id)});`,
+    `const ${outputName} = signal(${sourceRendered}, ${JSON.stringify(id)});`,
   )
   return id
 }
@@ -244,11 +215,10 @@ function prepareRootDeclaration(
 }
 
 interface ParsedSignalDecl {
-  kind: 'signal' | 'derived' | 'collection'
+  kind: 'signal' | 'derived'
   naturalName: string
   declaratorStart: number
   argPath: NodePath<t.Expression>
-  keyPath: NodePath<t.Expression> | null
 }
 
 // `const x = signal(...)` / `const x = derived(...)` の形を検証し、
@@ -281,18 +251,17 @@ function parseSignalDeclStatement(stmt: NodePath<t.Statement>): ParsedSignalDecl
   }
 
   const args = stmt.get('declarations.0.init.arguments') as NodePath<t.Expression>[]
-  if (init.callee.name === 'signal' && args.length !== 1 && args.length !== 2) {
-    throw new Error('compile: signal() takes an initial value and an optional key selector')
+  if (init.callee.name === 'signal' && args.length !== 1) {
+    throw new Error('compile: signal() takes exactly one initial value')
   }
   if (init.callee.name === 'derived' && args.length !== 1) {
     throw new Error(`compile: ${init.callee.name}() takes exactly one argument`)
   }
   return {
-    kind: init.callee.name === 'signal' && args.length === 2 ? 'collection' : init.callee.name,
+    kind: init.callee.name,
     naturalName: declarator.id.name,
     declaratorStart: declarator.start!,
     argPath: args[0]!,
-    keyPath: args[1] ?? null,
   }
 }
 
@@ -302,34 +271,10 @@ function processDeclarationStatement(
   instanceId: number,
   out: RenderOutput,
 ): void {
-  const { kind, naturalName, declaratorStart, argPath, keyPath } = parseSignalDeclStatement(stmt)
+  const { kind, naturalName, declaratorStart, argPath } = parseSignalDeclStatement(stmt)
   if (kind === 'signal') {
     const { rendered, sourceRendered } = analyzeExpr(ctx, argPath, instanceId)
     emitSignal(ctx, instanceId, declaratorStart, naturalName, rendered, sourceRendered, out)
-  } else if (kind === 'collection') {
-    if (
-      !keyPath?.isArrowFunctionExpression() ||
-      keyPath.node.params.length !== 1 ||
-      keyPath.node.params[0]?.type !== 'Identifier' ||
-      keyPath.get('body').isBlockStatement()
-    ) {
-      throw new Error(
-        'compile: signal() key selector must be a one-argument concise arrow function `(item) => key` (scope limit)',
-      )
-    }
-    const initial = analyzeExpr(ctx, argPath, instanceId)
-    const key = analyzeExpr(ctx, keyPath as NodePath<t.Expression>, instanceId)
-    emitCollection(
-      ctx,
-      instanceId,
-      declaratorStart,
-      naturalName,
-      initial.rendered,
-      initial.sourceRendered,
-      key.rendered,
-      key.sourceRendered,
-      out,
-    )
   } else {
     emitDerived(ctx, instanceId, declaratorStart, naturalName, argPath, out)
   }
@@ -397,11 +342,6 @@ export function processLocalDeclarationStatement(
   if (kind === 'signal') {
     const { rendered } = analyzeExpr(ctx, argPath, instanceId)
     return emitLocalSignal(ctx, instanceId, declaratorStart, naturalName, rendered)
-  }
-  if (kind === 'collection') {
-    throw new Error(
-      'compile: keyed signal() is only supported in the root variable zone (scope limit)',
-    )
   }
   return emitLocalDerived(ctx, instanceId, declaratorStart, naturalName, argPath)
 }

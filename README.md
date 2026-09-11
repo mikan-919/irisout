@@ -115,7 +115,7 @@ Worker入口を読み込みます。配信先に接頭辞がある場合は`IRIS
 主な対応機能は次のとおりです。
 
 - `signal`と`derived`
-- `signal(initial, keyOf)`によるキー付きリスト
+- 関数形式の`signal`更新とキー付きリスト
 - テキストと属性の更新
 - イベント処理
 - キー付きリストと条件分岐
@@ -127,7 +127,7 @@ Worker入口を読み込みます。配信先に接頭辞がある場合は`IRIS
 - SVG要素、静的なSVG名前空間属性、SVGの動的属性更新
 
 `compileProject()`では、直接のmodule共有`signal`と`derived`を受理します。
-キー付きsignalの配列は複数のcomponent instanceで共有され、ListのDOM状態はinstanceごとに
+配列signalは複数のcomponent instanceで共有され、ListのDOM状態はinstanceごとに
 保持されます。module共有stateのrequest単位SSR分離と永続化は対応範囲に含めません。
 
 SVGは`svg`以下の要素を既存のJSXで記述できます。通常の動的属性は`setAttribute`で更新し、

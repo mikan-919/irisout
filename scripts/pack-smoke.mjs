@@ -75,7 +75,7 @@ writeFileSync(
 )
 writeFileSync(
   path.join(fixtureDir, 'src/App.jsx'),
-  `export function App() {\n  const count = signal(0);\n  const items = signal([{ id: 1, text: 'a' }], (item) => item.id);\n  render(<div><button onClick={increment}>{count()}</button><ul>{items().map((item) => <li key={item.id}>{item.text}</li>)}</ul></div>);\n  function increment() {\n    console.log('irisout-pack-source-map');\n    items.update(1, (item) => ({ ...item, text: item.text + '!' }));\n    count(count() + 1);\n  }\n}\n`,
+  `export function App() {\n  const count = signal(0);\n  const items = signal([{ id: 1, text: 'a' }]);\n  render(<div><button onClick={increment}>{count()}</button><ul>{items().map((item) => <li key={item.id}>{item.text}</li>)}</ul></div>);\n  function increment() {\n    console.log('irisout-pack-source-map');\n    items((previous) => previous.map((item) => item.id === 1 ? { ...item, text: item.text + '!' } : item));\n    count((previous) => previous + 1);\n  }\n}\n`,
 )
 writeFileSync(path.join(fixtureDir, 'src/main.js'), "import 'virtual:irisout-entry'\n")
 writeFileSync(
@@ -121,7 +121,7 @@ try {
   if (
     !html.includes('<button') ||
     !app.includes('addEventListener') ||
-    !app.includes('update_items_item')
+    !app.includes('reconcileList')
   ) {
     throw new Error('pack smoke: generated runtime entry missing')
   }

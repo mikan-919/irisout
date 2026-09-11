@@ -126,8 +126,7 @@ function parseModuleUnchecked(filePath: string, source: string): ModuleRecord {
       const stateCall = findModuleStateCall(declarator.init)
       if (stateCall) {
         const isSharedState =
-          (stateCall === 'signal' &&
-            (isSharedSignalDeclarator(declarator) || isSharedCollectionDeclarator(declarator))) ||
+          (stateCall === 'signal' && isSharedSignalDeclarator(declarator)) ||
           (stateCall === 'derived' && isSharedDerivedDeclarator(declarator))
         if (!isSharedState) {
           throw compileError(
@@ -398,30 +397,8 @@ function isSharedDerivedDeclarator(declarator: t.VariableDeclarator): boolean {
   )
 }
 
-function isSharedCollectionDeclarator(declarator: t.VariableDeclarator): boolean {
-  const init = declarator.init
-  const args = init?.type === 'CallExpression' ? init.arguments : []
-  const key = args[1]
-  return (
-    declarator.id.type === 'Identifier' &&
-    init?.type === 'CallExpression' &&
-    init.callee.type === 'Identifier' &&
-    init.callee.name === 'signal' &&
-    args.length === 2 &&
-    args[0]?.type !== 'SpreadElement' &&
-    key?.type === 'ArrowFunctionExpression' &&
-    key.params.length === 1 &&
-    key.params[0]?.type === 'Identifier' &&
-    key.body.type !== 'BlockStatement'
-  )
-}
-
 function isSharedStateDeclarator(declarator: t.VariableDeclarator): boolean {
-  return (
-    isSharedSignalDeclarator(declarator) ||
-    isSharedDerivedDeclarator(declarator) ||
-    isSharedCollectionDeclarator(declarator)
-  )
+  return isSharedSignalDeclarator(declarator) || isSharedDerivedDeclarator(declarator)
 }
 
 function resolveModule(fromFile: string, specifier: string): string {

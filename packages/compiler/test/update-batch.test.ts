@@ -323,22 +323,22 @@ export function App() {
     }
   })
 
-  it('defers signal.update direct notification when another root shares its marker', async () => {
+  it('batches a functional signal update when another root shares its marker', async () => {
     const source = `
 export function App() {
-  const items = signal([{ id: 1, text: 'a' }], (item) => item.id);
+  const items = signal([{ id: 1, text: 'a' }]);
   const suffix = signal('');
   render(
     <div>
       <p>{items().map((item) => item.text).join(',')}{suffix()}</p>
-      <button onClick={() => { items.update(1, (item) => ({ ...item, text: 'b' })); suffix('!'); }}>set</button>
+      <button onClick={() => { items((previous) => previous.map((item) => ({ ...item, text: 'b' }))); suffix('!'); }}>set</button>
     </div>
   );
 }
 `
     const { code } = compile(source)
     expect(code).toContain('__update_batch_0__()')
-    expect(code).toContain('__update_batch_depth__')
+    expect(code).not.toContain('__update_batch_depth__')
 
     const mod = await loadGenerated(code)
     const container = createContainer()
@@ -353,21 +353,21 @@ export function App() {
     }
   })
 
-  it('keeps signal.update direct behavior when it is the only write', async () => {
+  it('uses the normal update path for one functional signal write', async () => {
     const source = `
 export function App() {
-  const items = signal([{ id: 1, text: 'a' }], (item) => item.id);
+  const items = signal([{ id: 1, text: 'a' }]);
   render(
     <div>
       <p>{items().map((item) => item.text).join(',')}</p>
-      <button onClick={() => items.update(1, (item) => ({ ...item, text: 'b' }))}>set</button>
+      <button onClick={() => items((previous) => previous.map((item) => ({ ...item, text: 'b' })))}>set</button>
     </div>
   );
 }
 `
     const { code } = compile(source)
     expect(code).not.toContain('__update_batch_')
-    expect(code).not.toContain('update_items();')
+    expect(code).toContain('update_items();')
 
     const mod = await loadGenerated(code)
     const container = createContainer()
@@ -376,10 +376,10 @@ export function App() {
     expect(container.querySelector('p')?.textContent).toBe('b')
   })
 
-  it('defers signal.update from an action closure in the same way', async () => {
+  it('batches a functional signal update from an action closure', async () => {
     const source = `
 export function App() {
-  const items = signal([{ id: 1, text: 'a' }], (item) => item.id);
+  const items = signal([{ id: 1, text: 'a' }]);
   const suffix = signal('');
   render(
     <div>
@@ -387,12 +387,12 @@ export function App() {
       <canvas use={setup}></canvas>
     </div>
   );
-  function setup(el) { return () => { items.update(1, (item) => ({ ...item, text: 'b' })); suffix('!'); }; }
+  function setup(el) { return () => { items((previous) => previous.map((item) => ({ ...item, text: 'b' }))); suffix('!'); }; }
 }
 `
     const { code } = compile(source)
     expect(code).toContain('__update_batch_0__()')
-    expect(code).toContain('__update_batch_depth__')
+    expect(code).not.toContain('__update_batch_depth__')
 
     const mod = await loadGenerated(code)
     const container = createContainer()
@@ -406,22 +406,22 @@ export function App() {
     }
   })
 
-  it('keeps keyed signal direct notification deferred when a setter registered the same batch first', async () => {
+  it('uses one batch for value and functional setters with a shared marker', async () => {
     const source = `
 export function App() {
-  const items = signal([{ id: 1, text: 'a' }], (item) => item.id);
+  const items = signal([{ id: 1, text: 'a' }]);
   const suffix = signal('');
   render(
     <div>
       <p>{items().map((item) => item.text).join(',')}{suffix()}</p>
       <button class="replace" onClick={() => { items([{ id: 1, text: 'r' }]); suffix('!'); }}>replace</button>
-      <button class="update" onClick={() => { items.update(1, (item) => ({ ...item, text: 'u' })); suffix('?'); }}>update</button>
+      <button class="update" onClick={() => { items((previous) => previous.map((item) => ({ ...item, text: 'u' }))); suffix('?'); }}>update</button>
     </div>
   );
 }
 `
     const { code } = compile(source)
-    expect(code).toContain('__update_batch_depth__')
+    expect(code).not.toContain('__update_batch_depth__')
 
     const mod = await loadGenerated(code)
     const container = createContainer()

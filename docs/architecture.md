@@ -158,11 +158,11 @@ triage手続きで捌く — コンパイラの受理条件自体を場当たり
 - **module境界**(ADR-0024/0030/0037/0038): `compileProject()`は相対`.js`/`.jsx`の静的named/default
   importだけをAST bindingへ解決する。componentはinline pathへ入り、通常のfunctionと
   `const`だけが補助宣言としてmodule scopeに残る。直接`const name = signal(initial)`、
-  `const name = derived(() => expression)`、`const name = signal(initial, keyOf)`は、
+  `const name = derived(() => expression)`は、
   参照時だけ専用shared stateとして出力する。外部module、dynamic import、re-export、cycle、
   直接形でないmodule scope stateは`compile:`エラーで拒否する。shared signalはinstance更新を
-  購読し、shared derivedはその関数を読む既存の依存経路へ接続し、shared keyed signalは配列変更を
-  instanceのList更新へ通知する(ADR-0030/0037/0039)。
+  購読し、shared derivedはその関数を読む既存の依存経路へ接続する。配列も通常のshared signalとして
+  instanceのList更新へ通知する(ADR-0030/0037/0051)。
 
 ## 設計変更の進め方
 
