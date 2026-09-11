@@ -1,6 +1,7 @@
 {
   "name": "irisout",
   "version": "0.2.1",
+  "author": "mikan-919 <mikan919.dev@gmail.com>",
   "license": "Apache-2.0",
   "files": [
     "dist",
