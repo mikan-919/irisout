@@ -1,5 +1,16 @@
 # 変更履歴
 
+## 0.2.0 - 未公開
+
+- キー付き配列状態を`signal(initial, keyOf)`へ統合した。
+- キー付きsignalは読み取り、配列全体の置換、`update(key, updater)`による一項目更新を提供する。
+- `collection()`を作者向けAPIから削除した。
+- Webアプリの依存を単一の`irisout`パッケージへ統一した。
+
+### 移行
+
+`collection(initial, keyOf)`を`signal(initial, keyOf)`へ置き換える。`update(key, updater)`の呼び出し形は変更しない。
+
 ## 0.1.1 - 2026-09-10
 
 - イベント処理、`use=`、`onMount`、`effect`の作者記述を元のJSXへ対応付ける実行時ソースマップを追加した。

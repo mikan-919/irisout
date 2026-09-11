@@ -3,6 +3,13 @@
 実装の「今」の状態(現在地・マイルストーン進捗・既知の制約)をまとめたもの。
 設計判断待ちの論点・次のアクションの計画は `ROADMAP.md` を参照。
 
+## 現在地(2026-09-11・0.2.0公開準備)
+
+作者向け`collection()`を廃止し、キー付き配列状態を`signal(initial, keyOf)`へ統合した。
+読み取り、全体置換、`update(key, updater)`の項目直接更新、module共有、Listのキー照合を
+維持する。移行方法は`collection(initial, keyOf)`を`signal(initial, keyOf)`へ置き換える。
+公開済み版は0.1.1であり、ソース版0.2.0は未公開である。
+
 ## 現在地(2026-09-09・R3完了判定)
 
 `bun run check`と`bun run test`を実行し、型検査と試験の通過を確認した。性能値は
@@ -202,10 +209,10 @@ moduleを依存順にASTリンクする。named importとdefault import、二段
 functionと初期化済み単純`const`は生成moduleのmodule scopeへ補助宣言として一度だけ出す。
 component function、props object、component runtimeは生成しない。直接のmodule scope
 `const name = signal(initial)`、`const name = derived(() => expression)`、
-`const name = collection(initial, keyOf)`はADR-0030/0037/0039の共有stateとして参照時だけ生成する。
+`const name = signal(initial, keyOf)`はADR-0030/0037/0039/0051の共有stateとして参照時だけ生成する。
 
 `compile(source)`は単一文字列APIとして維持し、importは受理しない。`compileProject`の
-module scopeでは直接signal/derived/collection以外のstate、副作用文、`let`/`var`、分割代入、外部specifier、未解決path、
+module scopeでは直接signal/derived以外のstate、副作用文、`let`/`var`、分割代入、外部specifier、未解決path、
 namespace/side-effect import、dynamic import、re-export、循環依存を`compile:`エラーで
 拒否する。補助宣言はstateを呼ばない通常の処理に限る。背景は
 `docs/adr/0024-multi-file-module-composition.md`、`docs/adr/0030-module-shared-signal.md`、
@@ -226,9 +233,9 @@ CONCEPT.v3への移行に伴い、List更新を共有最小ランタイムへ切
 並べ替えは`reconcileList()`が担当し、順序が同じDOM要素は再挿入しない。
 Listを使わない生成物にはList helperのimport自体を出力しない。
 
-keyed collection APIを追加した(ADR-0019)。`collection(initial, keyOf)`は
-`signal()`と同じ読み取り・全体setterに加えて`collection.update(key, updater)`を持つ。
-直接の`collection().map()`は変更itemのhandleをMapから引いてO(1)で通知し、同じcollectionを
+キー付き配列APIはADR-0051で`signal(initial, keyOf)`へ統合した。通常のsignalと同じ
+読み取り・全体setterに加えて`signal.update(key, updater)`を持つ。
+直接のキー付き`signal().map()`は変更itemのhandleをMapから引いてO(1)で通知し、同じsignalを
 描画する複数ListとList以外の依存markerも更新する。通常setter、派生した配列式、ネストListは
 従来どおり全体reconcileへフォールバックする。
 
@@ -240,7 +247,7 @@ keyed collection APIを追加した(ADR-0019)。`collection(initial, keyOf)`は
 重複なしで反映する。単一root・異なるmarker・同じsignalの複数回書き込みでは既存の
 `update_<name>()`を使い、未使用のbatch関数は出力しない。
 
-`collection.update()`のkeyed direct通知は維持し、別rootと共有markerを持つbatch内だけ
+`signal.update()`のkeyed direct通知は維持し、別rootと共有markerを持つbatch内だけ
 instance専有の深さカウンタでdirect通知を遅延する。ローカルsignalのfactory
 `update()`、Listのkey照合/順序調整、公開batch APIやmicrotask schedulerは変更しない。
 イベント配線は実Chromiumで`direct`、`delegated`、`capture`、`adapter`を、
@@ -248,7 +255,7 @@ instance専有の深さカウンタでdirect通知を遅延する。ローカル
 (ADR-0021)。delegated/capture/adapterはリスナー数とJavaScriptヒープで有利だったが、
 delegatedは`blur`を処理できず、captureは`currentTarget`と段階を変え、adapterは
 event objectの同一性を失った。native eventの意味を保つためproduction既定はdirectを
-維持する。collection構造操作APIは引き続き未着手である。
+維持する。キー付きsignalの構造操作APIは引き続き未着手である。
 
 ## 現在地(2026-09-06・JSX型検査)
 
@@ -352,7 +359,7 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
 | 合成      | 同一ファイル内の複数コンポーネント合成(ADR-0014/0041)                          | **DONE** | change `same-file-component-composition` + `component-children-slot`。コンパイル時ASTインライン化、root scope + list item、直接children slotを実装。再帰は未対応                                                                 |
 | SVG       | SVG要素、名前空間属性、foreignObject(ADR-0042)                                 | **DONE** | change `svg-authoring`。既存HTML parser・setAttribute経路、SVG intrinsic型、静的`xlink:*`/`xml:*`/`xmlns:*`を実装。動的namespace属性は対象外                                                                                     |
 | 分割      | 相対moduleの複数ファイル合成(ADR-0024)                                         | **DONE** | `compileProject(entryPath)`、AST bindingリンク、依存順、静的import検証、Vite fixtureを実装。外部module・dynamic import・cycle・re-exportは対象外                                                                                 |
-| Batch     | 同期スコープ内の共有marker更新(ADR-0020)                                       | **DONE** | 複数root write時だけ専用batchを生成。公開batch API・scheduler・collection構造操作は対象外。イベント配線はADR-0021でdirectを採用                                                                                                  |
+| Batch     | 同期スコープ内の共有marker更新(ADR-0020)                                       | **DONE** | 複数root write時だけ専用batchを生成。公開batch API・scheduler・キー付きsignal構造操作は対象外。イベント配線はADR-0021でdirectを採用                                                                                              |
 | Context   | instance単位context(ADR-0027)                                                  | **DONE** | `createContext`/`provideContext`/`useContext`を静的置換。root・list item・conditional branchの所有単位へ接続し、未使用時の生成物は増やさない                                                                                     |
 | Heatmap 3 | 同期解析の派生値連鎖・構造unitのroot依存・条件分岐内の状態付き子部品(ADR-0033) | **DONE** | `apps/examples/heatmap.jsx`、回帰試験を追加                                                                                                                                                                                      |
 | Heatmap 4 | 外部解析依存、CSS・辞書URL・Worker資源のVite境界(ADR-0034)                     | **DONE** | `@libraz/suzume`、接頭辞付き本番build、未使用外部binding除外を確認                                                                                                                                                               |
@@ -360,7 +367,7 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
 | Heatmap 6 | 診断、型定義、別アプリ導入、自動検査、配布形式(ADR-0036)                       | **DONE** | 元ファイル・行・列付き診断、`@irisout/compiler/jsx`、別workspaceアプリのbuild試験、CI、Apache-2.0を追加                                                                                                                          |
 | R1〜R4    | 次期方針の診断、ヒートマップ、初期化、外部梱包検査                             | **DONE** | R1/R2/R3、R4の梱包検査、npm公開版検査、サブエージェントによる隔離試用を完了。人間による試用は公開後の確認項目として残す                                                                                                          |
 | Shared 1  | module共有derivedの受理と依存更新(ADR-0037)                                    | **DONE** | 共有signalの通知経路、derived依存グラフ、未使用出力の除外、読み取り専用検査を追加                                                                                                                                                |
-| Shared 2  | module共有collectionの受理とList更新(ADR-0039)                                 | **DONE** | 共有accessor、key selector、instance購読、List key照合、未使用出力の除外を追加                                                                                                                                                   |
+| Shared 2  | module共有キー付きsignalの受理とList更新(ADR-0039/0051)                        | **DONE** | 共有accessor、key selector、instance購読、List key照合、未使用出力の除外を追加                                                                                                                                                   |
 
 ## 既知の制約(現時点のcodegenの限界)
 
@@ -409,19 +416,19 @@ TypeScript書き直しは M6(全マイルストーン横断の no-wrapper 検証
 受理する。参照されたderivedは生成moduleへ一つだけ出力し、共有signalの更新時は各instanceの
 既存`update_*()`から関数を読み直す。derived専用のcache、購読registry、schedulerは生成しない。
 module共有derivedの呼び出しは読み取り専用で、引数付き呼び出しは`compile:`エラーになる。
-未使用のderivedと、その依存だけの共有signalは生成物へ出力しない。collection共有と永続化は
+未使用のderivedと、その依存だけの共有signalは生成物へ出力しない。キー付きsignal共有と永続化は
 別契約であり、request単位SSR分離はADR-0038で現行版の対象外と定めた。
 
-## 追加実装結果(2026-09-06・module共有collection、ADR-0039)
+## 追加実装結果(2026-09-06・module共有キー付き状態、ADR-0039/0051)
 
-`compileProject()`は直接の`const name = collection(initial, (item) => key)`をmodule scopeの
-共有collectionとして受理する。参照されたcollectionは生成moduleへ一つだけ出力し、配列の置換と
+`compileProject()`は直接の`const name = signal(initial, (item) => key)`をmodule scopeの
+共有キー付きsignalとして受理する。参照されたsignalは生成moduleへ一つだけ出力し、配列の置換と
 `update(key, updater)`を現在のmounted instanceへ同期通知する。Listのkeyed DOM状態とbinding
-cacheは各instanceが所有し、unmount時に購読を解除する。直接形でないcollection宣言は
+cacheは各instanceが所有し、unmount時に購読を解除する。直接形でないキー付きsignal宣言は
 `compile:`エラーになる。
 
-module共有collectionの更新は各instanceの既存`update_*()`からListを再調整する。module collection
-ではinstance専有collectionのitem直接更新経路を使わない。未使用のcollectionと、その依存だけの
+module共有キー付きsignalの更新は各instanceの既存`update_*()`からListを再調整する。module共有時
+はinstance専有のitem直接更新経路を使わない。未使用のキー付きsignalと、その依存だけの
 共有stateは生成物へ出力しない。永続化とrequest単位SSR分離は別契約である。
 
 ## 現在地(2026-09-06・client buildとSSR境界、ADR-0038)
@@ -467,7 +474,7 @@ AI向けの`irisout-development` Skillは、公開入口、記述範囲、診断
 - **`compileProject(entryPath)`のmodule境界**(ADR-0024/0030/0034/0037〜0039): 相対`.js`/`.jsx`の静的
   named/default importを解析して連結する。外部moduleの静的named/default/namespace importと
   CSS、`?url`、`?worker`などの資源importは解析せず生成moduleへ残し、使用されないbindingは
-  出力しない。相対資源の実pathは依存一覧へ含める。module scopeの直接`signal`/`derived`/`collection`は
+  出力しない。相対資源の実pathは依存一覧へ含める。module scopeの直接`signal`/`derived`は
   共有stateとして受理し、その他のstate、副作用文、`let`/`var`、分割代入、未解決の相対path、
   相対`.js`/`.jsx`のside-effect import、dynamic import、re-export、循環依存は`compile:`エラーで
   拒否する。
@@ -548,7 +555,7 @@ AI向けの`irisout-development` Skillは、公開入口、記述範囲、診断
     component変数ゾーンまたは構造unitへインライン化されたproviderに限る。consumerは
     JSX/式解析時に静的置換され、構造unitの動的provider treeとPromiseLikeの非同期contextも
     受理する。runtime provider伝播、非同期scheduler、動きゾーンでのprovider宣言は対象外。
-    module共有signal/derived/collectionはADR-0030/0037/0039の直接形だけを
+    module共有signal/derivedはADR-0030/0037/0039/0051の直接形だけを
     `compileProject`で受理する。
   - action本体のconcise arrow(単一式)にネストしたリスナー等がある場合、
     その内部の書き込みに対する`update_*`挿入位置は本体全体の実行時点に
@@ -586,5 +593,5 @@ AI向けの`irisout-development` Skillは、公開入口、記述範囲、診断
     コンポーネント名で接頭辞化してリネームする(例: `TodoItem_count`,
     `TodoItem_inc`)。衝突しない場合はauthored名のまま出力する。
   - `compileProject`のmodule helperは純粋な補助処理を前提にする。module scopeのstateは
-    ADR-0030/0037/0039の直接signal/derived/collectionだけを共有stateとして受理し、汎用storeは
+    ADR-0030/0037/0039/0051の直接signal/derivedだけを共有stateとして受理し、汎用storeは
     追加しない。componentのstateは入口側へ置いてpropsで渡す。

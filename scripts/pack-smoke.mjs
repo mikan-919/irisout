@@ -13,6 +13,9 @@ import path from 'node:path'
 import { TraceMap, originalPositionFor } from '@jridgewell/trace-mapping'
 
 const repoRoot = path.resolve(import.meta.dirname, '..')
+const sourcePackageVersion = JSON.parse(
+  readFileSync(path.join(repoRoot, 'packages', 'irisout', 'package.json'), 'utf8'),
+).version
 const packDir = mkdtempSync(path.join(os.tmpdir(), 'irisout-pack-'))
 const fixtureDir = mkdtempSync(path.join(os.tmpdir(), 'irisout-consumer-'))
 
@@ -72,7 +75,7 @@ writeFileSync(
 )
 writeFileSync(
   path.join(fixtureDir, 'src/App.jsx'),
-  `export function App() {\n  const count = signal(0);\n  render(<button onClick={increment}>{count()}</button>);\n  function increment() {\n    console.log('irisout-pack-source-map');\n    count(count() + 1);\n  }\n}\n`,
+  `export function App() {\n  const count = signal(0);\n  const items = signal([{ id: 1, text: 'a' }], (item) => item.id);\n  render(<div><button onClick={increment}>{count()}</button><ul>{items().map((item) => <li key={item.id}>{item.text}</li>)}</ul></div>);\n  function increment() {\n    console.log('irisout-pack-source-map');\n    items.update(1, (item) => ({ ...item, text: item.text + '!' }));\n    count(count() + 1);\n  }\n}\n`,
 )
 writeFileSync(path.join(fixtureDir, 'src/main.js'), "import 'virtual:irisout-entry'\n")
 writeFileSync(
@@ -115,7 +118,11 @@ try {
     .filter((name) => name.endsWith('.js'))
     .map((name) => readFileSync(path.join(dist, 'assets', name), 'utf8'))
     .join('\n')
-  if (!html.includes('<button') || !app.includes('addEventListener')) {
+  if (
+    !html.includes('<button') ||
+    !app.includes('addEventListener') ||
+    !app.includes('update_items_item')
+  ) {
     throw new Error('pack smoke: generated runtime entry missing')
   }
   const lockfile = readFileSync(path.join(fixtureDir, 'bun.lock'), 'utf8')
@@ -123,8 +130,10 @@ try {
   const packageVersion = JSON.parse(
     readFileSync(path.join(fixtureDir, 'node_modules/irisout/package.json'), 'utf8'),
   ).version
-  if (!registryPackage && packageVersion !== '0.1.1') {
-    throw new Error(`pack smoke: expected irisout 0.1.1, received ${packageVersion}`)
+  if (!registryPackage && packageVersion !== sourcePackageVersion) {
+    throw new Error(
+      `pack smoke: expected irisout ${sourcePackageVersion}, received ${packageVersion}`,
+    )
   }
   const assetNames = readdirSync(path.join(dist, 'assets'))
   const jsName = assetNames.find((name) => name.endsWith('.js'))
@@ -142,9 +151,9 @@ try {
       column: offset - before.lastIndexOf('\n') - 1,
     },
   )
-  if (!original.source?.endsWith('src/App.jsx') || original.line !== 5) {
+  if (!original.source?.endsWith('src/App.jsx') || original.line !== 6) {
     throw new Error(
-      `pack smoke: expected handler source src/App.jsx:5, received ${original.source}:${original.line}`,
+      `pack smoke: expected handler source src/App.jsx:6, received ${original.source}:${original.line}`,
     )
   }
   console.log(`pack smoke passed: ${fixtureDir}`)

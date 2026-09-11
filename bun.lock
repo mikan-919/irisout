@@ -85,7 +85,7 @@
     },
     "packages/irisout": {
       "name": "irisout",
-      "version": "0.1.1",
+      "version": "0.2.0",
       "peerDependencies": {
         "vite-plus": ">=0.3.0",
       },
