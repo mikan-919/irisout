@@ -7,7 +7,7 @@
     "allowJs": true,
     "checkJs": true,
     "jsx": "preserve",
-    "types": ["@irisout/compiler/jsx"],
+    "types": ["irisout/jsx"],
     "skipLibCheck": true,
     "noEmit": true,
     "isolatedModules": true,

@@ -9,11 +9,9 @@
     "dev": "vp dev"
   },
   "dependencies": {
-    "@irisout/runtime": "workspace:*"
+    "irisout": "workspace:*"
   },
   "devDependencies": {
-    "@irisout/compiler": "workspace:*",
-    "@irisout/vite-plugin": "workspace:*",
     "typescript": "^5.9.0",
     "vite-plus": "0.3.0"
   }
