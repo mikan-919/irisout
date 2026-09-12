@@ -4,16 +4,15 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "bench": "tsx todomvc-vs-react.ts",
-    "bench:browser": "tsx todomvc-vs-react.playwright.ts",
-    "bench:heatmap": "tsx heatmap.playwright.ts",
-    "bench:todomvc-compiler": "tsx todomvc-compiler.playwright.ts",
-    "bench:list-runtime": "tsx list-runtime.playwright.ts",
-    "bench:listener-strategy": "tsx listener-strategy.playwright.ts"
+    "bench": "bun --jsx-runtime automatic --jsx-import-source react --define 'process.env.NODE_ENV=\"production\"' todomvc-vs-react.ts",
+    "bench:browser": "bun todomvc-vs-react.playwright.ts",
+    "bench:heatmap": "bun heatmap.playwright.ts",
+    "bench:todomvc-compiler": "bun todomvc-compiler.playwright.ts",
+    "bench:list-runtime": "bun list-runtime.playwright.ts",
+    "bench:listener-strategy": "bun listener-strategy.playwright.ts"
   },
   "dependencies": {
     "@irisout/examples": "workspace:*",
-    "@irisout/runtime": "workspace:*",
     "jsdom": "^29.1.1",
     "playwright": "^1.61.1",
     "react": "^19.2.7",
@@ -22,7 +21,6 @@
   "devDependencies": {
     "@types/jsdom": "^28.0.3",
     "@types/react": "^19.2.17",
-    "@types/react-dom": "^19.2.3",
-    "tsx": "^4.20.0"
+    "@types/react-dom": "^19.2.3"
   }
 }

@@ -16,5 +16,5 @@
     "jsx": "react-jsx"
   },
   "include": ["vite.config.ts", "packages/**/*.ts", "packages/**/*.tsx", "apps/**/*.ts"],
-  "exclude": ["legacy", "**/dist/**"]
+  "exclude": ["**/dist/**"]
 }

@@ -55,7 +55,7 @@ import type { DiagnosticOrigin } from './diagnostics.ts'
 import { finalizeSourceMap } from './source-map.ts'
 import type { IrisoutSourceMap } from './source-map.ts'
 export { CompileDiagnostic } from './diagnostics.ts'
-import { derived, registry, signal } from '@irisout/runtime'
+import { derived, registry, signal } from '../../runtime/src/index.ts'
 
 const traverse =
   (traverseImport as unknown as { default?: typeof traverseImport }).default ?? traverseImport

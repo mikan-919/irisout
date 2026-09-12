@@ -4,7 +4,7 @@
 // 状態保持はこの連携のスコープ外で、更新時はページ全体を再読み込みする。
 
 import path from 'node:path'
-import { compileProject, type CompileResult } from '@irisout/compiler'
+import { compileProject, type CompileResult } from '../../compiler/src/compiler.ts'
 import type { HmrContext, Plugin, ResolvedConfig } from 'vite-plus'
 
 const DEFAULT_VIRTUAL_MODULE_ID = 'virtual:irisout-entry'

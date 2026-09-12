@@ -66,7 +66,7 @@ linked source + module-scope補助宣言
 ```
 
 `compileProject()`は生成結果とともに、リンクした入口・相対moduleの絶対pathを返す。
-`@irisout/vite-plugin`はこの一覧だけを監視対象にし、変更時に同じ入口を再コンパイルする。
+`irisout/vite`はこの一覧だけを監視対象にし、変更時に同じ入口を再コンパイルする。
 初期HTMLはビルド時に一度生成してindex.htmlのmarkerへ埋め込み、仮想moduleへhydrate処理を
 出力する。これは要求ごとのSSR HTMLではなく、静的HTMLをブラウザで引き継ぐclient buildの
 契約である。request SSRの入口と要求ごとのstate所有はADR-0038で別契約に分ける。開発時の
@@ -97,7 +97,7 @@ triage手続きで捌く — コンパイラの受理条件自体を場当たり
 | `packages/vite-plugin/src/index.ts`                   | `compileProject()`の生成結果をViteの仮想module・初期HTML・依存監視・全体再読み込みへ接続                                                                                                            |
 | `packages/runtime/src/index.ts`                       | 2つの顔を持つ: signal/derived は**ビルド時専用**。mount/hydrate、`use=`返り値のshape検証、List使用時だけimportされるkey照合・binding値キャッシュは**ブラウザ出荷用**の最小ランタイム(ADR-0015/0022) |
 | `packages/compiler/src/template.ts`                   | テンプレートリテラル組み立てヘルパー(render と codegen の共有部)                                                                                                                                    |
-| `apps/examples/vite.config.ts`                        | `@irisout/vite-plugin`へentry pathを渡し、`dist/index.html`(焼き込み済み HTML)+ `dist/app.js`(hydrate のみ)を生成                                                                                   |
+| `apps/examples/vite.config.ts`                        | `irisout/vite`へentry pathを渡し、`dist/index.html`(焼き込み済み HTML)+ `dist/app.js`(hydrate のみ)を生成                                                                                           |
 
 ## 重要な概念
 
@@ -175,8 +175,5 @@ triage手続きで捌く — コンパイラの受理条件自体を場当たり
    場合は `bunx @fission-ai/openspec` を使い、完了後はchangeをarchiveする。
 4. マイルストーン完了・計画外の制約発見時は `STATUS.md` を更新する。
 
-## legacy/ について
-
-`legacy/` は元の JS 実装。**参照専用でメンテナンスしない**。TypeScript 版の
-マイルストーンは legacy から機能を移植しながら進めるので、未実装機能の
-挙動・テストの参考として読むのは有用(biome のチェック対象外)。
+旧JavaScript実装はTypeScript版への移植完了後に削除した。必要な比較はGit履歴、ADR、
+OpenSpecの受入条件から参照する。

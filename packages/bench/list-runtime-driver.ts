@@ -4,7 +4,7 @@ import {
   updateListBinding,
   type ListItemHandle,
   type ListItemState,
-} from '@irisout/runtime'
+} from '../runtime/src/index.ts'
 
 interface Item {
   id: number

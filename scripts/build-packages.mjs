@@ -5,94 +5,24 @@ import { build } from 'vite-plus'
 
 const repoRoot = path.resolve(import.meta.dirname, '..')
 
-const packages = [
-  {
-    name: 'runtime',
-    entries: [{ name: 'index', source: 'packages/runtime/src/index.ts' }],
-    external: () => false,
-  },
-  {
-    name: 'compiler',
-    entries: [
-      { name: 'compiler', source: 'packages/compiler/src/compiler.ts' },
-      { name: 'diagnostics', source: 'packages/compiler/src/diagnostics.ts' },
-      { name: 'state', source: 'packages/compiler/src/compiler/state.ts' },
-    ],
-    external: (id) => id === '@irisout/runtime' || id.startsWith('node:'),
-  },
-  {
-    name: 'vite-plugin',
-    entries: [{ name: 'index', source: 'packages/vite-plugin/src/index.ts' }],
-    external: (id) => id === '@irisout/compiler' || id === 'vite-plus' || id.startsWith('node:'),
-  },
-]
-
-for (const packageInfo of packages) {
-  const outDir = path.join(repoRoot, 'packages', packageInfo.name, 'dist')
-  rmSync(outDir, { recursive: true, force: true })
-  mkdirSync(outDir, { recursive: true })
-  for (const entry of packageInfo.entries) {
-    await build({
-      configFile: false,
-      root: repoRoot,
-      build: {
-        outDir,
-        emptyOutDir: false,
-        lib: {
-          entry: path.join(repoRoot, entry.source),
-          formats: ['es'],
-          fileName: entry.name,
-        },
-        rollupOptions: { external: packageInfo.external },
-      },
-    })
-  }
-
-  const declarationOutDir = outDir
-  execFileSync(
-    path.join(repoRoot, 'node_modules/.bin/tsc'),
-    [
-      '--declaration',
-      '--emitDeclarationOnly',
-      '--allowImportingTsExtensions',
-      '--esModuleInterop',
-      '--isolatedModules',
-      '--lib',
-      'ES2022,DOM,DOM.Iterable',
-      '--target',
-      'ES2022',
-      '--module',
-      'ESNext',
-      '--moduleResolution',
-      'bundler',
-      '--outDir',
-      declarationOutDir,
-      '--rootDir',
-      path.join(repoRoot, 'packages', packageInfo.name, 'src'),
-      '--skipLibCheck',
-      '--strict',
-      ...packageInfo.entries.map((entry) => path.join(repoRoot, entry.source)),
-    ],
-    { cwd: repoRoot, stdio: 'inherit' },
-  )
-}
-
 const publicOutDir = path.join(repoRoot, 'packages', 'irisout', 'dist')
+const declarationOutDir = path.join(repoRoot, 'packages', 'irisout', '.types')
 rmSync(publicOutDir, { recursive: true, force: true })
+rmSync(declarationOutDir, { recursive: true, force: true })
 mkdirSync(publicOutDir, { recursive: true })
 
 const publicEntries = [
   {
     name: 'runtime',
     source: 'packages/runtime/src/index.ts',
-    external: (id) => id.startsWith('node:'),
-    paths: {},
+    external: (id) => id.startsWith('node:') || id.includes('runtime/src/index'),
+    paths: (id) => (id.includes('runtime/src/index') ? './runtime.js' : id),
   },
   {
     name: 'index',
     source: 'packages/compiler/src/compiler.ts',
-    external: (id) => id === '@irisout/runtime' || id.startsWith('node:'),
-    paths: { '@irisout/runtime': './runtime.js' },
+    external: (id) => id.startsWith('node:'),
+    paths: {},
   },
   {
     name: 'diagnostics',
@@ -109,8 +39,9 @@ const publicEntries = [
   {
     name: 'vite',
     source: 'packages/vite-plugin/src/index.ts',
-    external: (id) => id === '@irisout/compiler' || id === 'vite-plus' || id.startsWith('node:'),
-    paths: { '@irisout/compiler': './index.js' },
+    external: (id) =>
+      id === 'vite-plus' || id.startsWith('node:') || id.includes('compiler/src/compiler'),
+    paths: (id) => (id.includes('compiler/src/compiler') ? './index.js' : id),
   },
 ]
 
@@ -131,20 +62,47 @@ for (const entry of publicEntries) {
   })
 }
 
+execFileSync(
+  path.join(repoRoot, 'node_modules/.bin/tsc'),
+  [
+    '--declaration',
+    '--emitDeclarationOnly',
+    '--allowImportingTsExtensions',
+    '--esModuleInterop',
+    '--isolatedModules',
+    '--lib',
+    'ES2022,DOM,DOM.Iterable',
+    '--target',
+    'ES2022',
+    '--module',
+    'ESNext',
+    '--moduleResolution',
+    'bundler',
+    '--outDir',
+    declarationOutDir,
+    '--rootDir',
+    path.join(repoRoot, 'packages'),
+    '--skipLibCheck',
+    '--strict',
+    ...publicEntries.map((entry) => path.join(repoRoot, entry.source)),
+  ],
+  { cwd: repoRoot, stdio: 'inherit' },
+)
+
 copyFileSync(
-  path.join(repoRoot, 'packages/compiler/dist/compiler.d.ts'),
+  path.join(declarationOutDir, 'compiler/src/compiler.d.ts'),
   path.join(publicOutDir, 'index.d.ts'),
 )
 copyFileSync(
-  path.join(repoRoot, 'packages/runtime/dist/index.d.ts'),
+  path.join(declarationOutDir, 'runtime/src/index.d.ts'),
   path.join(publicOutDir, 'runtime.d.ts'),
 )
 copyFileSync(
-  path.join(repoRoot, 'packages/vite-plugin/dist/index.d.ts'),
+  path.join(declarationOutDir, 'vite-plugin/src/index.d.ts'),
   path.join(publicOutDir, 'vite.d.ts'),
 )
 copyFileSync(
-  path.join(repoRoot, 'packages/compiler/dist/diagnostics.d.ts'),
+  path.join(declarationOutDir, 'compiler/src/diagnostics.d.ts'),
   path.join(publicOutDir, 'diagnostics.d.ts'),
 )
 copyFileSync(
@@ -152,16 +110,10 @@ copyFileSync(
   path.join(publicOutDir, 'jsx.d.ts'),
 )
 copyFileSync(path.join(repoRoot, 'LICENSE'), path.join(publicOutDir, 'LICENSE'))
-cpSync(
-  path.join(repoRoot, 'packages/compiler/dist/compiler'),
-  path.join(publicOutDir, 'compiler'),
-  { recursive: true },
-)
-
-for (const packageInfo of packages) {
-  const declarationRoot = path.join(repoRoot, 'packages', packageInfo.name, 'dist')
-  if (!existsSync(declarationRoot)) throw new Error(`missing package output: ${packageInfo.name}`)
-}
+cpSync(path.join(declarationOutDir, 'compiler/src/compiler'), path.join(publicOutDir, 'compiler'), {
+  recursive: true,
+})
+rmSync(declarationOutDir, { recursive: true, force: true })
 if (!existsSync(publicOutDir)) throw new Error('missing package output: irisout')
 
 console.log('package bundles and declarations built')

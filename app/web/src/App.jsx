@@ -359,13 +359,7 @@ export function App() {
                   <span class="code-prompt">$</span> bun run build:packages
                 </span>
                 <span>
-                  <span class="code-prompt">$</span> bun pm pack --cwd packages/runtime
-                </span>
-                <span>
-                  <span class="code-prompt">$</span> bun pm pack --cwd packages/compiler
-                </span>
-                <span>
-                  <span class="code-prompt">$</span> bun pm pack --cwd packages/vite-plugin
+                  <span class="code-prompt">$</span> bun pm pack --cwd packages/irisout
                 </span>
                 <span>
                   <span class="code-prompt">$</span> bun install &amp;&amp; bun run dev
@@ -396,7 +390,7 @@ export function App() {
 
   function copyInstall() {
     const commands =
-      'bun run build:packages\nbun pm pack --cwd packages/runtime\nbun pm pack --cwd packages/compiler\nbun pm pack --cwd packages/vite-plugin\nbun install && bun run dev'
+      'bun run build:packages\nbun pm pack --cwd packages/irisout\nbun install && bun run dev'
     if (navigator.clipboard) void navigator.clipboard.writeText(commands)
     copied(true)
   }

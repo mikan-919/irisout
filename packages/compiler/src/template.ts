@@ -69,9 +69,3 @@ export function innerTemplateSource(contentParts: ContentPart[]): string {
     .map((part) => (part.type === 'text' ? escapeTemplateText(part.value) : `\${${part.code}}`))
     .join('')
 }
-
-// 条件分岐のブランチをテンプレートリテラルに埋め込む形:実マークアップか、
-// 何も描画しないブランチなら空のプレースホルダ `<!---->`。(M5 で使用予定)
-export function embedBranch(html: string | null): string {
-  return html !== null ? `\`${html}\`` : '`<!---->`'
-}

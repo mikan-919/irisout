@@ -7,7 +7,7 @@
 - package managerはBunに固定するが、直接の`bun test`/`Bun.build`には依存しない。
 - フォーマットはOxfmt、lintはOxlint、テストはVite+ Test(Vitest)。設定はルートの
   `vite.config.ts`へ集約する。コミット前は`vp check && vp test --run`。
-- `legacy/`と生成済み`dist/`はすべてのチェック対象外。触らない。
+- 生成済み`dist/`はすべてのチェック対象外。直接編集しない。
 
 ## コメント
 

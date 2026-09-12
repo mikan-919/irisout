@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import {
+  cpSync,
   existsSync,
-  mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
@@ -19,10 +19,10 @@ const sourcePackageVersion = JSON.parse(
 const packDir = mkdtempSync(path.join(os.tmpdir(), 'irisout-pack-'))
 const fixtureDir = mkdtempSync(path.join(os.tmpdir(), 'irisout-consumer-'))
 
-function run(command, args, cwd) {
+function run(command, args, cwd, env = {}) {
   return execFileSync(command, args, {
     cwd,
-    env: process.env,
+    env: { ...process.env, ...env },
     stdio: 'inherit',
   })
 }
@@ -54,55 +54,16 @@ function pack() {
 }
 
 const packageSpec = registryPackage ?? `file:${pack()}`
-mkdirSync(path.join(fixtureDir, 'src'))
-const packageJson = {
-  name: 'irisout-pack-smoke-consumer',
-  private: true,
-  type: 'module',
-  scripts: { build: 'vp build', typecheck: 'tsc --noEmit' },
-  dependencies: {
-    irisout: packageSpec,
-  },
-  overrides: {
-    irisout: packageSpec,
-  },
-  devDependencies: { typescript: '^5.9.0', 'vite-plus': '0.3.0' },
-}
+cpSync(path.join(repoRoot, 'examples', 'consumer-app'), fixtureDir, {
+  recursive: true,
+  filter: (source) => !['dist', 'node_modules'].includes(path.basename(source)),
+})
+const fixturePackagePath = path.join(fixtureDir, 'package.json')
+const packageJson = JSON.parse(readFileSync(fixturePackagePath, 'utf8'))
+packageJson.dependencies.irisout = packageSpec
+packageJson.overrides = { irisout: packageSpec }
+packageJson.devDependencies.typescript = '^5.9.0'
 writeFileSync(path.join(fixtureDir, 'package.json'), `${JSON.stringify(packageJson, null, 2)}\n`)
-writeFileSync(
-  path.join(fixtureDir, 'index.html'),
-  '<!doctype html><div id="app"><!--irisout-html--></div><script type="module" src="/src/main.js"></script>\n',
-)
-writeFileSync(
-  path.join(fixtureDir, 'src/App.jsx'),
-  `export function App() {\n  const count = signal(0);\n  const items = signal([{ id: 1, text: 'a' }]);\n  render(<div><button onClick={increment}>{count()}</button><ul>{items().map((item) => <li key={item.id}>{item.text}</li>)}</ul></div>);\n  function increment() {\n    console.log('irisout-pack-source-map');\n    items((previous) => previous.map((item) => item.id === 1 ? { ...item, text: item.text + '!' } : item));\n    count((previous) => previous + 1);\n  }\n}\n`,
-)
-writeFileSync(path.join(fixtureDir, 'src/main.js'), "import 'virtual:irisout-entry'\n")
-writeFileSync(
-  path.join(fixtureDir, 'tsconfig.json'),
-  `${JSON.stringify(
-    {
-      compilerOptions: {
-        target: 'ES2022',
-        module: 'ESNext',
-        moduleResolution: 'bundler',
-        allowJs: true,
-        checkJs: true,
-        jsx: 'preserve',
-        types: ['irisout/jsx'],
-        noEmit: true,
-        skipLibCheck: true,
-      },
-      include: ['src/**/*.jsx'],
-    },
-    null,
-    2,
-  )}\n`,
-)
-writeFileSync(
-  path.join(fixtureDir, 'vite.config.ts'),
-  `import { defineConfig } from 'vite-plus';\nimport { irisout } from 'irisout/vite';\nexport default defineConfig({ plugins: [irisout({ entry: 'src/App.jsx' })], build: { sourcemap: true, minify: false } });\n`,
-)
 
 try {
   run('bun', ['install', '--no-progress'], fixtureDir)
@@ -110,7 +71,7 @@ try {
     throw new Error('pack smoke: license missing')
   }
   run('bun', ['run', 'typecheck'], fixtureDir)
-  run('bun', ['run', 'build'], fixtureDir)
+  run('bun', ['run', 'build'], fixtureDir, { IRISOUT_SOURCEMAP: 'true' })
   const dist = path.join(fixtureDir, 'dist')
   if (!existsSync(path.join(dist, 'index.html'))) throw new Error('pack smoke: index.html missing')
   const html = readFileSync(path.join(dist, 'index.html'), 'utf8')
@@ -118,11 +79,7 @@ try {
     .filter((name) => name.endsWith('.js'))
     .map((name) => readFileSync(path.join(dist, 'assets', name), 'utf8'))
     .join('\n')
-  if (
-    !html.includes('<button') ||
-    !app.includes('addEventListener') ||
-    !app.includes('reconcileList')
-  ) {
+  if (!html.includes('別アプリからの文章') || !app.includes('addEventListener')) {
     throw new Error('pack smoke: generated runtime entry missing')
   }
   const lockfile = readFileSync(path.join(fixtureDir, 'bun.lock'), 'utf8')
@@ -140,7 +97,7 @@ try {
   const mapName = assetNames.find((name) => name.endsWith('.js.map'))
   if (!jsName || !mapName) throw new Error('pack smoke: production source map missing')
   const code = readFileSync(path.join(dist, 'assets', jsName), 'utf8')
-  const needle = 'irisout-pack-source-map'
+  const needle = 'text = event.currentTarget.value'
   const offset = code.indexOf(needle)
   if (offset < 0) throw new Error('pack smoke: mapped handler statement missing')
   const before = code.slice(0, offset)
@@ -151,9 +108,9 @@ try {
       column: offset - before.lastIndexOf('\n') - 1,
     },
   )
-  if (!original.source?.endsWith('src/App.jsx') || original.line !== 6) {
+  if (!original.source?.endsWith('src/App.jsx') || original.line !== 11) {
     throw new Error(
-      `pack smoke: expected handler source src/App.jsx:6, received ${original.source}:${original.line}`,
+      `pack smoke: expected handler source src/App.jsx:11, received ${original.source}:${original.line}`,
     )
   }
   console.log(`pack smoke passed: ${fixtureDir}`)

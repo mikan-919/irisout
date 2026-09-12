@@ -4,7 +4,6 @@ export default defineConfig({
   defaultPackage: './apps/examples',
   fmt: {
     ignorePatterns: [
-      'legacy/**',
       'openspec/**',
       'session/**',
       'docs/adr/0001-first-milestone.md',
@@ -23,7 +22,7 @@ export default defineConfig({
     semi: false,
   },
   lint: {
-    ignorePatterns: ['legacy/**', '**/dist/**', '**/dist-size-test/**', 'skills/**/assets/**'],
+    ignorePatterns: ['**/dist/**', '**/dist-size-test/**', 'skills/**/assets/**'],
     options: {
       typeAware: true,
       typeCheck: true,
@@ -62,7 +61,6 @@ export default defineConfig({
   },
   test: {
     include: ['packages/compiler/test/**/*.test.ts'],
-    exclude: ['legacy/**'],
   },
   staged: {
     '*.{js,jsx,ts,tsx,json}': 'vp check --fix',
