@@ -1,6 +1,6 @@
-# irisout authoring boundary
+# irisout application authoring boundary
 
-Read this reference when creating or changing authored JSX. Verify behavior against the installed package when the requested feature is not listed.
+Read this reference when creating or changing authored JSX in an application that depends on irisout. Verify behavior against the installed package when the requested feature is not listed. Do not use this reference as a workflow for changing the irisout compiler or runtime.
 
 ## Project wiring
 
@@ -63,7 +63,7 @@ export function Counter() {
 - Handler control flow such as unsupported `try/catch/finally`, loops, or switches may be rejected when update placement cannot be determined statically.
 - Request cancellation, stale-result selection, Worker protocols, persistence, routing, and external-service behavior belong to application code.
 - Server rendering per request, portals, animation systems, and component-level error recovery are not part of the current contract.
-- The generated component supports `unmount()`, but the 0.1.0 Vite virtual entry hydrates it
+- The generated component supports `unmount()`, but the Vite virtual entry hydrates it
   automatically and does not expose that handle to application code. Exercise action cleanup by
   removing a conditional branch or keyed list item; do not claim that root unmount is available
   through the standard Vite entry.
