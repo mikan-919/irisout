@@ -1,6 +1,6 @@
 # 変更履歴
 
-## 0.2.1 - 未公開
+## 0.2.1 - 2026-09-11
 
 - `signal((previous) => next)`による関数形式の更新を追加した。
 - `signal(initial, keyOf)`と`.update(key, updater)`を削除した。

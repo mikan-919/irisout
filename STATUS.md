@@ -5,7 +5,7 @@
 
 ## 現在地（2026-09-12）
 
-ソース版は0.2.1で、npm公開版は0.1.1である。0.2.1では状態更新を
+ソース版とnpm公開版は0.2.1である。0.2.1では状態更新を
 `signal((previous) => next)`へ統一し、`signal(initial, keyOf)`と`.update()`を削除した。
 配列更新は一覧全体を再調整し、要素の識別とDOM再利用にはJSXの`key`を使う。
 
@@ -39,7 +39,7 @@
 - `bun run build:packages`: `irisout`のJavaScriptと型定義を生成。
 - `bun run pack:smoke`: 一時ディレクトリへ梱包物を導入して型検査、本番ビルド、
   初期HTML、イベント生成、ソースマップ、workspace依存の不存在を確認。
-- `bun run registry:smoke`: npm公開版0.1.1に同じ隔離検査を適用。
+- `bun run registry:smoke`: npm公開版0.2.1に同じ隔離検査を適用。
 
 時間とメモリの測定は環境差を含むため、同じ生成物、Chromium、入力、反復数の比較だけを
 採否に使う。R3の最終値と判断理由はADR-0044〜0046、ヒートマップの測定条件は
