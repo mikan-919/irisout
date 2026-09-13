@@ -31,8 +31,11 @@ describe('irisout Vite連携', () => {
       virtualModuleId: 'virtual:test-entry',
     })
 
-    const configResolved = plugin.configResolved as unknown as (config: { root: string }) => void
-    configResolved({ root: project.root })
+    const configResolved = plugin.configResolved as unknown as (config: {
+      root: string
+      command: 'build' | 'serve'
+    }) => void
+    configResolved({ root: project.root, command: 'build' })
 
     const addedByBuild: string[] = []
     const buildStart = plugin.buildStart as unknown as (this: {
@@ -96,6 +99,24 @@ describe('irisout Vite連携', () => {
       { type: 'full-reload', path: '*' },
     ])
     expect(transformIndexHtml('<!--irisout-html-->')).toContain('>fixed</span>')
+  })
+
+  it('uses a NUL virtual id during development', () => {
+    const project = writeProject({
+      'main.jsx': `export function App() { render(<span>ready</span>); }`,
+    })
+    const plugin = irisout({ entry: project.entry })
+    const configResolved = plugin.configResolved as unknown as (config: {
+      root: string
+      command: 'build' | 'serve'
+    }) => void
+    configResolved({ root: project.root, command: 'serve' })
+
+    const resolveId = plugin.resolveId as unknown as (id: string) => string | null
+    expect(resolveId('virtual:irisout-entry')).toBe('\0virtual:irisout-entry')
+
+    const load = plugin.load as unknown as (id: string) => { code: string } | null
+    expect(load('\0virtual:irisout-entry')?.code).toContain('hydrateComponent')
   })
 
   it('ignores files outside the compiler dependency graph', async () => {

@@ -333,10 +333,10 @@ export function App() {
         <section class="install-section" id="install">
           <div class="install-copy">
             <p class="eyebrow">
-              <span class="eyebrow-dot" /> Start from a tarball
+              <span class="eyebrow-dot" /> Start from npm
             </p>
             <h2>まずは、手元のアプリへ。</h2>
-            <p>現在はnpmへ登録していません。ビルドしたtarballをVite+アプリへ導入して試せます。</p>
+            <p>npm公開版を導入して、Vite+アプリで試せます。</p>
             <a class="button button-light" href="https://github.com/mikan-919/irisout">
               GitHubで導入手順を見る <span>↗</span>
             </a>
@@ -356,18 +356,18 @@ export function App() {
             <pre>
               <code class="terminal-lines">
                 <span>
-                  <span class="code-prompt">$</span> bun run build:packages
+                  <span class="code-prompt">$</span> bun add irisout@0.2.2 vite-plus@0.3.0
                 </span>
                 <span>
-                  <span class="code-prompt">$</span> bun pm pack --cwd packages/irisout
+                  <span class="code-prompt">$</span> bun add --dev typescript@5.9
                 </span>
                 <span>
-                  <span class="code-prompt">$</span> bun install &amp;&amp; bun run dev
+                  <span class="code-prompt">$</span> bun run dev
                 </span>
               </code>
             </pre>
             <div class="install-result">
-              <span>✓</span> package bundles ready
+              <span>✓</span> irisout@0.2.2 ready
             </div>
           </div>
         </section>
@@ -390,7 +390,7 @@ export function App() {
 
   function copyInstall() {
     const commands =
-      'bun run build:packages\nbun pm pack --cwd packages/irisout\nbun install && bun run dev'
+      'bun add irisout@0.2.2 vite-plus@0.3.0\nbun add --dev typescript@5.9\nbun run dev'
     if (navigator.clipboard) void navigator.clipboard.writeText(commands)
     copied(true)
   }

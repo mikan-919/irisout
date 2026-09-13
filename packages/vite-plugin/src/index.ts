@@ -38,8 +38,8 @@ export function irisout(options: IrisoutPluginOptions): Plugin {
 
   let root = process.cwd()
   let entryPath = normalizePath(path.resolve(root, options.entry))
-  // NUL始まりの仮想識別子はVite+の本番ビルドで変換地図の入力元から除かれる。
-  // Vite root内の仮想pathを使い、通常のmoduleとして地図とpackage解決を連鎖させる。
+  // 開発時はNUL始まりで依存走査から除き、本番はVite+が元の位置へ地図を
+  // 合成できるよう、Vite root内の実パスを使う。
   let resolvedVirtualModuleId = path.join(
     root,
     `.irisout-${encodeURIComponent(virtualModuleId)}.js`,
@@ -78,10 +78,10 @@ export function irisout(options: IrisoutPluginOptions): Plugin {
     configResolved(config: ResolvedConfig) {
       root = config.root
       entryPath = normalizePath(path.resolve(root, options.entry))
-      resolvedVirtualModuleId = path.join(
-        root,
-        `.irisout-${encodeURIComponent(virtualModuleId)}.js`,
-      )
+      resolvedVirtualModuleId =
+        config.command === 'serve'
+          ? `\0${virtualModuleId}`
+          : path.join(root, `.irisout-${encodeURIComponent(virtualModuleId)}.js`)
       result = null
       dependencies = new Set()
     },
