@@ -78,6 +78,9 @@
 ## 既知の制約
 
 - `compile()`は、他の部品から参照されないトップレベル関数を一つ要求する。
+- `compile()`は初期HTMLの生成中に入力由来の処理を実行する。現在の入口はNodeの
+  ファイル読込み機能にも依存し、ブラウザ用のコンパイラ専用入口はない。共有Playgroundでは
+  入口の分離と実行環境の隔離が必要であり、投稿ソースをサーバーの診断処理へ渡さない。
 - `compile()`のトップレベルは関数宣言とcontext keyに限る。`compileProject()`は相対
   `.js`/`.jsx`の静的importを連結し、外部moduleとVite資源importは生成物へ残す。
 - dynamic import、re-export、module循環、名前空間による相対importは対象外である。
