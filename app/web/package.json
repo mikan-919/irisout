@@ -5,7 +5,8 @@
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {
-    "build": "node scripts/build-docs.mjs && vp build",
+    "build": "node scripts/build-docs.mjs && vp build && bun run build:ssr",
+    "build:ssr": "vp build --config vite.ssr.config.ts",
     "site:check": "node scripts/build-docs.mjs --check",
     "site:test": "node --test scripts/site-docs.test.mjs",
     "dev": "vp dev",

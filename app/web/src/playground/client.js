@@ -8,7 +8,14 @@ import {
   PLAYGROUND_PROTOCOL_VERSION,
   PLAYGROUND_SOURCE_MAX_BYTES,
 } from './protocol.js'
-import { downloadText, exportSaveBundle, readPendingSave, savePlayground } from './save-share.js'
+import {
+  clearPendingSave,
+  deletePlayground,
+  downloadText,
+  exportSaveBundle,
+  readPendingSave,
+  savePlayground,
+} from './save-share.js'
 
 const DEFAULT_SOURCE = `export function Counter() {
   const count = signal(0)
@@ -35,6 +42,7 @@ export function setupPlayground(root) {
   const runElement = root.querySelector('[data-playground-run]')
   const stopElement = root.querySelector('[data-playground-stop]')
   const saveElement = root.querySelector('[data-playground-save]')
+  const deleteElement = root.querySelector('[data-playground-delete]')
   const exportElement = root.querySelector('[data-playground-export]')
   const titleElement = root.querySelector('[data-playground-title]')
   const descriptionElement = root.querySelector('[data-playground-description]')
@@ -49,6 +57,7 @@ export function setupPlayground(root) {
     !(runElement instanceof HTMLButtonElement) ||
     !(stopElement instanceof HTMLButtonElement) ||
     !(saveElement instanceof HTMLButtonElement) ||
+    !(deleteElement instanceof HTMLButtonElement) ||
     !(exportElement instanceof HTMLButtonElement) ||
     !(titleElement instanceof HTMLInputElement) ||
     !(descriptionElement instanceof HTMLInputElement) ||
@@ -162,6 +171,7 @@ export function setupPlayground(root) {
       deleteTokenElement.textContent = latestSave.managementKey
       shareElement.hidden = false
       exportElement.disabled = false
+      deleteElement.disabled = false
       setStatus('保存しました', 'success')
     } catch (error) {
       const pending = readPendingSave()
@@ -169,6 +179,25 @@ export function setupPlayground(root) {
       setStatus(error instanceof Error ? error.message : String(error), 'error')
     } finally {
       saveElement.disabled = false
+    }
+  })
+
+  deleteElement.addEventListener('click', async () => {
+    const pending = readPendingSave()
+    const id = latestSave?.id ?? pending?.result?.id
+    if (!id || !pending?.managementKey) return
+    deleteElement.disabled = true
+    setStatus('削除しています')
+    try {
+      await deletePlayground({ id, managementKey: pending.managementKey })
+      clearPendingSave()
+      latestSave = null
+      shareElement.hidden = true
+      exportElement.disabled = true
+      setStatus('共有を削除しました', 'success')
+    } catch (error) {
+      deleteElement.disabled = false
+      setStatus(error instanceof Error ? error.message : String(error), 'error')
     }
   })
 
@@ -222,11 +251,31 @@ export function setupPlayground(root) {
         exampleElement.value = examples[0].id
         sourceElement.value = examples[0].source
       }
+      const duplicateSource = readDuplicateSource()
+      if (duplicateSource !== null) sourceElement.value = duplicateSource
       const pending = readPendingSave()
       exportElement.disabled = !pending?.managementKey
+      if (pending?.managementKey && pending.result?.id && pending.result?.url) {
+        latestSave = pending.result
+        shareLinkElement.href = new URL(pending.result.url, location.origin).href
+        shareLinkElement.textContent = shareLinkElement.href
+        deleteTokenElement.textContent = pending.managementKey
+        shareElement.hidden = false
+        deleteElement.disabled = false
+      }
       setStatus('実行できます')
     } catch {
       setStatus('初期例を使っています')
+    }
+  }
+
+  function readDuplicateSource() {
+    try {
+      const source = sessionStorage.getItem('irisout.playground.duplicate-source')
+      sessionStorage.removeItem('irisout.playground.duplicate-source')
+      return source
+    } catch {
+      return null
     }
   }
 

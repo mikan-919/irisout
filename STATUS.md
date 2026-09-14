@@ -100,6 +100,15 @@ CSPにはコンパイラが`new Function()`を使うため`unsafe-eval`が必要
 公式画面の下書きと管理鍵をブラウザ保存領域へ残して再送と書き出しへ接続した。共有ページのSSR公開は
 後続changeで行い、保存APIは内部検査が通るまで公開入口から分離する。
 
+2026-09-14に保存済み共有ページのSSRを実装した。`PlaygroundPage.jsx`を運営側のSSR部品として
+Vite+でビルドし、Bunサーバーは`/playground/:id`の要求ごとにSQLiteの表示許可値を一度だけ読み、
+`render(input) -> { html, state }`の同じ入力をhead・本文・hydrate stateへ渡す。末尾slashの308、
+不存在・削除済みIDの404、保存先停止の503と`no-store`・`noindex`・`no-referrer`を実装した。タイトル、
+説明、source全文はHTML文脈と埋込みJSONでescapeし、管理鍵と投稿sourceの実行結果をサーバー表示へ
+入れていない。共有ページの複製は公式画面の編集欄へ戻り、管理鍵削除は公式Originの保存画面から行う。
+ローカルSQLiteのバックアップ復元後に削除記録を再適用する手順と自動試験も追加した。実運用の保存先、
+配信先、公開済み復元機能は未確定である。
+
 ## 検証
 
 - `bun run check`: 書式、静的検査、TypeScriptとauthored JSXの型検査。
@@ -144,8 +153,8 @@ CSPにはコンパイラが`new Function()`を使うため`unsafe-eval`が必要
 - 実行時ソースマップはイベント処理、`use=`、`onMount`、`effect`の処理文を対象とする。
   DOM探索、一覧照合、自動生成した更新関数には一対一の元構文がないため対応しない。
 - Playgroundは単一`.jsx`とブラウザーが提供する組込み機能だけを受け付け、任意のnpm依存と複数
-  ファイルは対象外である。保存APIは内部接続済みだが、共有ページのSSR公開と本番用の保存期間・
-  バックアップ・送信元情報の運用値は未確定である。実行管理画面は保存APIを持たない別配信元へ置き、
+  ファイルは対象外である。共有ページのSSR経路は内部実装済みだが、本番用の保存期間・バックアップ・
+  送信元情報の運用値は未確定である。実行管理画面は保存APIを持たない別配信元へ置き、
   実運用のCSP `frame-ancestors`、runtime資産のCORS、Workerを含む配信ヘッダーを環境ごとに固定する。
 
 対応範囲の詳細と拒否例は`docs/getting-started.md`、`docs/architecture.md`、

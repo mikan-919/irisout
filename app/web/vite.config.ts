@@ -1,5 +1,6 @@
 import path from 'node:path'
 import { defineConfig, type Plugin } from 'vite-plus'
+import { compileProject, type CompileResult } from 'irisout'
 import { irisout } from 'irisout/vite'
 
 const playgroundDevCsp = [
@@ -43,9 +44,52 @@ function playgroundHeaders(): Plugin {
   }
 }
 
+// SSRと同じ解析結果からhydrate用moduleを作る。投稿sourceはこの入口へ渡さない。
+function playgroundPageClient(): Plugin {
+  const virtualModuleId = 'virtual:irisout-playground-page'
+  let root = process.cwd()
+  let entryPath = path.resolve(root, 'src/PlaygroundPage.jsx')
+  let resolvedId = `\0${virtualModuleId}`
+  let result: CompileResult | null = null
+
+  const compile = () => {
+    result = compileProject(entryPath, { target: 'ssr' })
+    return result
+  }
+
+  return {
+    name: 'irisout-playground-page-client',
+    configResolved(config) {
+      root = config.root
+      entryPath = path.resolve(root, 'src/PlaygroundPage.jsx')
+      resolvedId =
+        config.command === 'serve'
+          ? `\0${virtualModuleId}`
+          : path.join(root, `.irisout-${encodeURIComponent(virtualModuleId)}.js`)
+      result = null
+    },
+    buildStart() {
+      const current = compile()
+      for (const dependency of current.dependencies) this.addWatchFile(dependency)
+    },
+    resolveId(id) {
+      return id === virtualModuleId ? resolvedId : null
+    },
+    load(id) {
+      if (id !== resolvedId) return null
+      const current = result ?? compile()
+      return { code: current.code, map: current.map }
+    },
+  }
+}
+
 export default defineConfig({
   base: '/',
-  plugins: [irisout({ entry: 'src/App.jsx', container: '#app' }), playgroundHeaders()],
+  plugins: [
+    irisout({ entry: 'src/App.jsx', container: '#app' }),
+    playgroundPageClient(),
+    playgroundHeaders(),
+  ],
   build: {
     outDir: 'dist',
     emptyOutDir: true,
@@ -54,10 +98,12 @@ export default defineConfig({
       input: {
         main: path.resolve(import.meta.dirname, 'index.html'),
         controller: path.resolve(import.meta.dirname, 'playground-controller.html'),
+        playground: path.resolve(import.meta.dirname, 'playground.html'),
       },
       output: {
         entryFileNames: (chunk) => {
           if (chunk.name === 'main') return 'app.js'
+          if (chunk.name === 'playground') return 'playground.js'
           return 'assets/[name]-[hash].js'
         },
       },

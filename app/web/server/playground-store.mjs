@@ -127,6 +127,46 @@ export class PlaygroundStore {
     }
   }
 
+  listDeletionRecords() {
+    return this.database
+      .query(
+        `SELECT id, deleted_at
+           FROM playgrounds
+          WHERE deleted_at IS NOT NULL
+          ORDER BY deleted_at, id`,
+      )
+      .all()
+      .map((row) => ({ id: row.id, deletedAt: row.deleted_at }))
+  }
+
+  applyDeletionRecords(records) {
+    if (!Array.isArray(records)) throw new TypeError('削除記録は配列が必要です')
+    const apply = this.database.transaction((entries) => {
+      for (const entry of entries) {
+        if (
+          !entry ||
+          typeof entry.id !== 'string' ||
+          typeof entry.deletedAt !== 'string' ||
+          !/^[A-Za-z0-9_-]{22}$/.test(entry.id)
+        ) {
+          throw new TypeError('削除記録の形式が不正です')
+        }
+        this.database
+          .query(
+            `UPDATE playgrounds
+                SET title = NULL,
+                    description = NULL,
+                    source = NULL,
+                    compiler_version = NULL,
+                    deleted_at = ?
+              WHERE id = ? AND (deleted_at IS NULL OR deleted_at < ?)`,
+          )
+          .run(entry.deletedAt, entry.id, entry.deletedAt)
+      }
+    })
+    apply(records)
+  }
+
   delete(id, deleteToken) {
     const deleteTokenHash = hashToken(deleteToken)
     const deleteTransaction = this.database.transaction((targetId, tokenHash) => {

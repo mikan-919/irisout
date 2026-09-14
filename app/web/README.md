@@ -31,6 +31,24 @@ bun run typecheck:web
 bun run build:web
 ```
 
+`build:web`は公式サイトの静的生成物に加えて、共有ページのhydrate用`playground.js`と
+サーバー用`dist/server/playground-page.js`を生成します。Bunサーバーは保存後の
+`/playground/:id`を再ビルドなしでSQLiteから読み、運営側部品だけをSSRします。保存されたJSXは
+表示用の文字列として扱い、サーバーではコンパイルまたは実行しません。
+
+保存先が未確定のため、削除記録の復元手順はローカルSQLite用だけを用意しています。復元前に
+`playground-backup.mjs export`で削除記録を書き出し、SQLiteファイルを復元した後に同じスクリプトの
+`apply`を実行します。これは公開済みの復旧機能ではありません。
+
+```bash
+IRISOUT_PLAYGROUND_DATABASE=playgrounds.sqlite \
+IRISOUT_PLAYGROUND_DELETION_LOG=deletions.json \
+bun server/playground-backup.mjs export
+IRISOUT_PLAYGROUND_DATABASE=restored.sqlite \
+IRISOUT_PLAYGROUND_DELETION_LOG=deletions.json \
+bun server/playground-backup.mjs apply
+```
+
 `build:web`は先に`docs/getting-started.md`と登録済み公式例を検査し、`/docs`と
 `/docs/:slug`の静的HTML、目次、前後リンク、検索索引を`app/web/public/docs`へ生成します。
 この処理は本文をJSXへ複製せず、Markdown解析器とIrisoutコンパイラを文書のブラウザ向け出力へ

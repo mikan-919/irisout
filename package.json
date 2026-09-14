@@ -20,7 +20,7 @@
     "dev:todomvc": "IRISOUT_ENTRY=todomvc.jsx vp -C apps/examples dev",
     "dev:multi-file": "IRISOUT_ENTRY=multi-file/App.jsx vp -C apps/examples dev",
     "build": "vp -C apps/examples build",
-    "build:web": "node app/web/scripts/build-docs.mjs && vp -C app/web build",
+    "build:web": "node app/web/scripts/build-docs.mjs && vp -C app/web build && bun run --cwd app/web build:ssr",
     "site:build": "node app/web/scripts/build-docs.mjs",
     "site:check": "node app/web/scripts/build-docs.mjs --check",
     "site:test": "node --test app/web/scripts/site-docs.test.mjs",

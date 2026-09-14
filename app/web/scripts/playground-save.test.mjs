@@ -3,7 +3,12 @@
 
 import assert from 'node:assert/strict'
 import { test } from 'bun:test'
-import { exportSaveBundle, readPendingSave, savePlayground } from '../src/playground/save-share.js'
+import {
+  deletePlayground,
+  exportSaveBundle,
+  readPendingSave,
+  savePlayground,
+} from '../src/playground/save-share.js'
 
 test('通信断後の再送はrequestIdと管理鍵を保持する', async () => {
   const values = new Map()
@@ -56,4 +61,19 @@ test('通信断後の再送はrequestIdと管理鍵を保持する', async () =>
   })
   assert.match(exported, new RegExp(saved.managementKey))
   assert.match(exported, /1234567890abcdefghijkl/)
+})
+
+test('正しい管理鍵で共有を削除する', async () => {
+  let request
+  await deletePlayground({
+    id: '1234567890abcdefghijkl',
+    managementKey: 'a'.repeat(43),
+    fetchImpl: async (url, options) => {
+      request = { url, options }
+      return new Response(null, { status: 204 })
+    },
+  })
+  assert.equal(request.url, '/api/playgrounds/1234567890abcdefghijkl')
+  assert.equal(request.options.method, 'DELETE')
+  assert.equal(request.options.headers.authorization, `Bearer ${'a'.repeat(43)}`)
 })

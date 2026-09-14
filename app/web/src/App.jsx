@@ -321,6 +321,9 @@ export function App() {
                 <button class="playground-save" type="button" data-playground-save>
                   保存／再送
                 </button>
+                <button class="playground-stop" type="button" data-playground-delete disabled>
+                  共有を削除
+                </button>
                 <button class="playground-stop" type="button" data-playground-export disabled>
                   書き出し
                 </button>

@@ -113,6 +113,39 @@ export async function savePlayground({
   return { ...body, managementKey, input }
 }
 
+export async function deletePlayground({
+  id,
+  managementKey,
+  apiUrl = id ? `/api/playgrounds/${encodeURIComponent(id)}` : '',
+  fetchImpl = globalThis.fetch,
+} = {}) {
+  if (typeof id !== 'string' || typeof managementKey !== 'string' || !apiUrl) {
+    throw new SaveError('削除対象または管理鍵がありません', 0)
+  }
+  let response
+  try {
+    response = await fetchImpl(apiUrl, {
+      method: 'DELETE',
+      headers: { authorization: `Bearer ${managementKey}` },
+      credentials: 'same-origin',
+    })
+  } catch (error) {
+    throw new SaveError('削除通信に失敗しました。管理鍵は保持されています', 0, error)
+  }
+  if (!response.ok) {
+    let body = null
+    try {
+      body = await response.json()
+    } catch {
+      // JSONでない障害応答はHTTP状態だけを表示する。
+    }
+    const message =
+      typeof body?.error === 'string' ? body.error : `削除に失敗しました (${response.status})`
+    throw new SaveError(message, response.status)
+  }
+  return true
+}
+
 export function exportSaveBundle({ managementKey, result, source } = {}) {
   return JSON.stringify(
     {
