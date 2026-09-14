@@ -73,6 +73,37 @@ describe('ADR-0012: dynamic attribute bindings', () => {
     expect(initialHtml).toContain('<input type="checkbox" checked')
   })
 
+  it('updates disabled through the DOM property and removes it when false', async () => {
+    const source = `export function App() {
+      const blocked = signal(false);
+      render(
+        <div>
+          <button disabled={blocked()}>connect</button>
+          <button onClick={() => blocked(!blocked())}>toggle</button>
+        </div>
+      );
+    }`
+    const { code, initialHtml } = compile(source)
+    expect(initialHtml).not.toContain('disabled')
+    expect(code).toContain('.disabled = ')
+    expect(code).not.toContain('setAttribute("disabled"')
+
+    const mod = await loadGenerated(code)
+    const container = createContainer()
+    ;(mod.mountComponent as (c: Element) => void)(container)
+    const connect = container.querySelector('button') as HTMLButtonElement
+    expect(connect.disabled).toBe(false)
+    expect(connect.hasAttribute('disabled')).toBe(false)
+
+    dispatch(container, container.querySelectorAll('button')[1]!, 'click')
+    expect(connect.disabled).toBe(true)
+    expect(connect.hasAttribute('disabled')).toBe(true)
+
+    dispatch(container, container.querySelectorAll('button')[1]!, 'click')
+    expect(connect.disabled).toBe(false)
+    expect(connect.hasAttribute('disabled')).toBe(false)
+  })
+
   it('escapes baked attribute values (quotes and ampersands)', () => {
     const source = `export function App() {
       const title = signal('a"&b');

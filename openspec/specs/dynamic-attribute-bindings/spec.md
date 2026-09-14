@@ -24,8 +24,8 @@ List/conditional factory・no-wrapper出力との境界をADR-0012に従って�
 
 ### Requirement: attribute/property の固定表による更新反映
 コンパイラは、動的属性の更新反映を ADR-0012 の固定表で使い分けなければ
-ならない(SHALL): `checked` は boolean プロパティ代入(初期 HTML は
-presence)、`value` は文字列プロパティ代入、それ以外は
+ならない(SHALL): `checked` と `disabled` は boolean プロパティ代入(初期
+HTML は true のときだけ presence)、`value` は文字列プロパティ代入、それ以外は
 `setAttribute(name, expr)`。依存 signal の `update_<name>()` が該当要素の
 属性/プロパティを再設定する。
 
@@ -34,6 +34,12 @@ presence)、`value` は文字列プロパティ代入、それ以外は
   し、ハンドラで `on` を true に書き込む
 - **THEN** 要素の `checked` **プロパティ**が true になる(初期 HTML では
   presence 属性として焼き込まれる)
+
+#### Scenario: disabled の真偽値反映
+- **WHEN** `<button disabled={busy()}>接続</button>` を含むソースを mount
+  し、`busy` を false、true、false の順に更新する
+- **THEN** `disabled` **プロパティ**が各値に追随し、false のときは
+  `disabled` 属性が存在しない
 
 #### Scenario: class の setAttribute 反映
 - **WHEN** 動的 class を持つ要素の依存 signal をハンドラで書き込む

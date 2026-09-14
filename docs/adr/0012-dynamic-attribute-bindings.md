@@ -29,18 +29,22 @@ SVG要素の静的な`xlink:*`、`xml:*`、`xmlns:*`はADR-0042で別に定め�
 
 ### 2. attribute / property の使い分けは固定表で行う
 
-- **boolean プロパティ**(現時点で `checked` のみ): 初期 HTML へは
-  presence(値なし属性)として焼き込み、更新は `el.checked = expr` の
-  プロパティ代入。
+- **boolean プロパティ**(現時点で `checked` と `disabled`): 初期 HTML へは
+  true のときだけ presence(値なし属性)として焼き込み、更新は
+  `el.checked = expr` または `el.disabled = expr` のプロパティ代入。
 - **文字列プロパティ**(現時点で `value` のみ): 初期 HTML へは属性として
   焼き込み、更新は `el.value = expr`。
 - **それ以外すべて**: 初期 HTML へは属性として焼き込み、更新は
   `el.setAttribute(name, expr)`。
 
-表は実需(TodoMVC パリティ)が要求する最小限に留める。`disabled` /
+表は実需が要求する最小限に留める。`disabled` は接続画面での実需により追加した。
 `selected` 等を動的に使う実需が出たら、この ADR に追記して表を広げる —
 汎用の property 推論機構(React の DOM プロパティ表のような網羅)は
 持ち込まない(ADR-0004: 出力が膨らむ方向を避ける)。
+
+`disabled` を通常属性として `setAttribute('disabled', false)` へ渡すと、
+HTMLの真偽属性は値に関係なく存在だけで有効になる。そのため、接続画面の
+ボタンが常に無効になる不具合を避けるためにDOMプロパティへ反映する。
 
 ### 3. 初期値の焼き込みはトップレベルのみ、ユニット内は factory が設定する
 

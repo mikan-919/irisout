@@ -9,7 +9,7 @@
 // 属性名は意図的に緩くしている: 共通属性(key/use/onXxxハンドラ/children)
 // のみ明示的に型付けし、それ以外は string キーの index signature で
 // 受ける。コンパイラ自身が host 属性名をホワイトリスト化していない
-// (M4静的host属性・ADR-0012動的host属性はchecked/valueの特別扱い以外
+// (M4静的host属性・ADR-0012動的host属性はchecked/disabled/valueの特別扱い以外
 // 任意の属性名をsetAttributeへ通す)ため、型を先に厳しくすると
 // aria-*/data-* のような正当な属性を誤検出してしまう。
 // 詳細は openspec/specs/authored-jsx-type-checking/spec.md 参照。

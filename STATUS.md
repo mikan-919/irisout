@@ -54,6 +54,10 @@
 確認した。実際のGeminiキー、モデル重み、YouTubeアカウントへの書き込みは未実施である。画面破棄
 時は`pagehide`で要求を中断し、ルートの破棄用ハンドルが公開されていない制約を踏まえた実装にした。
 
+同日の画面確認で、動的な`disabled`を通常属性へ`false`として設定すると、HTMLの真偽属性の規則に
+よりボタンが常に無効になる不具合を発見した。`checked`と同じDOMプロパティへ生成するよう修正し、
+生成物の実DOM試験とyt-utilの接続画面をChromiumで確認した。
+
 ## 検証
 
 - `bun run check`: 書式、静的検査、TypeScriptとauthored JSXの型検査。
@@ -76,7 +80,7 @@
 - dynamic import、re-export、module循環、名前空間による相対importは対象外である。
 - 部品入力は一つのshorthand分割代入を使う。別名、spread、複数仮引数は対象外である。
 - `children`は部品本体のJSXにある直接の子位置でだけ使える。自己再帰と相互再帰は対象外である。
-- 動的属性は`checked`と`value`をDOMプロパティへ、その他を属性へ反映する。動的な
+- 動的属性は`checked`、`disabled`、`value`をDOMプロパティへ、その他を属性へ反映する。動的な
   名前空間属性は対象外である。
 - ハンドラの`try`、ループ、`switch`など、更新位置を静的に決められない制御フローは
   `compile: ... (scope limit)`で拒否する。
