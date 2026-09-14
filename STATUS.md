@@ -13,6 +13,10 @@
 ソースは責務別のディレクトリに置くが、内部パッケージとしては梱包しない。旧JavaScript実装は
 移植完了により削除した。履歴はJujutsuとGitから参照できる。
 
+公式サイトと共有Playgroundの計画は、第0段階（文書8分類、Counter・List・SVGの例、
+`docs/getting-started.md`の正本、SSR入口、hydrate state、限定共有、投稿JSXの非実行）の範囲を
+2026-09-14に固定した。実装は未着手であり、ADR-0052〜0054と各OpenSpec changeへ分割している。
+
 ## 段階
 
 | 段階           | 状態 | 結果                                                   |

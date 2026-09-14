@@ -23,9 +23,20 @@ R1からR4までを完了し、`irisout` 0.2.2を2026-09-12にnpmへ公開した
 人間の協力者が得られた場合は、導入、部品分割、診断修正、イベント更新、破棄を確認し、
 止まった箇所を再現例として記録する。協力者を前提に期限は設けない。
 
-公式サイトのドキュメントはSSGを基本とする。共有Playgroundを利用例として、要求データから
-HTMLとブラウザへの引継ぎデータを生成するIrisoutのサーバー用入口を検討する。初期対応は
-共有ページに必要な記法と要求ごとの状態分離に限る。構成案と段階的な受入条件は
+公式サイトのドキュメントはSSGを基本とする。第0段階で、文書8分類とCounter・List・SVGの
+例、`docs/getting-started.md`の正本、対象版を固定した。共有Playgroundでは、指定したルート
+部品の初期描画全体を要求ごとにSSRし、`render(input) -> { html, state }`でstateをhydrateへ
+渡す。初期対応は入力、テキスト、属性、条件分岐、局所signalに限り、module共有状態と投稿
+JSXのサーバー実行は拒否する。契約は[ADR-0052](./docs/adr/0052-request-ssr-root-entry.md)、
+文書範囲は[ADR-0053](./docs/adr/0053-site-document-source-and-initial-scope.md)、共有境界は
+[ADR-0054](./docs/adr/0054-playground-share-and-posted-code-boundary.md)に記録した。
+
+第0段階は完了した。次は[文書SSG](./openspec/changes/site-docs-ssg/)を実装し、その後に
+[ブラウザ用コンパイラ入口](./openspec/changes/browser-compiler-entry/)、
+[隔離実行](./openspec/changes/playground-isolated-execution/)、
+[SSR入口](./openspec/changes/irisout-ssr-entry/)を試作する。保存・削除は
+[playground-save-share](./openspec/changes/playground-save-share/)、共有ページの公開は
+[playground-ssr-publish](./openspec/changes/playground-ssr-publish/)で扱う。各段階の条件は
 [公式サイトと共有Playgroundの計画](./docs/irisout-site-and-playground-plan.md)に記載する。
 
 Suspense、Transition、Portal、部品単位の例外回復などの機能は
