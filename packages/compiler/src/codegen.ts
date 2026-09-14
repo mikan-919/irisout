@@ -85,6 +85,7 @@ export interface ListMarkerOutput {
   kind: 'list'
   itemParam: string
   arrayRendered: string
+  arraySourceRendered: string
   keyRendered: string
   collectionDeclId: DeclId | null
   collectionOutputName: string | null
@@ -100,6 +101,7 @@ export interface ConditionalMarkerOutput {
   id: MarkerId
   kind: 'conditional'
   condRendered: string
+  condSourceRendered: string
   isLogical: boolean
   branches: ConditionalBranchOutput[]
 }
@@ -193,6 +195,12 @@ export interface GenerateModuleInput {
   // authored 名のままモジュールスコープへ1回だけ emit する(design D4)。
   emittedFns: { name: string; params: string; body: string; async: boolean }[]
   initialHtml: string
+  /** ルート部品の入力仮引数。SSRのstateをhydrate時に同じ字句束縛へ戻す。 */
+  inputPattern: string | null
+  /** SSRのrenderが保存したルートsignal初期値をhydrateで復元する。 */
+  signalState: { id: DeclId; outputName: string }[]
+  /** SSR HTMLの構造unitをhydrate前に差し替えるclient生成物か。 */
+  ssrHydration: boolean
 }
 
 // クローンしたテンプレート内から data-iris-id を持つ要素を探す。ルート
@@ -1462,6 +1470,9 @@ export function generateModule({
   attrBindings,
   emittedFns,
   initialHtml,
+  inputPattern,
+  signalState,
+  ssrHydration,
 }: GenerateModuleInput): string {
   const moduleLines: string[] = []
   const instanceLines: string[] = []
@@ -1494,10 +1505,58 @@ export function generateModule({
   if (sharedStatements.length > 0) runtimeImports.push('sharedSignal as __sharedSignal__')
   if (externalImports.length > 0) moduleLines.push(...externalImports, '')
   moduleLines.push(`import { ${runtimeImports.join(', ')} } from 'irisout/runtime';`, '')
+  const acceptsInputOrState = inputPattern !== null || signalState.length > 0
+  if (ssrHydration && acceptsInputOrState) {
+    // SSR生成物の第2引数はrender()が返したstateだけを受け付ける。入力側に
+    // `__irisout_state__`というpropertyがあっても、state.inputを通るため
+    // 入力とstateを同じ引数で推測しない。
+    moduleLines.push(
+      'function __irisout_require_state__(value) {',
+      "  if (!value || typeof value !== 'object' || value.__irisout_state__ !== true || !Object.prototype.hasOwnProperty.call(value, 'input') || !Object.prototype.hasOwnProperty.call(value, 'signals')) throw new TypeError('SSR hydration requires state returned by render(input)');",
+      '  return value;',
+      '}',
+      ...(inputPattern
+        ? [
+            'function __irisout_input__(value) {',
+            '  return __irisout_require_state__(value).input;',
+            '}',
+          ]
+        : []),
+      ...(signalState.length > 0
+        ? [
+            'function __irisout_state__(value) {',
+            '  const state = __irisout_require_state__(value);',
+            '  return state.signals;',
+            '}',
+            'function __irisout_restore_signal__(id, fallback, state) {',
+            '  return state && Object.prototype.hasOwnProperty.call(state, id) ? state[id] : fallback();',
+            '}',
+          ]
+        : []),
+      '',
+    )
+  }
   if (supportStatements.length > 0) moduleLines.push(...supportStatements, '')
   if (sharedStatements.length > 0) moduleLines.push(...sharedStatements, '')
   if (sharedDerivedStatements.length > 0) moduleLines.push(...sharedDerivedStatements, '')
-  instanceLines.push(...declStatements, '')
+  if (acceptsInputOrState) {
+    instanceLines.push(
+      ...(inputPattern ? ['const __input__ = __irisout_input__(__input_or_state__);'] : []),
+      ...(signalState.length > 0
+        ? ['const __state__ = __irisout_state__(__input_or_state__);']
+        : []),
+      ...(inputPattern ? [`const ${inputPattern} = __input__;`] : []),
+      '',
+    )
+  }
+  const signalIdsByOutputName = new Map(signalState.map(({ outputName, id }) => [outputName, id]))
+  const restoredDeclStatements = declStatements.map((statement) => {
+    const match = /^let ([A-Za-z_$][A-Za-z0-9_$]*) = ([\s\S]*);$/.exec(statement)
+    const id = match ? signalIdsByOutputName.get(match[1]!) : undefined
+    if (!match || !id) return statement
+    return `let ${match[1]} = __irisout_restore_signal__(${JSON.stringify(id)}, () => (${match[2]}), __state__);`
+  })
+  instanceLines.push(...restoredDeclStatements, '')
   // cross-function-handler-writes design D4: 追跡された動きゾーン関数をauthored
   // 名のままinstanceスコープへemitする(update_*()は本体に入れない — D3)。
   // 関数宣言なのでhoistされ、ハンドラ/他の追跡関数からそのまま呼べる。
@@ -1595,6 +1654,31 @@ export function generateModule({
   const initialUpdateCalls = [...signalsNeedingInitialCall].map(
     (id) => `  update_${declOutputName.get(id)}();`,
   )
+  // SSR HTMLは入力parameterだけで構造unitを選ぶ場合がある。その場合は
+  // signalToMarkersに登録されないため、hydrate直後に全構造unitを一度だけ
+  // 初期化する。signal依存unitは既存のupdate_*が続けて呼ばれても再利用される。
+  const structuralInitializationLines = ssrHydration
+    ? markers.flatMap((marker) => {
+        if (marker.kind === 'list') {
+          return generateListUpdate(
+            marker,
+            `__ranges__.get(${JSON.stringify(marker.id)})`,
+            'true',
+            'null',
+          )
+        }
+        if (marker.kind === 'conditional') {
+          return generateConditionalUpdate(
+            marker,
+            `__ranges__.get(${JSON.stringify(marker.id)})`,
+            condDispatchesUpdate(marker, false),
+            'true',
+            'null',
+          )
+        }
+        return []
+      })
+    : []
   const docSetupLines =
     templateSetupLines.length > 0
       ? ['  __doc__ = container.ownerDocument;', ...templateSetupLines]
@@ -1717,6 +1801,7 @@ export function generateModule({
   const initializationLines = [
     ...docSetupLines,
     ...setupLines,
+    ...structuralInitializationLines,
     ...initialUpdateCalls,
     ...actionCallLines,
     ...mountCallLines,
@@ -1765,6 +1850,11 @@ export function generateModule({
     structuralMarkerIds.length > 0
       ? '  ({ markers: __markers__, ranges: __ranges__ } = __hydrate__(container, __MARKER_IDS__, __RANGE_IDS__));'
       : '  ({ markers: __markers__ } = __hydrate__(container, __MARKER_IDS__));',
+    ...(ssrHydration && structuralMarkerIds.length > 0
+      ? [
+          '  for (const __range__ of __ranges__.values()) { while (__range__.start.nextSibling && __range__.start.nextSibling !== __range__.end) __range__.start.nextSibling.remove(); }',
+        ]
+      : []),
     '  __container__ = container;',
     '  __mounted__ = true;',
     ...sharedSubscribeLines,
@@ -1994,18 +2084,40 @@ export function generateModule({
     `return { mount, hydrate: hydrateComponentInstance, unmount${updateNames.map((name) => `, ${name}`).join('')} };`,
   )
 
-  moduleLines.push('export function createComponent() {')
+  moduleLines.push(
+    acceptsInputOrState
+      ? ssrHydration
+        ? 'export function createComponent(__input_or_state__) {'
+        : 'export function createComponent(__input_or_state__ = {}) {'
+      : 'export function createComponent() {',
+  )
   moduleLines.push(...instanceLines.map((line) => (line ? `  ${line}` : '')))
   moduleLines.push('}', '')
   moduleLines.push(
-    'export function mountComponent(container) {',
-    '  const instance = createComponent();',
+    acceptsInputOrState
+      ? ssrHydration
+        ? 'export function mountComponent(container, state) {'
+        : 'export function mountComponent(container, inputOrState) {'
+      : 'export function mountComponent(container) {',
+    acceptsInputOrState
+      ? ssrHydration
+        ? '  const instance = createComponent(state);'
+        : '  const instance = createComponent(inputOrState);'
+      : '  const instance = createComponent();',
     '  instance.mount(container);',
     '  return instance;',
     '}',
     '',
-    'export function hydrateComponent(container) {',
-    '  const instance = createComponent();',
+    acceptsInputOrState
+      ? ssrHydration
+        ? 'export function hydrateComponent(container, state) {'
+        : 'export function hydrateComponent(container, inputOrState) {'
+      : 'export function hydrateComponent(container) {',
+    acceptsInputOrState
+      ? ssrHydration
+        ? '  const instance = createComponent(state);'
+        : '  const instance = createComponent(inputOrState);'
+      : '  const instance = createComponent();',
     '  instance.hydrate(container);',
     '  return instance;',
     '}',

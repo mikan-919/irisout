@@ -22,6 +22,13 @@ export interface IrisoutPluginOptions {
   virtualModuleId?: string
 }
 
+export interface IrisoutSsrPluginOptions {
+  /** Viteのrootから解決するSSR対象ルート。絶対pathも受け付ける。 */
+  entry: string
+  /** サーバー側からimportする仮想module名。 */
+  virtualModuleId?: string
+}
+
 function normalizePath(filePath: string): string {
   return path.normalize(path.resolve(filePath))
 }
@@ -130,3 +137,79 @@ export function irisout(options: IrisoutPluginOptions): Plugin {
 }
 
 export default irisout
+
+/**
+ * 要求単位のSSR moduleをVite+へ接続する。client用irisout()とは別pluginとして
+ * 明示的に登録し、生成したserver入口以外へSSR契約を混ぜない。
+ */
+export function irisoutSsr(options: IrisoutSsrPluginOptions): Plugin {
+  const virtualModuleId = options.virtualModuleId ?? 'virtual:irisout-ssr'
+  let root = process.cwd()
+  let entryPath = normalizePath(path.resolve(root, options.entry))
+  let resolvedVirtualModuleId = path.join(
+    root,
+    `.irisout-${encodeURIComponent(virtualModuleId)}.js`,
+  )
+  let result: CompileResult | null = null
+  let dependencies = new Set<string>()
+
+  const compile = (): CompileResult => {
+    const next = compileProject(entryPath, { target: 'ssr' })
+    if (!next.ssrCode) throw new Error('irisout SSR: compiler did not produce a server module')
+    result = next
+    dependencies = new Set(next.dependencies.map(normalizePath))
+    return next
+  }
+
+  const ensureCompiled = (): CompileResult => result ?? compile()
+  const watch = (add: (filePath: string) => void): void => {
+    for (const filePath of dependencies) add(filePath)
+  }
+
+  return {
+    name: 'irisout-ssr',
+    configResolved(config: ResolvedConfig) {
+      root = config.root
+      entryPath = normalizePath(path.resolve(root, options.entry))
+      resolvedVirtualModuleId =
+        config.command === 'serve'
+          ? `\0${virtualModuleId}`
+          : path.join(root, `.irisout-${encodeURIComponent(virtualModuleId)}.js`)
+      result = null
+      dependencies = new Set()
+    },
+    buildStart() {
+      compile()
+      watch((filePath) => this.addWatchFile(filePath))
+    },
+    configureServer(server) {
+      const current = ensureCompiled()
+      server.watcher.add([...current.dependencies])
+    },
+    resolveId(id: string) {
+      return id === virtualModuleId ? resolvedVirtualModuleId : null
+    },
+    load(id: string) {
+      if (id !== resolvedVirtualModuleId) return null
+      const current = ensureCompiled()
+      if (!current.ssrCode) throw new Error('irisout SSR: missing generated server module')
+      return { code: current.ssrCode, map: null }
+    },
+    async handleHotUpdate(context: HmrContext) {
+      const changedPath = normalizePath(context.file)
+      if (dependencies.size === 0) ensureCompiled()
+      if (!dependencies.has(changedPath)) return
+
+      const previous = result
+      try {
+        const current = compile()
+        context.server.watcher.add([...current.dependencies])
+      } catch (error) {
+        result = previous
+        throw error
+      }
+      context.server.ws.send({ type: 'full-reload', path: '*' })
+      return []
+    },
+  }
+}

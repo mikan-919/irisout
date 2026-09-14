@@ -293,13 +293,14 @@ function emitLocalSignal(
   declaratorStart: number,
   naturalName: string,
   rendered: string,
+  sourceRendered: string,
 ): LocalDecl {
   const id = toDeclId(`decl_${instanceId}_${declaratorStart}_${naturalName}`)
   ctx.declIdByKey.set(declKey(instanceId, declaratorStart, naturalName), id)
   ctx.declKind.set(id, 'signal')
   ctx.localDeclIds.add(id)
   const outputName = assignOutputName(ctx, naturalName, id)
-  return { id, kind: 'signal', outputName, rendered }
+  return { id, kind: 'signal', outputName, rendered, sourceRendered }
 }
 
 function emitLocalDerived(
@@ -327,10 +328,14 @@ function emitLocalDerived(
   ctx.localDeclIds.add(id)
   const outputName = assignOutputName(ctx, naturalName, id)
 
-  const { deps, rendered } = analyzeExpr(ctx, bodyPath as NodePath<t.Expression>, instanceId)
+  const { deps, rendered, sourceRendered } = analyzeExpr(
+    ctx,
+    bodyPath as NodePath<t.Expression>,
+    instanceId,
+  )
   ctx.derivedDeps.set(id, deps)
   ctx.derivedRecompute.set(id, rendered)
-  return { id, kind: 'derived', outputName, rendered }
+  return { id, kind: 'derived', outputName, rendered, sourceRendered }
 }
 
 export function processLocalDeclarationStatement(
@@ -340,8 +345,8 @@ export function processLocalDeclarationStatement(
 ): LocalDecl {
   const { kind, naturalName, declaratorStart, argPath } = parseSignalDeclStatement(stmt)
   if (kind === 'signal') {
-    const { rendered } = analyzeExpr(ctx, argPath, instanceId)
-    return emitLocalSignal(ctx, instanceId, declaratorStart, naturalName, rendered)
+    const { rendered, sourceRendered } = analyzeExpr(ctx, argPath, instanceId)
+    return emitLocalSignal(ctx, instanceId, declaratorStart, naturalName, rendered, sourceRendered)
   }
   return emitLocalDerived(ctx, instanceId, declaratorStart, naturalName, argPath)
 }
@@ -707,6 +712,7 @@ function renderElement(
         markerId,
         name: a.name,
         rendered: a.rendered,
+        sourceRendered: a.sourceRendered,
         deps: a.deps,
       })
       if (!insideUnit) {
@@ -1319,7 +1325,11 @@ function renderListUnit(
 ): MarkerId {
   const callee = exprPath.get('callee') as NodePath<t.MemberExpression>
   const arrayObjPath = callee.get('object') as NodePath<t.Expression>
-  const { deps, rendered: arrayRendered } = analyzeExpr(ctx, arrayObjPath, instanceId)
+  const {
+    deps,
+    rendered: arrayRendered,
+    sourceRendered: arraySourceRendered,
+  } = analyzeExpr(ctx, arrayObjPath, instanceId)
   const directDep = deps.size === 1 ? [...deps][0]! : null
   const isDirectCollectionRead =
     directDep != null &&
@@ -1388,6 +1398,7 @@ function renderListUnit(
     kind: 'list',
     itemParam,
     arrayRendered,
+    arraySourceRendered,
     keyRendered,
     collectionDeclId,
     body,
@@ -1423,7 +1434,11 @@ function renderConditionalUnit(
     throw new Error('compile: unsupported conditional expression form (scope limit)')
   }
 
-  const { deps, rendered: condRendered } = analyzeExpr(ctx, testPath, instanceId)
+  const {
+    deps,
+    rendered: condRendered,
+    sourceRendered: condSourceRendered,
+  } = analyzeExpr(ctx, testPath, instanceId)
 
   const branches = branchPaths.map((branchPath) => {
     if (!branchPath || branchPath.isNullLiteral()) return { body: null }
@@ -1465,6 +1480,7 @@ function renderConditionalUnit(
     id: markerId,
     kind: 'conditional',
     condRendered,
+    condSourceRendered,
     isLogical,
     branches,
   })

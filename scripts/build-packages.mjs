@@ -1,5 +1,13 @@
 import { execFileSync } from 'node:child_process'
-import { copyFileSync, cpSync, existsSync, mkdirSync, rmSync } from 'node:fs'
+import {
+  copyFileSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import path from 'node:path'
 import { build } from 'vite-plus'
 
@@ -39,6 +47,13 @@ const publicEntries = [
   {
     name: 'vite',
     source: 'packages/vite-plugin/src/index.ts',
+    external: (id) =>
+      id === 'vite-plus' || id.startsWith('node:') || id.includes('compiler/src/compiler'),
+    paths: (id) => (id.includes('compiler/src/compiler') ? './index.js' : id),
+  },
+  {
+    name: 'ssr',
+    source: 'packages/vite-plugin/src/ssr.ts',
     external: (id) =>
       id === 'vite-plus' || id.startsWith('node:') || id.includes('compiler/src/compiler'),
     paths: (id) => (id.includes('compiler/src/compiler') ? './index.js' : id),
@@ -100,6 +115,17 @@ copyFileSync(
 copyFileSync(
   path.join(declarationOutDir, 'vite-plugin/src/index.d.ts'),
   path.join(publicOutDir, 'vite.d.ts'),
+)
+copyFileSync(
+  path.join(declarationOutDir, 'vite-plugin/src/ssr.d.ts'),
+  path.join(publicOutDir, 'ssr.d.ts'),
+)
+writeFileSync(
+  path.join(publicOutDir, 'ssr.d.ts'),
+  readFileSync(path.join(publicOutDir, 'ssr.d.ts'), 'utf8').replaceAll(
+    "'./index.ts'",
+    "'./vite.d.ts'",
+  ),
 )
 copyFileSync(
   path.join(declarationOutDir, 'compiler/src/diagnostics.d.ts'),

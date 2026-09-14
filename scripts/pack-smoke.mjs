@@ -46,6 +46,8 @@ function pack() {
     'package/dist/LICENSE',
     'package/dist/index.js',
     'package/dist/vite.js',
+    'package/dist/ssr.js',
+    'package/dist/ssr.d.ts',
     'package/dist/jsx.d.ts',
   ]) {
     if (!files.includes(expected)) throw new Error(`pack smoke: ${expected} missing from tarball`)
@@ -70,6 +72,15 @@ try {
   if (!existsSync(path.join(fixtureDir, 'node_modules/irisout/dist/LICENSE'))) {
     throw new Error('pack smoke: license missing')
   }
+  run(
+    'node',
+    [
+      '--input-type=module',
+      '-e',
+      "const { irisoutSsr, serializeSsrState } = await import('irisout/ssr'); if (typeof irisoutSsr !== 'function' || typeof serializeSsrState !== 'function') throw new Error('pack smoke: irisout/ssr export missing')",
+    ],
+    fixtureDir,
+  )
   run('bun', ['run', 'typecheck'], fixtureDir)
   run('bun', ['run', 'build'], fixtureDir, { IRISOUT_SOURCEMAP: 'true' })
   const dist = path.join(fixtureDir, 'dist')

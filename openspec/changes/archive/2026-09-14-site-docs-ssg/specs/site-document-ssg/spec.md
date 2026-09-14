@@ -6,7 +6,7 @@
 
 ### Requirement: 文書正本と初回掲載範囲
 
-文書生成は`docs/getting-started.md`を導入文書の正本として参照し、初回の文書分類を導入、状態と更新、イベント、条件分岐と一覧、部品とファイル分割、ライフサイクル、API、診断と対応範囲に限定しなければならない(SHALL)。公式例はCounter、List、SVGを同じ入力から表示用コードと実行入力へ展開しなければならない(SHALL)。
+文書生成は`docs/getting-started.md`を導入文書の正本として参照し、初回の文書分類を導入、状態と更新、イベント、条件分岐と一覧、部品とファイル分割、ライフサイクル、API、診断と対応範囲に限定しなければならない(SHALL)。公式例はCounter、List、SVGを同じ入力から文書表示用コードと後続Playground接続用`examples.json`へ展開しなければならない(SHALL)。Playground画面が`examples.json`を読み込む処理は後続changeの責務とする。
 
 #### Scenario: 正本からの導入文書生成
 
@@ -24,12 +24,17 @@
 
 ### Requirement: 文書入力の検査
 
-生成は重複slug、未知の分類、見出し参照切れ、登録されていない例、許可されないHTMLまたはコード言語を検出した場合に失敗しなければならない(SHALL)。
+生成は重複slug、未知の分類、分類内の順序重複、相対・絶対の文書または見出し参照切れ、画像参照切れ、登録されていない例、許可されないHTMLまたはコード言語、path traversal、不正なpercent encodingを検出した場合に失敗しなければならない(SHALL)。`/docs`は文書一覧への絶対参照として許可する(SHALL)。
 
 #### Scenario: 不正な文書入力
 
 - **WHEN** 重複slugまたは切れた例参照を含む入力で生成する
 - **THEN** 公開物を出力せず、対象を示すビルドエラーを返す
+
+#### Scenario: 絶対参照の検査
+
+- **WHEN** 文書が`/docs`、`/docs/:slug#heading`、`/docs/assets/...`を参照する
+- **THEN** 一覧または実在する文書・見出し・画像だけが正規URLへ解決され、存在しない対象、path traversal、不正なpercent encodingはビルドエラーになる
 
 ### Requirement: 文書とPlaygroundの依存分離
 

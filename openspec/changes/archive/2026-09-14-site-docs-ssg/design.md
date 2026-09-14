@@ -8,7 +8,7 @@
 
 - 文書の入力検査とHTML出力を`app/web/scripts`へ置く。
 - JavaScriptなしの文書閲覧、直接URL、参照切れ検出、検索索引を成立させる。
-- 公式例の表示用コードとPlayground入力を同じファイルから生成する。
+- 公式例の表示用コードと後続Playground接続用`examples.json`を同じファイルから生成する。Playground画面の読込みは後続changeで接続する。
 
 **Non-Goals:**
 

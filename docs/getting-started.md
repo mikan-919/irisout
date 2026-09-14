@@ -1,3 +1,11 @@
+---
+title: npm公開版から始める
+description: irisout 0.2.2を空のディレクトリへ導入し、JSXの型検査と本番ビルドを確認する手順
+slug: getting-started
+section: 導入
+order: 1
+---
+
 # npm公開版から始める
 
 この手順は、空のディレクトリへ`irisout` 0.2.2を導入し、JSXの型検査、開発サーバー、
@@ -154,7 +162,7 @@ npm run dev
 - `try`、`for`、`switch`など、更新位置を静的に決められない制御構文は拒否される場合がある。
 - 未対応構文は`compile: ... (scope limit)`として、ファイル、行、列とともに表示される。
 
-対応機能と制約の全体は[`STATUS.md`](../STATUS.md)を参照する。不具合を報告するときは、
+対応機能と制約の全体は[STATUS.md](https://github.com/mikan-919/irisout/blob/main/STATUS.md)を参照する。不具合を報告するときは、
 元のJSX、生成物、`irisout`とブラウザの版、再現手順を残す。
 
 ## 初期HTMLの範囲

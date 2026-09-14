@@ -5,7 +5,9 @@
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {
-    "build": "vp build",
+    "build": "node scripts/build-docs.mjs && vp build",
+    "site:check": "node scripts/build-docs.mjs --check",
+    "site:test": "node --test scripts/site-docs.test.mjs",
     "dev": "vp dev"
   },
   "dependencies": {

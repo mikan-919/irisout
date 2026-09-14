@@ -74,6 +74,8 @@ export interface AttrBinding {
   name: string
   /** 出力向け(update 用、read call を裸の識別子へ書き換え済み)。 */
   rendered: string
+  /** SSR初期HTML向け。signal/derivedのread callを保持する。 */
+  sourceRendered: string
   deps: Set<DeclId>
 }
 
@@ -88,6 +90,8 @@ export interface LocalDecl {
   outputName: string
   /** 初期化式(出力向け、read call を裸の識別子へ書き換え済み)。 */
   rendered: string
+  /** SSR初期HTML向け。local signal/derivedのread callを保持する。 */
+  sourceRendered: string
 }
 
 // M5(ADR-0005): リストアイテム/条件分岐ブランチの中身。テンプレート HTML
@@ -124,6 +128,8 @@ export interface ListMarker {
   itemParam: string
   /** `.map()` を呼ぶ対象配列の出力向けレンダー結果(裸の識別子または式)。 */
   arrayRendered: string
+  /** SSR初期HTML向け。配列signalのread callを保持する。 */
+  arraySourceRendered: string
   /** `key={...}` の出力向けレンダー結果(item 仮引数を参照する式)。 */
   keyRendered: string
   /** 配列式が直接、キー付き`signal()`を読んでいる場合の宣言ID。それ以外はnull。 */
@@ -141,6 +147,8 @@ export interface ConditionalMarker {
   kind: 'conditional'
   /** 条件式の出力向けレンダー結果。 */
   condRendered: string
+  /** SSR初期HTML向け。条件signalのread callを保持する。 */
+  condSourceRendered: string
   /** true: branches[0]=真, false=なし(`&&`)。false: branches[0]=consequent, branches[1]=alternate(三項)。 */
   isLogical: boolean
   branches: ConditionalBranch[]

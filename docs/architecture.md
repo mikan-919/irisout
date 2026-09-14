@@ -72,6 +72,16 @@ linked source + module-scope補助宣言
 契約である。request SSRの入口と要求ごとのstate所有はADR-0038で別契約に分ける。開発時の
 変更反映はページ全体の再読み込みであり、状態保持やDOM差分HMRは対象外である。
 
+`compileProject(entryPath, { target: 'ssr' })`は同じ解析結果から`ssrCode`を追加生成する。
+公開側は`irisout/ssr`の`irisoutSsr()`でこのtargetを選び、仮想moduleの`render(input)`から
+要求ごとのHTMLとstateを得る。SSRではrootの入力を要求ごとに複製し、必須入力を空objectで
+ビルド時実行しない。初期SSRは単一module入口に限り、構造unit内のsignal/derivedはscope limitで
+拒否する。構造unitは条件・一覧を初期HTMLへ展開してから対応するrange markerを残す。client生成物は
+`render()`が返したstateを`hydrateComponent(container, state)`または`mountComponent(container, state)`へ
+渡してsignal初期値を復元する。raw inputとの推測は行わない。module共有state、相対module、外部module、
+イベント・lifecycle・actionのサーバー実行はSSR入口のscope limitである。仮想SSR moduleのsource mapは
+未実装のため`null`を返す。
+
 `compileComponent()`(4)が受理しないパターンに当たると、常に
 `compile:`+`(scope limit)`エラーで拒否する(ADR-0004の裏面、
 「安全に拒否する」)。この拒否からの公式な逃げ道は`use=`アクション

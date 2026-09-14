@@ -4,6 +4,7 @@ node_modules
 .pi
 package-lock.json
 dist
+app/web/public
 plans
 .cursor
 .agents

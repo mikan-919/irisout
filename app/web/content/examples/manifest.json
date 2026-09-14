@@ -1,0 +1,23 @@
+{
+  "version": "0.2.2",
+  "examples": [
+    {
+      "id": "counter",
+      "title": "Counter",
+      "description": "signalとイベントによる状態更新",
+      "source": "counter.jsx"
+    },
+    {
+      "id": "list",
+      "title": "List",
+      "description": "key付き一覧の追加と削除",
+      "source": "list.jsx"
+    },
+    {
+      "id": "svg",
+      "title": "SVG",
+      "description": "SVG要素と属性の記述",
+      "source": "svg.jsx"
+    }
+  ]
+}

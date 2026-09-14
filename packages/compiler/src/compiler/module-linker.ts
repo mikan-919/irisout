@@ -47,6 +47,8 @@ export interface LinkedProject {
   source: string
   supportStatements: string[]
   supportNames: Set<string>
+  /** 相対module。初期SSRは単一ファイル入口に限定する。 */
+  hasRelativeModule: boolean
   /** 外部moduleとViteの資源import。compilerのAST解析へ入れず生成moduleへ残す。 */
   externalImports: string[]
   /** compileProject()の利用側が相対moduleを監視できる絶対pathの一覧。 */
@@ -637,6 +639,7 @@ export function linkProject(entryPath: string): LinkedProject {
   const origins: DiagnosticOrigin[] = []
   const supportStatements: string[] = []
   const supportNames = new Set<string>()
+  const hasRelativeModule = order.some((record) => record.filePath !== absoluteEntry)
   const externalImports: string[] = []
   const dependencies = new Set<string>()
 
@@ -679,6 +682,7 @@ export function linkProject(entryPath: string): LinkedProject {
     source: sourceParts.join('\n'),
     supportStatements,
     supportNames,
+    hasRelativeModule,
     externalImports: [...new Set(externalImports)],
     dependencies: [...dependencies],
     origins,

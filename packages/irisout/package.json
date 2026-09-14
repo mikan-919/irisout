@@ -18,6 +18,10 @@
       "types": "./dist/vite.d.ts",
       "import": "./dist/vite.js"
     },
+    "./ssr": {
+      "types": "./dist/ssr.d.ts",
+      "import": "./dist/ssr.js"
+    },
     "./runtime": {
       "types": "./dist/runtime.d.ts",
       "import": "./dist/runtime.js"

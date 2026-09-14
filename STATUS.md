@@ -15,7 +15,19 @@
 
 公式サイトと共有Playgroundの計画は、第0段階（文書8分類、Counter・List・SVGの例、
 `docs/getting-started.md`の正本、SSR入口、hydrate state、限定共有、投稿JSXの非実行）の範囲を
-2026-09-14に固定した。実装は未着手であり、ADR-0052〜0054と各OpenSpec changeへ分割している。
+2026-09-14に固定した。第1段階の文書SSGは、`docs/getting-started.md`を正本とした静的HTML、
+文書一覧・目次・前後リンク、タイトルと見出しの検索索引、参照検査、公式例の版検査、CI接続まで
+実装した。公式例は同じJSXから文書表示用コードと後続Playground接続用`examples.json`を生成する。
+Playground画面がこの索引を読む処理、ブラウザ用コンパイラ入口、隔離実行、保存・共有は後続段階である。
+
+2026-09-14にSSR入口の試作を実装した。`irisout/ssr`の`irisoutSsr()`は指定したルート部品から
+要求単位の`render(input) -> { html, state }`を生成し、入力、テキスト、属性、条件分岐、一覧、
+局所signalを扱う。必須入力は要求時だけ評価し、局所signal初期値をstateからhydrateへ復元する。
+`serializeSsrState()`はJSON値を検査してscript埋込み用にescapeする。イベント、`onMount`、`effect`、
+`use=`はサーバーで実行せず、module共有state、相対module、外部module、構造unit内の`signal()`/
+`derived()`は`compile:` scope limitで拒否する。SSRの局所signalはルート部品直下に限る。hydrateと
+mountのstate引数は`render()`の返値専用で、入力値との推測を行わない。A/B並行要求と失敗後の正常要求を確認した。404・503の判定は要求層へ移管し、
+梱包導入検査は環境のBun一時領域または依存取得の制限で未完了である。
 
 ## 段階
 
@@ -98,6 +110,14 @@
 - Contextは静的に解決する。実行時provider探索、非同期予定表、永続化は持たない。
 - Vite連携はビルド時に作った静的HTMLをブラウザで引き継ぐ。要求ごとのサーバー描画は
   別契約である。
+- SSR入口のstateは配列、`null` prototypeまたは`Object.prototype`のobject、有限number、string、
+  boolean、`null`だけを受け付ける。`Map`、`Set`、`Date`、`toJSON`、function、symbol、循環参照、
+  accessor propertyは対象外である。
+- 初期SSRは単一module入口に限る。構造unit内の`signal()`と`derived()`は対象外で、ルート部品直下の
+  signalだけstateへ保存してhydrateする。
+- ルート入力bindingが生成moduleの内部名と衝突する場合は`compile:` scope limitで拒否する。
+- SSR仮想moduleのsource mapは未実装で`null`を返す。404・503で正常ページ用stateを生成しない
+  判定は要求処理層の責務である。
 - 実行時ソースマップはイベント処理、`use=`、`onMount`、`effect`の処理文を対象とする。
   DOM探索、一覧照合、自動生成した更新関数には一対一の元構文がないため対応しない。
 

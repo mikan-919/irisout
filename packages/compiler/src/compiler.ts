@@ -54,6 +54,7 @@ import { withCompileDiagnostic } from './diagnostics.ts'
 import type { DiagnosticOrigin } from './diagnostics.ts'
 import { finalizeSourceMap } from './source-map.ts'
 import type { IrisoutSourceMap } from './source-map.ts'
+import { attrBindingKind } from './template.ts'
 export { CompileDiagnostic } from './diagnostics.ts'
 import { derived, registry, signal } from '../../runtime/src/index.ts'
 
@@ -64,6 +65,8 @@ export interface CompileResult {
   code: string
   map: IrisoutSourceMap
   initialHtml: string
+  /** SSR targetで生成した要求単位のrender module。client targetでは未定義。 */
+  ssrCode?: string
   markers: ReturnType<typeof createCompilerState>['markers']
   signalToMarkers: Map<DeclId, Set<MarkerId>>
   declName: Map<DeclId, string>
@@ -331,13 +334,202 @@ function buildSignalToMarkers(
 }
 
 interface CompileOptions {
+  target?: 'client' | 'ssr'
   allowModuleSupport?: boolean
+  hasRelativeModule?: boolean
   supportStatements?: string[]
   supportNames?: Set<string>
   externalImports?: string[]
   dependencies?: string[]
   sourceMapFilePath?: string
   sourceMapOrigins?: DiagnosticOrigin[]
+}
+
+const SSR_RESERVED_NAMES = new Set([
+  '__rawInput__',
+  '__input__',
+  '__input_or_state__',
+  '__state__',
+  '__signal_state__',
+  '__irisout_clone_json__',
+  '__irisout_input__',
+  '__irisout_require_state__',
+  '__irisout_state__',
+  '__irisout_signal__',
+  '__irisout_restore_signal__',
+  '__esc__',
+  '__escAttr__',
+  '__INITIAL_HTML__',
+  '__MARKER_IDS__',
+  '__RANGE_IDS__',
+  '__markers__',
+  '__ranges__',
+  '__container__',
+  '__mounted__',
+  '__unmounted__',
+  '__doc__',
+  'html',
+  'signal',
+  'derived',
+])
+
+function assertSsrInputBinding(name: string): void {
+  if (SSR_RESERVED_NAMES.has(name)) {
+    throw new Error(
+      `compile: SSR root input binding "${name}" conflicts with generated internal name (scope limit)`,
+    )
+  }
+}
+
+// SSRとclient hydrateで同じ入力を使うため、ルート部品の仮引数だけを
+// 生成moduleへ移す。任意のJavaScriptを入力境界へ持ち込まないよう、初期版は
+// 識別子一つ、または単純なobject destructuringだけを受理する。
+function rootInputPattern(
+  componentPath: NodePath<t.FunctionDeclaration>,
+  source: string,
+): string | null {
+  const params = componentPath.node.params
+  if (params.length === 0) return null
+  if (params.length !== 1) {
+    throw new Error('compile: SSR root component accepts at most one input parameter (scope limit)')
+  }
+  const parameter = params[0]!
+  if (parameter.type === 'Identifier') {
+    assertSsrInputBinding(parameter.name)
+    return parameter.name
+  }
+  if (parameter.type === 'ObjectPattern') {
+    const start = parameter.start
+    const end = parameter.end
+    if (start == null || end == null) {
+      throw new Error('compile: SSR root input parameter must have a source range (scope limit)')
+    }
+    for (const property of parameter.properties) {
+      if (property.type === 'RestElement') {
+        throw new Error('compile: SSR root input rest properties are not supported (scope limit)')
+      }
+      if (property.type !== 'ObjectProperty' || property.computed) {
+        throw new Error(
+          'compile: SSR root input must use simple object destructuring (scope limit)',
+        )
+      }
+      if (property.key.type !== 'Identifier' && property.key.type !== 'StringLiteral') {
+        throw new Error(
+          'compile: SSR root input must use identifier or string property names (scope limit)',
+        )
+      }
+      if (property.value.type !== 'Identifier') {
+        throw new Error(
+          'compile: SSR root input only supports shorthand destructuring (scope limit)',
+        )
+      }
+      assertSsrInputBinding(property.value.name)
+    }
+    const pattern = source.slice(start, end)
+    if (pattern.includes(':')) {
+      throw new Error('compile: SSR root input only supports shorthand destructuring (scope limit)')
+    }
+    return pattern
+  }
+  throw new Error('compile: SSR root input must be an identifier or object pattern (scope limit)')
+}
+
+const SSR_JSON_HELPER = `function __irisout_clone_json__(value) {
+  const seen = new Set();
+  const fail = (message) => { throw new TypeError(message); };
+  const visitObject = (current) => {
+    const prototype = Object.getPrototypeOf(current);
+    if (prototype !== Object.prototype && prototype !== null) fail('SSR input must contain plain JSON objects');
+    for (const key of Reflect.ownKeys(current)) {
+      if (typeof key !== 'string') fail('SSR input must not contain symbol properties');
+      if (key === 'toJSON') fail('SSR input must not contain toJSON properties');
+      const descriptor = Object.getOwnPropertyDescriptor(current, key);
+      if (!descriptor || !descriptor.enumerable || descriptor.get || descriptor.set) fail('SSR input must contain data properties only');
+      visit(current[key]);
+    }
+  };
+  const visitArray = (current) => {
+    if (Object.getPrototypeOf(current) !== Array.prototype) fail('SSR input must contain ordinary arrays');
+    for (const key of Reflect.ownKeys(current)) {
+      if (key === 'length') continue;
+      if (typeof key !== 'string' || !/^(0|[1-9][0-9]*)$/.test(key) || Number(key) >= current.length) fail('SSR input arrays must contain indexed values only');
+      const descriptor = Object.getOwnPropertyDescriptor(current, key);
+      if (!descriptor || !descriptor.enumerable || descriptor.get || descriptor.set) fail('SSR input must contain data properties only');
+      visit(current[Number(key)]);
+    }
+  };
+  const visit = (current) => {
+    if (current === null || typeof current === 'string' || typeof current === 'boolean') return;
+    if (typeof current === 'number') {
+      if (!Number.isFinite(current)) fail('SSR input must contain finite JSON numbers');
+      return;
+    }
+    if (typeof current !== 'object') fail('SSR input must contain JSON-serializable values');
+    if (seen.has(current)) fail('SSR input must not contain cycles');
+    seen.add(current);
+    if (Array.isArray(current)) visitArray(current);
+    else visitObject(current);
+    seen.delete(current);
+  };
+  visit(value);
+  const encoded = JSON.stringify(value);
+  if (encoded === undefined) fail('SSR input must be JSON-serializable');
+  return JSON.parse(encoded);
+}`
+
+interface SsrModuleInput {
+  externalImports: string[]
+  supportStatements: string[]
+  inputPattern: string | null
+  instrumentedDeclStatements: string[]
+  rootHtmlSource: string
+}
+
+function generateSsrModule({
+  externalImports,
+  supportStatements,
+  inputPattern,
+  instrumentedDeclStatements,
+  rootHtmlSource,
+}: SsrModuleInput): string {
+  const lines: string[] = []
+  const instrumentedSsrDeclStatements = instrumentedDeclStatements.map((statement) =>
+    /^const ([A-Za-z_$][A-Za-z0-9_$]*) = signal\(/.test(statement)
+      ? statement.replace(
+          /^const ([A-Za-z_$][A-Za-z0-9_$]*) = signal\(/,
+          'const $1 = __irisout_signal__(',
+        )
+      : statement,
+  )
+  const hasSignalState = instrumentedDeclStatements.some((statement) =>
+    /^const [A-Za-z_$][A-Za-z0-9_$]* = signal\(/.test(statement),
+  )
+  if (externalImports.length > 0) lines.push(...externalImports, '')
+  lines.push("import { signal, derived } from 'irisout/runtime';", '', SSR_JSON_HELPER, '')
+  if (supportStatements.length > 0) lines.push(...supportStatements, '')
+  lines.push(
+    'export function render(__rawInput__) {',
+    '  const __input__ = __irisout_clone_json__(arguments.length === 0 ? {} : __rawInput__);',
+  )
+  if (inputPattern) lines.push(`  const ${inputPattern} = __input__;`)
+  if (hasSignalState) {
+    lines.push(
+      '  const __signal_state__ = Object.create(null);',
+      '  const __irisout_signal__ = (initial, id) => { const accessor = signal(initial, id); __signal_state__[id] = accessor(); return accessor; };',
+    )
+  }
+  lines.push(
+    ...instrumentedSsrDeclStatements.map((statement) => `  ${statement}`),
+    "  const __esc__ = (value) => String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;');",
+    "  const __escAttr__ = (value) => String(value).replace(/&/g, '&amp;').replace(/\"/g, '&quot;');",
+    `  const html = \`${rootHtmlSource}\`;`,
+    hasSignalState
+      ? '  return { html, state: { __irisout_state__: true, input: __input__, signals: __irisout_clone_json__(__signal_state__) } };'
+      : '  return { html, state: { __irisout_state__: true, input: __input__, signals: {} } };',
+    '}',
+    '',
+  )
+  return lines.join('\n')
 }
 
 function compileSource(source: string, options: CompileOptions = {}): CompileResult {
@@ -356,14 +548,32 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
   const ctx = createCompilerState(source, transformedNodes, options.supportNames)
   collectContextDeclarations(ast, source, ctx)
   for (const supportName of options.supportNames ?? []) ctx.usedOutputNames.add(supportName)
+  if (options.target === 'ssr') {
+    for (const reservedName of SSR_RESERVED_NAMES) ctx.usedOutputNames.add(reservedName)
+  }
   if (options.allowModuleSupport) collectSharedDeclarations(ast, source, ctx)
   const rootPath = findRootComponent(ast, options.allowModuleSupport === true)
+  const inputPattern = options.target === 'ssr' ? rootInputPattern(rootPath, source) : null
+  if (options.target === 'ssr' && ctx.sharedDeclIds.size > 0) {
+    throw new Error('compile: module shared state is not supported in SSR (scope limit)')
+  }
+  if (options.target === 'ssr' && options.hasRelativeModule) {
+    throw new Error('compile: relative modules are not supported in SSR (scope limit)')
+  }
+  if (options.target === 'ssr' && (options.externalImports?.length ?? 0) > 0) {
+    throw new Error('compile: external modules are not supported in SSR (scope limit)')
+  }
 
   const out = {
     declStatements: [] as string[],
     instrumentedDeclStatements: [] as string[],
   }
   const rootHtmlSource = compileComponent(ctx, rootPath, ctx.instanceCounter++, out)
+  if (options.target === 'ssr' && ctx.localDeclIds.size > 0) {
+    throw new Error(
+      'compile: signal() and derived() inside structural units are not supported in SSR (scope limit)',
+    )
+  }
 
   assertAcyclicDerivedGraph(ctx)
   markUsedSharedDependencies(ctx)
@@ -642,6 +852,92 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
     return convertUnitMarker(m)
   })
 
+  // 構造unitはclient buildではコメント範囲へ遅延生成するが、SSRでは要求入力
+  // に応じた実要素を初期HTMLへ含める。既存のmarker/templateを再利用し、SSR
+  // 専用の汎用DOM runtimeやbuild時の投稿コード実行は追加しない。
+  const structuralAnchor = (id: string): string =>
+    `<!--irisout:start:${id}--><!--irisout:end:${id}-->`
+
+  const renderSsrLocalDecls = (decls: StructuralUnitBodyOutput['localDecls']): string[] =>
+    decls.map((decl) =>
+      decl.kind === 'signal'
+        ? `const ${decl.outputName} = signal(${decl.sourceRendered}, ${JSON.stringify(decl.id)});`
+        : `const ${decl.outputName} = derived(() => ${decl.sourceRendered}, ${JSON.stringify(decl.id)});`,
+    )
+
+  const renderSsrBody = (body: StructuralUnitBodyOutput): string => {
+    let template = body.template
+    for (const binding of body.localAttrBindings) {
+      const marker = `data-iris-id="${binding.markerId}"`
+      const markerStart = template.indexOf(marker)
+      if (markerStart < 0) {
+        throw new Error(
+          `compile: SSR could not locate dynamic attribute marker ${binding.markerId} (scope limit)`,
+        )
+      }
+      const tagEnd = template.indexOf('>', markerStart)
+      if (tagEnd < 0) {
+        throw new Error(
+          `compile: SSR could not locate dynamic attribute host for ${binding.markerId} (scope limit)`,
+        )
+      }
+      const expression =
+        attrBindingKind(binding.name) === 'boolProp'
+          ? `\${(${binding.sourceRendered}) ? " ${binding.name}" : ""}`
+          : ` ${binding.name}="\${__escAttr__(${binding.sourceRendered})}"`
+      template = `${template.slice(0, tagEnd)}${expression}${template.slice(tagEnd)}`
+    }
+
+    for (const marker of body.localMarkers) {
+      if (marker.kind === 'text') continue
+      const anchor = structuralAnchor(marker.id)
+      if (!template.includes(anchor)) continue
+      template = template.replace(anchor, renderSsrUnitExpression(marker))
+    }
+    return template
+  }
+
+  const renderSsrUnitExpression = (marker: ListMarkerOutput | ConditionalMarkerOutput): string => {
+    if (marker.kind === 'list') {
+      const body = renderSsrBody(marker.body)
+      const declarations = renderSsrLocalDecls(marker.body.localDecls)
+      const start = `<!--irisout:start:${marker.id}-->`
+      const end = `<!--irisout:end:${marker.id}-->`
+      return `\${(() => { const __items__ = (${marker.arraySourceRendered}).map((${marker.itemParam}) => { ${declarations.join(' ')} return \`${body}\`; }).join(''); return \`${start}\${__items__}${end}\`; })()}`
+    }
+
+    const branch = (index: number): { body: string; declarations: string[] } | null => {
+      const branchBody = marker.branches[index]?.body
+      if (!branchBody) return null
+      return {
+        body: renderSsrBody(branchBody),
+        declarations: renderSsrLocalDecls(branchBody.localDecls),
+      }
+    }
+    const yes = branch(0)
+    const no = marker.isLogical ? null : branch(1)
+    const start = `<!--irisout:start:${marker.id}-->`
+    const end = `<!--irisout:end:${marker.id}-->`
+    const yesCode = yes
+      ? `{ ${yes.declarations.join(' ')} return \`${start}\${(() => \`${yes.body}\`)()}${end}\`; }`
+      : `{ return \`${start}${end}\`; }`
+    const noCode = no
+      ? `{ ${no.declarations.join(' ')} return \`${start}\${(() => \`${no.body}\`)()}${end}\`; }`
+      : `{ return \`${start}${end}\`; }`
+    return `\${(() => { if (${marker.condSourceRendered}) ${yesCode} else ${noCode} })()}`
+  }
+
+  // TypeScriptのconst初期化順に依存せず再帰参照できるよう、unit expressionの
+  // 関数宣言を先に定義してからroot templateを置換する。
+  const ssrHtmlSource = (() => {
+    let template = rootHtmlSource
+    for (const marker of markerOutputs) {
+      if (marker.kind !== 'list' && marker.kind !== 'conditional') continue
+      template = template.replace(structuralAnchor(marker.id), renderSsrUnitExpression(marker))
+    }
+    return template
+  })()
+
   // ADR-0011/ADR-0020: writeDeclIds は analyze.ts 側で既に root signal へ
   // 推移解決済み(analyzeActionIdentifier)なので、ここでは共有markerの有無に
   // 応じて個別updateまたはbatch文へ変換するだけでよい。action本体・返り値
@@ -664,65 +960,74 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
     ],
   }))
 
-  // --- ビルド時実行:discovery の確認 + 実際の初期 HTML の取得 ---
-  const instrumentedBody = [
-    ...(options.supportStatements ?? []),
-    ...ctx.sharedDecls.map((decl) => {
-      if (decl.kind === 'signal') {
-        return `const ${decl.outputName} = signal(${decl.sourceRendered}, ${JSON.stringify(decl.id)});`
-      }
-      if (decl.kind === 'derived') {
-        return `const ${decl.outputName} = derived(${decl.sourceRendered}, ${JSON.stringify(decl.id)});`
-      }
-      throw new Error(`compile: unsupported shared declaration kind ${decl.kind}`)
-    }),
-    ...out.instrumentedDeclStatements,
-    `return \`${rootHtmlSource}\`;`,
-  ].join('\n')
-  // __esc__: テキストマーカー式値のテキストノード文脈エスケープ
-  // (escape-initial-html design D2)。テキストノードなので `&` と `<` で十分。
-  // __escAttr__: 動的属性の初期値焼き込み用の属性文脈エスケープ(ADR-0012
-  // 決定3 — 二重引用符で囲むため `&` と `"`)。
-  const runComponent = new Function(
-    'signal',
-    'derived',
-    '__esc__',
-    '__escAttr__',
-    instrumentedBody,
-  ) as (
-    signalFn: typeof signal,
-    derivedFn: typeof derived,
-    escFn: (v: unknown) => string,
-    escAttrFn: (v: unknown) => string,
-  ) => string
-  const escapeTextValue = (v: unknown): string =>
-    String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;')
-  const escapeAttrTextValue = (v: unknown): string =>
-    String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;')
-  // 構文検査(assertTopLevelShape / render.ts の scope limit 群)をすり抜けた
-  // 未知の経路が残っても、生の実行時エラーではなく「コンパイルの失敗」として
-  // 報告する安全網(scope-limit-coverage design D3)。元エラーは cause に保持。
-  let initialHtml: string
-  try {
-    initialHtml = runComponent(signal, derived, escapeTextValue, escapeAttrTextValue)
-  } catch (e) {
-    throw new Error(
-      `compile: build-time execution failed: ${e instanceof Error ? e.message : String(e)}`,
-      { cause: e },
-    )
-  }
-
-  // same-file-component-composition: ローカルsignal(構造ユニットへ
-  // インライン化されたコンポーネントの変数ゾーン宣言)は、コンテナが
-  // 初期HTMLで空のまま焼かれる(design.md D5)ためビルド時実行の対象に
-  // ならず、registry には現れない。discovery check の対象外にする。
-  for (const [id, kind] of ctx.declKind) {
-    if (ctx.localDeclIds.has(id)) continue
-    const entry = registry.get(id)
-    if (!entry || entry.kind !== kind) {
+  // --- client用ビルド時実行: discoveryの確認 + 実際の初期HTMLの取得 ---
+  // SSRは要求入力なしの実行を行わない。必須入力を空objectで実行すると、
+  // `title.toUpperCase()`等がコンパイル時に失敗するため、SSRの初期HTMLは
+  // 要求時のssrCodeだけから生成する。
+  let initialHtml = ''
+  if (options.target !== 'ssr') {
+    const inputPrelude = inputPattern ? `const ${inputPattern} = __input__;` : ''
+    const instrumentedBody = [
+      inputPrelude,
+      ...(options.supportStatements ?? []),
+      ...ctx.sharedDecls.map((decl) => {
+        if (decl.kind === 'signal') {
+          return `const ${decl.outputName} = signal(${decl.sourceRendered}, ${JSON.stringify(decl.id)});`
+        }
+        if (decl.kind === 'derived') {
+          return `const ${decl.outputName} = derived(${decl.sourceRendered}, ${JSON.stringify(decl.id)});`
+        }
+        throw new Error(`compile: unsupported shared declaration kind ${decl.kind}`)
+      }),
+      ...out.instrumentedDeclStatements,
+      `return \`${rootHtmlSource}\`;`,
+    ].join('\n')
+    // __esc__: テキストマーカー式値のテキストノード文脈エスケープ
+    // (escape-initial-html design D2)。テキストノードなので `&` と `<` で十分。
+    // __escAttr__: 動的属性の初期値焼き込み用の属性文脈エスケープ(ADR-0012
+    // 決定3 — 二重引用符で囲むため `&` と `"`)。
+    const runComponent = new Function(
+      'signal',
+      'derived',
+      '__esc__',
+      '__escAttr__',
+      '__input__',
+      instrumentedBody,
+    ) as (
+      signalFn: typeof signal,
+      derivedFn: typeof derived,
+      escFn: (v: unknown) => string,
+      escAttrFn: (v: unknown) => string,
+      input: unknown,
+    ) => string
+    const escapeTextValue = (v: unknown): string =>
+      String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    const escapeAttrTextValue = (v: unknown): string =>
+      String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+    // 構文検査(assertTopLevelShape / render.ts の scope limit 群)をすり抜けた
+    // 未知の経路が残っても、生の実行時エラーではなく「コンパイルの失敗」として
+    // 報告する安全網(scope-limit-coverage design D3)。元エラーは cause に保持。
+    try {
+      initialHtml = runComponent(signal, derived, escapeTextValue, escapeAttrTextValue, {})
+    } catch (e) {
       throw new Error(
-        `compile: expected "${ctx.declOutputName.get(id)}" to be a ${kind}() call (ADR-0001 #3 discovery check)`,
+        `compile: build-time execution failed: ${e instanceof Error ? e.message : String(e)}`,
+        { cause: e },
       )
+    }
+
+    // same-file-component-composition: ローカルsignal(構造ユニットへ
+    // インライン化されたコンポーネントの変数ゾーン宣言)は、コンテナが
+    // 初期HTMLで空のまま焼かれる(design.md D5)ためビルド時実行の対象に
+    // ならず、registry には現れない。discovery check の対象外にする。
+    for (const [id, kind] of ctx.declKind) {
+      if (ctx.localDeclIds.has(id)) continue
+      const entry = registry.get(id)
+      if (!entry || entry.kind !== kind) {
+        throw new Error(
+          `compile: expected "${ctx.declOutputName.get(id)}" to be a ${kind}() call (ADR-0001 #3 discovery check)`,
+        )
+      }
     }
   }
 
@@ -734,6 +1039,12 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
     body: f.rendered,
     async: f.async,
   }))
+  const signalState =
+    options.target === 'ssr'
+      ? [...ctx.declKind]
+          .filter(([id, kind]) => kind === 'signal' && !ctx.localDeclIds.has(id))
+          .map(([id]) => ({ id, outputName: ctx.declOutputName.get(id)! }))
+      : []
 
   const markedCode = generateModule({
     supportStatements: options.supportStatements ?? [],
@@ -768,6 +1079,9 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
     attrBindings: ctx.attrBindings,
     emittedFns,
     initialHtml,
+    inputPattern: options.target === 'ssr' ? inputPattern : null,
+    signalState,
+    ssrHydration: options.target === 'ssr',
   })
   const { code, map } = finalizeSourceMap(markedCode, {
     filePath: options.sourceMapFilePath ?? '<source>',
@@ -775,10 +1089,22 @@ function compileSource(source: string, options: CompileOptions = {}): CompileRes
     origins: options.sourceMapOrigins,
   })
 
+  const ssrCode =
+    options.target === 'ssr'
+      ? generateSsrModule({
+          externalImports: options.externalImports ?? [],
+          supportStatements: options.supportStatements ?? [],
+          inputPattern,
+          instrumentedDeclStatements: out.instrumentedDeclStatements,
+          rootHtmlSource: ssrHtmlSource,
+        })
+      : undefined
+
   return {
     code,
     map,
     initialHtml,
+    ssrCode,
     markers: ctx.markers,
     signalToMarkers,
     declName: ctx.declOutputName,
@@ -794,10 +1120,26 @@ export function compile(source: string): CompileResult {
   }
 }
 
+export interface CompileProjectOptions {
+  /** clientは既存入口、ssrは要求単位のrender moduleを追加生成する。 */
+  target?: 'client' | 'ssr'
+}
+
+export function compileSSR(source: string): CompileResult {
+  try {
+    return compileSource(source, { target: 'ssr' })
+  } catch (error) {
+    throw withCompileDiagnostic(error, { filePath: '<source>', source })
+  }
+}
+
 // Node側のbuild入口。module graphの読込はここで行い、既存compile(source)の
 // 単一文字列APIとsource-onlyテストを変更しない。Vite pluginはentry pathだけを
 // 渡し、リンク済みsourceや補助宣言を直接扱わない。
-export function compileProject(entryPath: string): CompileResult {
+export function compileProject(
+  entryPath: string,
+  projectOptions: CompileProjectOptions = {},
+): CompileResult {
   const diagnosticFilePath = path.resolve(entryPath)
   let diagnosticSource = ''
   let diagnosticOrigins: import('./diagnostics.ts').DiagnosticOrigin[] | undefined
@@ -808,6 +1150,8 @@ export function compileProject(entryPath: string): CompileResult {
     diagnosticOrigins = linked.origins
     return compileSource(linked.source, {
       allowModuleSupport: true,
+      target: projectOptions.target,
+      hasRelativeModule: linked.hasRelativeModule,
       supportStatements: linked.supportStatements,
       supportNames: linked.supportNames,
       externalImports: linked.externalImports,
