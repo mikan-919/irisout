@@ -21,6 +21,10 @@
 
 入口は `packages/compiler/src/compiler.ts` の `compile(source)` または
 `compileProject(entryPath)`である。`compile(source)`は単一sourceをそのまま6段で処理する。
+ブラウザ内のPlaygroundは`packages/compiler/src/browser.ts`の`irisout/browser`副入口を使う。
+この入口は解析本体を共有するが、source文字列だけを受け取り、Nodeのファイル読込みと
+`module-linker.ts`を梱包しない。静的・動的importと外部資源importはブラウザ境界で
+`compile:` scope limitとして拒否する。
 `compileProject(entryPath)`は最初に`module-linker.ts`で相対moduleを検査・解決・ASTリンクし、
 リンク済みsourceを同じ6段へ渡す。module-linkerは各fileを実行せず、build-time executionの
 単位を一つに保つ。

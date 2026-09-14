@@ -35,7 +35,7 @@ export default defineConfig({
         },
       },
       {
-        files: ['packages/compiler/src/compiler.ts'],
+        files: ['packages/compiler/src/compiler.ts', 'packages/compiler/src/compiler/source.ts'],
         rules: {
           'typescript/no-implied-eval': 'off',
         },

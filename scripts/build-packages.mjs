@@ -33,6 +33,12 @@ const publicEntries = [
     paths: {},
   },
   {
+    name: 'browser',
+    source: 'packages/compiler/src/browser.ts',
+    external: (id) => id.startsWith('node:'),
+    paths: {},
+  },
+  {
     name: 'diagnostics',
     source: 'packages/compiler/src/diagnostics.ts',
     external: (id) => id.startsWith('node:'),
@@ -107,6 +113,10 @@ execFileSync(
 copyFileSync(
   path.join(declarationOutDir, 'compiler/src/compiler.d.ts'),
   path.join(publicOutDir, 'index.d.ts'),
+)
+copyFileSync(
+  path.join(declarationOutDir, 'compiler/src/browser.d.ts'),
+  path.join(publicOutDir, 'browser.d.ts'),
 )
 copyFileSync(
   path.join(declarationOutDir, 'runtime/src/index.d.ts'),

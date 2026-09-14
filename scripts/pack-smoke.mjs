@@ -10,6 +10,7 @@ import {
 } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { Worker } from 'node:worker_threads'
 import { TraceMap, originalPositionFor } from '@jridgewell/trace-mapping'
 
 const repoRoot = path.resolve(import.meta.dirname, '..')
@@ -52,6 +53,11 @@ function pack() {
   ]) {
     if (!files.includes(expected)) throw new Error(`pack smoke: ${expected} missing from tarball`)
   }
+  if (!registryPackage) {
+    for (const expected of ['package/dist/browser.js', 'package/dist/browser.d.ts']) {
+      if (!files.includes(expected)) throw new Error(`pack smoke: ${expected} missing from tarball`)
+    }
+  }
   return tarball
 }
 
@@ -81,6 +87,42 @@ try {
     ],
     fixtureDir,
   )
+  if (!registryPackage) {
+    const browserCode = readFileSync(
+      path.join(fixtureDir, 'node_modules/irisout/dist/browser.js'),
+      'utf8',
+    )
+    if (/['"]node:(?:fs|path)['"]/.test(browserCode)) {
+      throw new Error('pack smoke: browser compiler contains a Node file module')
+    }
+    if (browserCode.includes('module-linker')) {
+      throw new Error('pack smoke: browser compiler contains the module linker')
+    }
+
+    const workerFile = path.join(fixtureDir, 'browser-compiler-worker.mjs')
+    writeFileSync(
+      workerFile,
+      `import { parentPort } from 'node:worker_threads'\nimport { compile } from 'irisout/browser'\n\nparentPort.on('message', (source) => {\n  try {\n    const result = compile(source)\n    parentPort.postMessage({ ok: true, initialHtml: result.initialHtml })\n  } catch (error) {\n    parentPort.postMessage({ ok: false, message: error instanceof Error ? error.message : String(error) })\n  }\n})\n`,
+    )
+    const workerResult = await new Promise((resolve, reject) => {
+      const worker = new Worker(workerFile)
+      worker.once('message', (message) => {
+        void worker.terminate()
+        resolve(message)
+      })
+      worker.once('error', (error) => {
+        void worker.terminate()
+        reject(error)
+      })
+      worker.postMessage(`export function App() { render(<button>browser worker</button>); }`)
+    })
+    if (
+      workerResult?.ok !== true ||
+      workerResult.initialHtml !== '<button>browser worker</button>'
+    ) {
+      throw new Error(`pack smoke: browser compiler worker failed: ${JSON.stringify(workerResult)}`)
+    }
+  }
   run('bun', ['run', 'typecheck'], fixtureDir)
   run('bun', ['run', 'build'], fixtureDir, { IRISOUT_SOURCEMAP: 'true' })
   const dist = path.join(fixtureDir, 'dist')

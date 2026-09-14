@@ -12,6 +12,18 @@ Vite連携は`irisout/vite`、JSX型定義は`irisout/jsx`から参照します�
 import { irisout } from 'irisout/vite'
 ```
 
+Playgroundなどブラウザ内で単一JSXを変換する場合は`irisout/browser`を使います。入力は
+ソース文字列だけで、ファイル読込み、module解決、外部資源importは行いません。
+
+```ts
+import { compile } from 'irisout/browser'
+
+const result = compile(source)
+```
+
+対応外のimportや構文は`compile:`で始まるscope limit診断になります。投稿されたsourceを
+サーバーへ渡さず、Workerなどの隔離した実行単位から呼び出してください。
+
 要求単位のSSRは`irisout/ssr`の`irisoutSsr()`でルート部品を明示して使います。生成された
 `render(input)`はHTMLとhydrate用stateを返し、stateをscriptへ埋め込むときは
 `serializeSsrState()`を使います。SSR生成物の`hydrateComponent(container, state)`と

@@ -18,7 +18,7 @@
 2026-09-14に固定した。第1段階の文書SSGは、`docs/getting-started.md`を正本とした静的HTML、
 文書一覧・目次・前後リンク、タイトルと見出しの検索索引、参照検査、公式例の版検査、CI接続まで
 実装した。公式例は同じJSXから文書表示用コードと後続Playground接続用`examples.json`を生成する。
-Playground画面がこの索引を読む処理、ブラウザ用コンパイラ入口、隔離実行、保存・共有は後続段階である。
+Playground画面がこの索引を読む処理、隔離実行、保存・共有は後続段階である。
 
 2026-09-14にSSR入口の試作を実装した。`irisout/ssr`の`irisoutSsr()`は指定したルート部品から
 要求単位の`render(input) -> { html, state }`を生成し、入力、テキスト、属性、条件分岐、一覧、
@@ -26,8 +26,7 @@ Playground画面がこの索引を読む処理、ブラウザ用コンパイラ�
 `serializeSsrState()`はJSON値を検査してscript埋込み用にescapeする。イベント、`onMount`、`effect`、
 `use=`はサーバーで実行せず、module共有state、相対module、外部module、構造unit内の`signal()`/
 `derived()`は`compile:` scope limitで拒否する。SSRの局所signalはルート部品直下に限る。hydrateと
-mountのstate引数は`render()`の返値専用で、入力値との推測を行わない。A/B並行要求と失敗後の正常要求を確認した。404・503の判定は要求層へ移管し、
-梱包導入検査は環境のBun一時領域または依存取得の制限で未完了である。
+mountのstate引数は`render()`の返値専用で、入力値との推測を行わない。A/B並行要求と失敗後の正常要求を確認した。404・503の判定は要求層へ移管した。
 
 ## 段階
 
@@ -77,6 +76,12 @@ mountのstate引数は`render()`の返値専用で、入力値との推測を行
 よりボタンが常に無効になる不具合を発見した。`checked`と同じDOMプロパティへ生成するよう修正し、
 生成物の実DOM試験とyt-utilの接続画面をChromiumで確認した。
 
+2026-09-14にブラウザ用コンパイラ入口を実装した。`irisout/browser`は単一JSXの文字列だけを
+受け取り、`compile()`と同じ初期HTML・生成コード・診断を返す。source-onlyの解析本体をNodeの
+ファイル読込みとmodule linkerから分離し、梱包済み`browser.js`に`node:fs`、`node:path`、module
+linkerが含まれないことを依存検査で確認した。静的・動的import、外部資源importはブラウザ境界で
+`compile:` scope limitとして拒否する。tarballの別ディレクトリ導入とWorker実行も確認した。
+
 ## 検証
 
 - `bun run check`: 書式、静的検査、TypeScriptとauthored JSXの型検査。
@@ -94,9 +99,9 @@ mountのstate引数は`render()`の返値専用で、入力値との推測を行
 ## 既知の制約
 
 - `compile()`は、他の部品から参照されないトップレベル関数を一つ要求する。
-- `compile()`は初期HTMLの生成中に入力由来の処理を実行する。現在の入口はNodeの
-  ファイル読込み機能にも依存し、ブラウザ用のコンパイラ専用入口はない。共有Playgroundでは
-  入口の分離と実行環境の隔離が必要であり、投稿ソースをサーバーの診断処理へ渡さない。
+- `compile()`は初期HTMLの生成中に入力由来の処理を実行する。共有Playgroundでは投稿ソースを
+  サーバーの診断処理へ渡さず、`irisout/browser`をWorkerなどの隔離した実行単位から呼び出す。
+  外部通信や結果表示の権限分離は`playground-isolated-execution`の責務である。
 - `compile()`のトップレベルは関数宣言とcontext keyに限る。`compileProject()`は相対
   `.js`/`.jsx`の静的importを連結し、外部moduleとVite資源importは生成物へ残す。
 - dynamic import、re-export、module循環、名前空間による相対importは対象外である。
