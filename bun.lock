@@ -19,6 +19,7 @@
         "irisout": "workspace:*",
       },
       "devDependencies": {
+        "playwright": "^1.61.1",
         "typescript": "^5.9.0",
         "vite-plus": "0.3.0",
       },
@@ -66,7 +67,7 @@
     },
     "packages/irisout": {
       "name": "irisout",
-      "version": "0.2.1",
+      "version": "0.2.2",
       "peerDependencies": {
         "vite-plus": ">=0.3.0",
       },

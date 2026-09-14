@@ -8,12 +8,16 @@
     "build": "node scripts/build-docs.mjs && vp build",
     "site:check": "node scripts/build-docs.mjs --check",
     "site:test": "node --test scripts/site-docs.test.mjs",
-    "dev": "vp dev"
+    "dev": "vp dev",
+    "dev:playground": "node scripts/dev-playground.mjs",
+    "serve:playground": "node scripts/playground-server.mjs",
+    "test:playground": "bun scripts/playground-e2e.test.mjs"
   },
   "dependencies": {
     "irisout": "workspace:*"
   },
   "devDependencies": {
+    "playwright": "^1.61.1",
     "typescript": "^5.9.0",
     "vite-plus": "0.3.0"
   }

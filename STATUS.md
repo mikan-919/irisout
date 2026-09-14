@@ -82,6 +82,15 @@ mountのstate引数は`render()`の返値専用で、入力値との推測を行
 linkerが含まれないことを依存検査で確認した。静的・動的import、外部資源importはブラウザ境界で
 `compile:` scope limitとして拒否する。tarballの別ディレクトリ導入とWorker実行も確認した。
 
+同日にPlaygroundの編集・実行を実装した。公式サイトは`app/web`の入力欄だけを所有し、別配信元の
+`playground-controller.html`が実行ごとのWorkerと結果iframeを所有する。Workerは5秒で破棄し、
+生成結果は1 MiBまで、結果iframeは`sandbox="allow-scripts"`と`connect-src 'none'`を使う。
+親画面と実行管理画面は送信元・形式・サイズ・実行番号を検査し、診断文字列は`textContent`へ表示する。
+`bun run test:web:playground`で別配信元のCookie境界、CSP、例外、無限ループ、外部通信、フォーム、
+上位遷移、ポップアップ、ダウンロード、連続実行、停止後の再実行をChromiumで確認した。実行管理側の
+CSPにはコンパイラが`new Function()`を使うため`unsafe-eval`が必要であり、これはWorkerを含む配信元へ
+限定する。共有機能を公開する前に、実運用の隔離配信元へ同じヘッダーとブラウザー試験を適用する。
+
 ## 検証
 
 - `bun run check`: 書式、静的検査、TypeScriptとauthored JSXの型検査。
@@ -125,6 +134,9 @@ linkerが含まれないことを依存検査で確認した。静的・動的im
   判定は要求処理層の責務である。
 - 実行時ソースマップはイベント処理、`use=`、`onMount`、`effect`の処理文を対象とする。
   DOM探索、一覧照合、自動生成した更新関数には一対一の元構文がないため対応しない。
+- Playgroundは単一`.jsx`とブラウザーが提供する組込み機能だけを受け付け、任意のnpm依存、複数
+  ファイル、保存・共有APIは未接続である。実行管理画面は保存APIを持たない別配信元へ置き、
+  実運用のCSP `frame-ancestors`、runtime資産のCORS、Workerを含む配信ヘッダーを環境ごとに固定する。
 
 対応範囲の詳細と拒否例は`docs/getting-started.md`、`docs/architecture.md`、
 `openspec/specs/`を参照する。

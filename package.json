@@ -13,6 +13,7 @@
   "scripts": {
     "dev": "vp -C apps/examples dev",
     "dev:web": "vp -C app/web dev",
+    "dev:web:playground": "bun run --cwd app/web dev:playground",
     "dev:list": "IRISOUT_ENTRY=list.jsx vp -C apps/examples dev",
     "dev:notes": "IRISOUT_ENTRY=notes.jsx vp -C apps/examples dev",
     "dev:heatmap": "IRISOUT_ENTRY=heatmap.jsx vp -C apps/examples dev",
@@ -23,6 +24,7 @@
     "site:build": "node app/web/scripts/build-docs.mjs",
     "site:check": "node app/web/scripts/build-docs.mjs --check",
     "site:test": "node --test app/web/scripts/site-docs.test.mjs",
+    "test:web:playground": "bun run --cwd app/web test:playground",
     "build:inspect": "IRISOUT_MINIFY=false vp -C apps/examples build",
     "start": "bun run build && vp -C apps/examples preview",
     "check": "vp check && bun run typecheck:tsc",

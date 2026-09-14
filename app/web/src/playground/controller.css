@@ -1,0 +1,43 @@
+/* 実行管理iframe内の表示。公式サイトのDOM・CSSへ依存しない。 */
+
+:root {
+  color: #25232e;
+  background: #f5f4f8;
+  font-family: system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+}
+
+main {
+  min-height: 19rem;
+  padding: 1rem;
+}
+
+#controller-status {
+  min-height: 1.3rem;
+  margin: 0 0 0.75rem;
+  color: #5d596b;
+  font-size: 0.8rem;
+}
+
+#controller-status[data-state='error'] {
+  color: #a73c2c;
+}
+
+#result-root {
+  min-height: 16rem;
+  border: 1px solid #ddd9e7;
+  border-radius: 0.6rem;
+  background: #fff;
+  overflow: hidden;
+}
+
+#result-root iframe {
+  display: block;
+  width: 100%;
+  min-height: 16rem;
+  border: 0;
+  background: #fff;
+}

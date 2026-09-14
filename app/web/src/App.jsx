@@ -298,6 +298,51 @@ export function App() {
               <span>●</span> no virtual DOM involved
             </div>
           </div>
+
+          <div class="playground-editor" data-playground-root>
+            <div class="playground-editor-head">
+              <div>
+                <p class="demo-kicker">browser compiler</p>
+                <h3>JSXを編集して実行する</h3>
+              </div>
+              <div class="playground-actions">
+                <label class="playground-example-label">
+                  例
+                  <select data-playground-example aria-label="公式例">
+                    <option value="counter">Counter</option>
+                  </select>
+                </label>
+                <button class="demo-action" type="button" data-playground-run>
+                  実行
+                </button>
+                <button class="playground-stop" type="button" data-playground-stop disabled>
+                  停止
+                </button>
+              </div>
+            </div>
+            <label class="playground-source-label" for="playground-source">
+              入力JSX
+            </label>
+            <textarea
+              id="playground-source"
+              class="playground-source"
+              data-playground-source
+              spellcheck="false"
+              rows="16"
+              aria-describedby="playground-status"
+            />
+            <p
+              id="playground-status"
+              class="playground-status"
+              data-playground-status
+              role="status"
+            >
+              例を読み込んでいます
+            </p>
+            <div class="playground-result" data-playground-result>
+              実行結果はここに表示されます
+            </div>
+          </div>
         </section>
 
         <section class="section principles-section" id="principles">
