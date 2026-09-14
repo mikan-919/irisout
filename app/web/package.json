@@ -11,7 +11,10 @@
     "dev": "vp dev",
     "dev:playground": "node scripts/dev-playground.mjs",
     "serve:playground": "node scripts/playground-server.mjs",
-    "test:playground": "bun scripts/playground-e2e.test.mjs"
+    "serve:web": "bun server/index.mjs",
+    "test:playground": "bun scripts/playground-e2e.test.mjs",
+    "test:server": "bun test server",
+    "test:save": "bun test scripts/playground-save.test.mjs"
   },
   "dependencies": {
     "irisout": "workspace:*"

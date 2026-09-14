@@ -869,6 +869,7 @@ pre {
   display: flex;
   align-items: end;
   gap: 0.6rem;
+  flex-wrap: wrap;
 }
 
 .playground-example-label,
@@ -890,6 +891,42 @@ pre {
   background: var(--panel-raised);
   color: var(--ink);
   font: inherit;
+}
+
+.playground-save-fields {
+  display: grid;
+  grid-template-columns: minmax(12rem, 0.7fr) minmax(16rem, 1.3fr);
+  gap: 0.8rem;
+  padding: 0 1.4rem 1rem;
+}
+
+.playground-save-fields input {
+  min-width: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 0.45rem;
+  padding: 0.58rem 0.7rem;
+  background: var(--panel-raised);
+  color: var(--ink);
+  font: inherit;
+}
+
+.playground-save-fields input:focus {
+  outline: 2px solid var(--purple);
+  outline-offset: 2px;
+}
+
+.playground-save {
+  border: 1px solid var(--purple);
+  border-radius: 999px;
+  padding: 0.68rem 0.95rem;
+  background: rgb(174 110 255 / 0.12);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 0.72rem;
+}
+
+.playground-save:hover {
+  background: rgb(174 110 255 / 0.22);
 }
 
 .playground-stop {
@@ -956,6 +993,33 @@ pre {
 
 .playground-status[data-state='success'] {
   color: var(--mint);
+}
+
+.playground-share {
+  margin: 0 1.4rem 1.2rem;
+  border: 1px solid rgb(135 231 194 / 0.28);
+  border-radius: 0.55rem;
+  padding: 0.8rem 1rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.playground-share p {
+  margin: 0 0 0.45rem;
+  overflow-wrap: anywhere;
+}
+
+.playground-share a {
+  color: var(--mint);
+}
+
+.playground-share code {
+  color: var(--orange);
+  overflow-wrap: anywhere;
+}
+
+.playground-share small {
+  color: var(--subtle);
 }
 
 .playground-result {
@@ -1331,6 +1395,10 @@ pre {
 
   .playground-example-label select {
     width: 100%;
+  }
+
+  .playground-save-fields {
+    grid-template-columns: 1fr;
   }
 
   .demo-content {

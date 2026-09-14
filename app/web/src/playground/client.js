@@ -8,6 +8,7 @@ import {
   PLAYGROUND_PROTOCOL_VERSION,
   PLAYGROUND_SOURCE_MAX_BYTES,
 } from './protocol.js'
+import { downloadText, exportSaveBundle, readPendingSave, savePlayground } from './save-share.js'
 
 const DEFAULT_SOURCE = `export function Counter() {
   const count = signal(0)
@@ -33,15 +34,29 @@ export function setupPlayground(root) {
   const exampleElement = root.querySelector('[data-playground-example]')
   const runElement = root.querySelector('[data-playground-run]')
   const stopElement = root.querySelector('[data-playground-stop]')
+  const saveElement = root.querySelector('[data-playground-save]')
+  const exportElement = root.querySelector('[data-playground-export]')
+  const titleElement = root.querySelector('[data-playground-title]')
+  const descriptionElement = root.querySelector('[data-playground-description]')
   const statusElement = root.querySelector('[data-playground-status]')
   const resultElement = root.querySelector('[data-playground-result]')
+  const shareElement = root.querySelector('[data-playground-share]')
+  const shareLinkElement = root.querySelector('[data-playground-share-link]')
+  const deleteTokenElement = root.querySelector('[data-playground-delete-token]')
   if (
     !(sourceElement instanceof HTMLTextAreaElement) ||
     !(exampleElement instanceof HTMLSelectElement) ||
     !(runElement instanceof HTMLButtonElement) ||
     !(stopElement instanceof HTMLButtonElement) ||
+    !(saveElement instanceof HTMLButtonElement) ||
+    !(exportElement instanceof HTMLButtonElement) ||
+    !(titleElement instanceof HTMLInputElement) ||
+    !(descriptionElement instanceof HTMLInputElement) ||
     !(statusElement instanceof HTMLElement) ||
-    !(resultElement instanceof HTMLElement)
+    !(resultElement instanceof HTMLElement) ||
+    !(shareElement instanceof HTMLElement) ||
+    !(shareLinkElement instanceof HTMLAnchorElement) ||
+    !(deleteTokenElement instanceof HTMLElement)
   ) {
     return
   }
@@ -61,6 +76,7 @@ export function setupPlayground(root) {
   let loaded = false
   let nextRunNumber = 0
   let activeRunId = null
+  let latestSave = null
 
   controllerFrame.addEventListener('load', () => {
     loaded = true
@@ -132,6 +148,45 @@ export function setupPlayground(root) {
     if (selected) sourceElement.value = selected.source
   })
 
+  saveElement.addEventListener('click', async () => {
+    saveElement.disabled = true
+    setStatus('保存しています')
+    try {
+      latestSave = await savePlayground({
+        title: titleElement.value,
+        description: descriptionElement.value,
+        source: sourceElement.value,
+      })
+      shareLinkElement.href = new URL(latestSave.url, location.origin).href
+      shareLinkElement.textContent = shareLinkElement.href
+      deleteTokenElement.textContent = latestSave.managementKey
+      shareElement.hidden = false
+      exportElement.disabled = false
+      setStatus('保存しました', 'success')
+    } catch (error) {
+      const pending = readPendingSave()
+      exportElement.disabled = !pending?.managementKey
+      setStatus(error instanceof Error ? error.message : String(error), 'error')
+    } finally {
+      saveElement.disabled = false
+    }
+  })
+
+  exportElement.addEventListener('click', () => {
+    const pending = readPendingSave()
+    if (!pending?.managementKey) return
+    const result = latestSave ?? pending.result
+    downloadText(
+      'irisout-playground-share.json',
+      exportSaveBundle({
+        managementKey: pending.managementKey,
+        result,
+        source: sourceElement.value,
+      }),
+    )
+    setStatus('共有情報を書き出しました', 'success')
+  })
+
   void loadExamples()
 
   function postToController(message) {
@@ -167,6 +222,8 @@ export function setupPlayground(root) {
         exampleElement.value = examples[0].id
         sourceElement.value = examples[0].source
       }
+      const pending = readPendingSave()
+      exportElement.disabled = !pending?.managementKey
       setStatus('実行できます')
     } catch {
       setStatus('初期例を使っています')

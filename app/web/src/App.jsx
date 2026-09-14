@@ -318,7 +318,23 @@ export function App() {
                 <button class="playground-stop" type="button" data-playground-stop disabled>
                   停止
                 </button>
+                <button class="playground-save" type="button" data-playground-save>
+                  保存／再送
+                </button>
+                <button class="playground-stop" type="button" data-playground-export disabled>
+                  書き出し
+                </button>
               </div>
+            </div>
+            <div class="playground-save-fields">
+              <label class="playground-source-label" for="playground-title">
+                共有タイトル
+                <input id="playground-title" data-playground-title value="Irisout Playground" />
+              </label>
+              <label class="playground-source-label" for="playground-description">
+                説明
+                <input id="playground-description" data-playground-description />
+              </label>
             </div>
             <label class="playground-source-label" for="playground-source">
               入力JSX
@@ -339,6 +355,16 @@ export function App() {
             >
               例を読み込んでいます
             </p>
+            <section class="playground-share" data-playground-share hidden aria-live="polite">
+              <p>
+                共有URL: <a data-playground-share-link target="_blank" rel="noreferrer" />
+              </p>
+              <p>
+                削除用の管理鍵:
+                <code data-playground-delete-token />
+              </p>
+              <small>管理鍵を失うと自分で削除できません。書き出して保管してください。</small>
+            </section>
             <div class="playground-result" data-playground-result>
               実行結果はここに表示されます
             </div>
