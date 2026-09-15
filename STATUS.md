@@ -142,7 +142,8 @@ Vite+でビルドし、Bunサーバーは`/playground/:id`の要求ごとにSQLi
 依存最適化`cacheDir`を渡し、同時更新時の`ENOTEMPTY`を防ぐ。`/playground`は編集画面へ内部転送し、
 結果iframeが読むIrisout実行時処理だけにCORSを許可した。開発用入口は`irisout/runtime`の公開項目を
 再公開し、Counter以外の一覧・条件分岐にも対応する。並行起動、Listの選択・実行完了、開発経路の
-自動試験を確認した。単独の`dev:web`は従来の既定キャッシュを使う。
+自動試験を確認した。公式画面を`localhost`で開いた場合は、Cookie境界を保つため正規の
+`127.0.0.1`へ転送する。単独の`dev:web`は従来の既定キャッシュを使う。
 
 ## 検証
 

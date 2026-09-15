@@ -2,10 +2,29 @@ import assert from 'node:assert/strict'
 import path from 'node:path'
 import { test } from 'bun:test'
 import * as irisoutRuntime from 'irisout/runtime'
-import config from '../vite.config.ts'
+import config, { playgroundDevelopmentRedirect } from '../vite.config.ts'
 import * as playgroundRuntime from '../src/playground/runtime.js'
 
 test('開発用Playgroundの経路と実行時処理を接続する', () => {
+  assert.equal(
+    playgroundDevelopmentRedirect(
+      'site',
+      'http://127.0.0.1:5173',
+      'localhost:5173',
+      '/playground?example=list',
+    ),
+    'http://127.0.0.1:5173/playground?example=list',
+  )
+  assert.equal(
+    playgroundDevelopmentRedirect(
+      'controller',
+      'http://127.0.0.1:5173',
+      'localhost:5174',
+      '/playground-controller.html',
+    ),
+    null,
+  )
+
   const plugin = config.plugins.find((candidate) => candidate.name === 'irisout-playground-headers')
   assert.ok(plugin)
 

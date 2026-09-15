@@ -5,25 +5,39 @@ import { irisout } from 'irisout/vite'
 import { createControllerCsp, validateSeparateOrigins } from './src/playground/origin.js'
 
 const cacheDir = process.env.IRISOUT_VITE_CACHE_DIR
+const developmentRole = process.env.IRISOUT_PLAYGROUND_DEV_ROLE
 const runtimeDependencyPath = `/@fs${path.resolve(import.meta.dirname, '../../packages/irisout/dist/runtime.js')}`
 
 function playgroundHeaders(): Plugin {
   let playgroundDevCsp = createControllerCsp(null)
+  let playgroundDevSiteOrigin: string | null = null
   return {
     name: 'irisout-playground-headers',
     configResolved(config) {
       const siteOrigin = config.env.VITE_IRISOUT_PLAYGROUND_SITE_ORIGIN
       const controllerOrigin = config.env.VITE_IRISOUT_PLAYGROUND_CONTROLLER_ORIGIN
       if (typeof siteOrigin === 'string' && typeof controllerOrigin === 'string') {
-        playgroundDevCsp = createControllerCsp(
-          validateSeparateOrigins(siteOrigin, controllerOrigin).siteOrigin,
-        )
+        playgroundDevSiteOrigin = validateSeparateOrigins(siteOrigin, controllerOrigin).siteOrigin
+        playgroundDevCsp = createControllerCsp(playgroundDevSiteOrigin)
       } else if (typeof siteOrigin === 'string') {
+        playgroundDevSiteOrigin = new URL(siteOrigin).origin
         playgroundDevCsp = createControllerCsp(siteOrigin)
       }
     },
     configureServer(server) {
       server.middlewares.use((request, response, next) => {
+        const redirect = playgroundDevelopmentRedirect(
+          developmentRole,
+          playgroundDevSiteOrigin,
+          request.headers?.host,
+          request.url,
+        )
+        if (redirect) {
+          response.statusCode = 307
+          response.setHeader('Location', redirect)
+          response.end()
+          return
+        }
         const [pathname, search] = (request.url ?? '').split('?', 2)
         if (pathname === '/playground/') {
           response.statusCode = 308
@@ -54,6 +68,17 @@ function playgroundHeaders(): Plugin {
       })
     },
   }
+}
+
+export function playgroundDevelopmentRedirect(
+  role: string | undefined,
+  siteOrigin: string | null,
+  host: string | undefined,
+  requestUrl: string | undefined,
+) {
+  if (role !== 'site' || !siteOrigin || !host) return null
+  if (new URL(`http://${host}`).origin === siteOrigin) return null
+  return `${siteOrigin}${requestUrl?.startsWith('/') ? requestUrl : '/'}`
 }
 
 function isPlaygroundRuntimeResource(pathname: string) {

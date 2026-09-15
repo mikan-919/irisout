@@ -27,6 +27,7 @@ function start(args, env) {
 }
 
 start(['-C', 'app/web', 'dev', '--host', '127.0.0.1', '--port', String(sitePort), '--strictPort'], {
+  IRISOUT_PLAYGROUND_DEV_ROLE: 'site',
   IRISOUT_VITE_CACHE_DIR: path.join(root, 'app/web/node_modules/.vite-site'),
   VITE_IRISOUT_PLAYGROUND_CONTROLLER_ORIGIN: controllerOrigin,
   VITE_IRISOUT_PLAYGROUND_SITE_ORIGIN: siteOrigin,
@@ -34,6 +35,7 @@ start(['-C', 'app/web', 'dev', '--host', '127.0.0.1', '--port', String(sitePort)
 start(
   ['-C', 'app/web', 'dev', '--host', 'localhost', '--port', String(controllerPort), '--strictPort'],
   {
+    IRISOUT_PLAYGROUND_DEV_ROLE: 'controller',
     IRISOUT_VITE_CACHE_DIR: path.join(root, 'app/web/node_modules/.vite-controller'),
     VITE_IRISOUT_PLAYGROUND_CONTROLLER_ORIGIN: controllerOrigin,
     VITE_IRISOUT_PLAYGROUND_SITE_ORIGIN: siteOrigin,
