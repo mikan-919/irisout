@@ -115,6 +115,8 @@ triage手続きで捌く — コンパイラの受理条件自体を場当たり
 
 ## 重要な概念
 
+- **記述APIのimport**(ADR-0055): authored JSXの`signal`、`derived`、`render`などは`irisout`から名前付きでimportする。source parserとmodule linkerはこのimportをコンパイル時に取り除き、別名を既存の解析名へ戻す。生成moduleへは残さず、`irisout/jsx`にも大域宣言を置かない。
+
 - **DeclId / MarkerId**(state.ts): どちらも文字列だがブランド型で取り違えを
   コンパイル時に防ぐ。`decl_<instanceId>_<declaratorStart>` / `m<連番>`。
 - **rendered と sourceRendered の二重生成**(analyze.ts): 同じ式から

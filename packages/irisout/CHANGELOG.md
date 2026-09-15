@@ -1,5 +1,15 @@
 # 変更履歴
 
+## 次回公開
+
+- authored JSXの記述APIを大域関数から`irisout`の名前付きimportへ移行した。
+- コンパイラは記述APIのimportを生成物から取り除く。
+
+### 移行
+
+`signal`、`derived`、`render`などを使うauthored JSXへ、
+`import { signal, derived, render } from 'irisout'`のような名前付きimportを追加する。
+
 ## 0.2.2 - 2026-09-12
 
 - 導入手順、実装状況、開発計画の記述を現状に合わせた。

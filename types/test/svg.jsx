@@ -1,3 +1,5 @@
+import { render, signal } from 'irisout'
+
 const radius = signal(4)
 
 render(
@@ -9,5 +11,3 @@ render(
     </foreignObject>
   </svg>,
 )
-
-export {}

@@ -1,4 +1,5 @@
 import { TypedCard } from './typed-card.jsx'
+import { render } from 'irisout'
 
 /**
  * @typedef {object} LocalCardProps

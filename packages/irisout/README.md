@@ -12,6 +12,18 @@ Vite連携は`irisout/vite`、JSX型定義は`irisout/jsx`から参照します�
 import { irisout } from 'irisout/vite'
 ```
 
+authored JSXの記述APIは`irisout`から名前付きでimportします。このimportはコンパイル時に
+取り除かれ、生成物の実行時依存にはなりません。
+
+```jsx
+import { render, signal } from 'irisout'
+
+export function Counter() {
+  const count = signal(0)
+  render(<button onClick={() => count(count() + 1)}>{count()}</button>)
+}
+```
+
 Playgroundなどブラウザ内で単一JSXを変換する場合は`irisout/browser`を使います。入力は
 ソース文字列だけで、ファイル読込み、module解決、外部資源importは行いません。
 

@@ -1,4 +1,6 @@
 // 保存済み共有ページの運営側SSR部品。投稿JSXはsource文字列として表示する。
+import { render } from 'irisout'
+
 export function PlaygroundPage({ record }) {
   render(
     <main class="shared-playground" data-playground-page>

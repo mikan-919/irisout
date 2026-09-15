@@ -17,6 +17,9 @@ export default defineConfig({
 
 The HTML container contains `<!--irisout-html-->`. The browser entry imports `virtual:irisout-entry`. For authored `.jsx` checking, use `allowJs`, `checkJs`, `jsx: "preserve"`, `moduleResolution: "bundler"`, and `types: ["irisout/jsx"]`.
 
+Import authoring APIs such as `signal`, `derived`, and `render` by name from `irisout`.
+The compiler removes these imports before build-time execution and generated output.
+
 Static hosts and build-time values appear in the generated initial HTML. Lists and conditional
 branches place range comments in initial HTML and insert their contents during browser hydration.
 Do not present this client-build contract as per-request server rendering.
@@ -30,6 +33,8 @@ Do not present this client-build contract as per-request server rendering.
 - Component props use shorthand object destructuring. Spread props, aliased destructuring, recursive components, and arbitrary component values are outside the supported boundary.
 
 ```jsx
+import { derived, render, signal } from 'irisout'
+
 export function Counter() {
   const count = signal(0)
   const doubled = derived(() => count() * 2)

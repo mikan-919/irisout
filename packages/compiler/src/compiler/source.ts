@@ -41,6 +41,7 @@ import { analyzeExpr } from './analyze.ts'
 import { assertAcyclicDerivedGraph, resolveToSignals } from './decl-graph.ts'
 import { collectTopLevelComponents, inlineComponents } from './inline-components.ts'
 import { compileComponent } from './render.ts'
+import { stripAuthoringImports } from './authoring-import.ts'
 import type {
   ConditionalMarker,
   DeclId,
@@ -579,6 +580,7 @@ export function compileSource(source: string, options: CompileOptions = {}): Com
     sourceType: 'module',
     plugins: ['typescript', 'jsx'],
   })
+  stripAuthoringImports(ast)
   if (options.browser) assertBrowserSourceBoundary(ast)
   assertTopLevelShape(ast.program, options.allowModuleSupport)
   // same-file-component-composition (ADR-0014, design.md D1): 同一ファイル内

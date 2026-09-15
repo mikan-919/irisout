@@ -18,7 +18,9 @@ import {
 } from './save-share.js'
 import { validateSeparateOrigins } from './origin.js'
 
-const DEFAULT_SOURCE = `export function Counter() {
+const DEFAULT_SOURCE = `import { render, signal } from 'irisout'
+
+export function Counter() {
   const count = signal(0)
 
   render(

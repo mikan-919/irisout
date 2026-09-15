@@ -1,6 +1,7 @@
 import analysisDictionaryUrl from './heatmap-dictionary.json?url'
 import HeatmapWorker from './heatmap.worker.js?worker'
 import './heatmap.css'
+import { derived, render, signal } from 'irisout'
 import { Detail, ParagraphRow } from './heatmap-components.jsx'
 import { HEATMAP_LIMITS, scoreParagraphs, splitParagraphs } from './heatmap-model.js'
 import { startHeatmapAnalysis } from './heatmap-worker-client.js'

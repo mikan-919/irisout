@@ -1,3 +1,5 @@
+import { derived, render, signal } from 'irisout'
+
 export function App() {
   const count = signal(0)
   const selectedExample = signal('counter')
@@ -102,7 +104,7 @@ export function App() {
               <pre>
                 <code>
                   {
-                    '01  const count = signal(0)\n02  const doubled = derived(() => count() * 2)\n03\n04  render(\n05    button onClick={increment}\n06      count()\n07    /button\n08  )'
+                    "01  import { signal, derived, render } from 'irisout'\n02  const count = signal(0)\n03  const doubled = derived(() => count() * 2)\n04\n05  render(\n06    button onClick={increment}\n07      count()\n08    /button\n09  )"
                   }
                 </code>
               </pre>

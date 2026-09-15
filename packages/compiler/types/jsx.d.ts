@@ -74,34 +74,7 @@ type IrisSvgAttributes<El extends SVGElement> = IrisCommonAttributes<El> & {
   'xmlns:xlink'?: string
 }
 
-interface IrisSignal<T> {
-  (): T
-  (next: T | ((previous: T) => T)): T
-}
-
-declare function signal<T>(initial: T): IrisSignal<T>
-declare function derived<T>(compute: () => T): () => T
-declare function render(element: JSX.Element): void
-// componentのmount/hydrate完了後に一度だけ呼ばれ、返り値のcleanupは
-// instanceのunmount時に一度だけ呼ばれる。構造unit内ではunit factoryが所有する。
-// biome-ignore lint/suspicious/noConfusingVoidType: callbackの「返り値なし」を表す
-declare function onMount(callback: () => void | (() => void)): void
-// root componentの依存signal/derivedが変わるたびに再実行され、前回の返り値の
-// cleanupは再実行前とinstanceのunmount時に呼ばれる。compilerのscope limitに
-// よる制約(signal書き込み禁止・root動きゾーン専用)は型宣言の代替ではない。
-// biome-ignore lint/suspicious/noConfusingVoidType: callbackの「返り値なし」を表す
-declare function effect(callback: () => void | (() => void)): void
-
-interface IrisContext<T> {
-  readonly __irisoutContextType?: T
-}
-interface IrisAsyncContext<T> extends IrisContext<PromiseLike<T>> {}
-declare function createContext<T>(defaultValue: T): IrisContext<T>
-// 非同期contextはPromiseLike<T>を値として静的置換する。compilerはawait、Suspense、
-// schedulerを暗黙に追加せず、解決後の処理はauthorがthen/await可能な動きゾーンで行う。
-declare function createAsyncContext<T>(defaultValue: PromiseLike<T>): IrisAsyncContext<T>
-declare function provideContext<T>(context: IrisContext<T>, value: T): void
-declare function useContext<T>(context: IrisContext<T>): T
+// lifecycle/context APIは`irisout`から明示的にimportする。
 
 declare namespace JSX {
   // 同一ファイル内合成(ADR-0014)のコンポーネントは`render()`を内部で

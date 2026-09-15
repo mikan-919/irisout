@@ -36,6 +36,8 @@ tarballには`compiler/source.d.ts`、公開state宣言、`source-map.d.ts`な�
 隔離した外部プロジェクトで`irisout`、`irisout/browser`、`irisout/ssr`、`irisout/state`を
 `skipLibCheck:false`で型検査し、本番構築まで確認した。
 
+2026-09-15にauthored JSXの記述APIを`irisout`からの明示的な名前付きimportへ整理した。`signal`、`derived`、`render`などは公開入口の型宣言を使い、source parserとmodule linkerがコンパイル前にimportを取り除く。`irisout/jsx`から大域宣言を削除し、実例と型検査用入力を移行した。既存の`compile(source)`へ渡す裸の記述API名は互換性のため当面受理する。
+
 ## 段階
 
 | 段階           | 状態 | 結果                                                   |

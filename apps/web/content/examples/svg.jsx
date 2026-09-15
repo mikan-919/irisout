@@ -1,4 +1,6 @@
 // 公式文書とPlaygroundが共有するSVG入力。
+import { render } from 'irisout'
+
 export function SvgExample() {
   render(
     <main>

@@ -1,6 +1,7 @@
 // ヒートマップの段落行と詳細表示を担当する。状態は各componentのfactoryへ閉じ、
 // 親の選択状態と指標はpropsの式置換で受け取る。
 
+import { render, signal } from 'irisout'
 import { metricLabel } from './heatmap-model.js'
 
 export function ParagraphRow({ paragraph, paragraphCount, metric, selectedId }) {

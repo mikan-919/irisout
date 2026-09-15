@@ -19,6 +19,65 @@ export { compile, compileSSR }
 export { CompileDiagnostic } from './diagnostics.ts'
 export type { CompileResult } from './compiler/source.ts'
 
+// authored JSXからだけ使う、コンパイル時に消える記述API。実行時にこの関数が
+// 呼ばれた場合は、Vite連携またはcompile()を通さずに実行していることを示す。
+export interface IrisSignal<T> {
+  (): T
+  (next: T | ((previous: T) => T)): T
+}
+
+export interface IrisContext<T> {
+  readonly __irisoutContextType?: T
+}
+
+export interface IrisAsyncContext<T> extends IrisContext<PromiseLike<T>> {}
+
+function authoringOnly(name: string): never {
+  throw new Error(`irisout ${name}() is only available in compiled authored JSX`)
+}
+
+// JSX.Elementと同じく、値を返さないcomponentとhost要素の両方を受ける。
+// biome-ignore lint/suspicious/noConfusingVoidType: JSXの値なしcomponentを表す公開型
+type IrisAuthoringElement = void | object
+
+export function signal<T>(_initial: T): IrisSignal<T> {
+  return authoringOnly('signal')
+}
+
+export function derived<T>(_compute: () => T): () => T {
+  return authoringOnly('derived')
+}
+
+export function render(_element: IrisAuthoringElement): void {
+  authoringOnly('render')
+}
+
+// biome-ignore lint/suspicious/noConfusingVoidType: cleanupなしを表す公開記述APIの型
+export function onMount(_callback: () => void | (() => void)): void {
+  authoringOnly('onMount')
+}
+
+// biome-ignore lint/suspicious/noConfusingVoidType: cleanupなしを表す公開記述APIの型
+export function effect(_callback: () => void | (() => void)): void {
+  authoringOnly('effect')
+}
+
+export function createContext<T>(_defaultValue: T): IrisContext<T> {
+  return authoringOnly('createContext')
+}
+
+export function createAsyncContext<T>(_defaultValue: PromiseLike<T>): IrisAsyncContext<T> {
+  return authoringOnly('createAsyncContext')
+}
+
+export function provideContext<T>(_context: IrisContext<T>, _value: T): void {
+  authoringOnly('provideContext')
+}
+
+export function useContext<T>(_context: IrisContext<T>): T {
+  return authoringOnly('useContext')
+}
+
 export interface CompileProjectOptions {
   /** clientは既存入口、ssrは要求単位のrender moduleを追加生成する。 */
   target?: 'client' | 'ssr'

@@ -10,6 +10,7 @@ import type { NodePath } from '@babel/traverse'
 import traverseImport from '@babel/traverse'
 import * as t from '@babel/types'
 import { withCompileDiagnostic, type DiagnosticOrigin } from '../diagnostics.ts'
+import { stripAuthoringImports } from './authoring-import.ts'
 
 const traverse =
   (traverseImport as unknown as { default?: typeof traverseImport }).default ?? traverseImport
@@ -82,6 +83,7 @@ function parseModuleUnchecked(filePath: string, source: string): ModuleRecord {
       { cause: error },
     )
   }
+  stripAuthoringImports(ast)
 
   const imports: ImportSpec[] = []
   const externalImports: ExternalImportSpec[] = []

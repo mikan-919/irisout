@@ -1,3 +1,5 @@
+import { render, signal } from 'irisout'
+
 export function App() {
   const count = signal(0)
 

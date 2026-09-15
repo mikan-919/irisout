@@ -3,7 +3,8 @@
 ## Purpose
 
 authored `.jsx`向けの静的型検査を規定する。`types/jsx.d.ts`のグローバル
-`JSX`namespace・authoring API・要素別イベント型、JSDocで宣言するコンポーネントの
+`JSX`namespace・要素別イベント型、`irisout`からimportする記述API、
+JSDocで宣言するコンポーネントの
 props形状、デモ専用の`apps/demos/tsconfig.json`で構成される。型は静的検査用で、
 コンパイラの実行時受理・拒否には影響しない。属性名のホワイトリスト化と、JSDocのない
 コンポーネントpropsの自動推論は対象外とする。
@@ -29,20 +30,33 @@ props形状、デモ専用の`apps/demos/tsconfig.json`で構成される。型�
   `signal`/`derived`/`render`のいずれでもない不明な識別子)を呼び出す
 - **THEN** `tsc --noEmit`は型エラーを報告する
 
-### Requirement: signal/derived/render のグローバル型宣言
-`signal`・`derived`・`render`は`types/jsx.d.ts`でグローバル関数として型宣言されなければならない(MUST)。authored `.jsx`からimportなしで型付きで呼び出せなければならない(MUST)。`signal<T>(initial: T)`は読み取り、値設定、関数形式設定(`(): T`、`(next: T): T`、`(updater: (previous: T) => T): T`)を提供しなければならない(SHALL)。二引数signalと`collection`は宣言してはならない(SHALL NOT)。`derived<T>(compute: () => T)`は`() => T`を返す SHALL。`render(element: JSX.Element): void`はJSX式を1つ受け取る SHALL。
+### Requirement: signal/derived/render は irisout から明示的にimportする
+`signal`・`derived`・`render`は`irisout`の公開型宣言として名前付きvalue importで提供されなければならない(MUST)。authored `.jsx`は
+`import { signal, derived, render } from 'irisout'`のように明示的にimportして型付きで
+呼び出せなければならない(MUST)。`types/jsx.d.ts`はこれらを大域関数として宣言しては
+ならない(SHALL NOT)。コンパイラはこのimportを生成物の実行時依存にしてはならず、生成前に
+取り除かなければならない(SHALL)。`signal<T>(initial: T)`は読み取り、値設定、関数形式設定
+(`(): T`、`(next: T): T`、`(updater: (previous: T) => T): T`)を提供しなければ
+ならない(SHALL)。二引数signalと`collection`は宣言してはならない(SHALL NOT)。
+`derived<T>(compute: () => T)`は`() => T`を返す SHALL。`render(element: JSX.Element): void`
+はJSX式を1つ受け取る SHALL。
 
 #### Scenario: signal の読み書き両方の呼び出し形が型付けされる
-- **WHEN** `const count = signal(0)`のあと`count()`と`count(1)`の両方を呼ぶ
+- **WHEN** `import { signal } from 'irisout'`のあと`const count = signal(0)`、`count()`と`count(1)`の両方を呼ぶ
 - **THEN** どちらも型エラーにならず、`count()`の返り値型は`number`と推論される
 
 #### Scenario: signal の初期値と異なる型を書き込むと型エラーになる
-- **WHEN** `const count = signal(0)`のあと`count('x')`を呼ぶ
+- **WHEN** `import { signal } from 'irisout'`のあと`const count = signal(0)`、`count('x')`を呼ぶ
 - **THEN** `tsc --noEmit`は型エラーを報告する
 
 #### Scenario: キー付きsignalの項目更新が型付けされる
-- **WHEN** `count((previous) => previous + 1)`を呼ぶ
+- **WHEN** `import { signal } from 'irisout'`と`const count = signal(0)`のあと
+  `count((previous) => previous + 1)`を呼ぶ
 - **THEN** 引数と返り値がsignal値の型として検査される
+
+#### Scenario: authoring API をimportなしで呼ぶと型エラーになる
+- **WHEN** authored `.jsx`で`signal(0)`または`render(<div />)`をimportなしで呼ぶ
+- **THEN** `tsc --noEmit`は未宣言の識別子として型エラーを報告する
 
 ### Requirement: JSX intrinsic 要素の型宣言
 `types/jsx.d.ts`はグローバル`JSX.IntrinsicElements`を宣言しなければ

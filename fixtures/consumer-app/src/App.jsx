@@ -1,5 +1,7 @@
 // 別アプリ側で書く最小の authored JSX。実行時のsignal/render APIは
 // compilerが解析し、生成moduleには同じ形のランタイムAPIを送らない。
+import { derived, render, signal } from 'irisout'
+
 export function App() {
   const text = signal('別アプリからの文章')
   const characterCount = derived(() => text().length)

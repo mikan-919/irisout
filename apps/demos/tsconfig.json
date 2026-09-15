@@ -14,6 +14,10 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "bundler",
+    // types/testはこのtsconfigの外にあるため、workspace packageの型入口を直接指定する。
+    "paths": {
+      "irisout": ["../../packages/irisout/dist/index.d.ts"]
+    },
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "allowJs": true,
     "checkJs": true,

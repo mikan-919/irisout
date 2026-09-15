@@ -1,6 +1,8 @@
 // 実用画面の作者向け網羅性fixture。フォーム、タブ、リスト項目ごとの局所状態、
 // 条件分岐、入れ子リスト、同一ファイルのコンポーネント合成を1画面で使う。
 
+import { derived, render, signal } from 'irisout'
+
 /**
  * @typedef {object} Note
  * @property {number} id

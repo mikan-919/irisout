@@ -63,6 +63,6 @@ describe('consumer app integration', () => {
       },
     )
     expect(original.source).toMatch(/src\/App\.jsx$/)
-    expect(original.line).toBe(11)
+    expect(original.line).toBe(13)
   })
 })

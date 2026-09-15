@@ -1,3 +1,5 @@
+import { render } from 'irisout'
+
 /**
  * @typedef {object} TypedCardProps
  * @property {string} title

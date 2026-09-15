@@ -169,7 +169,9 @@ try {
         void worker.terminate()
         reject(error)
       })
-      worker.postMessage(`export function App() { render(<button>browser worker</button>); }`)
+      worker.postMessage(
+        `import { render } from 'irisout'; export function App() { render(<button>browser worker</button>); }`,
+      )
     })
     if (
       workerResult?.ok !== true ||
@@ -216,9 +218,9 @@ try {
       column: offset - before.lastIndexOf('\n') - 1,
     },
   )
-  if (!original.source?.endsWith('src/App.jsx') || original.line !== 11) {
+  if (!original.source?.endsWith('src/App.jsx') || original.line !== 13) {
     throw new Error(
-      `pack smoke: expected handler source src/App.jsx:11, received ${original.source}:${original.line}`,
+      `pack smoke: expected handler source src/App.jsx:13, received ${original.source}:${original.line}`,
     )
   }
   console.log(`pack smoke passed: ${fixtureDir}`)

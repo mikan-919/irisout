@@ -1,3 +1,5 @@
+import { signal } from 'irisout'
+
 const count = signal(1)
 
 count()
@@ -13,5 +15,3 @@ items(() => 'wrong type')
 
 // @ts-expect-error collectionは廃止済みであり、グローバル宣言を持たない。
 collection([], (item) => item.id)
-
-export {}

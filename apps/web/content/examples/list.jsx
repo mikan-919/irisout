@@ -1,4 +1,6 @@
 // 公式文書とPlaygroundが共有するList入力。
+import { render, signal } from 'irisout'
+
 export function List() {
   const items = signal([
     { id: 1, label: 'alpha' },

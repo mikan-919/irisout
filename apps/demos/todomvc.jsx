@@ -9,6 +9,8 @@
 // 構造ユニットは親要素の兄弟と共存できるコメント範囲として生成される。
 // TodoAppの条件分岐→リストとTodoItemのローカル編集条件はこの範囲を使う。
 
+import { derived, render, signal } from 'irisout'
+
 /**
  * @typedef {object} Todo
  * @property {number} id
