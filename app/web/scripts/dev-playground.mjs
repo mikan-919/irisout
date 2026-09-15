@@ -7,6 +7,11 @@ import path from 'node:path'
 const root = path.resolve(import.meta.dirname, '../../..')
 const vp = path.join(root, 'node_modules/.bin/vp')
 const children = []
+const sitePort = readPort('IRISOUT_PLAYGROUND_SITE_PORT', 5173)
+const controllerPort = readPort('IRISOUT_PLAYGROUND_CONTROLLER_PORT', 5174)
+if (sitePort === controllerPort) throw new Error('公式サイトと実行管理画面のポートを分けてください')
+const siteOrigin = `http://127.0.0.1:${sitePort}`
+const controllerOrigin = `http://localhost:${controllerPort}`
 
 function start(args, env) {
   const child = spawn(vp, args, {
@@ -21,14 +26,27 @@ function start(args, env) {
   })
 }
 
-start(['-C', 'app/web', 'dev', '--host', '127.0.0.1', '--port', '5173'], {
-  VITE_IRISOUT_PLAYGROUND_CONTROLLER_ORIGIN: 'http://localhost:5174',
-  VITE_IRISOUT_PLAYGROUND_SITE_ORIGIN: 'http://127.0.0.1:5173',
+start(['-C', 'app/web', 'dev', '--host', '127.0.0.1', '--port', String(sitePort), '--strictPort'], {
+  IRISOUT_VITE_CACHE_DIR: path.join(root, 'app/web/node_modules/.vite-site'),
+  VITE_IRISOUT_PLAYGROUND_CONTROLLER_ORIGIN: controllerOrigin,
+  VITE_IRISOUT_PLAYGROUND_SITE_ORIGIN: siteOrigin,
 })
-start(['-C', 'app/web', 'dev', '--host', 'localhost', '--port', '5174'], {
-  VITE_IRISOUT_PLAYGROUND_CONTROLLER_ORIGIN: 'http://localhost:5174',
-  VITE_IRISOUT_PLAYGROUND_SITE_ORIGIN: 'http://127.0.0.1:5173',
-})
+start(
+  ['-C', 'app/web', 'dev', '--host', 'localhost', '--port', String(controllerPort), '--strictPort'],
+  {
+    IRISOUT_VITE_CACHE_DIR: path.join(root, 'app/web/node_modules/.vite-controller'),
+    VITE_IRISOUT_PLAYGROUND_CONTROLLER_ORIGIN: controllerOrigin,
+    VITE_IRISOUT_PLAYGROUND_SITE_ORIGIN: siteOrigin,
+  },
+)
+
+function readPort(name, fallback) {
+  const value = Number(process.env[name] ?? fallback)
+  if (!Number.isInteger(value) || value < 1 || value > 65_535) {
+    throw new Error(`${name}は1から65535の整数で指定してください`)
+  }
+  return value
+}
 
 function stop() {
   for (const child of children) {

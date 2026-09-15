@@ -4,6 +4,8 @@ import { compileProject, type CompileResult } from 'irisout'
 import { irisout } from 'irisout/vite'
 import { createControllerCsp, validateSeparateOrigins } from './src/playground/origin.js'
 
+const cacheDir = process.env.IRISOUT_VITE_CACHE_DIR
+
 function playgroundHeaders(): Plugin {
   let playgroundDevCsp = createControllerCsp(null)
   return {
@@ -84,6 +86,8 @@ function playgroundPageClient(): Plugin {
 
 export default defineConfig({
   base: '/',
+  // Playground開発時は二つのVite+を同時に起動するため、依存最適化の保存先を分ける。
+  ...(cacheDir ? { cacheDir } : {}),
   plugins: [
     irisout({ entry: 'src/App.jsx', container: '#app' }),
     playgroundPageClient(),

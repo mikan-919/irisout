@@ -22,6 +22,15 @@ bun run dev:web:playground
 hostnameを分けています。実行管理画面は
 保存APIや管理鍵を持たず、親画面から受け取るのは単一JSX、コンパイラー版、実行番号だけです。
 投稿JSXは実行ごとのWorkerで変換し、結果は`sandbox="allow-scripts"`のiframeへ表示します。
+使用中のポートを避ける場合は、両方を指定して起動します。指定したポートを使えない場合は、
+画面の接続先がずれないよう自動変更せず終了します。
+
+```bash
+IRISOUT_PLAYGROUND_SITE_PORT=45173 \
+IRISOUT_PLAYGROUND_CONTROLLER_PORT=45174 \
+bun run dev:web:playground
+```
+
 実運用では`VITE_IRISOUT_PLAYGROUND_SITE_ORIGIN`へ公式Origin、
 `VITE_IRISOUT_PLAYGROUND_CONTROLLER_ORIGIN`へ隔離配信元をそれぞれOriginだけで指定します。
 未設定または同じhostnameの場合はsourceを残して実行を無効にします。Cookie Domainを両配信元で共有しないでください。
