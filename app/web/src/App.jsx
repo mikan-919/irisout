@@ -351,6 +351,12 @@ export function App() {
               rows="16"
               aria-describedby="playground-status"
             />
+            <div
+              class="playground-monaco"
+              data-playground-monaco
+              aria-describedby="playground-status"
+              hidden
+            />
             <p
               id="playground-status"
               class="playground-status"

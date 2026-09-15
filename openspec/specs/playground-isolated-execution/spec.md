@@ -5,6 +5,20 @@
 
 ## Requirements
 
+### Requirement: 編集入力の提供
+
+公式画面は単一JSXの編集にMonaco Editorを使い、編集値を保存、書き出し、実行が参照する元の入力値と同期しなければならない(SHALL)。エディタ本体と言語機能はPlaygroundの初期化時に遅延読込みし、読込みに失敗した場合は元のテキスト入力を残さなければならない(SHALL)。
+
+#### Scenario: Monacoからの実行
+
+- **WHEN** 利用者がMonaco EditorでJSXを変更し、実行する
+- **THEN** 変更後の同じ値が公式画面の入力値となり、実行管理画面へ送られる
+
+#### Scenario: エディタの読込み失敗
+
+- **WHEN** Monaco Editorまたは言語機能を読み込めない
+- **THEN** 元のテキスト入力を表示したまま、入力値を失わない
+
 ### Requirement: 実行権限の分離
 
 実行管理画面は公式サイトと別配信元で提供し、投稿実行環境へ公式サイトのCookie、管理鍵、保存APIの権限を渡してはならない(SHALL NOT)。公式Originと実行管理Originは設定値をOriginへ正規化したうえで異なるhostnameにし、本番の実行管理Originを省略してはならない(SHALL)。設定不足または同一hostnameを検出した場合、sourceを保持したまま実行だけを無効にしなければならない(SHALL)。Cookie Domainは両配信元で共有してはならない(SHALL NOT)。

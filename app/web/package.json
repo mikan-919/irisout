@@ -18,7 +18,8 @@
     "test:save": "bun test scripts/playground-save.test.mjs"
   },
   "dependencies": {
-    "irisout": "workspace:*"
+    "irisout": "workspace:*",
+    "monaco-editor": "0.56.0"
   },
   "devDependencies": {
     "playwright": "^1.61.1",

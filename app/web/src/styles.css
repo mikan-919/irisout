@@ -971,6 +971,20 @@ pre {
   tab-size: 2;
 }
 
+.playground-monaco {
+  width: calc(100% - 2.8rem);
+  height: 24rem;
+  margin: 0.45rem 1.4rem 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 0.55rem;
+}
+
+.playground-source[hidden],
+.playground-monaco[hidden] {
+  display: none;
+}
+
 .playground-source:focus,
 .playground-example-label select:focus,
 .playground-stop:focus,

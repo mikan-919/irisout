@@ -39,6 +39,7 @@ const DEFAULT_SOURCE = `export function Counter() {
 export function setupPlayground(root) {
   if (!(root instanceof HTMLElement)) return
   const sourceElement = root.querySelector('[data-playground-source]')
+  const monacoElement = root.querySelector('[data-playground-monaco]')
   const exampleElement = root.querySelector('[data-playground-example]')
   const runElement = root.querySelector('[data-playground-run]')
   const stopElement = root.querySelector('[data-playground-stop]')
@@ -54,6 +55,7 @@ export function setupPlayground(root) {
   const deleteTokenElement = root.querySelector('[data-playground-delete-token]')
   if (
     !(sourceElement instanceof HTMLTextAreaElement) ||
+    !(monacoElement instanceof HTMLElement) ||
     !(exampleElement instanceof HTMLSelectElement) ||
     !(runElement instanceof HTMLButtonElement) ||
     !(stopElement instanceof HTMLButtonElement) ||
@@ -82,6 +84,25 @@ export function setupPlayground(root) {
   sourceElement.readOnly = true
   exampleElement.disabled = true
   runElement.disabled = true
+
+  let sourceEditor = null
+  void import('./monaco-editor.js')
+    .then(({ createSourceEditor }) => {
+      sourceEditor = createSourceEditor(monacoElement, {
+        value: sourceElement.value,
+        readOnly: sourceElement.readOnly,
+        onChange(value) {
+          if (sourceElement.value === value) return
+          sourceElement.value = value
+          sourceElement.dispatchEvent(new Event('input', { bubbles: true }))
+        },
+      })
+      sourceElement.hidden = true
+    })
+    .catch(() => {
+      monacoElement.hidden = true
+    })
+  window.addEventListener('pagehide', () => sourceEditor?.dispose(), { once: true })
 
   let controllerOrigin = null
   let executionError = ''
@@ -127,6 +148,7 @@ export function setupPlayground(root) {
 
   sourceElement.addEventListener('input', () => {
     sourceEdited = true
+    sourceEditor?.setValue(sourceElement.value)
   })
 
   if (controllerFrame && controllerOrigin) {
@@ -198,7 +220,7 @@ export function setupPlayground(root) {
   exampleElement.addEventListener('change', () => {
     const selected = examples.find((example) => example.id === exampleElement.value)
     if (selected) {
-      sourceElement.value = selected.source
+      setSourceValue(selected.source)
       sourceEdited = true
     }
   })
@@ -277,7 +299,7 @@ export function setupPlayground(root) {
 
   function updateReadyState() {
     const ready = examplesLoaded && controllerReady
-    sourceElement.readOnly = !ready
+    setSourceReadOnly(!ready)
     exampleElement.disabled = !examplesLoaded
     runElement.disabled = !ready || !controllerOrigin
     if (!ready) {
@@ -321,7 +343,7 @@ export function setupPlayground(root) {
           examples.find((example) => example.id === requestedExampleId) ?? examples[0]
         exampleElement.value = selectedExample.id
         if (!sourceEdited && sourceElement.value === initialSource) {
-          sourceElement.value = selectedExample.source
+          setSourceValue(selectedExample.source)
         }
       }
       const pending = readPendingSave()
@@ -350,6 +372,16 @@ export function setupPlayground(root) {
     } catch {
       return null
     }
+  }
+
+  function setSourceValue(value) {
+    sourceElement.value = value
+    sourceEditor?.setValue(value)
+  }
+
+  function setSourceReadOnly(readOnly) {
+    sourceElement.readOnly = readOnly
+    sourceEditor?.setReadOnly(readOnly)
   }
 
   function readRequestedExampleId() {

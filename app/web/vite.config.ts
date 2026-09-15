@@ -168,8 +168,14 @@ export default defineConfig({
   worker: {
     rollupOptions: {
       output: {
-        entryFileNames: 'assets/controller/[name]-[hash].js',
-        chunkFileNames: 'assets/controller/[name]-[hash].js',
+        entryFileNames: (chunk) =>
+          isControllerChunk(chunk)
+            ? 'assets/controller/[name]-[hash].js'
+            : 'assets/[name]-[hash].js',
+        chunkFileNames: (chunk) =>
+          isControllerChunk(chunk)
+            ? 'assets/controller/[name]-[hash].js'
+            : 'assets/[name]-[hash].js',
       },
     },
   },

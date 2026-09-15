@@ -58,6 +58,13 @@ async function waitForText(locator, expected, timeout = 10_000) {
   throw new Error(`表示を待てませんでした: ${expected}; actual=${lastText}`)
 }
 
+async function fillSource(source, value) {
+  await source.evaluate((element, next) => {
+    element.value = next
+    element.dispatchEvent(new Event('input', { bubbles: true }))
+  }, value)
+}
+
 async function resultFrame(page) {
   const deadline = Date.now() + 10_000
   while (Date.now() < deadline) {
@@ -146,11 +153,25 @@ try {
     releaseExamples.resolve()
     releaseController.resolve()
     await waitForText(status, '実行できます')
+    const editor = page.locator('[data-playground-monaco] .monaco-editor')
+    await editor.waitFor()
+    await source.waitFor({ state: 'hidden' })
     assert.equal(
       await source.inputValue(),
       'export function Preserved() { render(<p>遅延入力</p>) }',
     )
     assert.equal(await source.evaluate((element) => element.readOnly), false)
+    await editor.click()
+    await page.keyboard.press('Control+A')
+    await page.keyboard.type('export function Edited() { render(<p>Monaco入力</p>) }')
+    await page.waitForFunction(
+      (expected) => document.querySelector('[data-playground-source]')?.value === expected,
+      'export function Edited() { render(<p>Monaco入力</p>) }',
+    )
+    assert.equal(
+      await source.inputValue(),
+      'export function Edited() { render(<p>Monaco入力</p>) }',
+    )
     await page.unroute(`${siteAddress.origin}/docs/examples.json`)
     await page.unroute(`${controllerAddress.origin}/playground-controller.html*`)
     await page.locator('[data-playground-example]').selectOption('counter')
@@ -240,7 +261,7 @@ try {
   function popup() { window.open('https://example.com/') }
   function attemptDom() { parent.parent.document.body.dataset.playgroundPwned = 'yes' }
 }`
-    await source.fill(blockedSource)
+    await fillSource(source, blockedSource)
     const blockedRequests = []
     const requestListener = (request) => {
       if (request.url().includes('example.com')) blockedRequests.push(request.url())
@@ -265,7 +286,7 @@ try {
     const oversizedResultSource = `export function App() {
   render(<div>{'x'.repeat(1_100_000)}</div>)
 }`
-    await source.fill(oversizedResultSource)
+    await fillSource(source, oversizedResultSource)
     await run.click()
     await waitForText(status, '生成結果が1 MiBを超えています')
     assert.equal(await controllerFrame.locator('iframe').count(), 0)
@@ -274,7 +295,7 @@ try {
   const value = signal((() => { throw new Error('playground exception') })())
   render(<div>{value()}</div>)
 }`
-    await source.fill(exceptionSource)
+    await fillSource(source, exceptionSource)
     await run.click()
     await waitForText(status, 'playground exception')
     assert.equal(await controllerFrame.locator('iframe').count(), 0)
@@ -283,24 +304,24 @@ try {
   const value = signal((() => { while (true) {} })())
   render(<div>{value()}</div>)
 }`
-    await source.fill(infiniteSource)
+    await fillSource(source, infiniteSource)
     await run.click()
     await waitForText(status, '時間超過', 8_000)
     assert.equal(await controllerFrame.locator('iframe').count(), 0)
 
-    await source.fill(`export function App() { render(<p>再実行</p>) }`)
+    await fillSource(source, `export function App() { render(<p>再実行</p>) }`)
     await run.click()
     await waitForText(status, '実行しました')
     assert.equal(await (await resultFrame(page)).locator('p').textContent(), '再実行')
 
-    await source.fill(infiniteSource)
+    await fillSource(source, infiniteSource)
     await run.click()
     await new Promise((resolve) => setTimeout(resolve, 150))
     await stop.click()
     await waitForText(status, '停止しました')
     assert.equal(await controllerFrame.locator('iframe').count(), 0)
 
-    await source.fill(`export function App() { render(<p>停止後の再実行</p>) }`)
+    await fillSource(source, `export function App() { render(<p>停止後の再実行</p>) }`)
     await run.click()
     await waitForText(status, '実行しました')
     assert.equal(await (await resultFrame(page)).locator('p').textContent(), '停止後の再実行')
@@ -350,6 +371,18 @@ try {
       false,
     )
     await duplicatePage.close()
+
+    const editorFallbackPage = await context.newPage()
+    await editorFallbackPage.route('**/assets/monaco-editor-*.js', (route) => route.abort())
+    await editorFallbackPage.goto(siteAddress.origin, { waitUntil: 'networkidle' })
+    await waitForText(editorFallbackPage.locator('[data-playground-status]'), '実行できます')
+    assert.equal(await editorFallbackPage.locator('[data-playground-source]').isVisible(), true)
+    assert.match(
+      await editorFallbackPage.locator('[data-playground-source]').inputValue(),
+      /export function/,
+    )
+    assert.equal(await editorFallbackPage.locator('.monaco-editor').count(), 0)
+    await editorFallbackPage.close()
 
     buildSite(siteAddress.origin)
     const sameHostPage = await context.newPage()
