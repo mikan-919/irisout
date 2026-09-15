@@ -54,7 +54,7 @@ tarballには`compiler/source.d.ts`、公開state宣言、`source-map.d.ts`な�
 作者以外の人間による手動試用は未実施である。隔離したエージェントによる導入、型検査、
 本番ビルド、開発サーバー、状態更新、条件分岐、一覧、ファイル分割、診断修正は確認済みである。
 
-2026-09-13に`app/web`をNix版Chromiumで操作し、メニュー、Counter、List、SVGの切り替えを
+2026-09-13に`apps/web`をNix版Chromiumで操作し、メニュー、Counter、List、SVGの切り替えを
 確認した。この確認で、開発時の依存走査（開発サーバーがimport先を事前に調べる処理）が実パスの
 仮想モジュールを実ファイルとして読む問題を再現したため、開発時はNUL形式、本番はソースマップを
 合成できる実パスを使うようVite連携を修正した。公開導入案内のnpm登録状態も修正した。
@@ -90,7 +90,7 @@ tarballには`compiler/source.d.ts`、公開state宣言、`source-map.d.ts`な�
 linkerが含まれないことを依存検査で確認した。静的・動的import、外部資源importはブラウザ境界で
 `compile:` scope limitとして拒否する。tarballの別ディレクトリ導入とWorker実行も確認した。
 
-同日にPlaygroundの編集・実行を実装した。公式サイトは`app/web`の入力欄だけを所有し、別配信元の
+同日にPlaygroundの編集・実行を実装した。公式サイトは`apps/web`の入力欄だけを所有し、別配信元の
 `playground-controller.html`が実行ごとのWorkerと結果iframeを所有する。Workerは5秒で破棄し、
 生成結果は1 MiBまで、結果iframeは`sandbox="allow-scripts"`と`connect-src 'none'`を使う。
 親画面と実行管理画面は送信元・形式・サイズ・実行番号を検査し、診断文字列は`textContent`へ表示する。
@@ -128,7 +128,7 @@ JSXタグ・属性・式の色分け、初期値、入力置換、例切替え�
 信頼済みプロキシを明示した場合だけ検証済み`X-Forwarded-For`を使う。利用者入力の転送元情報は
 直接信用せず、接続元が取得できない要求を共通`unknown`へ集約しない。
 
-同日に共有保存の内部接続を実装した。`app/web/server`のBunサーバーは組込みSQLiteへ単一JSXの
+同日に共有保存の内部接続を実装した。`apps/web/server`のBunサーバーは組込みSQLiteへ単一JSXの
 タイトル、説明、source、compilerVersion、限定公開の値をスナップショットとして保存し、保存ごとに
 128ビットのIDを発行する。管理鍵はブラウザで256ビット乱数から生成し、SQLiteにはSHA-256ハッシュだけを
 残す。同じrequestId・管理鍵・入力の再送は同じIDを返し、入力競合は409、削除後の再送は410、無権限の
@@ -151,7 +151,7 @@ Vite+でビルドし、Bunサーバーは`/playground/:id`の要求ごとにSQLi
 結果iframeが読むIrisout実行時処理だけにCORSを許可した。開発用入口は`irisout/runtime`の公開項目を
 再公開し、Counter以外の一覧・条件分岐にも対応する。並行起動、Listの選択・実行完了、開発経路の
 自動試験を確認した。公式画面を`localhost`で開いた場合は、Cookie境界を保つため正規の
-`127.0.0.1`へ転送する。単独の`dev:web`は従来の既定キャッシュを使う。
+`127.0.0.1`へ転送する。公式サイト単独の起動は`bun run dev site`を使う。
 同日に公式側の開発サーバーへ保存APIを接続し、保存・同一要求の再送を確認した。開発保存値は再起動で消えるため、
 永続共有はBunサーバーのSQLite経路を使う。実行管理Originへ保存APIは置かない。
 

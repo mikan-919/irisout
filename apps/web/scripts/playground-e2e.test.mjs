@@ -10,7 +10,7 @@ import { chromium } from 'playwright'
 import { createPlaygroundServer } from './playground-server.mjs'
 
 const projectRoot = path.resolve(import.meta.dirname, '../../..')
-const distRoot = path.join(projectRoot, 'app/web/dist')
+const distRoot = path.join(projectRoot, 'apps/web/dist')
 const sitePort = Number(process.env.IRISOUT_PLAYGROUND_SITE_PORT ?? 4173)
 const controllerPort = Number(process.env.IRISOUT_PLAYGROUND_CONTROLLER_PORT ?? 4174)
 

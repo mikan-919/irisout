@@ -72,6 +72,14 @@ bun run dev
 端末に表示されたURLをブラウザで開き、`increment`を押してください。ソースは
 [`apps/examples/counter.jsx`](./apps/examples/counter.jsx)です。
 
+サイト、Playground、別のexamplesを起動するときも同じ入口へ引数を渡します。
+
+```bash
+bun run dev site
+bun run dev playground
+bun run dev example list
+```
+
 生成コードを圧縮せずに確認する場合は、次を実行します。
 
 ```bash
@@ -84,17 +92,17 @@ SSR HTML生成は対応していません。
 
 ### 別の例
 
-| コマンド                 | 確認できる機能                                   | ソース                                                     |
-| ------------------------ | ------------------------------------------------ | ---------------------------------------------------------- |
-| `bun run dev:list`       | キー付きリストの追加、更新、並べ替え、削除       | [`list.jsx`](./apps/examples/list.jsx)                     |
-| `bun run dev:notes`      | フォーム、タブ、局所状態、条件分岐、入れ子リスト | [`notes.jsx`](./apps/examples/notes.jsx)                   |
-| `bun run dev:heatmap`    | 本文入力、指標切り替え、段落一覧、全体地図       | [`heatmap.jsx`](./apps/examples/heatmap.jsx)               |
-| `bun run dev:todomvc`    | TodoMVCの操作                                    | [`todomvc.jsx`](./apps/examples/todomvc.jsx)               |
-| `bun run dev:multi-file` | 相対モジュールによるファイル分割                 | [`multi-file/App.jsx`](./apps/examples/multi-file/App.jsx) |
+| コマンド                         | 確認できる機能                                   | ソース                                                     |
+| -------------------------------- | ------------------------------------------------ | ---------------------------------------------------------- |
+| `bun run dev example list`       | キー付きリストの追加、更新、並べ替え、削除       | [`list.jsx`](./apps/examples/list.jsx)                     |
+| `bun run dev example notes`      | フォーム、タブ、局所状態、条件分岐、入れ子リスト | [`notes.jsx`](./apps/examples/notes.jsx)                   |
+| `bun run dev example heatmap`    | 本文入力、指標切り替え、段落一覧、全体地図       | [`heatmap.jsx`](./apps/examples/heatmap.jsx)               |
+| `bun run dev example todomvc`    | TodoMVCの操作                                    | [`todomvc.jsx`](./apps/examples/todomvc.jsx)               |
+| `bun run dev example multi-file` | 相対モジュールによるファイル分割                 | [`multi-file/App.jsx`](./apps/examples/multi-file/App.jsx) |
 
 開発サーバーを切り替えるときは、実行中の処理を`Ctrl+C`で終了してください。
 
-`dev:heatmap`は`@libraz/suzume`のブラウザ内日本語解析、WebAssembly、JSON辞書URL、CSS、
+`bun run dev example heatmap`は`@libraz/suzume`のブラウザ内日本語解析、WebAssembly、JSON辞書URL、CSS、
 Worker入口を読み込みます。配信先に接頭辞がある場合は`IRISOUT_BASE=/heatmap/ bun run build`
 で資源URLを確認できます。
 

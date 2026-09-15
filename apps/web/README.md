@@ -9,13 +9,13 @@ irisout自身のVite連携で生成するホームページです。`src/App.jsx
 
 ```bash
 bun install
-bun run dev:web
+bun run dev site
 ```
 
 Playgroundの実行管理画面を公式サイトと別配信元で起動する場合は次を使います。
 
 ```bash
-bun run dev:web:playground
+bun run dev playground
 ```
 
 公式サイトは`127.0.0.1:5173`、実行管理画面は`localhost:5174`で起動します。Cookieを共有しないよう
@@ -33,7 +33,7 @@ JavaScript・JSX用の言語機能と作業スレッドを読み込みます。�
 ```bash
 IRISOUT_PLAYGROUND_SITE_PORT=45173 \
 IRISOUT_PLAYGROUND_CONTROLLER_PORT=45174 \
-bun run dev:web:playground
+bun run dev playground
 ```
 
 実運用では`VITE_IRISOUT_PLAYGROUND_SITE_ORIGIN`へ公式Origin、
@@ -71,9 +71,9 @@ bun server/playground-backup.mjs apply
 この設定がない場合、利用者が送った`X-Forwarded-For`は無視されます。
 
 `build:web`は先に`docs/getting-started.md`と登録済み公式例を検査し、`/docs`と
-`/docs/:slug`の静的HTML、目次、前後リンク、検索索引を`app/web/public/docs`へ生成します。
+`/docs/:slug`の静的HTML、目次、前後リンク、検索索引を`apps/web/public/docs`へ生成します。
 この処理は本文をJSXへ複製せず、Markdown解析器とIrisoutコンパイラを文書のブラウザ向け出力へ
-含めません。出力先は`app/web/dist/`です。
+含めません。出力先は`apps/web/dist/`です。
 
 文書だけを検査する場合は次を実行します。
 

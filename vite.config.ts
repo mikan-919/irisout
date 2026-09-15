@@ -45,7 +45,7 @@ export default defineConfig({
           'apps/examples/*.jsx',
           'apps/examples/**/*.jsx',
           'examples/consumer-app/**/*.jsx',
-          'app/web/**/*.jsx',
+          'apps/web/**/*.jsx',
         ],
         rules: {
           'typescript/no-useless-default-assignment': 'off',
