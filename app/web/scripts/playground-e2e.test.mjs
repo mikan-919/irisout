@@ -78,6 +78,49 @@ async function resultFrame(page) {
   throw new Error('結果iframeがありません')
 }
 
+async function readEditorTokens(page) {
+  return page
+    .locator('[data-playground-monaco] .view-line span[class*="mtk"]')
+    .evaluateAll((elements) =>
+      elements.map((element) => ({
+        text: (element.textContent ?? '').replaceAll('\u00a0', ' '),
+        color: getComputedStyle(element).color,
+      })),
+    )
+}
+
+async function waitForEditorToken(page, expected) {
+  await page.waitForFunction((text) => {
+    const normalize = (value) => value.replaceAll('\u00a0', ' ')
+    return [
+      ...document.querySelectorAll('[data-playground-monaco] .view-line span[class*="mtk"]'),
+    ].some((element) => normalize(element.textContent ?? '') === text)
+  }, expected)
+}
+
+function assertSyntaxHighlight(tokens, { plain = 'Counter' } = {}) {
+  const token = (text) => tokens.find((candidate) => candidate.text === text)
+  const plainToken = token(plain)
+  assert.ok(token('export'), 'キーワードが構文トークンになっていません')
+  assert.ok(
+    token('// 公式文書とPlaygroundが共有するCounter入力。'),
+    'コメントが構文トークンになっていません',
+  )
+  assert.ok(token('main'), 'JSXタグが構文トークンになっていません')
+  assert.ok(token('type'), 'JSX属性が構文トークンになっていません')
+  assert.ok(token('"button"'), '文字列が構文トークンになっていません')
+  assert.ok(plainToken, '通常のJSXテキストがありません')
+  for (const syntax of [
+    'export',
+    '// 公式文書とPlaygroundが共有するCounter入力。',
+    'main',
+    'type',
+    '"button"',
+  ]) {
+    assert.notEqual(token(syntax)?.color, plainToken.color, `${syntax}が通常テキストと同じ色です`)
+  }
+}
+
 function deferred() {
   let resolve
   const promise = new Promise((done) => {
@@ -172,6 +215,24 @@ try {
       await source.inputValue(),
       'export function Edited() { render(<p>Monaco入力</p>) }',
     )
+
+    const replacedSource = `// 公式文書とPlaygroundが共有するCounter入力。
+export function Edited() {
+  render(<main type="button">置換後</main>)
+}`
+    await fillSource(source, replacedSource)
+    await waitForEditorToken(page, 'main')
+    assertSyntaxHighlight(await readEditorTokens(page), { plain: '置換後' })
+
+    const syntaxPage = await context.newPage()
+    await syntaxPage.goto(siteAddress.origin, { waitUntil: 'networkidle' })
+    await waitForText(syntaxPage.locator('[data-playground-status]'), '実行できます')
+    await syntaxPage.locator('[data-playground-monaco] .monaco-editor').waitFor()
+    await syntaxPage.locator('[data-playground-source]').waitFor({ state: 'hidden' })
+    const syntaxTokens = await readEditorTokens(syntaxPage)
+    console.log(JSON.stringify(syntaxTokens))
+    assertSyntaxHighlight(syntaxTokens)
+    await syntaxPage.close()
     await page.unroute(`${siteAddress.origin}/docs/examples.json`)
     await page.unroute(`${controllerAddress.origin}/playground-controller.html*`)
     await page.locator('[data-playground-example]').selectOption('counter')
@@ -334,12 +395,21 @@ try {
         waitUntil: 'networkidle',
       })
       await waitForText(examplePage.locator('[data-playground-status]'), '実行できます')
+      await examplePage.locator('[data-playground-monaco] .monaco-editor').waitFor()
+      await examplePage.locator('[data-playground-source]').waitFor({ state: 'hidden' })
       assert.equal(await examplePage.locator('[data-playground-example]').inputValue(), exampleId)
+      const exampleSource = await examplePage.locator('[data-playground-source]').inputValue()
       assert.match(
-        await examplePage.locator('[data-playground-source]').inputValue(),
+        exampleSource,
         new RegExp(
           `export function ${exampleId === 'svg' ? 'SvgExample' : exampleId[0].toUpperCase() + exampleId.slice(1)}`,
         ),
+      )
+      await waitForEditorToken(examplePage, 'export')
+      const exampleTokens = await readEditorTokens(examplePage)
+      assert.ok(exampleTokens.some((token) => token.text === 'export'))
+      assert.ok(
+        exampleTokens.some((token) => token.text.startsWith('// 公式文書とPlaygroundが共有する')),
       )
       await examplePage.close()
     }
@@ -360,6 +430,8 @@ try {
     }, duplicateSource)
     await duplicatePage.goto(siteAddress.origin, { waitUntil: 'networkidle' })
     await waitForText(duplicatePage.locator('[data-playground-status]'), '実行できます')
+    await duplicatePage.locator('[data-playground-monaco] .monaco-editor').waitFor()
+    await duplicatePage.locator('[data-playground-source]').waitFor({ state: 'hidden' })
     assert.equal(
       await duplicatePage.locator('[data-playground-source]').inputValue(),
       duplicateSource,
@@ -370,6 +442,10 @@ try {
         .evaluate((element) => element.readOnly),
       false,
     )
+    await waitForEditorToken(duplicatePage, 'export')
+    const duplicateTokens = await readEditorTokens(duplicatePage)
+    assert.ok(duplicateTokens.some((token) => token.text === 'export'))
+    assert.ok(duplicateTokens.some((token) => token.text === 'p'))
     await duplicatePage.close()
 
     const editorFallbackPage = await context.newPage()
