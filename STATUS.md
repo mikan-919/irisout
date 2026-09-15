@@ -30,6 +30,12 @@
 `derived()`は`compile:` scope limitで拒否する。SSRの局所signalはルート部品直下に限る。hydrateと
 mountのstate引数は`render()`の返値専用で、入力値との推測を行わない。A/B並行要求と失敗後の正常要求を確認した。404・503の判定は要求層へ移管した。
 
+2026-09-15に公開宣言を整理した。`CompileResult`と`irisout/state`から内部Babel AST型を切り離し、
+tarballには`compiler/source.d.ts`、公開state宣言、`source-map.d.ts`など公開入口が参照する宣言だけを
+梱包する。相対宣言参照は公開JavaScript入口へ解決し、`irisout/ssr`はVite+内部型を再公開しない。
+隔離した外部プロジェクトで`irisout`、`irisout/browser`、`irisout/ssr`、`irisout/state`を
+`skipLibCheck:false`で型検査し、本番構築まで確認した。
+
 ## 段階
 
 | 段階           | 状態 | 結果                                                   |
@@ -93,6 +99,16 @@ linkerが含まれないことを依存検査で確認した。静的・動的im
 CSPにはコンパイラが`new Function()`を使うため`unsafe-eval`が必要であり、これはWorkerを含む配信元へ
 限定する。共有機能を公開する前に、実運用の隔離配信元へ同じヘッダーとブラウザー試験を適用する。
 
+2026-09-15に初期化の遅延境界を修正した。トップPlaygroundと共有ページからの複製経路は、公式例の
+読込みと実行管理iframeの接続が完了するまでsourceを読取り専用にし、接続前の入力を例の初期値で
+上書きしない。実行管理Originの設定不備時はsourceを保持したまま例の読込み後に編集、保存、書き出しを
+許可し、実行だけを無効にする。応答遅延を入れたChromium試験で複製値と入力値の保持を確認した。
+
+同日に本番Bun入口の静的配信を修正した。共有distを使う場合も、controller・Worker・実行runtime固有資産を
+`assets/controller/`へ分離し、公式Originからcontroller HTMLと固有資産を取得できないようにした。公式Originの
+保存APIと実行管理OriginのAPI不存在、CSP、設定由来`frame-ancestors`、`Permissions-Policy`、CORP、文書SSGの
+直接URL、末尾slashの308、404、path traversal、不正なpercent encodingを実サーバー接続で確認した。
+
 同日に隔離配信の設定境界を修正した。実行管理Originの未設定時フォールバックを削除し、公式Originと
 異なるhostnameを必須にした。実行管理CSPの`frame-ancestors`は正規化した公式Originから生成し、
 許可Originと拒否Originの埋込みをChromiumで確認する。保存APIの頻度制限はBunの実接続元を使い、
@@ -123,8 +139,8 @@ Vite+でビルドし、Bunサーバーは`/playground/:id`の要求ごとにSQLi
 - `bun run test`: コンパイラ、実DOM、生成物、別アプリの統合試験。
 - `bun run build`: 利用例の本番ビルド。
 - `bun run build:packages`: `irisout`のJavaScriptと型定義を生成。
-- `bun run pack:smoke`: 一時ディレクトリへ梱包物を導入して型検査、本番ビルド、
-  初期HTML、イベント生成、ソースマップ、workspace依存の不存在を確認。
+- `bun run pack:smoke`: 一時ディレクトリへ梱包物を導入して公開4入口を`skipLibCheck:false`で型検査し、
+  本番ビルド、初期HTML、イベント生成、ソースマップ、workspace依存の不存在を確認。
 - `bun run registry:smoke`: npm公開版0.2.2に同じ隔離検査を適用。
 
 時間とメモリの測定は環境差を含むため、同じ生成物、Chromium、入力、反復数の比較だけを

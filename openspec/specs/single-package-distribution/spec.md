@@ -29,6 +29,19 @@
 - **WHEN** 利用者がVite設定で`irisout/vite`を読み、型設定で`irisout/jsx`を指定する
 - **THEN** 連携処理とJSX型定義が同じ導入済みパッケージから解決される
 
+### Requirement: 公開宣言の自己完結
+
+tarballの公開宣言は、コンパイラ内部のBabel AST型と生成元の`.ts`宣言を公開APIへ持ち込まず、
+利用者が追加の内部ファイルなしに解決できなければならない(SHALL)。`irisout/ssr`の公開宣言も
+Vite+内部宣言の任意依存を型検査へ持ち込んではならない(SHALL NOT)。
+
+#### Scenario: 公開入口をskipLibCheckなしで検査する
+
+- **WHEN** tarballを空の外部作業ディレクトリへ導入し、`irisout`、`irisout/browser`、
+  `irisout/ssr`、`irisout/state`を読み込んで`skipLibCheck:false`のTypeScript型検査を行う
+- **THEN** `source-map.d.ts`を含む必要な宣言だけで型検査が成功し、Babel型または作業領域内の
+  `.ts`ファイルを解決しようとしない
+
 ### Requirement: 単一tarballの外部導入検査
 梱包検査は一つの`irisout` tarballを作業領域外へ導入し、値形式と関数形式のsignal更新、配列一覧の型検査、本番構築、初期HTML、生成JavaScript、本番ソースマップ、作業領域指定の不存在を確認しなければならない(SHALL)。本番ソースマップは、生成されたイベント処理から梱包物外にある利用アプリの元JSX位置を取得できなければならない(SHALL)。
 

@@ -71,6 +71,14 @@ async function resultFrame(page) {
   throw new Error('結果iframeがありません')
 }
 
+function deferred() {
+  let resolve
+  const promise = new Promise((done) => {
+    resolve = done
+  })
+  return { promise, resolve }
+}
+
 const site = createPlaygroundServer({
   root: distRoot,
   kind: 'site',
@@ -107,12 +115,45 @@ try {
       },
     ])
     const page = await context.newPage()
-    await page.goto(siteAddress.origin, { waitUntil: 'networkidle' })
+    const examplesRequest = deferred()
+    const releaseExamples = deferred()
+    const controllerRequest = deferred()
+    const releaseController = deferred()
+    await page.route(`${siteAddress.origin}/docs/examples.json`, async (route) => {
+      examplesRequest.resolve()
+      await releaseExamples.promise
+      await route.continue()
+    })
+    await page.route(`${controllerAddress.origin}/playground-controller.html*`, async (route) => {
+      controllerRequest.resolve()
+      await releaseController.promise
+      await route.continue()
+    })
+    await page.goto(siteAddress.origin, { waitUntil: 'domcontentloaded' })
     const source = page.locator('[data-playground-source]')
     const status = page.locator('[data-playground-status]')
     const run = page.locator('[data-playground-run]')
     const stop = page.locator('[data-playground-stop]')
+    await Promise.all([examplesRequest.promise, controllerRequest.promise])
+    assert.equal(await source.evaluate((element) => element.readOnly), true)
+    assert.equal(await run.isDisabled(), true)
+    await page.evaluate(() => {
+      const element = document.querySelector('[data-playground-source]')
+      if (!(element instanceof HTMLTextAreaElement)) throw new Error('source欄がありません')
+      element.value = 'export function Preserved() { render(<p>遅延入力</p>) }'
+      element.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    releaseExamples.resolve()
+    releaseController.resolve()
     await waitForText(status, '実行できます')
+    assert.equal(
+      await source.inputValue(),
+      'export function Preserved() { render(<p>遅延入力</p>) }',
+    )
+    assert.equal(await source.evaluate((element) => element.readOnly), false)
+    await page.unroute(`${siteAddress.origin}/docs/examples.json`)
+    await page.unroute(`${controllerAddress.origin}/playground-controller.html*`)
+    await page.locator('[data-playground-example]').selectOption('counter')
 
     const controllerFrame = page
       .frames()
@@ -265,6 +306,25 @@ try {
     assert.equal(await (await resultFrame(page)).locator('p').textContent(), '停止後の再実行')
     await page.close()
 
+    const duplicateSource = 'export function Shared() { render(<p>共有からの複製</p>) }'
+    const duplicatePage = await context.newPage()
+    await duplicatePage.addInitScript((source) => {
+      sessionStorage.setItem('irisout.playground.duplicate-source', source)
+    }, duplicateSource)
+    await duplicatePage.goto(siteAddress.origin, { waitUntil: 'networkidle' })
+    await waitForText(duplicatePage.locator('[data-playground-status]'), '実行できます')
+    assert.equal(
+      await duplicatePage.locator('[data-playground-source]').inputValue(),
+      duplicateSource,
+    )
+    assert.equal(
+      await duplicatePage
+        .locator('[data-playground-source]')
+        .evaluate((element) => element.readOnly),
+      false,
+    )
+    await duplicatePage.close()
+
     buildSite(siteAddress.origin)
     const sameHostPage = await context.newPage()
     await sameHostPage.goto(siteAddress.origin, { waitUntil: 'networkidle' })
@@ -274,6 +334,12 @@ try {
     assert.match(
       await sameHostPage.locator('[data-playground-source]').inputValue(),
       /export function/,
+    )
+    assert.equal(
+      await sameHostPage
+        .locator('[data-playground-source]')
+        .evaluate((element) => element.readOnly),
+      false,
     )
     assert.equal(await sameHostPage.locator('.playground-controller').count(), 0)
     await sameHostPage.close()
@@ -286,6 +352,12 @@ try {
     assert.match(
       await missingConfigPage.locator('[data-playground-source]').inputValue(),
       /export function/,
+    )
+    assert.equal(
+      await missingConfigPage
+        .locator('[data-playground-source]')
+        .evaluate((element) => element.readOnly),
+      false,
     )
     assert.equal(await missingConfigPage.locator('.playground-controller').count(), 0)
     await missingConfigPage.close()

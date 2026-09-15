@@ -347,6 +347,7 @@ export function App() {
               class="playground-source"
               data-playground-source
               spellcheck="false"
+              readOnly
               rows="16"
               aria-describedby="playground-status"
             />

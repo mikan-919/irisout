@@ -68,11 +68,12 @@ export interface CompileResult {
   initialHtml: string
   /** SSR targetで生成した要求単位のrender module。client targetでは未定義。 */
   ssrCode?: string
-  markers: ReturnType<typeof createCompilerState>['markers']
-  signalToMarkers: Map<DeclId, Set<MarkerId>>
-  declName: Map<DeclId, string>
+  /** 公開結果ではコンパイラ内部のBabel ASTを露出させない。 */
+  markers: readonly unknown[]
+  signalToMarkers: ReadonlyMap<string, ReadonlySet<string>>
+  declName: ReadonlyMap<string, string>
   /** compileProject()が読み込んだ入口と相対moduleの絶対path。 */
-  dependencies: string[]
+  dependencies: readonly string[]
 }
 
 // Program 直下はcompile()では関数宣言(export付き含む)だけを受理する。

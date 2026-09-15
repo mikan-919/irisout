@@ -6,6 +6,7 @@ import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createControllerCsp, validateSeparateOrigins } from '../src/playground/origin.js'
+import { resolvePublicPath } from '../server/static-files.mjs'
 
 const MIME_TYPES = {
   '.css': 'text/css; charset=utf-8',
@@ -29,14 +30,14 @@ export function createPlaygroundServer({
     kind === 'controller' ? createControllerServerConfig({ host, officialOrigin }) : null
   const server = createServer(async (request, response) => {
     const pathname = new URL(request.url ?? '/', 'http://127.0.0.1').pathname
-    if (request.method !== 'GET' && request.method !== 'HEAD') {
-      response.writeHead(405, { allow: 'GET, HEAD' })
-      response.end('method not allowed')
-      return
-    }
     if (kind === 'controller' && !isControllerPath(pathname)) {
       response.writeHead(404)
       response.end('not found')
+      return
+    }
+    if (request.method !== 'GET' && request.method !== 'HEAD') {
+      response.writeHead(405, { allow: 'GET, HEAD' })
+      response.end('method not allowed')
       return
     }
 
@@ -108,40 +109,6 @@ function createControllerServerConfig({ host, officialOrigin }) {
 
 function isControllerPath(pathname) {
   return pathname === '/playground-controller.html' || pathname.startsWith('/assets/')
-}
-
-async function resolvePublicPath(root, pathname) {
-  let decoded
-  try {
-    decoded = decodeURIComponent(pathname)
-  } catch {
-    const error = new Error('invalid percent encoding')
-    error.code = 'EINVAL'
-    throw error
-  }
-  const relative = decoded === '/' ? 'index.html' : decoded.slice(1)
-  const candidates =
-    decoded === '/'
-      ? [path.resolve(root, 'index.html')]
-      : [
-          path.resolve(root, relative),
-          path.resolve(root, relative, 'index.html'),
-          path.resolve(root, `${relative}.html`),
-        ]
-  for (const candidate of candidates) {
-    if (candidate !== root && !candidate.startsWith(`${root}${path.sep}`)) {
-      throw new Error('path traversal')
-    }
-    try {
-      await readFile(candidate)
-      return candidate
-    } catch (error) {
-      if (error?.code !== 'ENOENT') throw error
-    }
-  }
-  const error = new Error('file not found')
-  error.code = 'ENOENT'
-  throw error
 }
 
 if (

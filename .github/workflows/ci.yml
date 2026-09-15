@@ -19,3 +19,13 @@ jobs:
       - run: bun run site:check
       - run: bun run site:test
       - run: bun run build:web
+      - run: bun run test:web:server
+      - run: bun run test:web:save
+      - uses: DeterminateSystems/nix-installer-action@main
+      - name: Resolve Nix Chromium
+        run: |
+          chromium_path="$(nix build --no-link --print-out-paths nixpkgs#chromium)/bin/chromium"
+          test -x "$chromium_path"
+          echo "PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=$chromium_path" >> "$GITHUB_ENV"
+      - run: bun run test:web:playground
+      - run: bun run pack:smoke

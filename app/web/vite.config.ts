@@ -103,9 +103,35 @@ export default defineConfig({
         entryFileNames: (chunk) => {
           if (chunk.name === 'main') return 'app.js'
           if (chunk.name === 'playground') return 'playground.js'
+          if (chunk.name === 'controller') return 'assets/controller/[name]-[hash].js'
           return 'assets/[name]-[hash].js'
         },
+        chunkFileNames: (chunk) =>
+          isControllerChunk(chunk)
+            ? 'assets/controller/[name]-[hash].js'
+            : 'assets/[name]-[hash].js',
+        assetFileNames: (asset) =>
+          asset.name?.startsWith('controller')
+            ? 'assets/controller/[name]-[hash][extname]'
+            : 'assets/[name]-[hash][extname]',
+      },
+    },
+  },
+  worker: {
+    rollupOptions: {
+      output: {
+        entryFileNames: 'assets/controller/[name]-[hash].js',
+        chunkFileNames: 'assets/controller/[name]-[hash].js',
       },
     },
   },
 })
+
+function isControllerChunk(chunk: { name: string; facadeModuleId?: string | null }) {
+  return (
+    chunk.name === 'controller' ||
+    chunk.name === 'compiler.worker' ||
+    chunk.facadeModuleId?.endsWith('/src/playground/controller.js') === true ||
+    chunk.facadeModuleId?.endsWith('/src/playground/runtime.js') === true
+  )
+}

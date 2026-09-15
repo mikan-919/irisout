@@ -1,7 +1,24 @@
 // `irisout/ssr`の公開境界。SSRの設定pluginとstate搬送だけを公開し、client用の
-// `irisout/vite`入口へ要求単位のserver処理を混ぜない。
+// `irisout/vite`入口へ要求単位のserver処理を混ぜない。Vite+内部の型はSSR入口から
+// 再公開せず、利用者の型検査へ任意依存を持ち込まない。
 
-export { irisoutSsr, type IrisoutSsrPluginOptions } from './index.ts'
+import { irisoutSsr as createIrisoutSsr } from './index.ts'
+
+export interface IrisoutSsrPluginOptions {
+  /** Viteのrootから解決するSSR対象ルート。絶対pathも受け付ける。 */
+  entry: string
+  /** サーバー側からimportする仮想module名。 */
+  virtualModuleId?: string
+}
+
+/** Vite+へ登録できるSSR pluginの公開最小形。 */
+export interface IrisoutSsrPlugin {
+  readonly name: string
+}
+
+export function irisoutSsr(options: IrisoutSsrPluginOptions): IrisoutSsrPlugin {
+  return createIrisoutSsr(options)
+}
 
 export type IrisoutJsonValue =
   | null

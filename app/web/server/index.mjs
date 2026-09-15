@@ -7,6 +7,7 @@ import { PlaygroundStore } from './playground-store.mjs'
 import { createPlaygroundApi } from './playground-api.mjs'
 import { createPlaygroundPageHandler } from './playground-ssr.mjs'
 import { parseTrustedProxyAddresses, resolveClientAddress } from './client-address.mjs'
+import { decodeRequestPath, resolveDecodedPublicPath } from './static-files.mjs'
 
 const root = path.resolve(import.meta.dirname, '../dist')
 const dataDirectory = path.resolve(
@@ -66,17 +67,41 @@ async function serveStatic(request) {
     return new Response('method not allowed', { status: 405, headers: { allow: 'GET, HEAD' } })
   }
   const url = new URL(request.url)
+  const rawPathname = extractRawPathname(request.url)
   let decodedPath
   try {
-    decodedPath = decodeURIComponent(url.pathname)
+    decodedPath = decodeRequestPath(rawPathname)
   } catch {
     return new Response('bad request', { status: 400 })
   }
-  const relativePath = decodedPath === '/' ? 'index.html' : decodedPath.slice(1)
-  const staticPath = decodedPath === '/playground' ? 'index.html' : relativePath
-  const filePath = path.resolve(root, staticPath)
-  if (filePath !== root && !filePath.startsWith(`${root}${path.sep}`)) {
-    return new Response('bad request', { status: 400 })
+
+  if (isControllerOnlyPath(decodedPath)) {
+    return new Response('not found', { status: 404 })
+  }
+  if (decodedPath === '/server' || decodedPath.startsWith('/server/')) {
+    return new Response('not found', { status: 404 })
+  }
+
+  const canonicalPath = canonicalDocumentPath(decodedPath)
+  if (canonicalPath) {
+    try {
+      await resolveDecodedPublicPath(root, canonicalPath, staticCandidates)
+      return new Response(null, {
+        status: 308,
+        headers: { location: `${canonicalPath}${url.search}` },
+      })
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error
+    }
+  }
+
+  let filePath
+  try {
+    filePath = await resolveDecodedPublicPath(root, decodedPath, staticCandidates)
+  } catch (error) {
+    if (error?.code === 'EINVAL') return new Response('bad request', { status: 400 })
+    if (error?.code === 'ENOENT') return new Response('not found', { status: 404 })
+    throw error
   }
   const file = Bun.file(filePath)
   if (!(await file.exists())) return new Response('not found', { status: 404 })
@@ -87,6 +112,35 @@ async function serveStatic(request) {
       'x-content-type-options': 'nosniff',
     },
   })
+}
+
+function extractRawPathname(requestUrl) {
+  const absolute = /^(?:[a-z][a-z\d+.-]*:\/\/[^/]*)([^?#]*)/i.exec(requestUrl)
+  if (absolute) return absolute[1] || '/'
+  return requestUrl.split(/[?#]/, 1)[0] || '/'
+}
+
+function isControllerOnlyPath(decodedPath) {
+  return (
+    decodedPath === '/playground-controller.html' || decodedPath.startsWith('/assets/controller/')
+  )
+}
+
+function canonicalDocumentPath(decodedPath) {
+  if (decodedPath === '/docs/') return '/docs'
+  const match = /^\/docs\/([a-z0-9]+(?:-[a-z0-9]+)*)\/$/.exec(decodedPath)
+  return match ? `/docs/${match[1]}` : null
+}
+
+function staticCandidates(decodedPath) {
+  if (decodedPath === '/') return ['index.html']
+  if (decodedPath === '/playground') return ['playground.html']
+  if (decodedPath === '/docs') return ['docs/index.html']
+  if (decodedPath.startsWith('/docs/')) {
+    const relative = decodedPath.slice(1)
+    return [relative, path.join(relative, 'index.html'), `${relative}.html`]
+  }
+  return [decodedPath.slice(1)]
 }
 
 async function loadPlaygroundRender(distRoot) {

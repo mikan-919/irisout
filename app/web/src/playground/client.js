@@ -1,4 +1,4 @@
-// 公式サイト側の編集画面。sourceを実行管理iframeへ送り、返る診断はtextContentだけで表示する。
+// 公式サイト側の編集画面。例と実行管理画面の接続を待ってからsourceを編集可能にする。
 // 投稿sourceはこの画面でもサーバーへ送らず、実行管理画面から結果を受け取らない。
 
 import {
@@ -71,7 +71,18 @@ export function setupPlayground(root) {
     return
   }
 
-  sourceElement.value = DEFAULT_SOURCE
+  // 共有ページからの複製値と既存入力は初期化より先に確定し、遅延した例読込みで失わない。
+  const duplicateSource = readDuplicateSource()
+  let sourceEdited = sourceElement.value.length > 0
+  if (!sourceEdited) {
+    sourceElement.value = duplicateSource ?? DEFAULT_SOURCE
+    sourceEdited = duplicateSource !== null
+  }
+  const initialSource = sourceElement.value
+  sourceElement.readOnly = true
+  exampleElement.disabled = true
+  runElement.disabled = true
+
   let controllerOrigin = null
   let executionError = ''
   try {
@@ -85,6 +96,7 @@ export function setupPlayground(root) {
   }
 
   let controllerFrame = null
+  let controllerReady = false
   if (controllerOrigin) {
     const parentOrigin = location.origin
     const controllerUrl = `${controllerOrigin}/playground-controller.html?parentOrigin=${encodeURIComponent(parentOrigin)}`
@@ -93,25 +105,30 @@ export function setupPlayground(root) {
     controllerFrame.title = 'Playground実行管理画面'
     controllerFrame.setAttribute('referrerpolicy', 'no-referrer')
     controllerFrame.src = controllerUrl
+    controllerFrame.addEventListener('load', () => {
+      controllerReady = true
+      updateReadyState()
+    })
     resultElement.replaceChildren(controllerFrame)
   } else {
-    runElement.disabled = true
+    controllerReady = true
     stopElement.disabled = true
-    setStatus(executionError, 'error')
+    resultElement.textContent =
+      '実行管理画面を設定できないため実行できません。入力は保持されています。'
   }
 
   let examples = []
-  let loaded = false
+  let examplesLoaded = false
+  let examplesError = false
   let nextRunNumber = 0
   let activeRunId = null
   let latestSave = null
 
+  sourceElement.addEventListener('input', () => {
+    sourceEdited = true
+  })
+
   if (controllerFrame && controllerOrigin) {
-    controllerFrame.addEventListener('load', () => {
-      loaded = true
-      runElement.disabled = false
-      setStatus('実行できます')
-    })
     window.addEventListener('message', (event) => {
       if (
         event.source !== controllerFrame.contentWindow ||
@@ -143,7 +160,7 @@ export function setupPlayground(root) {
       setStatus(executionError || '実行管理画面を設定できないため実行できません', 'error')
       return
     }
-    if (!loaded) {
+    if (!examplesLoaded || !controllerReady) {
       setStatus('実行管理画面を読み込んでいます', 'error')
       return
     }
@@ -179,7 +196,10 @@ export function setupPlayground(root) {
 
   exampleElement.addEventListener('change', () => {
     const selected = examples.find((example) => example.id === exampleElement.value)
-    if (selected) sourceElement.value = selected.source
+    if (selected) {
+      sourceElement.value = selected.source
+      sourceEdited = true
+    }
   })
 
   saveElement.addEventListener('click', async () => {
@@ -241,6 +261,7 @@ export function setupPlayground(root) {
     setStatus('共有情報を書き出しました', 'success')
   })
 
+  updateReadyState()
   void loadExamples()
 
   function postToController(message) {
@@ -251,6 +272,27 @@ export function setupPlayground(root) {
     statusElement.textContent = message
     statusElement.dataset.state =
       state === 'error' || state === 'timeout' ? 'error' : state === 'success' ? 'success' : ''
+  }
+
+  function updateReadyState() {
+    const ready = examplesLoaded && controllerReady
+    sourceElement.readOnly = !ready
+    exampleElement.disabled = !examplesLoaded
+    runElement.disabled = !ready || !controllerOrigin
+    if (!ready) {
+      if (!examplesLoaded) {
+        setStatus('例を読み込んでいます')
+      } else if (controllerOrigin && !controllerReady) {
+        setStatus('実行管理画面を読み込んでいます')
+      } else if (executionError) {
+        setStatus(executionError, 'error')
+      }
+      return
+    }
+    setStatus(
+      executionError || (examplesError ? '初期例を使っています' : '実行できます'),
+      executionError ? 'error' : '',
+    )
   }
 
   async function loadExamples() {
@@ -274,10 +316,10 @@ export function setupPlayground(root) {
       }
       if (examples[0]) {
         exampleElement.value = examples[0].id
-        sourceElement.value = examples[0].source
+        if (!sourceEdited && sourceElement.value === initialSource) {
+          sourceElement.value = examples[0].source
+        }
       }
-      const duplicateSource = readDuplicateSource()
-      if (duplicateSource !== null) sourceElement.value = duplicateSource
       const pending = readPendingSave()
       exportElement.disabled = !pending?.managementKey
       if (pending?.managementKey && pending.result?.id && pending.result?.url) {
@@ -288,9 +330,11 @@ export function setupPlayground(root) {
         shareElement.hidden = false
         deleteElement.disabled = false
       }
-      setStatus(executionError || '実行できます', executionError ? 'error' : '')
     } catch {
-      setStatus(executionError || '初期例を使っています', executionError ? 'error' : '')
+      examplesError = true
+    } finally {
+      examplesLoaded = true
+      updateReadyState()
     }
   }
 

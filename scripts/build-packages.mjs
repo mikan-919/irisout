@@ -1,13 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import {
-  copyFileSync,
-  cpSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { build } from 'vite-plus'
 
@@ -130,13 +122,6 @@ copyFileSync(
   path.join(declarationOutDir, 'vite-plugin/src/ssr.d.ts'),
   path.join(publicOutDir, 'ssr.d.ts'),
 )
-writeFileSync(
-  path.join(publicOutDir, 'ssr.d.ts'),
-  readFileSync(path.join(publicOutDir, 'ssr.d.ts'), 'utf8').replaceAll(
-    "'./index.ts'",
-    "'./vite.d.ts'",
-  ),
-)
 copyFileSync(
   path.join(declarationOutDir, 'compiler/src/diagnostics.d.ts'),
   path.join(publicOutDir, 'diagnostics.d.ts'),
@@ -146,9 +131,47 @@ copyFileSync(
   path.join(publicOutDir, 'jsx.d.ts'),
 )
 copyFileSync(path.join(repoRoot, 'LICENSE'), path.join(publicOutDir, 'LICENSE'))
-cpSync(path.join(declarationOutDir, 'compiler/src/compiler'), path.join(publicOutDir, 'compiler'), {
-  recursive: true,
-})
+
+// 公開入口から到達する宣言だけを梱包する。解析用の宣言一式を配ると、
+// CompilerState経由で内部Babel型を利用者へ要求するためである。
+const publicCompilerOutDir = path.join(publicOutDir, 'compiler')
+mkdirSync(publicCompilerOutDir, { recursive: true })
+copyFileSync(
+  path.join(declarationOutDir, 'compiler/src/compiler/source.d.ts'),
+  path.join(publicCompilerOutDir, 'source.d.ts'),
+)
+copyFileSync(
+  path.join(repoRoot, 'packages/compiler/types/state.d.ts'),
+  path.join(publicCompilerOutDir, 'state.d.ts'),
+)
+copyFileSync(
+  path.join(declarationOutDir, 'compiler/src/source-map.d.ts'),
+  path.join(publicOutDir, 'source-map.d.ts'),
+)
+
+const declarationFiles = [
+  'index.d.ts',
+  'browser.d.ts',
+  'runtime.d.ts',
+  'vite.d.ts',
+  'ssr.d.ts',
+  'diagnostics.d.ts',
+  'jsx.d.ts',
+  'source-map.d.ts',
+  'compiler/source.d.ts',
+  'compiler/state.d.ts',
+]
+for (const relativePath of declarationFiles) {
+  const declarationPath = path.join(publicOutDir, relativePath)
+  const declaration = readFileSync(declarationPath, 'utf8').replace(
+    /(['"])(\.\.?\/[^'"]+)\1/g,
+    (match, quote, specifier) =>
+      specifier.endsWith('.ts') && !specifier.endsWith('.d.ts')
+        ? `${quote}${specifier.slice(0, -3)}.js${quote}`
+        : match,
+  )
+  writeFileSync(declarationPath, declaration)
+}
 rmSync(declarationOutDir, { recursive: true, force: true })
 if (!existsSync(publicOutDir)) throw new Error('missing package output: irisout')
 

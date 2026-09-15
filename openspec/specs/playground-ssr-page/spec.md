@@ -27,12 +27,25 @@ source全文、compilerVersion、createdAt、未実行表示を含み、head、�
 
 初期HTMLの本文と、`render(input)`のstateを使ったhydrate後のDOMは、見出し、source全文、版、文字数が
 一致しなければならない(SHALL)。JavaScriptを無効にしても初期HTMLを読めなければならない(SHALL)。
-接続完了まで編集欄は読取り専用でなければならない(SHALL)。
+トップPlaygroundの編集欄は、`examples.json`の読込みと実行管理iframeの接続が両方完了するまで
+読取り専用でなければならない(SHALL)。共有ページから複製したsourceまたは接続前に入力されたsourceを、
+例の初期値で上書きしてはならない(SHALL NOT)。実行管理Originが設定不備の場合は、例の読込み後に
+sourceの編集、保存、書き出しを許可し、実行だけを無効にしなければならない(SHALL)。
 
 #### Scenario: JavaScript無効時とhydrate後の表示を一致させる
 
 - **WHEN** 同じ共有URLをJavaScript無効と有効のブラウザーで開く
 - **THEN** 見出し、source全文、版、文字数が初期HTMLとhydrate後DOMで一致する
+
+#### Scenario: 遅延した初期化中のsource保持
+
+- **WHEN** 例データまたは実行管理iframeの応答が遅れている状態で共有ページから複製し、sourceへ入力する
+- **THEN** 接続完了まで編集欄は読取り専用で、接続後も複製値または入力値が例の初期値へ置き換わらない
+
+#### Scenario: 実行管理Originの設定不備
+
+- **WHEN** 実行管理Originが未設定、形式不正、または公式Originと同じhostnameである
+- **THEN** 例の読込み後にsourceの編集、保存、書き出しができ、実行管理iframeを作らず実行だけが無効になる
 
 ### Requirement: HTTP境界
 

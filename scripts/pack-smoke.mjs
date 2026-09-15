@@ -50,8 +50,22 @@ function pack() {
     'package/dist/ssr.js',
     'package/dist/ssr.d.ts',
     'package/dist/jsx.d.ts',
+    'package/dist/compiler/source.d.ts',
+    'package/dist/compiler/state.d.ts',
+    'package/dist/source-map.d.ts',
   ]) {
     if (!files.includes(expected)) throw new Error(`pack smoke: ${expected} missing from tarball`)
+  }
+  if (
+    files.some(
+      (file) =>
+        file.startsWith('package/dist/compiler/') &&
+        !file.endsWith('/') &&
+        !file.endsWith('/source.d.ts') &&
+        !file.endsWith('/state.d.ts'),
+    )
+  ) {
+    throw new Error('pack smoke: internal compiler declarations leaked into tarball')
   }
   if (!registryPackage) {
     for (const expected of ['package/dist/browser.js', 'package/dist/browser.d.ts']) {
@@ -71,7 +85,48 @@ const packageJson = JSON.parse(readFileSync(fixturePackagePath, 'utf8'))
 packageJson.dependencies.irisout = packageSpec
 packageJson.overrides = { irisout: packageSpec }
 packageJson.devDependencies.typescript = '^5.9.0'
+packageJson.devDependencies['@types/node'] = '^24.0.0'
 writeFileSync(path.join(fixtureDir, 'package.json'), `${JSON.stringify(packageJson, null, 2)}\n`)
+
+if (!registryPackage) {
+  const tsconfigPath = path.join(fixtureDir, 'tsconfig.json')
+  const tsconfig = JSON.parse(readFileSync(tsconfigPath, 'utf8'))
+  tsconfig.compilerOptions.skipLibCheck = false
+  tsconfig.compilerOptions.lib = ['ESNext', 'DOM', 'DOM.Iterable']
+  tsconfig.include = ['src/**/*.jsx', 'src/public-api.ts']
+  writeFileSync(tsconfigPath, `${JSON.stringify(tsconfig, null, 2)}\n`)
+  writeFileSync(
+    path.join(fixtureDir, 'src/public-api.ts'),
+    `import { compile, compileProject } from 'irisout'
+import { compile as compileBrowser } from 'irisout/browser'
+import { irisoutSsr, serializeSsrState } from 'irisout/ssr'
+import {
+  createCompilerState,
+  toContextId,
+  toDeclId,
+  toMarkerId,
+  type CompilerState,
+  type ContextId,
+  type DeclId,
+  type MarkerId,
+} from 'irisout/state'
+
+const compilerState: CompilerState = createCompilerState('')
+const ids: [DeclId, MarkerId, ContextId] = [
+  toDeclId('decl_0'),
+  toMarkerId('m0'),
+  toContextId('ctx_0'),
+]
+const clientResult = compile('')
+const projectResult = compileProject('src/App.jsx', { target: 'client' })
+const browserResult = compileBrowser('')
+const ssrPlugin = irisoutSsr({ entry: 'src/App.jsx' })
+const serializedState = serializeSsrState({ ok: true })
+
+void [compilerState, ids, clientResult, projectResult, browserResult, ssrPlugin, serializedState]
+`,
+  )
+}
 
 try {
   run('bun', ['install', '--no-progress'], fixtureDir)
@@ -83,7 +138,7 @@ try {
     [
       '--input-type=module',
       '-e',
-      "const { irisoutSsr, serializeSsrState } = await import('irisout/ssr'); if (typeof irisoutSsr !== 'function' || typeof serializeSsrState !== 'function') throw new Error('pack smoke: irisout/ssr export missing')",
+      "const compiler = await import('irisout'); const browser = await import('irisout/browser'); const ssr = await import('irisout/ssr'); const state = await import('irisout/state'); if (typeof compiler.compile !== 'function' || typeof browser.compile !== 'function' || typeof ssr.irisoutSsr !== 'function' || typeof ssr.serializeSsrState !== 'function' || typeof state.toDeclId !== 'function') throw new Error('pack smoke: public export missing')",
     ],
     fixtureDir,
   )
