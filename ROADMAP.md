@@ -1,6 +1,6 @@
 # irisout ロードマップ
 
-更新日: 2026-09-14。方針と判断の根拠は[開発方針](./docs/project-direction.md)に記載する。
+更新日: 2026-09-15。方針と判断の根拠は[開発方針](./docs/project-direction.md)に記載する。
 この文書は今後の作業と着手条件を扱う。実装状況は[STATUS.md](./STATUS.md)、完了した計画は
 [旧ロードマップ](./docs/history/roadmap-through-2026-09-07.md)、設計判断は[ADR](./docs/adr/)を参照する。
 
@@ -9,6 +9,8 @@
 R1からR4までを完了し、`irisout` 0.2.2を2026-09-12にnpmへ公開した。診断、利用例、
 性能改善、梱包物による外部導入を確認済みである。作者以外の人間による手動試用は
 実施していない。詳細は[実装状況](./STATUS.md)に記録する。
+
+公式サイトと共有Playgroundは第0〜5段階の実装を完了し、6件の後続changeをarchiveへ移し、受入条件を`openspec/specs/`へ反映した。文書SSG、ブラウザ用入口、隔離実行、SSR入口、保存・削除、共有ページSSRは自動試験まで確認済みである。実運用の配信先・保存先・復元と、作者以外の人間による手動試用は未検証である。第6段階の公開一覧・認証付き非公開は初回公開後に判断する。
 
 ## 今後の作業
 
@@ -31,13 +33,7 @@ JSXのサーバー実行は拒否する。契約は[ADR-0052](./docs/adr/0052-re
 文書範囲は[ADR-0053](./docs/adr/0053-site-document-source-and-initial-scope.md)、共有境界は
 [ADR-0054](./docs/adr/0054-playground-share-and-posted-code-boundary.md)に記録した。
 
-第0段階は完了した。次は[文書SSG](./openspec/changes/site-docs-ssg/)を実装し、その後に
-[ブラウザ用コンパイラ入口](./openspec/changes/browser-compiler-entry/)、
-[隔離実行](./openspec/changes/playground-isolated-execution/)、
-[SSR入口](./openspec/changes/irisout-ssr-entry/)を試作する。保存・削除は
-[playground-save-share](./openspec/changes/playground-save-share/)、共有ページの公開は
-[playground-ssr-publish](./openspec/changes/playground-ssr-publish/)で扱う。各段階の条件は
-[公式サイトと共有Playgroundの計画](./docs/irisout-site-and-playground-plan.md)に記載する。
+第0〜5段階の実装を完了した。受入条件と現在の対応範囲は、[文書SSG仕様](./openspec/specs/site-document-ssg/spec.md)、[ブラウザ用入口仕様](./openspec/specs/browser-compiler-entry/spec.md)、[隔離実行仕様](./openspec/specs/playground-isolated-execution/spec.md)、[SSR入口仕様](./openspec/specs/server-rendering-entry/spec.md)、[保存共有仕様](./openspec/specs/playground-save-share/spec.md)、[共有ページSSR仕様](./openspec/specs/playground-ssr-page/spec.md)を参照する。次は実運用の配信先・保存先・復元手順・隔離配信元を固定し、実運用相当のブラウザー検査と作者以外の手動試用を行う。各段階の条件は[公式サイトと共有Playgroundの計画](./docs/irisout-site-and-playground-plan.md)に記載する。
 
 Suspense、Transition、Portal、部品単位の例外回復などの機能は
 予定へ置かない。必要性を示す利用例と、既存記法またはブラウザ標準機能では不足する理由が
