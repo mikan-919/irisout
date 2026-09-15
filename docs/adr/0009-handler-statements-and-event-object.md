@@ -88,10 +88,10 @@ factory handlerを検証している(これらのhelper dispatchはtarget要素�
 `e.currentTarget.value`を使う。既知の6属性以外は関数であることだけを検査し、
 個別イベント型は後続の実需まで追加しない。
 
-### この ADR が答えるべき具体的入力(`apps/examples/todomvc.jsx`)
+### この ADR が答えるべき具体的入力(`apps/demos/todomvc.jsx`)
 
 - **UNRESOLVED(09)** — イベントオブジェクト `e` の型付け
-  (`apps/examples/todomvc.jsx`)。`handleInputKeyDown(e)` は当時
+  (`apps/demos/todomvc.jsx`)。`handleInputKeyDown(e)` は当時
   `e.target.value`へ素朴にアクセスしていた。静的型付け後は
   `e.currentTarget.value`を使う。この1関数だけで、本 ADR が扱う
   4種の文がすべて現れる:
@@ -107,7 +107,7 @@ function handleInputKeyDown(e) {
 ```
 
 - 他のハンドラ(`toggleTodo(id)` / `removeTodo(id)` / `setFilter(next)` /
-  `startEditing(id)`, `apps/examples/todomvc.jsx`)は、いずれも **function 引数
+  `startEditing(id)`, `apps/demos/todomvc.jsx`)は、いずれも **function 引数
   (`id` / `next`)を本体で参照する**単一式ハンドラで、引数の scope 解決が
   必須であることを裏づける。
 

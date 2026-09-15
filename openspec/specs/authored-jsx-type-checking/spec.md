@@ -4,24 +4,24 @@
 
 authored `.jsx`向けの静的型検査を規定する。`types/jsx.d.ts`のグローバル
 `JSX`namespace・authoring API・要素別イベント型、JSDocで宣言するコンポーネントの
-props形状、examples専用の`apps/examples/tsconfig.json`で構成される。型は静的検査用で、
+props形状、デモ専用の`apps/demos/tsconfig.json`で構成される。型は静的検査用で、
 コンパイラの実行時受理・拒否には影響しない。属性名のホワイトリスト化と、JSDocのない
 コンポーネントpropsの自動推論は対象外とする。
 
 ## Requirements
 
 ### Requirement: authored .jsx が tsc の型検査対象に含まれる
-`apps/examples/tsconfig.json`(examples専用の独立したTSプロジェクト。
-ルートの`tsconfig.json`は変更しない)は`apps/examples/**/*.jsx`と型検査専用の
+`apps/demos/tsconfig.json`(デモ専用の独立したTSプロジェクト。
+ルートの`tsconfig.json`は変更しない)は`apps/demos/**/*.jsx`と型検査専用の
 `types/test/**/*.jsx`を型検査対象として含む SHALL。`allowJs`・`checkJs`・
 `jsx: "preserve"`が有効でなければならない(MUST)。`bun run typecheck:tsc`は、
-ルートプロジェクトに加えて`apps/examples/tsconfig.json`に対しても`tsc --noEmit`を
+ルートプロジェクトに加えて`apps/demos/tsconfig.json`に対しても`tsc --noEmit`を
 実行し、型エラーまたは未使用の`@ts-expect-error`があれば非ゼロ終了しなければ
 ならない(MUST)。
 
 #### Scenario: 既存の authored .jsx が型エラーなく通る
 - **WHEN** `bun run typecheck:tsc`を実行する
-- **THEN** `apps/examples/**/*.jsx`と`types/test/**/*.jsx`で、抑制対象として明示した
+- **THEN** `apps/demos/**/*.jsx`と`types/test/**/*.jsx`で、抑制対象として明示した
   失敗例を除き型エラーが報告されない
 
 #### Scenario: 存在しないグローバル関数を呼ぶと型エラーになる

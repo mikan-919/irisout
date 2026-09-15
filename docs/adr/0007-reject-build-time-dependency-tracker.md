@@ -10,8 +10,8 @@
 現行のBabel `scope.getBinding()`による静的解析から、`~/projects/quix`が
 採用しているビルド時トラッカー方式(式を`() => expr`でラップし、ビルド時に
 Node上で実際に1回実行して、実行中の読み取りを`tracker.report(id)`で観測する
-方式)に切り替えるかどうかが未決定だった。`session/000_ts-rewrite-kickoff-and-m1.md`
-4節は「任意の複雑な制御フローでもスコープ制限なしに依存発見できる」と記録
+方式)に切り替えるかどうかが未決定だった。初期の作業記録には「任意の複雑な
+制御フローでもスコープ制限なしに依存発見できる」と記録
 していたが、この判断はquixの実ソースを確認せずに書かれた推測だった。
 
 今回、`~/projects/quix/packages/runtime/src/core/tracker.ts`の実装を確認した:

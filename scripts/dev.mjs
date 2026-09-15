@@ -1,11 +1,11 @@
-// ルートの開発入口。サイト、Playground、examplesを一つの引数体系で起動する。
+// ルートの開発入口。サイト、Playground、デモを一つの引数体系で起動する。
 
 import { spawn } from 'node:child_process'
 import path from 'node:path'
 
 const root = path.resolve(import.meta.dirname, '..')
 const vp = path.join(root, 'node_modules/.bin/vp')
-const examples = {
+const demos = {
   counter: 'counter.jsx',
   list: 'list.jsx',
   notes: 'notes.jsx',
@@ -22,13 +22,13 @@ if (target === '--help' || target === '-h') {
 }
 
 if (!target) {
-  run(['-C', 'apps/examples', 'dev'])
+  run(['-C', 'apps/demos', 'dev'])
 } else if (target === 'site') {
   run(['-C', 'apps/web', 'dev'])
 } else if (target === 'playground') {
   run([path.join(root, 'apps/web/scripts/dev-playground.mjs')], process.execPath)
-} else if (target === 'example' && name && examples[name]) {
-  run(['-C', 'apps/examples', 'dev'], vp, { IRISOUT_ENTRY: examples[name] })
+} else if (target === 'demo' && name && demos[name]) {
+  run(['-C', 'apps/demos', 'dev'], vp, { IRISOUT_ENTRY: demos[name] })
 } else {
   printUsage()
   process.exitCode = 1
@@ -54,5 +54,5 @@ function printUsage() {
   bun run dev
   bun run dev site
   bun run dev playground
-  bun run dev example <counter|list|notes|heatmap|todomvc|multi-file>`)
+  bun run dev demo <counter|list|notes|heatmap|todomvc|multi-file>`)
 }

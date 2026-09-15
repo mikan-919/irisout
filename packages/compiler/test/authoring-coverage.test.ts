@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { compile } from '../src/compiler.js'
 import { createContainer, loadGenerated } from './helpers.js'
 
-const source = readFileSync(new URL('../../../apps/examples/notes.jsx', import.meta.url), 'utf8')
+const source = readFileSync(new URL('../../../apps/demos/notes.jsx', import.meta.url), 'utf8')
 
 function event(container: Element, target: Element, type: string): void {
   const Event = (

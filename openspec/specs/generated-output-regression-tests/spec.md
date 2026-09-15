@@ -39,7 +39,7 @@ onClick ハンドラ付き counter)を `compile()` した結果の `code` と
 - **THEN** 1回目と2回目の `code` は文字列として完全に一致する
 
 ### Requirement: 手書き基準に対するサイズ予算
-テストスイートは、`apps/examples/vite.config.ts`を使うVite+ buildが生成する
+テストスイートは、`apps/demos/vite.config.ts`を使うVite+ buildが生成する
 `dist/app.js`のバイトサイズを、手書き基準ファイル(コメント・空行を除いた
 バイト数)に対して
 一定の予算係数以内に収まることを検証しなければならない(SHALL)。予算を
@@ -50,8 +50,8 @@ onClick ハンドラ付き counter)を `compile()` した結果の `code` と
 unmount/lifecycle固定費を含む実測5.33xとなったため更新した。
 
 #### Scenario: サイズ予算内
-- **WHEN** `apps/examples/counter.jsx` をVite+ buildした `dist/app.js` の
-  サイズが`apps/examples/counter.handwritten.js`のサイズの5.5倍以内である
+- **WHEN** `apps/demos/counter.jsx` をVite+ buildした `dist/app.js` の
+  サイズが`apps/demos/counter.handwritten.js`のサイズの5.5倍以内である
 - **THEN** サイズ予算テストは成功し、実測比がテスト出力に表示される
 
 #### Scenario: サイズ予算超過

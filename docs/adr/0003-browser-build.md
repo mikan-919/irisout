@@ -6,7 +6,7 @@
 
 ## コンテキスト
 
-CONCEPT.v2.md 9行目は irisout の製品としての約束を「ブラウザに届くのは、
+旧コンセプト9行目は irisout の製品としての約束を「ブラウザに届くのは、
 静的 HTML と専用の更新コードだけであるべきです」と定義している。しかし
 plans/002 着手時点では、コンパイラの出力はまだ一度もブラウザに届いていない
 - 生成モジュールは `import ... from '../src/runtime.js'` を固定で持ち
@@ -56,7 +56,7 @@ hydrateComponent(document.getElementById('app'));
 の2行だけを持ち、`Bun.build({ format: 'esm', minify: false, target:
 'browser' })` でこれをエントリにバンドルする。`minify: false` は
 「理想的な出力は人間が手で書いたコードに見えること」という
-CONCEPT.v2.md の立場を反映した意図的な選択。
+旧コンセプトの立場を反映した意図的な選択。
 
 ### 3. `__INITIAL_HTML__` の二重出荷は実際には起きなかった
 

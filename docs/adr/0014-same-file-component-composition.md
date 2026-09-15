@@ -21,7 +21,7 @@ rootとして正しく選び出しており、`TodoItem`のような子コンポ
 自動的にroot候補から除外される ― `packages/compiler/src/compiler.ts`。変更が要るのは
 `compileComponent`が`<TodoItem/>`に到達した時点の拒否ロジックだけ)。
 
-具体的な検証対象は `apps/examples/todomvc.jsx` の `TodoApp` → `TodoItem`
+具体的な検証対象は `apps/demos/todomvc.jsx` の `TodoApp` → `TodoItem`
 分割。これにより ROADMAP §2 UNRESOLVED-04(アイテムごとの編集状態を
 表す暫定策 ― コンポーネント全体で1つの`editingId` signalを使い回す
 「同時1件編集」依存のハック)も同時に解消する。

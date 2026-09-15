@@ -111,7 +111,7 @@ triage手続きで捌く — コンパイラの受理条件自体を場当たり
 | `packages/vite-plugin/src/index.ts`                   | `compileProject()`の生成結果をViteの仮想module・初期HTML・依存監視・全体再読み込みへ接続                                                                                                            |
 | `packages/runtime/src/index.ts`                       | 2つの顔を持つ: signal/derived は**ビルド時専用**。mount/hydrate、`use=`返り値のshape検証、List使用時だけimportされるkey照合・binding値キャッシュは**ブラウザ出荷用**の最小ランタイム(ADR-0015/0022) |
 | `packages/compiler/src/template.ts`                   | テンプレートリテラル組み立てヘルパー(render と codegen の共有部)                                                                                                                                    |
-| `apps/examples/vite.config.ts`                        | `irisout/vite`へentry pathを渡し、`dist/index.html`(焼き込み済み HTML)+ `dist/app.js`(hydrate のみ)を生成                                                                                           |
+| `apps/demos/vite.config.ts`                           | `irisout/vite`へentry pathを渡し、`dist/index.html`(焼き込み済み HTML)+ `dist/app.js`(hydrate のみ)を生成                                                                                           |
 
 ## 重要な概念
 

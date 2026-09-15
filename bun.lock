@@ -12,8 +12,8 @@
         "vite-plus": "0.3.0",
       },
     },
-    "apps/examples": {
-      "name": "@irisout/examples",
+    "apps/demos": {
+      "name": "@irisout/demos",
       "version": "0.0.0",
       "dependencies": {
         "@libraz/suzume": "0.9.10",
@@ -40,8 +40,8 @@
         "vite-plus": "0.3.0",
       },
     },
-    "examples/consumer-app": {
-      "name": "@irisout/consumer-example",
+    "fixtures/consumer-app": {
+      "name": "@irisout/consumer-fixture",
       "version": "0.0.0",
       "dependencies": {
         "irisout": "workspace:*",
@@ -54,7 +54,7 @@
       "name": "@irisout/bench",
       "version": "0.0.0",
       "dependencies": {
-        "@irisout/examples": "workspace:*",
+        "@irisout/demos": "workspace:*",
         "jsdom": "^29.1.1",
         "playwright": "^1.61.1",
         "react": "^19.2.7",
@@ -165,9 +165,9 @@
 
     "@irisout/bench": ["@irisout/bench@workspace:packages/bench"],
 
-    "@irisout/consumer-example": ["@irisout/consumer-example@workspace:examples/consumer-app"],
+    "@irisout/consumer-fixture": ["@irisout/consumer-fixture@workspace:fixtures/consumer-app"],
 
-    "@irisout/examples": ["@irisout/examples@workspace:apps/examples"],
+    "@irisout/demos": ["@irisout/demos@workspace:apps/demos"],
 
     "@irisout/web": ["@irisout/web@workspace:apps/web"],
 

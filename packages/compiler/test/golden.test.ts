@@ -97,23 +97,19 @@ describe('golden: signal/derived ラッパー非混入(ADR-0006 回帰チェッ�
 })
 
 describe('golden: 手書き基準に対するサイズ予算', () => {
-  it('dist/app.js は手書き基準(apps/examples/counter.handwritten.js)の5.5倍以内', () => {
+  it('dist/app.js は手書き基準(apps/demos/counter.handwritten.js)の5.5倍以内', () => {
     const outDir = mkdtempSync(path.join(tmpdir(), 'irisout-size-test-'))
-    const result = spawnSync(
-      path.resolve('node_modules/.bin/vp'),
-      ['-C', 'apps/examples', 'build'],
-      {
-        env: {
-          ...process.env,
-          IRISOUT_ENTRY: path.resolve('apps/examples/counter.jsx'),
-          IRISOUT_OUT_DIR: outDir,
-        },
+    const result = spawnSync(path.resolve('node_modules/.bin/vp'), ['-C', 'apps/demos', 'build'], {
+      env: {
+        ...process.env,
+        IRISOUT_ENTRY: path.resolve('apps/demos/counter.jsx'),
+        IRISOUT_OUT_DIR: outDir,
       },
-    )
+    })
     expect(result.status).toBe(0)
 
     // 分母はコメント行・空行を除いた手書きコードの byteLength。
-    const handwritten = readFileSync('apps/examples/counter.handwritten.js', 'utf8')
+    const handwritten = readFileSync('apps/demos/counter.handwritten.js', 'utf8')
     const baselineBytes = Buffer.byteLength(
       handwritten
         .split('\n')

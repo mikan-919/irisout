@@ -6,17 +6,17 @@
 
 ## コンテキスト
 
-`vp check`の対象はrootのTypeScript設定であり、`apps/examples`のauthored `.jsx`は
+`vp check`の対象はrootのTypeScript設定であり、`apps/demos`のauthored `.jsx`は
 専用の`tsconfig.json`で検査していた。そのため通常の検査が成功しても、数値signalへの
 文字列代入、component propsの不足や余分な属性、イベント引数の誤用を検出できなかった。
 
-また、examplesのVite設定は設定評価時に一度だけ`compileProject()`を呼び、生成したHTMLと
+また、デモのVite設定は設定評価時に一度だけ`compileProject()`を呼び、生成したHTMLと
 JavaScriptを閉じ込めていた。別アプリから使う設定と、入口・相対moduleの編集反映を同じ
 境界へ置くには、compilerが実際に読んだ依存一覧を連携へ渡す必要がある。
 
 ## 決定
 
-- rootの`check`と`typecheck`は、既存のVite+検査に続けて`tsc -p apps/examples/tsconfig.json`
+- rootの`check`と`typecheck`は、既存のVite+検査に続けて`tsc -p apps/demos/tsconfig.json`
   を実行する。JSX固有の設定は`typecheck:jsx`として直接実行できる。
 - `compileProject()`の結果へ、入口と静的にリンクした全`.js`/`.jsx`の絶対pathを
   `dependencies`として含める。`compile(source)`は文字列入力なので空の一覧を返す。
@@ -32,7 +32,7 @@ JavaScriptを閉じ込めていた。別アプリから使う設定と、入口�
 
 - **`vp check`へJSXを無理に含める**: root設定へ`allowJs`を追加すると比較用の手書きJSまで
   対象になり、authored JSX用の`strict`設定も分離できないため採用しなかった。
-- **examplesのVite設定で依存を再解析する**: compilerと連携が別々のmodule解決を持ち、
+- **デモのVite設定で依存を再解析する**: compilerと連携が別々のmodule解決を持ち、
   監視対象と実際の入力がずれるため採用しなかった。
 - **生成moduleだけをHMR更新する**: 初期HTML、marker、構造unitの状態を同時に作り直す必要が
   あり、現在の連携が保証する全体再読み込みより広い実行時機構になるため対象外とした。

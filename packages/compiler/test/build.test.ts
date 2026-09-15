@@ -69,7 +69,7 @@ describe('hydrate over statically baked HTML (no mount(), no innerHTML write)', 
 
 describe('default List playground', () => {
   it('supports add, binding update, keyed reorder, and removal', async () => {
-    const source = readFileSync(path.resolve('apps/examples/list.jsx'), 'utf8')
+    const source = readFileSync(path.resolve('apps/demos/list.jsx'), 'utf8')
     const { code } = compile(source)
     const mod = await loadGenerated(code)
     const container = createContainer()
@@ -97,15 +97,15 @@ describe('default List playground', () => {
 })
 
 describe('TodoMVC authored JSX integration', () => {
-  it('compiles the complete apps/examples/todomvc.jsx fixture', () => {
-    const source = readFileSync(path.resolve('apps/examples/todomvc.jsx'), 'utf8')
+  it('compiles the complete apps/demos/todomvc.jsx fixture', () => {
+    const source = readFileSync(path.resolve('apps/demos/todomvc.jsx'), 'utf8')
     const { initialHtml } = compile(source)
     expect(initialHtml).toContain('class="todoapp"')
     expect(initialHtml).toContain('<!--irisout:start:')
   })
 
   it('runs add, complete, filter, edit, and remove through the real DOM', async () => {
-    const source = readFileSync(path.resolve('apps/examples/todomvc.jsx'), 'utf8')
+    const source = readFileSync(path.resolve('apps/demos/todomvc.jsx'), 'utf8')
     const { code } = compile(source)
     const mod = await loadGenerated(code)
     const container = createContainer()
@@ -158,17 +158,13 @@ describe('Vite+ example build end to end', () => {
     writeFileSync(fixturePath, COUNTER_SOURCE)
 
     const outDir = path.join(tmpDir, 'dist')
-    const result = spawnSync(
-      path.resolve('node_modules/.bin/vp'),
-      ['-C', 'apps/examples', 'build'],
-      {
-        env: {
-          ...process.env,
-          IRISOUT_ENTRY: fixturePath,
-          IRISOUT_OUT_DIR: outDir,
-        },
+    const result = spawnSync(path.resolve('node_modules/.bin/vp'), ['-C', 'apps/demos', 'build'], {
+      env: {
+        ...process.env,
+        IRISOUT_ENTRY: fixturePath,
+        IRISOUT_OUT_DIR: outDir,
       },
-    )
+    })
     expect(result.status, `${result.stdout.toString()}\n${result.stderr.toString()}`).toBe(0)
 
     const html = readFileSync(path.join(outDir, 'index.html'), 'utf8')

@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vite-plus/test'
 import { compileProject } from '../src/compiler.js'
 import { createContainer, loadGenerated } from './helpers.js'
 
-const ENTRY = fileURLToPath(new URL('../../../apps/examples/heatmap.jsx', import.meta.url))
+const ENTRY = fileURLToPath(new URL('../../../apps/demos/heatmap.jsx', import.meta.url))
 
 const HEATMAP_TEST_STUBS = `
 const IrisM0_analysisDictionaryUrl = 'data:application/json,%7B%22terms%22%3A%5B%22情報量%22%5D%7D';
@@ -76,14 +76,14 @@ function click(container: Element, selector: string): void {
   element.click()
 }
 
-describe('apps/examples/heatmap.jsx', () => {
+describe('apps/demos/heatmap.jsx', () => {
   it('keeps model, component, and worker helpers as linked modules', () => {
     const result = compileProject(ENTRY)
     expect(result.dependencies).toEqual(
       expect.arrayContaining([
-        path.resolve('apps/examples/heatmap-model.js'),
-        path.resolve('apps/examples/heatmap-components.jsx'),
-        path.resolve('apps/examples/heatmap-worker-client.js'),
+        path.resolve('apps/demos/heatmap-model.js'),
+        path.resolve('apps/demos/heatmap-components.jsx'),
+        path.resolve('apps/demos/heatmap-worker-client.js'),
       ]),
     )
   })
@@ -259,20 +259,16 @@ describe('apps/examples/heatmap.jsx', () => {
 
   it('builds library, dictionary URL, CSS, and worker assets under a base path', () => {
     const outDir = mkdtempSync(path.join(tmpdir(), 'irisout-heatmap-build-'))
-    const result = spawnSync(
-      path.resolve('node_modules/.bin/vp'),
-      ['-C', 'apps/examples', 'build'],
-      {
-        env: {
-          ...process.env,
-          IRISOUT_ENTRY: 'heatmap.jsx',
-          IRISOUT_MINIFY: 'false',
-          IRISOUT_BASE: '/heatmap/',
-          IRISOUT_OUT_DIR: outDir,
-        },
-        encoding: 'utf8',
+    const result = spawnSync(path.resolve('node_modules/.bin/vp'), ['-C', 'apps/demos', 'build'], {
+      env: {
+        ...process.env,
+        IRISOUT_ENTRY: 'heatmap.jsx',
+        IRISOUT_MINIFY: 'false',
+        IRISOUT_BASE: '/heatmap/',
+        IRISOUT_OUT_DIR: outDir,
       },
-    )
+      encoding: 'utf8',
+    })
     expect(result.status, result.stderr).toBe(0)
 
     const html = readFileSync(path.join(outDir, 'index.html'), 'utf8')

@@ -12,8 +12,8 @@ change: `perf-bench-todomvc-vs-react`。実行: `bun run bench`
 
 ## 方法(jsdom)
 
-- `apps/examples/todomvc.handwritten.js`(ADR-0005 keyed reuse の手書き目標出力、
-  M5 codegenの上限値)と `apps/examples/todomvc.react.tsx`(標準的なkey付きReact
+- `apps/demos/todomvc.handwritten.js`(ADR-0005 keyed reuse の手書き目標出力、
+  M5 codegenの上限値)と `apps/demos/todomvc.react.tsx`(標準的なkey付きReact
   実装、`useState`のみ・非最適化)を、同一シナリオ・同一Nでjsdom上に
   マウントして比較した。
 - `packages/bench/listener-strategy.ts`と同じ割り切り: jsdom上の相対比較であり、
@@ -28,7 +28,7 @@ change: `perf-bench-todomvc-vs-react`。実行: `bun run bench`
 
 ### fixtureの修正
 
-`apps/examples/todomvc.handwritten.js`の`update_todos()`にあった除去判定
+`apps/demos/todomvc.handwritten.js`の`update_todos()`にあった除去判定
 (`todos.some((t) => t.id === id)`)はO(N)走査をMapエントリ数ぶん繰り返す
 O(N^2)実装で、実際の`packages/compiler/src/codegen.ts`の`generateListUpdate()`が使う
 `__seen__` Set方式(O(N))とずれていた古いバグだった。今回この

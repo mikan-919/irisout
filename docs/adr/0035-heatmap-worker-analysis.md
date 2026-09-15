@@ -13,7 +13,7 @@ WebAssemblyを使う日本語解析を入力イベントのhandlerへ置くと�
 
 ## 決定
 
-- `apps/examples/heatmap.worker.js`をWorkerの実行入口とし、Worker内でSuzumeとWebAssembly
+- `apps/demos/heatmap.worker.js`をWorkerの実行入口とし、Worker内でSuzumeとWebAssembly
   解析器を生成する。用語辞書はURLから画面側で取得し、初期化要求でWorkerへ渡す。
 - 本文解析要求へ単調増加する`requestId`を付ける。画面側は最新の要求番号と一致する結果だけを
   `tokenCount`と状態表示へ反映する。解析例外とWorkerの`error`は失敗表示へ接続する。

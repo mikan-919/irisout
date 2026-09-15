@@ -14,7 +14,7 @@ Web Components(Custom Elements)による解決も検討したが、却下した�
 - **Customized built-in element**(`<li is="todo-item">`)はSafariが一切実装していない。
 - **Autonomous custom element** + `display: contents`はペイント(レイアウト)は透明にできるが、DOMツリー構造そのものは変わらないため、ラッパー要素(`<todo-item><li>...</li></todo-item>`)を挟むと`ul > li`のようなCSS子結合子や`:nth-child`によるゼブラストライプが壊れる。
 
-いずれもCONCEPT.v2.mdの「熟練開発者が手で書くなら」という基準、およびADR-0004の統治原則(ソースが要求していない副作用を生まない)に反する。
+いずれも旧コンセプトの「熟練開発者が手で書くなら」という基準、およびADR-0004の統治原則(ソースが要求していない副作用を生まない)に反する。
 
 ## 決定
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
-// apps/examples/todomvc.handwritten.js (ADR-0005 keyed reuse, M5の目標出力) vs
-// 同等機能のReact版TodoMVC(apps/examples/todomvc.react.tsx)で、同一シナリオの
+// apps/demos/todomvc.handwritten.js (ADR-0005 keyed reuse, M5の目標出力) vs
+// 同等機能のReact版TodoMVC(apps/demos/todomvc.react.tsx)で、同一シナリオの
 // 処理時間を比較するベンチマーク。ADR-0005の見立て(keyed reuseのMapの
 // 帳簿コストはReact Fiberと同種のコスト)を実測で検証する。
 //
@@ -61,11 +61,11 @@ Object.assign(globalThis, {
 })
 
 // @ts-expect-error 手書きfixtureは型宣言を持たないJSモジュール
-const { mountComponent } = await import('../../apps/examples/todomvc.handwritten.js')
+const { mountComponent } = await import('../../apps/demos/todomvc.handwritten.js')
 const React = await import('react')
 const { createRoot } = await import('react-dom/client')
 const { flushSync } = await import('react-dom')
-const { TodoApp } = await import('../../apps/examples/todomvc.react.tsx')
+const { TodoApp } = await import('../../apps/demos/todomvc.react.tsx')
 
 function freshContainer(): HTMLElement {
   const container = dom.window.document.createElement('div')

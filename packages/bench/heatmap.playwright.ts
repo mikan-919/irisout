@@ -72,7 +72,7 @@ function resolveChromiumExecutable(): string | undefined {
 function buildProduction(outDir: string): void {
   const result = spawnSync(
     path.resolve(PROJECT_ROOT, 'node_modules/.bin/vp'),
-    ['-C', 'apps/examples', 'build'],
+    ['-C', 'apps/demos', 'build'],
     {
       cwd: PROJECT_ROOT,
       env: {

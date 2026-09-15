@@ -70,14 +70,14 @@ bun run dev
 ```
 
 端末に表示されたURLをブラウザで開き、`increment`を押してください。ソースは
-[`apps/examples/counter.jsx`](./apps/examples/counter.jsx)です。
+[`apps/demos/counter.jsx`](./apps/demos/counter.jsx)です。
 
-サイト、Playground、別のexamplesを起動するときも同じ入口へ引数を渡します。
+サイト、Playground、別のデモを起動するときも同じ入口へ引数を渡します。
 
 ```bash
 bun run dev site
 bun run dev playground
-bun run dev example list
+bun run dev demo list
 ```
 
 生成コードを圧縮せずに確認する場合は、次を実行します。
@@ -86,23 +86,23 @@ bun run dev example list
 bun run build:inspect
 ```
 
-出力先は`apps/examples/dist/`です。`dist/index.html`にはbuild時の初期値が反映され、
+出力先は`apps/demos/dist/`です。`dist/index.html`にはbuild時の初期値が反映され、
 `dist/app.js`にはDOM更新処理が含まれます。現行の公開入口はclient build用で、要求ごとの
 SSR HTML生成は対応していません。
 
-### 別の例
+### デモ一覧
 
-| コマンド                         | 確認できる機能                                   | ソース                                                     |
-| -------------------------------- | ------------------------------------------------ | ---------------------------------------------------------- |
-| `bun run dev example list`       | キー付きリストの追加、更新、並べ替え、削除       | [`list.jsx`](./apps/examples/list.jsx)                     |
-| `bun run dev example notes`      | フォーム、タブ、局所状態、条件分岐、入れ子リスト | [`notes.jsx`](./apps/examples/notes.jsx)                   |
-| `bun run dev example heatmap`    | 本文入力、指標切り替え、段落一覧、全体地図       | [`heatmap.jsx`](./apps/examples/heatmap.jsx)               |
-| `bun run dev example todomvc`    | TodoMVCの操作                                    | [`todomvc.jsx`](./apps/examples/todomvc.jsx)               |
-| `bun run dev example multi-file` | 相対モジュールによるファイル分割                 | [`multi-file/App.jsx`](./apps/examples/multi-file/App.jsx) |
+| コマンド                      | 確認できる機能                                   | ソース                                                  |
+| ----------------------------- | ------------------------------------------------ | ------------------------------------------------------- |
+| `bun run dev demo list`       | キー付きリストの追加、更新、並べ替え、削除       | [`list.jsx`](./apps/demos/list.jsx)                     |
+| `bun run dev demo notes`      | フォーム、タブ、局所状態、条件分岐、入れ子リスト | [`notes.jsx`](./apps/demos/notes.jsx)                   |
+| `bun run dev demo heatmap`    | 本文入力、指標切り替え、段落一覧、全体地図       | [`heatmap.jsx`](./apps/demos/heatmap.jsx)               |
+| `bun run dev demo todomvc`    | TodoMVCの操作                                    | [`todomvc.jsx`](./apps/demos/todomvc.jsx)               |
+| `bun run dev demo multi-file` | 相対モジュールによるファイル分割                 | [`multi-file/App.jsx`](./apps/demos/multi-file/App.jsx) |
 
 開発サーバーを切り替えるときは、実行中の処理を`Ctrl+C`で終了してください。
 
-`bun run dev example heatmap`は`@libraz/suzume`のブラウザ内日本語解析、WebAssembly、JSON辞書URL、CSS、
+`bun run dev demo heatmap`は`@libraz/suzume`のブラウザ内日本語解析、WebAssembly、JSON辞書URL、CSS、
 Worker入口を読み込みます。配信先に接頭辞がある場合は`IRISOUT_BASE=/heatmap/ bun run build`
 で資源URLを確認できます。
 
@@ -181,12 +181,12 @@ bun run build:packages
 bun run pack:smoke
 ```
 
-`check`は整形、静的検査、TypeScriptとauthored JSXの型検査を実行します。examplesと別アプリの
+`check`は整形、静的検査、TypeScriptとauthored JSXの型検査を実行します。デモと別アプリの
 型検査も含みます。`test`はVite+ Testによる試験を実行します。規約は
 [`docs/conventions.md`](./docs/conventions.md)を参照してください。
 
 別のViteアプリから使う場合は、設定へ連携を追加して入口とhydrate対象を指定します。
-workspaceでの導入例は[`examples/consumer-app/`](./examples/consumer-app/)です。
+workspaceでの導入検証は[`fixtures/consumer-app/`](./fixtures/consumer-app/)です。
 
 ```ts
 import { irisout } from 'irisout/vite'
@@ -228,7 +228,7 @@ Skillを導入するコマンドです。利用可能なSkillだけを確認す�
 | [`docs/project-direction.md`](./docs/project-direction.md) | 今後の開発方針と判断の根拠   |
 | [`docs/getting-started.md`](./docs/getting-started.md)     | npm公開版による新規導入手順  |
 | [`STATUS.md`](./STATUS.md)                                 | 対応状況と制約               |
-| [`ROADMAP.md`](./ROADMAP.md)                               | 開発順序と各段階の完了条件   |
+| [`ROADMAP.md`](./ROADMAP.md)                               | 今後の作業と着手条件         |
 | [`docs/architecture.md`](./docs/architecture.md)           | コンパイラの構成と処理       |
 | [`docs/adr/`](./docs/adr/)                                 | 設計判断と却下案             |
 | [`openspec/specs/`](./openspec/specs/)                     | 実装対象の受け入れ条件と仕様 |

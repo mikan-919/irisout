@@ -13,8 +13,8 @@ import * as React from 'react'
 import { flushSync } from 'react-dom'
 import { createRoot } from 'react-dom/client'
 // @ts-expect-error 手書きfixtureは型宣言を持たないJSモジュール
-import { mountComponent } from '../../apps/examples/todomvc.handwritten.js'
-import { TodoApp } from '../../apps/examples/todomvc.react.tsx'
+import { mountComponent } from '../../apps/demos/todomvc.handwritten.js'
+import { TodoApp } from '../../apps/demos/todomvc.react.tsx'
 
 interface Todo {
   id: number

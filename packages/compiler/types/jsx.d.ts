@@ -1,4 +1,5 @@
-// authored .jsx 向けの型検査基盤(ROADMAP.md 次のアクション10)。
+// authored .jsx向けの型検査基盤。対応範囲は
+// openspec/specs/authored-jsx-type-checking/spec.mdを参照する。
 //
 // このコンパイラは .jsx を @babel/parser で直接解析するだけで、JSX を
 // createElement 相当のランタイム呼び出しへ変換しない(docs/architecture.md

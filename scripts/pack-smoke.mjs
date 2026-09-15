@@ -76,7 +76,7 @@ function pack() {
 }
 
 const packageSpec = registryPackage ?? `file:${pack()}`
-cpSync(path.join(repoRoot, 'examples', 'consumer-app'), fixtureDir, {
+cpSync(path.join(repoRoot, 'fixtures', 'consumer-app'), fixtureDir, {
   recursive: true,
   filter: (source) => !['dist', 'node_modules'].includes(path.basename(source)),
 })

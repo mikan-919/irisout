@@ -1,5 +1,5 @@
 // ADR-0005(factory-per-unitクロージャ)に従って人間が書いた、
-// apps/examples/todomvc.jsx の「あるべき」コンパイル後の姿(手書き試作)。
+// apps/demos/todomvc.jsx の「あるべき」コンパイル後の姿(手書き試作)。
 // M5 codegenの目標出力であり、このファイル自体はコンパイラの出力ではない。
 // ランタイム(packages/runtime/src/index.tsのmount/hydrate)は使わず、素のDOM APIのみで
 // 書く(生成コードの現在の形はpackages/compiler/src/codegen.ts参照)。

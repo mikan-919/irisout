@@ -1,15 +1,15 @@
 {
-  // authored .jsx 専用の型検査基盤(ROADMAP次のアクション10、
-  // openspec/specs/authored-jsx-type-checking/spec.md参照)。
+  // authored .jsx 専用の型検査基盤。詳細は
+  // openspec/specs/authored-jsx-type-checking/spec.mdを参照する。
   // ルートの tsconfig.json とは独立させている ― allowJs/checkJs を
-  // ルートへ足すと apps/examples/*.handwritten.js
+  // ルートへ足すと apps/demos/*.handwritten.js
   // (test/todomvc-handwritten.test.ts からimportされる比較用の手書きJS、
   // 型検査の対象外)まで検査対象になり、既存の @ts-expect-error が
   // 無効化されて壊れる。strict は意図的に off ― authored .jsx は
   // 型注釈を書けない素のJS構文なので、strict(noImplicitAny等)を
   // 掛けるとハンドラ引数のほぼ全てが implicit any でエラーになり
   // 実用にならない。タグ名の存在チェック・signal/derivedの型・
-  // JSX属性の形は strict なしでも効く(design.md参照)。
+  // JSX属性の形は strict なしでも効く。
   "compilerOptions": {
     "target": "ES2022",
     "module": "ESNext",

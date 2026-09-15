@@ -30,7 +30,7 @@
 - ライブラリ、辞書、Workerの生成と破棄はroot `onMount()`とcleanupへ置く。初期HTMLを
   作るbuild-time executionではブラウザAPIを呼ばない。Workerで本文解析を行う処理と
   要求競合の処理は第5段階で実装する。
-- 配信時の接頭辞はViteの`base`へ委ねる。examplesは`IRISOUT_BASE`で試験できる。
+- 配信時の接頭辞はViteの`base`へ委ねる。デモは`IRISOUT_BASE`で試験できる。
 
 ## 結果
 
@@ -38,7 +38,7 @@
 tree-shakingへ渡せる。CSS、辞書URL、Worker、WebAssemblyは開発と本番で同じ入口を使い、
 接頭辞付き本番buildでも資源URLが書き換わる。
 
-`apps/examples/heatmap.jsx`は初期HTML生成後に辞書URLを取得し、Workerへ初期化要求を送る。
+`apps/demos/heatmap.jsx`は初期HTML生成後に辞書URLを取得し、Workerへ初期化要求を送る。
 SuzumeとWebAssemblyの生成はWorker内で行い、componentのunmount時に購読解除とWorker終了を
 行う。本文の連続解析と古い結果の破棄はADR-0035で追加した。
 

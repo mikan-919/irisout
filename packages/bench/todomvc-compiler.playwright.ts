@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-// apps/examples/todomvc.jsx の現在のコンパイラ出力、手書き版、React版を、
+// apps/demos/todomvc.jsx の現在のコンパイラ出力、手書き版、React版を、
 // 同一Chromium内で機能試験・転送量・初期化・更新・DOM変更・JavaScriptヒープの
 // 6軸で比較する。authoringファイルは編集しない。
 
@@ -19,10 +19,10 @@ import type {
 } from './todomvc-compiler-driver.ts'
 
 const repoRoot = path.resolve(import.meta.dirname, '../..')
-const examplesRoot = path.join(repoRoot, 'apps/examples')
-const authoredPath = path.join(examplesRoot, 'todomvc.jsx')
-const handwrittenPath = path.join(examplesRoot, 'todomvc.handwritten.js')
-const reactPath = path.join(examplesRoot, 'todomvc.react.tsx')
+const demosRoot = path.join(repoRoot, 'apps/demos')
+const authoredPath = path.join(demosRoot, 'todomvc.jsx')
+const handwrittenPath = path.join(demosRoot, 'todomvc.handwritten.js')
+const reactPath = path.join(demosRoot, 'todomvc.react.tsx')
 const driverPath = path.resolve(import.meta.dirname, 'todomvc-compiler-driver.ts')
 
 const SIZES = parseSizes(process.env.IRISOUT_TODOMVC_SIZES ?? '100,1000,10000')
@@ -221,7 +221,7 @@ async function buildVirtualEntry(
   entryFileName: string,
 ): Promise<Bundle> {
   const built = await build({
-    root: examplesRoot,
+    root: demosRoot,
     configFile: false,
     plugins: [virtualModules(modules)],
     define: { 'process.env.NODE_ENV': '"production"' },
@@ -263,8 +263,8 @@ async function buildGeneratedProduction(generated: CompileResult): Promise<Produ
   )
   const html = await withRestoredEnv('IRISOUT_ENTRY', authoredPath, async () => {
     const built = await build({
-      root: examplesRoot,
-      configFile: path.join(examplesRoot, 'vite.config.ts'),
+      root: demosRoot,
+      configFile: path.join(demosRoot, 'vite.config.ts'),
       build: { write: false },
     })
     const outputs = buildOutputs(built)
@@ -309,7 +309,7 @@ async function buildBenchmarkDriver(
     'virtual:irisout-todomvc-generated-bench': generatedModuleSource(generatedBench),
   }
   const built = await build({
-    root: examplesRoot,
+    root: demosRoot,
     configFile: false,
     plugins: [virtualModules(modules)],
     define: { 'process.env.NODE_ENV': '"production"' },

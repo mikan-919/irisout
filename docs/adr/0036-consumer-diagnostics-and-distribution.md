@@ -24,11 +24,11 @@
   `signal`、`derived`、`render`、`onMount`、`effect`などの宣言は
   `@irisout/compiler/jsx`から参照できる。packageの`exports`と`files`へ登録し、利用者側の
   `tsconfig.json`は`types: ["@irisout/compiler/jsx"]`を指定する。
-- 別アプリの設定例を`examples/consumer-app`へ置く。`@irisout/vite-plugin`が入口JSXを
+- 別アプリの設定例を`fixtures/consumer-app`へ置く。`@irisout/vite-plugin`が入口JSXを
   コンパイルし、`@irisout/runtime`を生成moduleの実行時依存として読み込む。入口JSX、
   `index.html`のhydrate対象、Vite設定、型検査設定、build手順を同じ例へ置く。
-- `bun run check`へexamplesと別アプリの型検査を含める。`bun run test`へ別アプリの
-  `vp -C examples/consumer-app build`試験を含める。GitHub Actionsはlockfile固定の依存導入後に
+- `bun run check`へデモと別アプリの型検査を含める。`bun run test`へ別アプリの
+  `vp -C fixtures/consumer-app build`試験を含める。GitHub Actionsはlockfile固定の依存導入後に
   check、test、buildを実行する。
 - irisoutのコードとworkspace packageはApache License 2.0とする。ルートの`LICENSE`と
   packageの`license`欄へ記載する。現時点の配布形式はGitリポジトリ内のprivate workspaceとし、
@@ -51,5 +51,5 @@
 - 2026-09-09の隔離試用で、未対応の`try`と`for`が`render()`付近の代替位置を示す問題を
   確認した。拒否した文の構文木位置を診断へ渡し、文の先頭を示す回帰試験を追加した。
 - `packages/compiler/test/consumer-app.test.ts`で別ディレクトリからVite buildを実行し、初期HTMLと生成JavaScriptを確認した。
-- `bun run check`でroot、examples、consumer exampleの型検査を実行した。
+- `bun run check`でroot、デモ、利用者側検証用アプリの型検査を実行した。
 - `bun run test`と`bun run build`を実行した。

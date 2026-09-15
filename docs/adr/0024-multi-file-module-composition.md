@@ -8,7 +8,7 @@
 
 `compile(source)`は一つの文字列を受け取り、Program直下の関数宣言だけを処理する。
 同一ファイル内のcomponent合成はADR-0014で実装済みだが、別ファイルのcomponentや
-helperを通常のimportで使えない。examplesのVite pluginも一つのファイルを直接読む
+helperを通常のimportで使えない。デモのVite pluginも一つのファイルを直接読む
 構造であり、ファイル分割したauthoringの入口にならない。
 
 複数ファイル対応では、module解決、binding衝突、依存順、build-time discoveryの

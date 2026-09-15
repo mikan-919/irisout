@@ -2,11 +2,11 @@
 
 計測日: 2026-09-05 11:44 UTC。対象は次の3実装である。
 
-| 実装           | 対象                                            | 条件                                         |
-| -------------- | ----------------------------------------------- | -------------------------------------------- |
-| コンパイラ生成 | `apps/examples/todomvc.jsx`の現在のcompiler出力 | 初期HTMLを生成し、`hydrateComponent()`を実行 |
-| 手書き         | `apps/examples/todomvc.handwritten.js`          | keyed DOM再利用を実装した比較基準            |
-| React          | `apps/examples/todomvc.react.tsx`               | React 19 productionを同梱                    |
+| 実装           | 対象                                         | 条件                                         |
+| -------------- | -------------------------------------------- | -------------------------------------------- |
+| コンパイラ生成 | `apps/demos/todomvc.jsx`の現在のcompiler出力 | 初期HTMLを生成し、`hydrateComponent()`を実行 |
+| 手書き         | `apps/demos/todomvc.handwritten.js`          | keyed DOM再利用を実装した比較基準            |
+| React          | `apps/demos/todomvc.react.tsx`               | React 19 productionを同梱                    |
 
 手書き版は比較基準であり、irisoutの性能として扱わない。生成版のTodoItemは
 同一ファイル内でコンパイル時に展開され、アイテムごとの`editing`をfactoryの

@@ -3,7 +3,7 @@
 ## Purpose
 
 ADR-0005(keyed reuseのMapの帳簿コストはReact Fiberと同種)という見立てを、
-`apps/examples/todomvc.handwritten.js`(M5 codegenの目標出力の上限値)と同等機能の
+`apps/demos/todomvc.handwritten.js`(M5 codegenの目標出力の上限値)と同等機能の
 React版TodoMVC、現行compiler生成版TodoMVCの実測比較で検証する(change
 `perf-bench-todomvc-vs-react`)。結果は
 `packages/bench/todomvc-compiler.results.md`にまとめ、M5.5以降の設計
@@ -13,7 +13,7 @@ React版TodoMVC、現行compiler生成版TodoMVCの実測比較で検証する(c
 ## Requirements
 
 ### Requirement: handwritten版とReact版の同一シナリオ計測
-ベンチマークハーネスは、`apps/examples/todomvc.handwritten.js`とReact版TodoMVC
+ベンチマークハーネスは、`apps/demos/todomvc.handwritten.js`とReact版TodoMVC
 実装に対して、同一の操作シナリオ(初期マウント・全アイテム完了トグル・
 フィルタ切り替え・アイテム追加・アイテム削除)を同じデータサイズNで実行し、
 両者の処理時間を計測しなければならない(SHALL)。

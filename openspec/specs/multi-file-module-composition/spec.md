@@ -77,12 +77,12 @@ props object、汎用component runtimeを出力してはならない(SHALL NOT)�
 
 ### Requirement: Vite通常経路
 
-`apps/examples`の通常buildは入口pathをcompilerへ渡し、複数module fixtureの初期HTMLと
+`apps/demos`の通常buildは入口pathをcompilerへ渡し、複数module fixtureの初期HTMLと
 hydrate用JavaScriptを生成しなければならない(SHALL)。生成物には`signal(`、`derived(`、
 component functionの実行時呼び出しを含めてはならない(SHALL NOT)。
 
 #### Scenario: 分割fixtureをVite buildする
 
-- **WHEN** `IRISOUT_ENTRY`へ複数module fixtureのentry pathを設定してexamplesをbuildする
+- **WHEN** `IRISOUT_ENTRY`へ複数module fixtureのentry pathを設定してデモをbuildする
 - **THEN** `index.html`へ初期HTML、`app.js`へhydrate codeが出力され、component functionと
   build-time用state wrapperは出力されない

@@ -11,7 +11,7 @@ TodoMVCの機能試験や性能計測とは別に、作者が自然なJSXで画�
 ### Requirement: 実用画面の自然なJSX fixture
 リポジトリは、フォーム、タブ、条件分岐、リスト、同一ファイル内の複数
 コンポーネント、コンポーネントごとのローカルstateを含むfixtureを
-`apps/examples/notes.jsx`へ持たなければならない(SHALL)。fixtureは通常の
+`apps/demos/notes.jsx`へ持たなければならない(SHALL)。fixtureは通常の
 JSX要素、`.map()`、三項式または`&&`、イベントハンドラ、`signal()`/
 `derived()`で記述し、compilerの生成規則に合わせるためだけのDOM構造を
 要求してはならない(SHALL NOT)。
@@ -33,7 +33,7 @@ authoring fixtureには、TodoMVCの操作列や性能値に依存しないcompi
 TodoMVCの回帰試験から分離する。
 
 #### Scenario: fixtureが本番build経路を通る
-- **WHEN** `IRISOUT_ENTRY=notes.jsx`でexamplesのbuildを実行する
+- **WHEN** `IRISOUT_ENTRY=notes.jsx`でデモのbuildを実行する
 - **THEN** 初期HTMLとhydrate用JavaScriptが生成され、compile errorを出さない
 
 ### Requirement: scope limitの記録

@@ -1,11 +1,10 @@
 import { defineConfig } from 'vite-plus'
 
 export default defineConfig({
-  defaultPackage: './apps/examples',
+  defaultPackage: './apps/demos',
   fmt: {
     ignorePatterns: [
       'openspec/**',
-      'session/**',
       'docs/adr/0001-first-milestone.md',
       'docs/adr/0002-event-handlers.md',
       'docs/adr/0003-browser-build.md',
@@ -14,7 +13,6 @@ export default defineConfig({
       'docs/adr/0009-handler-statements-and-event-object.md',
       'docs/adr/0010-handwritten-js-escape-hatch.md',
       'docs/adr/0014-same-file-component-composition.md',
-      'CONCEPT.v2.md',
       '**/dist/**',
       '**/dist-size-test/**',
     ],
@@ -42,9 +40,9 @@ export default defineConfig({
       },
       {
         files: [
-          'apps/examples/*.jsx',
-          'apps/examples/**/*.jsx',
-          'examples/consumer-app/**/*.jsx',
+          'apps/demos/*.jsx',
+          'apps/demos/**/*.jsx',
+          'fixtures/consumer-app/**/*.jsx',
           'apps/web/**/*.jsx',
         ],
         rules: {
@@ -52,7 +50,7 @@ export default defineConfig({
         },
       },
       {
-        files: ['apps/examples/**/*.d.ts'],
+        files: ['apps/demos/**/*.d.ts'],
         rules: {
           'typescript/no-useless-default-assignment': 'off',
         },

@@ -10,7 +10,7 @@ describe('consumer app integration', () => {
     const outDir = mkdtempSync(path.join(tmpdir(), 'irisout-consumer-build-'))
     const result = spawnSync(
       path.resolve('node_modules/.bin/vp'),
-      ['-C', 'examples/consumer-app', 'build'],
+      ['-C', 'fixtures/consumer-app', 'build'],
       {
         env: {
           ...process.env,
@@ -30,7 +30,7 @@ describe('consumer app integration', () => {
     const outDir = mkdtempSync(path.join(tmpdir(), 'irisout-consumer-source-map-'))
     const result = spawnSync(
       path.resolve('node_modules/.bin/vp'),
-      ['-C', 'examples/consumer-app', 'build'],
+      ['-C', 'fixtures/consumer-app', 'build'],
       {
         env: {
           ...process.env,

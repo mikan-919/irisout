@@ -10,8 +10,8 @@ import * as generatedActualModule from 'virtual:irisout-todomvc-generated-actual
 import * as generatedBenchModule from 'virtual:irisout-todomvc-generated-bench'
 
 // @ts-expect-error 比較用のJavaScript fixtureは型宣言を持たない
-import { mountComponent as mountHandwritten } from '../../apps/examples/todomvc.handwritten.js'
-import { TodoApp } from '../../apps/examples/todomvc.react.tsx'
+import { mountComponent as mountHandwritten } from '../../apps/demos/todomvc.handwritten.js'
+import { TodoApp } from '../../apps/demos/todomvc.react.tsx'
 
 interface Todo {
   id: number

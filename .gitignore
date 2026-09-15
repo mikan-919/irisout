@@ -6,5 +6,8 @@ package-lock.json
 dist
 apps/web/public
 plans
+.plans/
+session/
+plugins/
 .cursor
 .agents

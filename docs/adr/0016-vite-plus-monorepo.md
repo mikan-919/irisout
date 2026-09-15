@@ -7,7 +7,7 @@
 ## コンテキスト
 
 従来はBun test、Bun.build、Biome、TypeScript、Viteが個別に存在し、compiler、
-runtime、examples、benchmarkもルート直下へ混在していた。最小ランタイムを機能単位で
+runtime、デモ、benchmarkもルート直下へ混在していた。最小ランタイムを機能単位で
 発展させるには、公開境界と開発ツールの責務を先に明確にする必要がある。
 
 ## 決定
@@ -17,17 +17,17 @@ runtime、examples、benchmarkもルート直下へ混在していた。最小�
 - `packages/compiler`: compiler本体、codegen、compilerテスト
 - `packages/runtime`: 生成コードが必要時にimportする最小ランタイム
 - `packages/bench`: jsdom/実ブラウザbenchmark
-- `apps/examples`: authored JSX、比較fixture、Viteによるdev/build対象
+- `apps/demos`: authored JSX、比較fixture、Viteによるdev/build対象
 
 開発コマンドはVite+へ統合する。formatはOxfmt、lint/typecheckはOxlintのtype-aware
-経路、testはVite+ Test、example buildはViteを使用する。設定はルートの
+経路、testはVite+ Test、デモのbuildはViteを使用する。設定はルートの
 `vite.config.ts`に集約する。Bunはpackage managerとして維持するが、テストAPIや
 bundler APIとしては使用しない。
 
 compilerの生成コードは相対ファイル位置ではなく`@irisout/runtime`をimportする。
 runtimeはcompilerの型へ依存せず、workspace依存グラフを一方向に保つ。
 
-`apps/examples/vite.config.ts`はauthored JSXをcompileする小さなVite pluginを持ち、
+`apps/demos/vite.config.ts`はauthored JSXをcompileする小さなVite pluginを持ち、
 初期HTMLを`transformIndexHtml`で注入し、hydrate専用コードをvirtual moduleとして
 bundleする。
 

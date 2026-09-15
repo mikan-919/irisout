@@ -1,5 +1,5 @@
 // 構造ユニットの実DOM回帰検証にも使うTodoMVC入力。手書きの比較出力は
-// apps/examples/todomvc.handwritten.js を参照。
+// apps/demos/todomvc.handwritten.js を参照。
 //
 // 実装済み: リスト・条件分岐(M5)、任意の深さの構造ユニット
 // (M5.5、change `m5-5-nested-structural-units`)、要素・構造unit内の`use=`属性

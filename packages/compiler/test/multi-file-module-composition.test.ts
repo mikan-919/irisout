@@ -7,7 +7,7 @@ import { JSDOM } from 'jsdom'
 import { compile, compileProject } from '../src/compiler.js'
 import { createContainer, loadGenerated } from './helpers.js'
 
-const FIXTURE = path.resolve('apps/examples/multi-file/App.jsx')
+const FIXTURE = path.resolve('apps/demos/multi-file/App.jsx')
 
 function fixtureCards(container: Element): Element[] {
   return [...container.querySelectorAll('.note-card')]
@@ -39,9 +39,9 @@ describe('compileProject: static multi-file module composition', () => {
     expect(initialHtml).toContain('irisout / ノート')
     expect(new Set(dependencies)).toEqual(
       new Set([
-        path.resolve('apps/examples/multi-file/lib/constants.js'),
-        path.resolve('apps/examples/multi-file/lib/format.js'),
-        path.resolve('apps/examples/multi-file/components/SplitCard.jsx'),
+        path.resolve('apps/demos/multi-file/lib/constants.js'),
+        path.resolve('apps/demos/multi-file/lib/format.js'),
+        path.resolve('apps/demos/multi-file/components/SplitCard.jsx'),
         FIXTURE,
       ]),
     )
@@ -348,23 +348,19 @@ describe('compileProject: module boundary errors', () => {
 })
 
 describe('multi-file Vite fixture', () => {
-  it('runs through the normal examples build path', () => {
+  it('runs through the normal demos build path', () => {
     const source = readFileSync(FIXTURE, 'utf8')
     expect(source).toContain("import SplitCard from './components/SplitCard.jsx'")
 
     const outRoot = mkdtempSync(path.join(tmpdir(), 'irisout-module-build-'))
     const outDir = path.join(outRoot, 'dist')
-    const result = spawnSync(
-      path.resolve('node_modules/.bin/vp'),
-      ['-C', 'apps/examples', 'build'],
-      {
-        env: {
-          ...process.env,
-          IRISOUT_ENTRY: FIXTURE,
-          IRISOUT_OUT_DIR: outDir,
-        },
+    const result = spawnSync(path.resolve('node_modules/.bin/vp'), ['-C', 'apps/demos', 'build'], {
+      env: {
+        ...process.env,
+        IRISOUT_ENTRY: FIXTURE,
+        IRISOUT_OUT_DIR: outDir,
       },
-    )
+    })
     expect(result.status).toBe(0)
 
     const html = readFileSync(path.join(outDir, 'index.html'), 'utf8')
