@@ -4,6 +4,7 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { chromium } from 'playwright'
 import { createPlaygroundServer } from './playground-server.mjs'
@@ -121,6 +122,16 @@ function assertSyntaxHighlight(tokens, { plain = 'Counter' } = {}) {
   }
 }
 
+function assertTypeScriptHighlight(tokens, { plain = 'plain' } = {}) {
+  assertSyntaxHighlight(tokens, { plain })
+  const token = (text) => tokens.find((candidate) => candidate.text === text)
+  const plainToken = token(plain)
+  for (const syntax of ['type', 'interface', 'string', 'number', 'T']) {
+    assert.ok(token(syntax), `${syntax}がTypeScriptの構文トークンになっていません`)
+    assert.notEqual(token(syntax).color, plainToken.color, `${syntax}が通常テキストと同じ色です`)
+  }
+}
+
 function deferred() {
   let resolve
   const promise = new Promise((done) => {
@@ -187,22 +198,38 @@ try {
     await Promise.all([examplesRequest.promise, controllerRequest.promise])
     assert.equal(await source.evaluate((element) => element.readOnly), true)
     assert.equal(await run.isDisabled(), true)
-    await page.evaluate(() => {
+    const initialTsxSource = `// 公式文書とPlaygroundが共有するCounter入力。
+type CounterLabel = string
+interface CounterProps {
+  label: CounterLabel
+}
+function identity<T>(value: T): T {
+  return value
+}
+export function Preserved(props: CounterProps) {
+  const count: number = 0
+  render(
+    <main>
+      <button type="button">{identity<string>(props.label)}</button>
+      <p>plain</p>
+    </main>,
+  )
+}`
+    await page.evaluate((value) => {
       const element = document.querySelector('[data-playground-source]')
       if (!(element instanceof HTMLTextAreaElement)) throw new Error('source欄がありません')
-      element.value = 'export function Preserved() { render(<p>遅延入力</p>) }'
+      element.value = value
       element.dispatchEvent(new Event('input', { bubbles: true }))
-    })
+    }, initialTsxSource)
     releaseExamples.resolve()
     releaseController.resolve()
     await waitForText(status, '実行できます')
     const editor = page.locator('[data-playground-monaco] .monaco-editor')
     await editor.waitFor()
     await source.waitFor({ state: 'hidden' })
-    assert.equal(
-      await source.inputValue(),
-      'export function Preserved() { render(<p>遅延入力</p>) }',
-    )
+    assert.equal(await source.inputValue(), initialTsxSource)
+    await waitForEditorToken(page, 'interface')
+    assertTypeScriptHighlight(await readEditorTokens(page))
     assert.equal(await source.evaluate((element) => element.readOnly), false)
     await editor.click()
     await page.keyboard.press('Control+A')
@@ -217,12 +244,26 @@ try {
     )
 
     const replacedSource = `// 公式文書とPlaygroundが共有するCounter入力。
-export function Edited() {
-  render(<main type="button">置換後</main>)
+type ButtonLabel = string
+interface ButtonProps {
+  label: ButtonLabel
+}
+function identity<T>(value: T): T {
+  return value
+}
+export function Edited(props: ButtonProps) {
+  const count: number = 0
+  render(
+    <main type="button">
+      <button>{identity<string>(props.label)}</button>
+      <p>plain</p>
+      <p>置換後</p>
+    </main>,
+  )
 }`
     await fillSource(source, replacedSource)
-    await waitForEditorToken(page, 'main')
-    assertSyntaxHighlight(await readEditorTokens(page), { plain: '置換後' })
+    await waitForEditorToken(page, 'interface')
+    assertTypeScriptHighlight(await readEditorTokens(page))
 
     const syntaxPage = await context.newPage()
     await syntaxPage.goto(siteAddress.origin, { waitUntil: 'networkidle' })
@@ -452,12 +493,36 @@ export function Edited() {
     await editorFallbackPage.route('**/assets/monaco-editor-*.js', (route) => route.abort())
     await editorFallbackPage.goto(siteAddress.origin, { waitUntil: 'networkidle' })
     await waitForText(editorFallbackPage.locator('[data-playground-status]'), '実行できます')
-    assert.equal(await editorFallbackPage.locator('[data-playground-source]').isVisible(), true)
-    assert.match(
-      await editorFallbackPage.locator('[data-playground-source]').inputValue(),
-      /export function/,
-    )
+    const fallbackSource = 'export function Fallback() { render(<p>退避入力</p>) }'
+    const fallbackSourceElement = editorFallbackPage.locator('[data-playground-source]')
+    assert.equal(await fallbackSourceElement.isVisible(), true)
+    assert.match(await fallbackSourceElement.inputValue(), /export function/)
     assert.equal(await editorFallbackPage.locator('.monaco-editor').count(), 0)
+    await fillSource(fallbackSourceElement, fallbackSource)
+    assert.equal(await fallbackSourceElement.inputValue(), fallbackSource)
+    await editorFallbackPage.route('**/api/playgrounds', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: 'fallback-playground',
+          url: '/playground/fallback-playground',
+          createdAt: '2026-09-15T00:00:00.000Z',
+        }),
+      })
+    })
+    await editorFallbackPage.locator('[data-playground-save]').click()
+    await waitForText(editorFallbackPage.locator('[data-playground-status]'), '保存しました')
+    assert.equal(await fallbackSourceElement.inputValue(), fallbackSource)
+    const downloadPromise = editorFallbackPage.waitForEvent('download')
+    await editorFallbackPage.locator('[data-playground-export]').click()
+    const download = await downloadPromise
+    assert.equal(download.suggestedFilename(), 'irisout-playground-share.json')
+    const downloadPath = await download.path()
+    assert.ok(downloadPath)
+    const exported = JSON.parse(await readFile(downloadPath, 'utf8'))
+    assert.equal(exported.source, fallbackSource)
+    await editorFallbackPage.unroute('**/api/playgrounds')
     await editorFallbackPage.close()
 
     buildSite(siteAddress.origin)

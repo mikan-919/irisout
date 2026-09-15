@@ -1,10 +1,10 @@
 // Monacoは編集画面でだけ遅延読込みし、投稿sourceの実行には使わない。
 
 import * as monaco from 'monaco-editor/editor/editor.api.js'
-import { language as javascriptLanguage } from 'monaco-editor/languages/definitions/javascript/javascript.js'
-import 'monaco-editor/languages/definitions/javascript/register.js'
+import { language as typescriptLanguage } from 'monaco-editor/languages/definitions/typescript/typescript.js'
+import 'monaco-editor/languages/definitions/typescript/register.js'
 import {
-  javascriptDefaults,
+  typescriptDefaults,
   JsxEmit,
   ScriptTarget,
 } from 'monaco-editor/language/typescript/monaco.contribution.js'
@@ -19,25 +19,25 @@ self.MonacoEnvironment = {
   },
 }
 
-javascriptDefaults.setDiagnosticsOptions({
+typescriptDefaults.setDiagnosticsOptions({
   noSemanticValidation: true,
   noSuggestionDiagnostics: true,
 })
-javascriptDefaults.setCompilerOptions({
+typescriptDefaults.setCompilerOptions({
   allowNonTsExtensions: true,
   jsx: JsxEmit.Preserve,
   target: ScriptTarget.ESNext,
 })
 
-// 標準のJavaScript定義を保ち、Playgroundに必要なJSXのタグと属性だけを追加する。
-// 言語IDはjavascriptのままにして、既存のTypeScript作業スレッド設定と共有する。
-monaco.languages.setMonarchTokensProvider('javascript', {
-  ...javascriptLanguage,
+// 標準のTypeScript定義を保ち、Playgroundに必要なJSXのタグと属性だけを追加する。
+// 型検査は無効のまま、同じTypeScript作業スレッドで構文だけを色分けする。
+monaco.languages.setMonarchTokensProvider('typescript', {
+  ...typescriptLanguage,
   tokenizer: {
-    ...javascriptLanguage.tokenizer,
+    ...typescriptLanguage.tokenizer,
     common: [
       [/(<\/?)([A-Za-z][\w.-]*)(?=[\s/>])/, ['delimiter', { token: 'tag', next: '@jsxTag' }]],
-      ...javascriptLanguage.tokenizer.common,
+      ...typescriptLanguage.tokenizer.common,
     ],
     jsxTag: [
       [/[ \t\r\n]+/, ''],
@@ -62,15 +62,15 @@ export function createSourceEditor(container, { value, readOnly, onChange }) {
   container.hidden = false
   const model = monaco.editor.createModel(
     value,
-    'javascript',
-    monaco.Uri.parse('file:///playground.jsx'),
+    'typescript',
+    monaco.Uri.parse('file:///playground.tsx'),
   )
   const editor = monaco.editor.create(container, {
     model,
     theme: 'vs-dark',
     automaticLayout: true,
     readOnly,
-    ariaLabel: '入力JSX',
+    ariaLabel: '入力TypeScriptとJSX',
     fontSize: 13,
     lineHeight: 21,
     minimap: { enabled: false },
