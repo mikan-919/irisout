@@ -5,6 +5,7 @@ import { irisout } from 'irisout/vite'
 import { createControllerCsp, validateSeparateOrigins } from './src/playground/origin.js'
 
 const cacheDir = process.env.IRISOUT_VITE_CACHE_DIR
+const runtimeDependencyPath = `/@fs${path.resolve(import.meta.dirname, '../../packages/irisout/dist/runtime.js')}`
 
 function playgroundHeaders(): Plugin {
   let playgroundDevCsp = createControllerCsp(null)
@@ -23,16 +24,26 @@ function playgroundHeaders(): Plugin {
     },
     configureServer(server) {
       server.middlewares.use((request, response, next) => {
-        const pathname = request.url?.split('?')[0] ?? ''
-        if (pathname === '/playground-controller.html' || pathname.startsWith('/src/playground/')) {
+        const [pathname, search] = (request.url ?? '').split('?', 2)
+        if (pathname === '/playground/') {
+          response.statusCode = 308
+          response.setHeader('Location', `/playground${search ? `?${search}` : ''}`)
+          response.end()
+          return
+        }
+        // playground.htmlは共有ページの接続用なので、編集画面にはトップのHTMLを使う。
+        if (pathname === '/playground') request.url = `/${search ? `?${search}` : ''}`
+        const runtimeResource = isPlaygroundRuntimeResource(pathname)
+        if (
+          pathname === '/playground-controller.html' ||
+          pathname.startsWith('/src/playground/') ||
+          runtimeResource
+        ) {
           response.setHeader('Content-Security-Policy', playgroundDevCsp)
           response.setHeader('Referrer-Policy', 'no-referrer')
           response.setHeader('X-Content-Type-Options', 'nosniff')
           response.setHeader('Permissions-Policy', 'camera=(), geolocation=(), microphone=()')
-          if (
-            pathname === '/src/playground/runtime.js' ||
-            pathname.startsWith('/node_modules/.vite/deps/')
-          ) {
+          if (runtimeResource) {
             response.setHeader('Access-Control-Allow-Origin', '*')
             response.setHeader('Cross-Origin-Resource-Policy', 'cross-origin')
           } else {
@@ -43,6 +54,14 @@ function playgroundHeaders(): Plugin {
       })
     },
   }
+}
+
+function isPlaygroundRuntimeResource(pathname: string) {
+  return (
+    pathname === '/src/playground/runtime.js' ||
+    pathname === runtimeDependencyPath ||
+    /^\/node_modules\/\.vite(?:-[^/]+)?\/deps\/irisout_runtime\.js$/.test(pathname)
+  )
 }
 
 // SSRと同じ解析結果からhydrate用moduleを作る。投稿sourceはこの入口へ渡さない。
