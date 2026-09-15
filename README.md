@@ -181,6 +181,75 @@ bun run build:packages
 bun run pack:smoke
 ```
 
+### ルートコマンド
+
+以下はすべてリポジトリのルートで実行します。開発サーバーやプレビューを終了するときは
+`Ctrl+C`を押してください。
+開発入口は`dev`一つで、対象は引数で選びます。
+
+#### 開発サーバー
+
+| コマンド                  | 用途                                                                                 |
+| ------------------------- | ------------------------------------------------------------------------------------ |
+| `bun run dev`             | `apps/demos`のCounterを起動する                                                      |
+| `bun run dev site`        | `apps/web`の公式サイトを起動する                                                     |
+| `bun run dev playground`  | 公式サイトと実行管理画面を別配信元で起動する                                         |
+| `bun run dev demo <名前>` | `counter`、`list`、`notes`、`heatmap`、`todomvc`、`multi-file`のデモを選んで起動する |
+| `bun run start`           | デモをbuildしてプレビューする                                                        |
+| `bun run dev --help`      | 開発入口の使い方を表示する                                                           |
+
+`bun run dev playground`は、公式サイトを`127.0.0.1:5173`、実行管理画面を
+`localhost:5174`で起動します。これは同じマシンでもhostnameを分けてCookieと実行権限の境界を
+保つためです。ポートを変える場合は、片方だけを変えず両方を指定してください。
+
+```sh
+IRISOUT_PLAYGROUND_SITE_PORT=45173 \
+IRISOUT_PLAYGROUND_CONTROLLER_PORT=45174 \
+bun run dev playground
+```
+
+#### 検査
+
+| コマンド                      | 用途                                                     |
+| ----------------------------- | -------------------------------------------------------- |
+| `bun run check`               | 整形、静的検査、全workspaceの型検査を行う                |
+| `bun run check:fix`           | 整形を修正してから全workspaceの型検査を行う              |
+| `bun run lint`                | lintだけを行う                                           |
+| `bun run typecheck`           | 整形とlintを省略して型検査を行う                         |
+| `bun run typecheck:tsc`       | root、デモ、利用者側検証用アプリ、公式サイトを型検査する |
+| `bun run typecheck:jsx`       | `apps/demos`のauthored JSXを型検査する                   |
+| `bun run typecheck:consumer`  | `fixtures/consumer-app`を型検査する                      |
+| `bun run typecheck:web`       | `apps/web`を型検査する                                   |
+| `bun run test`                | コンパイラと実DOMの試験を実行する                        |
+| `bun run site:test`           | 公式サイトの文書生成試験を実行する                       |
+| `bun run test:web:playground` | Playgroundのブラウザー試験を実行する                     |
+| `bun run test:web:server`     | Playgroundサーバーの接続試験を実行する                   |
+| `bun run test:web:save`       | Playground保存処理の試験を実行する                       |
+
+#### buildと梱包
+
+| コマンド                 | 用途                                                 |
+| ------------------------ | ---------------------------------------------------- |
+| `bun run build`          | `apps/demos`を`dist/`へbuildする                     |
+| `bun run build:inspect`  | 圧縮しないデモの生成物を`apps/demos/dist/`へ作る     |
+| `bun run site:build`     | 公式サイトの文書だけを生成する                       |
+| `bun run site:check`     | 文書と公式例の生成結果を検査する                     |
+| `bun run build:web`      | 文書、公式サイト、Playgroundの本番生成物を作る       |
+| `bun run build:packages` | 公開パッケージのJavaScriptと型定義を生成する         |
+| `bun run pack:smoke`     | ローカル梱包物を別アプリへ導入して検査する           |
+| `bun run registry:smoke` | npm公開版`irisout@0.2.2`を別アプリへ導入して検査する |
+
+#### ベンチマーク
+
+| コマンド                          | 用途                               |
+| --------------------------------- | ---------------------------------- |
+| `bun run bench`                   | TodoMVCの生成版とReact版を比較する |
+| `bun run bench:browser`           | TodoMVCのブラウザー比較を実行する  |
+| `bun run bench:todomvc-compiler`  | TodoMVCのコンパイラ出力を比較する  |
+| `bun run bench:heatmap`           | ヒートマップのWorker解析を測定する |
+| `bun run bench:list-runtime`      | Listの実行時処理を測定する         |
+| `bun run bench:listener-strategy` | イベントlistener方式を測定する     |
+
 `check`は整形、静的検査、TypeScriptとauthored JSXの型検査を実行します。デモと別アプリの
 型検査も含みます。`test`はVite+ Testによる試験を実行します。規約は
 [`docs/conventions.md`](./docs/conventions.md)を参照してください。
