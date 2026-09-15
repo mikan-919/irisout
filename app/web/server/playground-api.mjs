@@ -43,14 +43,25 @@ export function createPlaygroundApi({
   })
 
   return {
-    async handle(request) {
+    async handle(request, connection = {}) {
       const url = new URL(request.url)
       if (url.pathname === '/api/playgrounds' && request.method === 'POST') {
-        return handleSave(request, { store, origin, supportedVersions, rateLimiter })
+        return handleSave(request, {
+          store,
+          origin,
+          supportedVersions,
+          rateLimiter,
+          clientAddress: connection.clientAddress,
+        })
       }
       const idMatch = url.pathname.match(/^\/api\/playgrounds\/([^/]+)$/)
       if (idMatch && request.method === 'DELETE') {
-        return handleDelete(request, idMatch[1], { store, origin, rateLimiter })
+        return handleDelete(request, idMatch[1], {
+          store,
+          origin,
+          rateLimiter,
+          clientAddress: connection.clientAddress,
+        })
       }
       return null
     },
@@ -66,7 +77,7 @@ async function handleSave(request, context) {
   if (!isJsonContentType(request.headers.get('content-type'))) {
     return jsonError(415, 'application/jsonが必要です')
   }
-  const rateError = context.rateLimiter.check(request, 'save')
+  const rateError = context.rateLimiter.check(request, 'save', context.clientAddress)
   if (rateError) return rateError
 
   const token = readBearerToken(request.headers.get('authorization'))
@@ -102,7 +113,7 @@ async function handleDelete(request, id, context) {
   const originError = checkOrigin(request, context.origin)
   if (originError) return originError
   if (!PLAYGROUND_ID_PATTERN.test(id)) return jsonError(404, '共有が見つかりません')
-  const rateError = context.rateLimiter.check(request, 'delete')
+  const rateError = context.rateLimiter.check(request, 'delete', context.clientAddress)
   if (rateError) return rateError
   const token = readBearerToken(request.headers.get('authorization'))
   if (!token) return jsonError(404, '共有が見つかりません')
@@ -283,8 +294,10 @@ class RateLimiter {
     this.buckets = new Map()
   }
 
-  check(request, operation) {
-    const key = `${operation}:${request.headers.get('x-forwarded-for') ?? 'unknown'}`
+  check(_request, operation, clientAddress) {
+    // 接続元が取得できない試験用Requestは共有bucketへ入れない。
+    if (typeof clientAddress !== 'string' || clientAddress.length === 0) return null
+    const key = `${operation}:${clientAddress}`
     const current = this.now()
     const bucket = this.buckets.get(key) ?? { minute: [], day: [] }
     bucket.minute = bucket.minute.filter((timestamp) => current - timestamp < 60_000)

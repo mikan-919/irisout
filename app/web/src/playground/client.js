@@ -16,6 +16,7 @@ import {
   readPendingSave,
   savePlayground,
 } from './save-share.js'
+import { validateSeparateOrigins } from './origin.js'
 
 const DEFAULT_SOURCE = `export function Counter() {
   const count = signal(0)
@@ -70,54 +71,78 @@ export function setupPlayground(root) {
     return
   }
 
-  const controllerOrigin = resolveControllerOrigin()
-  const parentOrigin = location.origin
-  const controllerUrl = `${controllerOrigin}/playground-controller.html?parentOrigin=${encodeURIComponent(parentOrigin)}`
-  const controllerFrame = document.createElement('iframe')
-  controllerFrame.className = 'playground-controller'
-  controllerFrame.title = 'Playground実行管理画面'
-  controllerFrame.setAttribute('referrerpolicy', 'no-referrer')
-  controllerFrame.src = controllerUrl
-  resultElement.replaceChildren(controllerFrame)
-
   sourceElement.value = DEFAULT_SOURCE
+  let controllerOrigin = null
+  let executionError = ''
+  try {
+    controllerOrigin = resolveControllerOrigin()
+    validateSeparateOrigins(location.origin, controllerOrigin)
+  } catch (error) {
+    controllerOrigin = null
+    executionError = error instanceof Error ? error.message : String(error)
+    resultElement.textContent =
+      '実行管理画面を設定できないため実行できません。入力は保持されています。'
+  }
+
+  let controllerFrame = null
+  if (controllerOrigin) {
+    const parentOrigin = location.origin
+    const controllerUrl = `${controllerOrigin}/playground-controller.html?parentOrigin=${encodeURIComponent(parentOrigin)}`
+    controllerFrame = document.createElement('iframe')
+    controllerFrame.className = 'playground-controller'
+    controllerFrame.title = 'Playground実行管理画面'
+    controllerFrame.setAttribute('referrerpolicy', 'no-referrer')
+    controllerFrame.src = controllerUrl
+    resultElement.replaceChildren(controllerFrame)
+  } else {
+    runElement.disabled = true
+    stopElement.disabled = true
+    setStatus(executionError, 'error')
+  }
+
   let examples = []
   let loaded = false
   let nextRunNumber = 0
   let activeRunId = null
   let latestSave = null
 
-  controllerFrame.addEventListener('load', () => {
-    loaded = true
-    runElement.disabled = false
-    setStatus('実行できます')
-  })
-  window.addEventListener('message', (event) => {
-    if (
-      event.source !== controllerFrame.contentWindow ||
-      event.origin !== controllerOrigin ||
-      messageByteLength(event.data) > PLAYGROUND_MESSAGE_MAX_BYTES ||
-      !isStatusMessage(event.data) ||
-      event.data.runId !== activeRunId
-    ) {
-      return
-    }
-    const status = event.data
-    const label = {
-      compiling: '変換中です',
-      running: '実行中です',
-      success: '実行しました',
-      error: '実行できませんでした',
-      timeout: '時間超過で停止しました',
-      stopped: '停止しました',
-    }[status.status]
-    setStatus(status.message ? `${label}: ${status.message}` : label, status.status)
-    if (['success', 'error', 'timeout', 'stopped'].includes(status.status)) {
-      stopElement.disabled = true
-    }
-  })
+  if (controllerFrame && controllerOrigin) {
+    controllerFrame.addEventListener('load', () => {
+      loaded = true
+      runElement.disabled = false
+      setStatus('実行できます')
+    })
+    window.addEventListener('message', (event) => {
+      if (
+        event.source !== controllerFrame.contentWindow ||
+        event.origin !== controllerOrigin ||
+        messageByteLength(event.data) > PLAYGROUND_MESSAGE_MAX_BYTES ||
+        !isStatusMessage(event.data) ||
+        event.data.runId !== activeRunId
+      ) {
+        return
+      }
+      const status = event.data
+      const label = {
+        compiling: '変換中です',
+        running: '実行中です',
+        success: '実行しました',
+        error: '実行できませんでした',
+        timeout: '時間超過で停止しました',
+        stopped: '停止しました',
+      }[status.status]
+      setStatus(status.message ? `${label}: ${status.message}` : label, status.status)
+      if (['success', 'error', 'timeout', 'stopped'].includes(status.status)) {
+        stopElement.disabled = true
+      }
+    })
+  }
 
   runElement.addEventListener('click', () => {
+    if (!controllerFrame || !controllerOrigin) {
+      setStatus(executionError || '実行管理画面を設定できないため実行できません', 'error')
+      return
+    }
     if (!loaded) {
       setStatus('実行管理画面を読み込んでいます', 'error')
       return
@@ -141,7 +166,7 @@ export function setupPlayground(root) {
   })
 
   stopElement.addEventListener('click', () => {
-    if (!activeRunId) return
+    if (!activeRunId || !controllerFrame || !controllerOrigin) return
     postToController({
       type: 'irisout-playground/stop',
       version: PLAYGROUND_PROTOCOL_VERSION,
@@ -219,7 +244,7 @@ export function setupPlayground(root) {
   void loadExamples()
 
   function postToController(message) {
-    controllerFrame.contentWindow?.postMessage(message, controllerOrigin)
+    controllerFrame?.contentWindow?.postMessage(message, controllerOrigin ?? '')
   }
 
   function setStatus(message, state = '') {
@@ -263,9 +288,9 @@ export function setupPlayground(root) {
         shareElement.hidden = false
         deleteElement.disabled = false
       }
-      setStatus('実行できます')
+      setStatus(executionError || '実行できます', executionError ? 'error' : '')
     } catch {
-      setStatus('初期例を使っています')
+      setStatus(executionError || '初期例を使っています', executionError ? 'error' : '')
     }
   }
 
@@ -281,9 +306,9 @@ export function setupPlayground(root) {
 
   function resolveControllerOrigin() {
     const configured = import.meta.env.VITE_IRISOUT_PLAYGROUND_CONTROLLER_ORIGIN
-    if (typeof configured === 'string' && configured.length > 0) {
-      return new URL(configured, location.origin).origin
+    if (typeof configured !== 'string' || configured.trim().length === 0) {
+      throw new Error('実行管理Originが未設定のため実行できません')
     }
-    return location.origin
+    return new URL(configured).origin
   }
 }

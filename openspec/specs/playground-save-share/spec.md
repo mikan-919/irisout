@@ -57,13 +57,21 @@ title 120 Unicode code points、description 1000 Unicode code pointsの上限を
 ### Requirement: 保存先障害と頻度制限
 
 APIは初期値として保存10回/分・100回/日、削除30回/分の頻度制限を持ち、超過時に`429`と
-`Retry-After`を返さなければならない(SHALL)。SQLiteを利用できない場合は`503`を返し、
-保存成功や404へ置き換えてはならない(SHALL NOT)。共有APIの成功・失敗応答には`no-store`を付ける。
+`Retry-After`を返さなければならない(SHALL)。頻度制限のキーはBunが取得した実接続元、または
+明示した信頼済みプロキシから検証した値だけを使い、利用者入力の`X-Forwarded-For`を直接信用しては
+ならない(SHALL NOT)。接続元を取得できない場合は全利用者で共有する`unknown`キーへ集約してはならない
+(SHALL NOT)。SQLiteを利用できない場合は`503`を返し、保存成功や404へ置き換えてはならない(SHALL NOT)。
+共有APIの成功・失敗応答には`no-store`を付ける。
 
 #### Scenario: 保存先停止
 
 - **WHEN** SQLiteが停止中に保存または削除を要求する
 - **THEN** `503`が返り、ブラウザ側の入力と未完了の保存要求は保持される
+
+#### Scenario: 偽の転送元情報
+
+- **WHEN** 同じ実接続元から異なる`X-Forwarded-For`を付けて保存要求を送る
+- **THEN** 転送元情報を変えても同じ頻度制限へ入り、上限超過時は`429`になる
 
 ### Requirement: 管理鍵の保管境界
 

@@ -6,6 +6,7 @@ import path from 'node:path'
 import { PlaygroundStore } from './playground-store.mjs'
 import { createPlaygroundApi } from './playground-api.mjs'
 import { createPlaygroundPageHandler } from './playground-ssr.mjs'
+import { parseTrustedProxyAddresses, resolveClientAddress } from './client-address.mjs'
 
 const root = path.resolve(import.meta.dirname, '../dist')
 const dataDirectory = path.resolve(
@@ -15,6 +16,7 @@ const databasePath = path.join(dataDirectory, 'playgrounds.sqlite')
 const port = Number(process.env.PORT ?? 3000)
 const host = process.env.HOST ?? '127.0.0.1'
 const officialOrigin = process.env.IRISOUT_SITE_ORIGIN ?? `http://${host}:${port}`
+const trustedProxyAddresses = parseTrustedProxyAddresses(process.env.IRISOUT_TRUSTED_PROXY)
 
 await mkdir(dataDirectory, { recursive: true })
 const store = new PlaygroundStore(databasePath)
@@ -36,7 +38,14 @@ const server = Bun.serve({
   async fetch(request) {
     const pageResponse = await playgroundPage(request)
     if (pageResponse) return pageResponse
-    const apiResponse = await api.handle(request)
+    const socketAddress = server.requestIP(request)?.address
+    const apiResponse = await api.handle(request, {
+      clientAddress: resolveClientAddress({
+        socketAddress,
+        forwardedFor: request.headers.get('x-forwarded-for'),
+        trustedProxyAddresses,
+      }),
+    })
     if (apiResponse) return apiResponse
     return serveStatic(request)
   },

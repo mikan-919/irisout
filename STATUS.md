@@ -91,6 +91,12 @@ linkerが含まれないことを依存検査で確認した。静的・動的im
 CSPにはコンパイラが`new Function()`を使うため`unsafe-eval`が必要であり、これはWorkerを含む配信元へ
 限定する。共有機能を公開する前に、実運用の隔離配信元へ同じヘッダーとブラウザー試験を適用する。
 
+同日に隔離配信の設定境界を修正した。実行管理Originの未設定時フォールバックを削除し、公式Originと
+異なるhostnameを必須にした。実行管理CSPの`frame-ancestors`は正規化した公式Originから生成し、
+許可Originと拒否Originの埋込みをChromiumで確認する。保存APIの頻度制限はBunの実接続元を使い、
+信頼済みプロキシを明示した場合だけ検証済み`X-Forwarded-For`を使う。利用者入力の転送元情報は
+直接信用せず、接続元が取得できない要求を共通`unknown`へ集約しない。
+
 同日に共有保存の内部接続を実装した。`app/web/server`のBunサーバーは組込みSQLiteへ単一JSXの
 タイトル、説明、source、compilerVersion、限定公開の値をスナップショットとして保存し、保存ごとに
 128ビットのIDを発行する。管理鍵はブラウザで256ビット乱数から生成し、SQLiteにはSHA-256ハッシュだけを
@@ -154,8 +160,9 @@ Vite+でビルドし、Bunサーバーは`/playground/:id`の要求ごとにSQLi
   DOM探索、一覧照合、自動生成した更新関数には一対一の元構文がないため対応しない。
 - Playgroundは単一`.jsx`とブラウザーが提供する組込み機能だけを受け付け、任意のnpm依存と複数
   ファイルは対象外である。共有ページのSSR経路は内部実装済みだが、本番用の保存期間・バックアップ・
-  送信元情報の運用値は未確定である。実行管理画面は保存APIを持たない別配信元へ置き、
-  実運用のCSP `frame-ancestors`、runtime資産のCORS、Workerを含む配信ヘッダーを環境ごとに固定する。
+  送信元情報の運用値は未確定である。実行管理画面は保存APIを持たない別hostnameの配信元へ置き、
+  Cookie Domainを共有しない。実行管理Originは本番設定で必須とし、実運用のCSP `frame-ancestors`、
+  runtime資産のCORS、Workerを含む配信ヘッダーを環境ごとに固定する。
 
 対応範囲の詳細と拒否例は`docs/getting-started.md`、`docs/architecture.md`、
 `openspec/specs/`を参照する。

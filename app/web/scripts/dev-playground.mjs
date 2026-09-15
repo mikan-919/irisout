@@ -23,9 +23,11 @@ function start(args, env) {
 
 start(['-C', 'app/web', 'dev', '--host', '127.0.0.1', '--port', '5173'], {
   VITE_IRISOUT_PLAYGROUND_CONTROLLER_ORIGIN: 'http://localhost:5174',
+  VITE_IRISOUT_PLAYGROUND_SITE_ORIGIN: 'http://127.0.0.1:5173',
 })
 start(['-C', 'app/web', 'dev', '--host', 'localhost', '--port', '5174'], {
   VITE_IRISOUT_PLAYGROUND_CONTROLLER_ORIGIN: 'http://localhost:5174',
+  VITE_IRISOUT_PLAYGROUND_SITE_ORIGIN: 'http://127.0.0.1:5173',
 })
 
 function stop() {

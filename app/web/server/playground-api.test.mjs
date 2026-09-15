@@ -148,6 +148,36 @@ describe('playground save API', () => {
     assert.equal(unavailable.status, 503)
   })
 
+  test('利用者入力のX-Forwarded-Forで頻度制限を回避できない', async () => {
+    const { api } = await createFixture({
+      limits: { savePerMinute: 1, savePerDay: 1 },
+    })
+    const first = await save(api, makeInput(), createManagementKey(), {
+      clientAddress: '192.0.2.10',
+      forwardedFor: '198.51.100.10',
+    })
+    assert.equal(first.status, 201)
+    const second = await save(api, makeInput(), createManagementKey(), {
+      clientAddress: '192.0.2.10',
+      forwardedFor: '203.0.113.10',
+    })
+    assert.equal(second.status, 429)
+  })
+
+  test('接続元が未取得でも全利用者をunknownへ集約しない', async () => {
+    const { api } = await createFixture({
+      limits: { savePerMinute: 1, savePerDay: 1 },
+    })
+    assert.equal(
+      (await save(api, makeInput(), createManagementKey(), { clientAddress: null })).status,
+      201,
+    )
+    assert.equal(
+      (await save(api, makeInput(), createManagementKey(), { clientAddress: null })).status,
+      201,
+    )
+  })
+
   test('副作用を含むsourceをサーバーで実行しない', async () => {
     const { api, store } = await createFixture()
     const marker = path.join(await mkdtemp(path.join(os.tmpdir(), 'irisout-side-effect-')), 'ran')
@@ -192,16 +222,21 @@ function makeInput(overrides = {}) {
 }
 
 function save(api, input, token, options = {}) {
+  const headers = {
+    origin: options.origin ?? officialOrigin,
+    authorization: `Bearer ${token}`,
+    'content-type': 'application/json',
+  }
+  if (options.forwardedFor) headers['x-forwarded-for'] = options.forwardedFor
   return api.handle(
     new Request(`${officialOrigin}/api/playgrounds`, {
       method: 'POST',
-      headers: {
-        origin: options.origin ?? officialOrigin,
-        authorization: `Bearer ${token}`,
-        'content-type': 'application/json',
-      },
+      headers,
       body: JSON.stringify(input),
     }),
+    {
+      clientAddress: Object.hasOwn(options, 'clientAddress') ? options.clientAddress : '192.0.2.1',
+    },
   )
 }
 

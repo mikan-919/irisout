@@ -7,17 +7,27 @@
 
 ### Requirement: 実行権限の分離
 
-実行管理画面は公式サイトと別配信元で提供し、投稿実行環境へ公式サイトのCookie、管理鍵、保存APIの権限を渡してはならない(SHALL NOT)。
+実行管理画面は公式サイトと別配信元で提供し、投稿実行環境へ公式サイトのCookie、管理鍵、保存APIの権限を渡してはならない(SHALL NOT)。公式Originと実行管理Originは設定値をOriginへ正規化したうえで異なるhostnameにし、本番の実行管理Originを省略してはならない(SHALL)。設定不足または同一hostnameを検出した場合、sourceを保持したまま実行だけを無効にしなければならない(SHALL)。Cookie Domainは両配信元で共有してはならない(SHALL NOT)。
 
 #### Scenario: 投稿実行時の権限検査
 
 - **WHEN** 投稿JSXを実行する
 - **THEN** 実行管理画面と結果iframeから公式サイトのCookie、管理鍵、保存APIへアクセスできない
 
+#### Scenario: 配信元設定不足
+
+- **WHEN** 実行管理Originが未設定、形式不正、または公式Originと同じhostnameである
+- **THEN** sourceを失わず、実行管理iframeを作らず、実行不可の理由を表示する
+
 #### Scenario: 配信ヘッダーの検査
 
 - **WHEN** 実行管理画面を別配信元から読み込む
 - **THEN** `Content-Security-Policy`、`Referrer-Policy`、`X-Content-Type-Options`、`Permissions-Policy`が応答にあり、実行管理画面へ保存APIの経路がない
+
+#### Scenario: frame-ancestorsのOrigin検査
+
+- **WHEN** 検証済みの公式Originから実行管理画面を埋め込む、または別Originから埋め込む
+- **THEN** 前者だけが表示され、`frame-ancestors`は固定localhostではなく正規化済みの公式Originを含み、別Originからの表示は拒否される
 
 ### Requirement: 実行単位の破棄
 

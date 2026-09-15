@@ -2,24 +2,23 @@ import path from 'node:path'
 import { defineConfig, type Plugin } from 'vite-plus'
 import { compileProject, type CompileResult } from 'irisout'
 import { irisout } from 'irisout/vite'
-
-const playgroundDevCsp = [
-  "default-src 'none'",
-  "script-src 'self' data: 'unsafe-inline' 'unsafe-eval'",
-  "worker-src 'self' blob:",
-  "style-src 'self' 'unsafe-inline'",
-  "frame-src 'self'",
-  "connect-src 'self' ws:",
-  "img-src 'none'",
-  "object-src 'none'",
-  "base-uri 'none'",
-  "form-action 'none'",
-  'frame-ancestors http://127.0.0.1:* http://localhost:*',
-].join('; ')
+import { createControllerCsp, validateSeparateOrigins } from './src/playground/origin.js'
 
 function playgroundHeaders(): Plugin {
+  let playgroundDevCsp = createControllerCsp(null)
   return {
     name: 'irisout-playground-headers',
+    configResolved(config) {
+      const siteOrigin = config.env.VITE_IRISOUT_PLAYGROUND_SITE_ORIGIN
+      const controllerOrigin = config.env.VITE_IRISOUT_PLAYGROUND_CONTROLLER_ORIGIN
+      if (typeof siteOrigin === 'string' && typeof controllerOrigin === 'string') {
+        playgroundDevCsp = createControllerCsp(
+          validateSeparateOrigins(siteOrigin, controllerOrigin).siteOrigin,
+        )
+      } else if (typeof siteOrigin === 'string') {
+        playgroundDevCsp = createControllerCsp(siteOrigin)
+      }
+    },
     configureServer(server) {
       server.middlewares.use((request, response, next) => {
         const pathname = request.url?.split('?')[0] ?? ''

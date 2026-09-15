@@ -18,10 +18,13 @@ Playgroundの実行管理画面を公式サイトと別配信元で起動する�
 bun run dev:web:playground
 ```
 
-公式サイトは`127.0.0.1:5173`、実行管理画面は`localhost:5174`で起動します。実行管理画面は
+公式サイトは`127.0.0.1:5173`、実行管理画面は`localhost:5174`で起動します。Cookieを共有しないよう
+hostnameを分けています。実行管理画面は
 保存APIや管理鍵を持たず、親画面から受け取るのは単一JSX、コンパイラー版、実行番号だけです。
 投稿JSXは実行ごとのWorkerで変換し、結果は`sandbox="allow-scripts"`のiframeへ表示します。
-実運用では`VITE_IRISOUT_PLAYGROUND_CONTROLLER_ORIGIN`へ隔離配信元を指定し、
+実運用では`VITE_IRISOUT_PLAYGROUND_SITE_ORIGIN`へ公式Origin、
+`VITE_IRISOUT_PLAYGROUND_CONTROLLER_ORIGIN`へ隔離配信元をそれぞれOriginだけで指定します。
+未設定または同じhostnameの場合はsourceを残して実行を無効にします。Cookie Domainを両配信元で共有しないでください。
 `bun run test:web:playground`でCSP、応答ヘッダー、Cookie境界、停止と再実行をChromiumで確認します。
 
 本番生成物は次で作成します。
@@ -48,6 +51,10 @@ IRISOUT_PLAYGROUND_DATABASE=restored.sqlite \
 IRISOUT_PLAYGROUND_DELETION_LOG=deletions.json \
 bun server/playground-backup.mjs apply
 ```
+
+保存APIの頻度制限は、Bunが取得した実接続元をキーにします。プロキシを使う場合だけ、
+`IRISOUT_TRUSTED_PROXY`へ信頼するプロキシのIPを指定し、検証した`X-Forwarded-For`を使います。
+この設定がない場合、利用者が送った`X-Forwarded-For`は無視されます。
 
 `build:web`は先に`docs/getting-started.md`と登録済み公式例を検査し、`/docs`と
 `/docs/:slug`の静的HTML、目次、前後リンク、検索索引を`app/web/public/docs`へ生成します。

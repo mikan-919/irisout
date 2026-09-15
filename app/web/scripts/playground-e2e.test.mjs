@@ -34,12 +34,15 @@ function chromiumPath() {
 }
 
 function buildSite(controllerOrigin) {
+  const environment = { ...process.env }
+  if (controllerOrigin === undefined) {
+    delete environment.VITE_IRISOUT_PLAYGROUND_CONTROLLER_ORIGIN
+  } else {
+    environment.VITE_IRISOUT_PLAYGROUND_CONTROLLER_ORIGIN = controllerOrigin
+  }
   execFileSync('bun', ['run', 'build:web'], {
     cwd: projectRoot,
-    env: {
-      ...process.env,
-      VITE_IRISOUT_PLAYGROUND_CONTROLLER_ORIGIN: controllerOrigin,
-    },
+    env: environment,
     stdio: 'inherit',
   })
 }
@@ -68,13 +71,6 @@ async function resultFrame(page) {
   throw new Error('結果iframeがありません')
 }
 
-const controller = createPlaygroundServer({
-  root: distRoot,
-  kind: 'controller',
-  host: 'localhost',
-  port: controllerPort,
-})
-const controllerAddress = await controller.listen()
 const site = createPlaygroundServer({
   root: distRoot,
   kind: 'site',
@@ -82,6 +78,21 @@ const site = createPlaygroundServer({
   port: sitePort,
 })
 const siteAddress = await site.listen()
+const controller = createPlaygroundServer({
+  root: distRoot,
+  kind: 'controller',
+  host: 'localhost',
+  port: controllerPort,
+  officialOrigin: siteAddress.origin,
+})
+const controllerAddress = await controller.listen()
+const attacker = createPlaygroundServer({
+  root: distRoot,
+  kind: 'site',
+  host: 'localhost',
+  port: 0,
+})
+const attackerAddress = await attacker.listen()
 
 try {
   buildSite(controllerAddress.origin)
@@ -117,7 +128,31 @@ try {
     assert.match(csp, /default-src 'none'/)
     assert.match(csp, /worker-src 'self' blob:/)
     assert.match(csp, /connect-src 'none'/)
+    assert.match(
+      csp,
+      new RegExp(
+        `frame-ancestors ${siteAddress.origin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:;|$)`,
+      ),
+    )
+    assert.doesNotMatch(csp, /frame-ancestors .*localhost/)
     assert.equal(controllerHeaders.headers()['referrer-policy'], 'no-referrer')
+    const controllerApi = await context.request.get(controllerAddress.origin + '/api/playgrounds')
+    assert.equal(controllerApi.status(), 404)
+    assert.equal(controllerHeaders.headers()['set-cookie'], undefined)
+
+    const deniedPage = await context.newPage()
+    await deniedPage.goto(attackerAddress.origin, { waitUntil: 'domcontentloaded' })
+    await deniedPage.evaluate((origin) => {
+      const iframe = document.createElement('iframe')
+      iframe.src = `${origin}/playground-controller.html`
+      document.body.append(iframe)
+    }, controllerAddress.origin)
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    assert.equal(
+      deniedPage.frames().some((frame) => frame.url().startsWith(controllerAddress.origin)),
+      false,
+    )
+    await deniedPage.close()
 
     await run.click()
     await waitForText(status, '実行しました')
@@ -229,6 +264,32 @@ try {
     await waitForText(status, '実行しました')
     assert.equal(await (await resultFrame(page)).locator('p').textContent(), '停止後の再実行')
     await page.close()
+
+    buildSite(siteAddress.origin)
+    const sameHostPage = await context.newPage()
+    await sameHostPage.goto(siteAddress.origin, { waitUntil: 'networkidle' })
+    const sameHostStatus = sameHostPage.locator('[data-playground-status]')
+    await waitForText(sameHostStatus, '異なるhostname')
+    assert.equal(await sameHostPage.locator('[data-playground-run]').isDisabled(), true)
+    assert.match(
+      await sameHostPage.locator('[data-playground-source]').inputValue(),
+      /export function/,
+    )
+    assert.equal(await sameHostPage.locator('.playground-controller').count(), 0)
+    await sameHostPage.close()
+
+    buildSite(undefined)
+    const missingConfigPage = await context.newPage()
+    await missingConfigPage.goto(siteAddress.origin, { waitUntil: 'networkidle' })
+    await waitForText(missingConfigPage.locator('[data-playground-status]'), '未設定')
+    assert.equal(await missingConfigPage.locator('[data-playground-run]').isDisabled(), true)
+    assert.match(
+      await missingConfigPage.locator('[data-playground-source]').inputValue(),
+      /export function/,
+    )
+    assert.equal(await missingConfigPage.locator('.playground-controller').count(), 0)
+    await missingConfigPage.close()
+
     await context.close()
   } finally {
     await browser.close()
@@ -236,6 +297,7 @@ try {
 } finally {
   await site.close()
   await controller.close()
+  await attacker.close()
 }
 
 console.log('playground isolated execution browser test passed')
