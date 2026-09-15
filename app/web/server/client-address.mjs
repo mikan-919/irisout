@@ -1,6 +1,7 @@
 // Bunの接続元を頻度制限へ渡す。Forwarded系ヘッダーは信頼済みプロキシ経由だけで使う。
 import { isIP } from 'node:net'
 
+/** @param {string | undefined} value @returns {Set<string>} */
 export function parseTrustedProxyAddresses(value = '') {
   if (typeof value !== 'string' || value.trim() === '') return new Set()
   const addresses = value.split(',').map((entry) => normalizeIp(entry.trim()))
@@ -10,6 +11,10 @@ export function parseTrustedProxyAddresses(value = '') {
   return new Set(addresses)
 }
 
+/**
+ * @param {{ socketAddress?: string; forwardedFor?: string; trustedProxyAddresses?: Set<string> }} options
+ * @returns {string | null}
+ */
 export function resolveClientAddress({
   socketAddress,
   forwardedFor,

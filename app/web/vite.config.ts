@@ -1,12 +1,52 @@
+import { randomBytes } from 'node:crypto'
 import path from 'node:path'
-import { defineConfig, type Plugin } from 'vite-plus'
+import type { IncomingMessage } from 'node:http'
+import { defineConfig, type Plugin, type ViteDevServer } from 'vite-plus'
 import { compileProject, type CompileResult } from 'irisout'
 import { irisout } from 'irisout/vite'
+import { PLAYGROUND_BODY_MAX_BYTES, createPlaygroundApi } from './server/playground-api.mjs'
+import { parseTrustedProxyAddresses, resolveClientAddress } from './server/client-address.mjs'
 import { createControllerCsp, validateSeparateOrigins } from './src/playground/origin.js'
 
 const cacheDir = process.env.IRISOUT_VITE_CACHE_DIR
 const developmentRole = process.env.IRISOUT_PLAYGROUND_DEV_ROLE
 const runtimeDependencyPath = `/@fs${path.resolve(import.meta.dirname, '../../packages/irisout/dist/runtime.js')}`
+
+type DevelopmentPlaygroundInput = {
+  schemaVersion: number
+  title: string
+  description: string
+  source: string
+  compilerVersion: string
+  visibility: string
+  requestId: string
+}
+
+type DevelopmentPlaygroundRecord = {
+  id: string
+  input: DevelopmentPlaygroundInput
+  deleteToken: string
+  createdAt: string
+  deletedAt: string | null
+}
+
+type DevelopmentPlaygroundStore = {
+  save(options: {
+    input: DevelopmentPlaygroundInput
+    deleteToken: string
+    now?: Date
+  }):
+    | { kind: 'created' | 'existing'; id: string; createdAt: string }
+    | { kind: 'not-found' | 'deleted' | 'conflict' }
+  delete(id: string, deleteToken: string): 'not-found' | 'deleted'
+}
+
+type CreatePlaygroundApi = (options: {
+  store: DevelopmentPlaygroundStore
+  officialOrigin: string
+}) => ReturnType<typeof createPlaygroundApi>
+
+const createPlaygroundApiForDevelopment = createPlaygroundApi as unknown as CreatePlaygroundApi
 
 function playgroundHeaders(): Plugin {
   let playgroundDevCsp = createControllerCsp(null)
@@ -68,6 +108,154 @@ function playgroundHeaders(): Plugin {
       })
     },
   }
+}
+
+export function playgroundSaveApi(): Plugin {
+  let configuredSiteOrigin: string | null = null
+
+  return {
+    name: 'irisout-playground-save-api',
+    apply: 'serve',
+    configResolved(config) {
+      const value = config.env.VITE_IRISOUT_PLAYGROUND_SITE_ORIGIN
+      configuredSiteOrigin =
+        typeof value === 'string' && value.trim().length > 0 ? new URL(value).origin : null
+    },
+    configureServer(server) {
+      // 実行管理Originには保存APIとSQLiteを置かない。
+      if (process.env.IRISOUT_PLAYGROUND_DEV_ROLE === 'controller') return
+
+      const store = createDevelopmentPlaygroundStore()
+      const apiByOrigin = new Map<string, ReturnType<typeof createPlaygroundApi>>()
+      const trustedProxyAddresses = parseTrustedProxyAddresses(process.env.IRISOUT_TRUSTED_PROXY)
+
+      server.middlewares.use(async (request, response, next) => {
+        if (!isPlaygroundApiRequest(request)) {
+          next()
+          return
+        }
+
+        try {
+          const officialOrigin = configuredSiteOrigin ?? requestOrigin(request, server)
+          let api = apiByOrigin.get(officialOrigin)
+          if (!api) {
+            api = createPlaygroundApiForDevelopment({ store, officialOrigin })
+            apiByOrigin.set(officialOrigin, api)
+          }
+          const fetchRequest = await createFetchRequest(request, server)
+          const result = await api.handle(fetchRequest, {
+            clientAddress: resolveClientAddress({
+              socketAddress: request.socket?.remoteAddress ?? request.connection?.remoteAddress,
+              forwardedFor: headerValue(request.headers['x-forwarded-for']),
+              trustedProxyAddresses,
+            }),
+          })
+          if (!result) {
+            next()
+            return
+          }
+          response.statusCode = result.status
+          result.headers.forEach((value: string, name: string) => response.setHeader(name, value))
+          response.end(Buffer.from(await result.arrayBuffer()))
+        } catch {
+          response.statusCode = 500
+          response.setHeader('content-type', 'application/json; charset=utf-8')
+          response.end(JSON.stringify({ error: '保存APIでエラーが発生しました' }))
+        }
+      })
+    },
+  }
+}
+
+function createDevelopmentPlaygroundStore() {
+  // ponytail: 開発再起動で消えるメモリ保存。永続確認はBunサーバーで行う。
+  const records = new Map<string, DevelopmentPlaygroundRecord>()
+  const store: DevelopmentPlaygroundStore = {
+    save({ input, deleteToken, now = new Date() }) {
+      const existing = [...records.values()].find(
+        (record) => record.input.requestId === input.requestId,
+      )
+      if (existing) {
+        if (existing.deleteToken !== deleteToken) return { kind: 'not-found' }
+        if (existing.deletedAt !== null) return { kind: 'deleted' }
+        if (!samePlaygroundInput(existing.input, input)) return { kind: 'conflict' }
+        return { kind: 'existing', id: existing.id, createdAt: existing.createdAt }
+      }
+
+      const record = {
+        id: randomBytes(16).toString('base64url'),
+        input,
+        deleteToken,
+        createdAt: now.toISOString(),
+        deletedAt: null,
+      }
+      records.set(record.id, record)
+      return { kind: 'created', id: record.id, createdAt: record.createdAt }
+    },
+    delete(id, deleteToken) {
+      const record = records.get(id)
+      if (!record || record.deleteToken !== deleteToken) return 'not-found'
+      if (record.deletedAt !== null) return 'deleted'
+      record.deletedAt = new Date().toISOString()
+      return 'deleted'
+    },
+  }
+  return store
+}
+
+function samePlaygroundInput(left: DevelopmentPlaygroundInput, right: DevelopmentPlaygroundInput) {
+  return (
+    left.schemaVersion === right.schemaVersion &&
+    left.title === right.title &&
+    left.description === right.description &&
+    left.source === right.source &&
+    left.compilerVersion === right.compilerVersion &&
+    left.visibility === right.visibility &&
+    left.requestId === right.requestId
+  )
+}
+
+function isPlaygroundApiRequest(request: IncomingMessage) {
+  if (request.method !== 'POST' && request.method !== 'DELETE') return false
+  const pathname = new URL(request.url ?? '/', 'http://playground.local').pathname
+  return pathname === '/api/playgrounds' || /^\/api\/playgrounds\/[^/]+$/.test(pathname)
+}
+
+function requestOrigin(request: IncomingMessage, server: ViteDevServer) {
+  const host = request.headers.host
+  if (!host) throw new Error('開発サーバーのHostがありません')
+  const protocol = server.config.server.https ? 'https' : 'http'
+  return new URL(`${protocol}://${host}`).origin
+}
+
+async function createFetchRequest(request: IncomingMessage, server: ViteDevServer) {
+  const host = request.headers.host
+  if (!host) throw new Error('開発サーバーのHostがありません')
+  const protocol = server.config.server.https ? 'https' : 'http'
+  const headers = new Headers()
+  for (const [name, value] of Object.entries(request.headers)) {
+    if (value !== undefined) headers.set(name, Array.isArray(value) ? value.join(', ') : value)
+  }
+  const chunks: Buffer[] = []
+  let total = 0
+  for await (const chunk of request) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+    total += buffer.byteLength
+    if (total <= PLAYGROUND_BODY_MAX_BYTES) chunks.push(buffer)
+  }
+  const body =
+    total > PLAYGROUND_BODY_MAX_BYTES
+      ? new Uint8Array(PLAYGROUND_BODY_MAX_BYTES + 1)
+      : Buffer.concat(chunks, total)
+  return new Request(new URL(request.url ?? '/', `${protocol}://${host}`), {
+    method: request.method,
+    headers,
+    body,
+  })
+}
+
+function headerValue(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value.join(', ') : value
 }
 
 export function playgroundDevelopmentRedirect(
@@ -136,6 +324,7 @@ export default defineConfig({
     irisout({ entry: 'src/App.jsx', container: '#app' }),
     playgroundPageClient(),
     playgroundHeaders(),
+    playgroundSaveApi(),
   ],
   build: {
     outDir: 'dist',

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import path from 'node:path'
 import { test } from 'bun:test'
 import * as irisoutRuntime from 'irisout/runtime'
-import config, { playgroundDevelopmentRedirect } from '../vite.config.ts'
+import config, { playgroundDevelopmentRedirect, playgroundSaveApi } from '../vite.config.ts'
 import * as playgroundRuntime from '../src/playground/runtime.js'
 
 test('開発用Playgroundの経路と実行時処理を接続する', () => {
@@ -70,6 +70,107 @@ test('開発用Playgroundの経路と実行時処理を接続する', () => {
   )
 })
 
+test('開発用公式Originは保存APIを持ち、実行管理Originは持たない', async () => {
+  const plugin = playgroundSaveApi()
+  let middleware
+  plugin.configResolved({
+    root: path.resolve(import.meta.dirname, '..'),
+    env: {},
+  })
+  plugin.configureServer({
+    config: { server: { https: false } },
+    middlewares: {
+      use(candidate) {
+        middleware = candidate
+      },
+    },
+  })
+  assert.equal(typeof middleware, 'function')
+
+  const input = {
+    schemaVersion: 1,
+    title: '開発用',
+    description: '',
+    source: 'export function App() { render(<p />) }',
+    compilerVersion: '0.2.2',
+    visibility: 'unlisted',
+    requestId: '123e4567-e89b-42d3-a456-426614174003',
+  }
+  const token = 'a'.repeat(43)
+  const first = await callMiddleware(middleware, {
+    method: 'POST',
+    url: '/api/playgrounds',
+    body: input,
+    token,
+  })
+  assert.equal(first.statusCode, 201)
+  const saved = JSON.parse(first.body)
+
+  const retry = await callMiddleware(middleware, {
+    method: 'POST',
+    url: '/api/playgrounds',
+    body: input,
+    token,
+  })
+  assert.equal(retry.statusCode, 200)
+  assert.equal(JSON.parse(retry.body).id, saved.id)
+
+  const previousRole = process.env.IRISOUT_PLAYGROUND_DEV_ROLE
+  process.env.IRISOUT_PLAYGROUND_DEV_ROLE = 'controller'
+  try {
+    const controllerPlugin = playgroundSaveApi()
+    let controllerMiddleware
+    controllerPlugin.configureServer({
+      config: { server: { https: false } },
+      middlewares: {
+        use(candidate) {
+          controllerMiddleware = candidate
+        },
+      },
+    })
+    assert.equal(controllerMiddleware, undefined)
+  } finally {
+    if (previousRole === undefined) delete process.env.IRISOUT_PLAYGROUND_DEV_ROLE
+    else process.env.IRISOUT_PLAYGROUND_DEV_ROLE = previousRole
+  }
+})
+
 function response(setHeader = () => {}) {
   return { setHeader, end() {}, statusCode: 200 }
+}
+
+async function callMiddleware(middleware, { method, url, body, token }) {
+  const result = { statusCode: 200, headers: new Map(), body: '' }
+  const request = {
+    method,
+    url,
+    headers: {
+      host: '127.0.0.1:5173',
+      origin: 'http://127.0.0.1:5173',
+      authorization: `Bearer ${token}`,
+      'content-type': 'application/json',
+    },
+    socket: { remoteAddress: '127.0.0.1' },
+    async *[Symbol.asyncIterator]() {
+      if (body !== undefined) yield Buffer.from(JSON.stringify(body))
+    },
+  }
+  const output = {
+    get statusCode() {
+      return result.statusCode
+    },
+    set statusCode(value) {
+      result.statusCode = value
+    },
+    setHeader(name, value) {
+      result.headers.set(name, value)
+    },
+    end(value) {
+      result.body = Buffer.from(value ?? '').toString()
+    },
+  }
+  await middleware(request, output, () => {
+    throw new Error('保存APIが要求を処理しませんでした')
+  })
+  return result
 }

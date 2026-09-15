@@ -21,6 +21,8 @@ bun run dev:web:playground
 公式サイトは`127.0.0.1:5173`、実行管理画面は`localhost:5174`で起動します。Cookieを共有しないよう
 hostnameを分けています。実行管理画面は
 保存APIや管理鍵を持たず、親画面から受け取るのは単一JSX、コンパイラー版、実行番号だけです。
+公式サイト側のVite+開発サーバーは保存APIを持ちますが、保存値は開発プロセス内だけに保持します。再起動後も
+保存値を残す場合は本番用Bunサーバーを使います。
 投稿JSXは実行ごとのWorkerで変換し、結果は`sandbox="allow-scripts"`のiframeへ表示します。
 編集欄にはMonaco Editorを使います。トップ画面の初期表示には含めず、Playgroundの初期化時に
 JavaScript・JSX用の言語機能と作業スレッドを読み込みます。読込みに失敗した場合は元の
