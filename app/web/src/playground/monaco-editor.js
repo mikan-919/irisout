@@ -58,7 +58,9 @@ monaco.languages.setMonarchTokensProvider('typescript', {
   },
 })
 
-export function createSourceEditor(container, { value, readOnly, onChange }) {
+export async function createSourceEditor(container, { value, readOnly, onChange }) {
+  // 言語機能の失敗をtextareaを隠す前に検出し、client.jsの退避処理へ渡す。
+  await import('monaco-editor/languages/features/typescript/tsMode.js')
   container.hidden = false
   const model = monaco.editor.createModel(
     value,

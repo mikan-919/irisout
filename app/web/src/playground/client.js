@@ -87,8 +87,8 @@ export function setupPlayground(root) {
 
   let sourceEditor = null
   void import('./monaco-editor.js')
-    .then(({ createSourceEditor }) => {
-      sourceEditor = createSourceEditor(monacoElement, {
+    .then(async ({ createSourceEditor }) => {
+      sourceEditor = await createSourceEditor(monacoElement, {
         value: sourceElement.value,
         readOnly: sourceElement.readOnly,
         onChange(value) {

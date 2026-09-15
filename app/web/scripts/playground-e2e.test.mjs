@@ -525,6 +525,16 @@ export function Edited(props: ButtonProps) {
     await editorFallbackPage.unroute('**/api/playgrounds')
     await editorFallbackPage.close()
 
+    const languageFallbackPage = await context.newPage()
+    await languageFallbackPage.route('**/assets/tsMode-*.js', (route) => route.abort())
+    await languageFallbackPage.goto(siteAddress.origin, { waitUntil: 'networkidle' })
+    await waitForText(languageFallbackPage.locator('[data-playground-status]'), '実行できます')
+    const languageFallbackSource = languageFallbackPage.locator('[data-playground-source]')
+    assert.equal(await languageFallbackSource.isVisible(), true)
+    assert.match(await languageFallbackSource.inputValue(), /export function/)
+    assert.equal(await languageFallbackPage.locator('.monaco-editor').count(), 0)
+    await languageFallbackPage.close()
+
     buildSite(siteAddress.origin)
     const sameHostPage = await context.newPage()
     await sameHostPage.goto(siteAddress.origin, { waitUntil: 'networkidle' })
