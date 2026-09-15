@@ -109,6 +109,11 @@ CSPにはコンパイラが`new Function()`を使うため`unsafe-eval`が必要
 保存APIと実行管理OriginのAPI不存在、CSP、設定由来`frame-ancestors`、`Permissions-Policy`、CORP、文書SSGの
 直接URL、末尾slashの308、404、path traversal、不正なpercent encodingを実サーバー接続で確認した。
 
+同日に本番Bun入口の`/playground`を既存のトップSSGへ接続した。共有SSR用の`playground.html`を編集画面として
+返さず、`/playground`とクエリ付き要求から`data-playground-root`を持つHTMLを返す。`example`は
+`examples.json`の登録済み識別子だけを初期選択に使い、不在・未知・重複値は先頭例へ戻す。連続slashと
+符号化slashを含むcontroller専用資産は公式Originで404にする。
+
 同日に隔離配信の設定境界を修正した。実行管理Originの未設定時フォールバックを削除し、公式Originと
 異なるhostnameを必須にした。実行管理CSPの`frame-ancestors`は正規化した公式Originから生成し、
 許可Originと拒否Originの埋込みをChromiumで確認する。保存APIの頻度制限はBunの実接続元を使い、

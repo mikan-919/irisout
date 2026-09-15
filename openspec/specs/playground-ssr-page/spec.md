@@ -5,6 +5,24 @@
 
 ## Requirements
 
+### Requirement: トップ編集ページの静的配信
+
+`/playground`と`/playground?example=...`は、共有ページ用の空のHTMLではなく、SSGで生成した
+`data-playground-root`を持つ編集画面を返さなければならない(SHALL)。末尾slash付きの要求は
+`/playground`へ308で転送しなければならない(SHALL)。クエリの`example`は`examples.json`に登録された
+一つの識別子だけを初期選択に使い、不在、未知、重複値は先頭例へ戻さなければならない(SHALL)。
+クエリ値をファイルパスへ変換してはならない(SHALL NOT)。
+
+#### Scenario: トップ編集画面を直接開く
+
+- **WHEN** 利用者が`/playground`または`/playground?example=list`へアクセスする
+- **THEN** 応答HTMLに`data-playground-root`、実行、保存、書き出しの要素があり、ブラウザ側の初期化が完了する
+
+#### Scenario: 例の初期選択を検査する
+
+- **WHEN** `example`へCounter、List、SVGの登録済み識別子、不在値、未知値、重複値を指定する
+- **THEN** 登録済みの一つの値だけが選択され、それ以外は先頭例が選択される
+
 ### Requirement: 共有ページの要求描画
 
 `/playground/:id`はビルド後に作られた未削除IDをSQLiteから一度だけ読み、許可された表示値を

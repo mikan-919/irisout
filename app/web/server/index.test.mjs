@@ -73,6 +73,37 @@ test('本番Webサーバーの公式Originと実行管理Originを分離する',
       assertControllerHeaders(controllerResponse, officialOrigin)
     }
 
+    // 経路を二重化・符号化しても、controller専用資産を公式Originへ漏らさない。
+    for (const assetPath of [
+      workerPath.replace('/assets/controller/', '/assets//controller/'),
+      workerPath.replace('/assets/controller/', '/assets/%2fcontroller/'),
+      workerPath.replace('/assets/controller/', '/assets/%2Fcontroller/'),
+    ]) {
+      assert.equal((await rawGet(officialOrigin, assetPath)).statusCode, 404, assetPath)
+    }
+    assert.equal((await rawGet(officialOrigin, '/assets/%ZZ')).statusCode, 400)
+    assert.notEqual(
+      (await rawGet(officialOrigin, '/assets/controller/%2e%2e/app.js')).statusCode,
+      200,
+    )
+
+    const playground = await fetch(`${officialOrigin}/playground`)
+    assert.equal(playground.status, 200)
+    const playgroundHtml = await playground.text()
+    assert.match(playgroundHtml, /data-playground-root/)
+    assert.match(playgroundHtml, /data-playground-run/)
+    assert.match(playgroundHtml, /data-playground-save/)
+    assert.match(playgroundHtml, /data-playground-export/)
+
+    const playgroundExample = await fetch(`${officialOrigin}/playground?example=list`)
+    assert.equal(playgroundExample.status, 200)
+    assert.match(await playgroundExample.text(), /data-playground-root/)
+    const playgroundRedirect = await fetch(`${officialOrigin}/playground/?example=list`, {
+      redirect: 'manual',
+    })
+    assert.equal(playgroundRedirect.status, 308)
+    assert.equal(playgroundRedirect.headers.get('location'), '/playground?example=list')
+
     const input = {
       schemaVersion: 1,
       title: '本番入口',

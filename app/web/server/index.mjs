@@ -121,8 +121,11 @@ function extractRawPathname(requestUrl) {
 }
 
 function isControllerOnlyPath(decodedPath) {
+  // 連続slashや符号化slashを解決した後も、実行管理専用資産を公式Originから隠す。
+  const normalizedPath = decodedPath.replaceAll(/\/{2,}/g, '/')
   return (
-    decodedPath === '/playground-controller.html' || decodedPath.startsWith('/assets/controller/')
+    normalizedPath === '/playground-controller.html' ||
+    normalizedPath.startsWith('/assets/controller/')
   )
 }
 
@@ -134,7 +137,8 @@ function canonicalDocumentPath(decodedPath) {
 
 function staticCandidates(decodedPath) {
   if (decodedPath === '/') return ['index.html']
-  if (decodedPath === '/playground') return ['playground.html']
+  // 編集画面はトップのSSG生成物を共有する。playground.htmlは共有ページのhydrate用入口である。
+  if (decodedPath === '/playground') return ['index.html']
   if (decodedPath === '/docs') return ['docs/index.html']
   if (decodedPath.startsWith('/docs/')) {
     const relative = decodedPath.slice(1)

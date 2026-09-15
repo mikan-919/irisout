@@ -120,6 +120,7 @@ export function setupPlayground(root) {
   let examples = []
   let examplesLoaded = false
   let examplesError = false
+  const requestedExampleId = readRequestedExampleId()
   let nextRunNumber = 0
   let activeRunId = null
   let latestSave = null
@@ -315,9 +316,12 @@ export function setupPlayground(root) {
         exampleElement.append(option)
       }
       if (examples[0]) {
-        exampleElement.value = examples[0].id
+        // URL値は登録済みIDとの比較だけに使い、ファイル参照へ渡さない。
+        const selectedExample =
+          examples.find((example) => example.id === requestedExampleId) ?? examples[0]
+        exampleElement.value = selectedExample.id
         if (!sourceEdited && sourceElement.value === initialSource) {
-          sourceElement.value = examples[0].source
+          sourceElement.value = selectedExample.source
         }
       }
       const pending = readPendingSave()
@@ -346,6 +350,11 @@ export function setupPlayground(root) {
     } catch {
       return null
     }
+  }
+
+  function readRequestedExampleId() {
+    const values = new URLSearchParams(location.search).getAll('example')
+    return values.length === 1 && values[0] ? values[0] : null
   }
 
   function resolveControllerOrigin() {

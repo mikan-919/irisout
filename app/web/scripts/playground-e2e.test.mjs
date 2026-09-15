@@ -306,6 +306,32 @@ try {
     assert.equal(await (await resultFrame(page)).locator('p').textContent(), '停止後の再実行')
     await page.close()
 
+    // /playgroundのSSG編集画面で、登録済みCounter/List/SVGだけを初期選択する。
+    for (const exampleId of ['counter', 'list', 'svg']) {
+      const examplePage = await context.newPage()
+      await examplePage.goto(`${siteAddress.origin}/playground?example=${exampleId}`, {
+        waitUntil: 'networkidle',
+      })
+      await waitForText(examplePage.locator('[data-playground-status]'), '実行できます')
+      assert.equal(await examplePage.locator('[data-playground-example]').inputValue(), exampleId)
+      assert.match(
+        await examplePage.locator('[data-playground-source]').inputValue(),
+        new RegExp(
+          `export function ${exampleId === 'svg' ? 'SvgExample' : exampleId[0].toUpperCase() + exampleId.slice(1)}`,
+        ),
+      )
+      await examplePage.close()
+    }
+    for (const query of ['?example=unknown', '?example=list&example=list']) {
+      const fallbackPage = await context.newPage()
+      await fallbackPage.goto(`${siteAddress.origin}/playground${query}`, {
+        waitUntil: 'networkidle',
+      })
+      await waitForText(fallbackPage.locator('[data-playground-status]'), '実行できます')
+      assert.equal(await fallbackPage.locator('[data-playground-example]').inputValue(), 'counter')
+      await fallbackPage.close()
+    }
+
     const duplicateSource = 'export function Shared() { render(<p>共有からの複製</p>) }'
     const duplicatePage = await context.newPage()
     await duplicatePage.addInitScript((source) => {

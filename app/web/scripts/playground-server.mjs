@@ -41,8 +41,16 @@ export function createPlaygroundServer({
       return
     }
 
+    if (kind === 'site' && pathname === '/playground/') {
+      response.writeHead(308, {
+        location: `/playground${new URL(request.url ?? '/', 'http://127.0.0.1').search}`,
+      })
+      response.end()
+      return
+    }
+
     try {
-      const filePath = await resolvePublicPath(absoluteRoot, pathname)
+      const filePath = await resolvePublicPath(absoluteRoot, pathname, staticCandidates)
       const body = await readFile(filePath)
       const headers = {
         'content-type': MIME_TYPES[path.extname(filePath)] ?? 'application/octet-stream',
@@ -109,6 +117,12 @@ function createControllerServerConfig({ host, officialOrigin }) {
 
 function isControllerPath(pathname) {
   return pathname === '/playground-controller.html' || pathname.startsWith('/assets/')
+}
+
+function staticCandidates(pathname) {
+  if (pathname === '/playground') return ['index.html']
+  const relative = pathname === '/' ? 'index.html' : pathname.slice(1)
+  return [relative, path.join(relative, 'index.html'), `${relative}.html`]
 }
 
 if (
