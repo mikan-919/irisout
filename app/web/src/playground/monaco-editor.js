@@ -47,7 +47,8 @@ export function createSourceEditor(container, { value, readOnly, onChange }) {
     scrollBeyondLastLine: false,
     tabSize: 2,
     insertSpaces: true,
-    wordWrap: 'on',
+      wordWrap: 'on',
+      language: "javascript",
   })
   const change = editor.onDidChangeModelContent(() => onChange(editor.getValue()))
 
