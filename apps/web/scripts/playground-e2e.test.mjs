@@ -372,6 +372,13 @@ export function Edited(props: ButtonProps) {
     assert.ok(verticalSourceBox && verticalResultBox)
     assert.ok(verticalResultBox.y > verticalSourceBox.y)
     await page.setViewportSize({ width: 1280, height: 720 })
+    const desktopSectionBox = await page.locator('.playground-section').boundingBox()
+    const desktopIntroBox = await page.locator('.playground-intro').boundingBox()
+    const desktopEditorBox = await page.locator('.playground-editor').boundingBox()
+    assert.ok(desktopSectionBox && desktopIntroBox && desktopEditorBox)
+    assert.ok(desktopEditorBox.y >= desktopIntroBox.y + desktopIntroBox.height)
+    assert.ok(Math.abs(desktopEditorBox.x - desktopSectionBox.x) < 2)
+    assert.ok(Math.abs(desktopEditorBox.width - desktopSectionBox.width) < 2)
     assert.equal(await controllerFrame.locator('iframe').getAttribute('sandbox'), 'allow-scripts')
     assert.match(
       await firstResult
