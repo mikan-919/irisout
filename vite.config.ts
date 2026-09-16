@@ -33,7 +33,11 @@ export default defineConfig({
         },
       },
       {
-        files: ['packages/compiler/src/compiler.ts', 'packages/compiler/src/compiler/source.ts'],
+        files: [
+          'packages/compiler/src/compiler.ts',
+          'packages/compiler/src/compiler/source.ts',
+          'packages/hono/src/index.ts',
+        ],
         rules: {
           'typescript/no-implied-eval': 'off',
         },

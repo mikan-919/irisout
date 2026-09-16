@@ -1,9 +1,4 @@
-## Purpose
-
-運営側が指定したIrisoutのルート部品を要求ごとに描画し、HTMLとJSON直列化可能なstateを
-ブラウザへ渡して、既存DOMへhydrateできるサーバー用入口を定める。
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: SSR入口の明示指定
 
@@ -66,6 +61,8 @@ SSRはイベント処理、`onMount`、`effect`、`use=`を実行してはなら
 
 - **WHEN** page loaderが要求情報を含む例外を投げる
 - **THEN** 正常page stateと内部例外文を返さず、限定したserver error応答にする
+
+## ADDED Requirements
 
 ### Requirement: ファイル経路の要求処理
 

@@ -56,6 +56,17 @@ function pack() {
   ]) {
     if (!files.includes(expected)) throw new Error(`pack smoke: ${expected} missing from tarball`)
   }
+  if (!registryPackage) {
+    for (const expected of [
+      'package/dist/routes.js',
+      'package/dist/routes.d.ts',
+      'package/dist/hono.js',
+      'package/dist/hono.d.ts',
+      'package/dist/vite-routes.d.ts',
+    ]) {
+      if (!files.includes(expected)) throw new Error(`pack smoke: ${expected} missing from tarball`)
+    }
+  }
   if (
     files.some(
       (file) =>
@@ -86,6 +97,7 @@ packageJson.dependencies.irisout = packageSpec
 packageJson.overrides = { irisout: packageSpec }
 packageJson.devDependencies.typescript = '^5.9.0'
 packageJson.devDependencies['@types/node'] = '^24.0.0'
+if (!registryPackage) packageJson.dependencies.hono = '^4.13.8'
 writeFileSync(path.join(fixtureDir, 'package.json'), `${JSON.stringify(packageJson, null, 2)}\n`)
 
 if (!registryPackage) {
@@ -100,6 +112,9 @@ if (!registryPackage) {
     `import { compile, compileProject } from 'irisout'
 import { compile as compileBrowser } from 'irisout/browser'
 import { irisoutSsr, serializeSsrState } from 'irisout/ssr'
+import { createFileRouter, createRouteStateScript } from 'irisout/hono'
+import { createRouteDefinition, createRouteTable } from 'irisout/routes'
+import { irisoutRoutes } from 'irisout/vite'
 import {
   createCompilerState,
   toContextId,
@@ -122,8 +137,12 @@ const projectResult = compileProject('src/App.jsx', { target: 'client' })
 const browserResult = compileBrowser('')
 const ssrPlugin = irisoutSsr({ entry: 'src/App.jsx' })
 const serializedState = serializeSsrState({ ok: true })
+const routeTable = createRouteTable([createRouteDefinition('/')])
+const routePlugin = irisoutRoutes({ directory: 'src' })
+const fileRouter = createFileRouter('src')
+const routeStateScript = createRouteStateScript('/', { ok: true })
 
-void [compilerState, ids, clientResult, projectResult, browserResult, ssrPlugin, serializedState]
+void [compilerState, ids, clientResult, projectResult, browserResult, ssrPlugin, serializedState, routeTable, routePlugin, fileRouter, routeStateScript]
 `,
   )
 }
@@ -138,7 +157,7 @@ try {
     [
       '--input-type=module',
       '-e',
-      "const compiler = await import('irisout'); const browser = await import('irisout/browser'); const ssr = await import('irisout/ssr'); const state = await import('irisout/state'); if (typeof compiler.compile !== 'function' || typeof browser.compile !== 'function' || typeof ssr.irisoutSsr !== 'function' || typeof ssr.serializeSsrState !== 'function' || typeof state.toDeclId !== 'function') throw new Error('pack smoke: public export missing')",
+      "const compiler = await import('irisout'); const browser = await import('irisout/browser'); const ssr = await import('irisout/ssr'); const state = await import('irisout/state'); const routes = await import('irisout/routes'); const hono = await import('irisout/hono'); const vite = await import('irisout/vite'); if (typeof compiler.compile !== 'function' || typeof browser.compile !== 'function' || typeof ssr.irisoutSsr !== 'function' || typeof ssr.serializeSsrState !== 'function' || typeof state.toDeclId !== 'function' || typeof routes.matchRoute !== 'function' || typeof hono.createFileRouter !== 'function' || typeof vite.irisoutRoutes !== 'function') throw new Error('pack smoke: public export missing')",
     ],
     fixtureDir,
   )

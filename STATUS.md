@@ -38,20 +38,30 @@ tarballには`compiler/source.d.ts`、公開state宣言、`source-map.d.ts`な�
 
 2026-09-15にauthored JSXの記述APIを`irisout`からの明示的な名前付きimportへ整理した。`signal`、`derived`、`render`などは公開入口の型宣言を使い、source parserとmodule linkerがコンパイル前にimportを取り除く。`irisout/jsx`から大域宣言を削除し、実例と型検査用入力を移行した。既存の`compile(source)`へ渡す裸の記述API名は互換性のため当面受理する。
 
+2026-09-16にファイル経路とブラウザー遷移を実装した。`page.jsx`だけを走査し、`/`、`/users`、
+`/users/:id`の共通経路表を作る。静的優先、動的衝突、末尾斜線、引数の一度だけの復号、検索引数、
+不正な符号化、復号後の`/`、未一致をserverとclientで共有する。`irisout/hono`はprefix付きの
+HonoサブルーターとしてpageをSSR targetへ接続し、page別loaderのparams、検索引数、Requestを
+要求ごとに受け取る。loader結果だけを既存`render(input) -> { html, state }`へ渡し、直接HTML、遷移JSON、
+404、redirect、500を分離した。`irisoutRoutes`はclient経路表とhydrate用page moduleを生成する。
+初回stateを再取得せず、管理対象リンク、履歴、検索引数変更、旧画面の破棄、競合抑止、失敗時の
+通常文書遷移を実DOM試験で確認した。公開bundle、宣言、tarball、Hono peer依存を更新した。
+
 ## 段階
 
-| 段階           | 状態 | 結果                                                   |
-| -------------- | ---- | ------------------------------------------------------ |
-| M1〜M6         | 完了 | 状態、イベント、静的HTML、属性、構造単位、横断試験     |
-| 部品合成       | 完了 | 同一ファイル、相対module、直接のchildren位置、局所状態 |
-| ライフサイクル | 完了 | `use=`、`onMount`、`effect`、破棄、部品インスタンス    |
-| Context        | 完了 | インスタンス単位の静的置換、構造単位のprovider         |
-| SVG            | 完了 | SVG要素、`foreignObject`、静的名前空間属性             |
-| 共有状態       | 完了 | module共有signal/derived、複数インスタンスへの同期通知 |
-| R1             | 完了 | 元ファイル位置を含む診断と実行時ソースマップ           |
-| R2             | 完了 | Workerを使うヒートマップ利用例と操作・性能検証         |
-| R3             | 完了 | 1万件一覧の初期化を同一条件で14.5%短縮                 |
-| R4             | 完了 | 単一npmパッケージ、外部梱包検査、隔離試用              |
+| 段階               | 状態 | 結果                                                      |
+| ------------------ | ---- | --------------------------------------------------------- |
+| M1〜M6             | 完了 | 状態、イベント、静的HTML、属性、構造単位、横断試験        |
+| 部品合成           | 完了 | 同一ファイル、相対module、直接のchildren位置、局所状態    |
+| ライフサイクル     | 完了 | `use=`、`onMount`、`effect`、破棄、部品インスタンス       |
+| Context            | 完了 | インスタンス単位の静的置換、構造単位のprovider            |
+| SVG                | 完了 | SVG要素、`foreignObject`、静的名前空間属性                |
+| 共有状態           | 完了 | module共有signal/derived、複数インスタンスへの同期通知    |
+| R1                 | 完了 | 元ファイル位置を含む診断と実行時ソースマップ              |
+| R2                 | 完了 | Workerを使うヒートマップ利用例と操作・性能検証            |
+| R3                 | 完了 | 1万件一覧の初期化を同一条件で14.5%短縮                    |
+| R4                 | 完了 | 単一npmパッケージ、外部梱包検査、隔離試用                 |
+| ファイル経路・遷移 | 完了 | `page.jsx`走査、Hono SSR、loader、client遷移、tarball検査 |
 
 作者以外の人間による手動試用は未実施である。隔離したエージェントによる導入、型検査、
 本番ビルド、開発サーバー、状態更新、条件分岐、一覧、ファイル分割、診断修正は確認済みである。
@@ -200,6 +210,12 @@ Vite+でビルドし、Bunサーバーは`/playground/:id`の要求ごとにSQLi
 - ルート入力bindingが生成moduleの内部名と衝突する場合は`compile:` scope limitで拒否する。
 - SSR仮想moduleのsource mapは未実装で`null`を返す。404・503で正常ページ用stateを生成しない
   判定は要求処理層の責務である。
+- ファイル経路はディレクトリ単位の`page.jsx`だけを受け付け、入れ子layout、catch-all、任意の
+  経路制約、先読み、状態保持、フォーム更新、APIの自動登録は対象外である。loaderは利用側が
+  `irisout/hono`のpage経路へ登録し、HTML文書の外枠は利用側が組み立てる。
+- `irisoutRoutes`の初回hydrateは、文書へ`data-irisout-route-state` scriptを埋め込んだ場合に
+  stateを再利用する。scriptがない、route idがURLと異なる、または遷移取得・描画に失敗した場合は
+  通常の文書遷移へ戻る。Honoの`prefix`とHono側のmount pathは利用側が対応させる。
 - 実行時ソースマップはイベント処理、`use=`、`onMount`、`effect`の処理文を対象とする。
   DOM探索、一覧照合、自動生成した更新関数には一対一の元構文がないため対応しない。
 - Playgroundは単一`.jsx`とブラウザーが提供する組込み機能だけを受け付け、任意のnpm依存と複数

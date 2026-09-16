@@ -43,6 +43,12 @@ const publicEntries = [
     paths: {},
   },
   {
+    name: 'routes',
+    source: 'packages/routes/src/index.ts',
+    external: (id) => id.startsWith('node:'),
+    paths: {},
+  },
+  {
     name: 'vite',
     source: 'packages/vite-plugin/src/index.ts',
     external: (id) =>
@@ -55,6 +61,21 @@ const publicEntries = [
     external: (id) =>
       id === 'vite-plus' || id.startsWith('node:') || id.includes('compiler/src/compiler'),
     paths: (id) => (id.includes('compiler/src/compiler') ? './index.js' : id),
+  },
+  {
+    name: 'hono',
+    source: 'packages/hono/src/index.ts',
+    external: (id) =>
+      id === 'hono' ||
+      id === 'vite-plus' ||
+      id.startsWith('node:') ||
+      id.includes('compiler/src/compiler') ||
+      id.includes('runtime/src/index'),
+    paths: (id) => {
+      if (id.includes('compiler/src/compiler')) return './index.js'
+      if (id.includes('runtime/src/index')) return './runtime.js'
+      return id
+    },
   },
 ]
 
@@ -127,6 +148,18 @@ copyFileSync(
   path.join(publicOutDir, 'diagnostics.d.ts'),
 )
 copyFileSync(
+  path.join(declarationOutDir, 'routes/src/index.d.ts'),
+  path.join(publicOutDir, 'routes.d.ts'),
+)
+copyFileSync(
+  path.join(declarationOutDir, 'hono/src/index.d.ts'),
+  path.join(publicOutDir, 'hono.d.ts'),
+)
+copyFileSync(
+  path.join(declarationOutDir, 'vite-plugin/src/routes.d.ts'),
+  path.join(publicOutDir, 'vite-routes.d.ts'),
+)
+copyFileSync(
   path.join(repoRoot, 'packages/compiler/types/jsx.d.ts'),
   path.join(publicOutDir, 'jsx.d.ts'),
 )
@@ -154,7 +187,10 @@ const declarationFiles = [
   'browser.d.ts',
   'runtime.d.ts',
   'vite.d.ts',
+  'vite-routes.d.ts',
   'ssr.d.ts',
+  'routes.d.ts',
+  'hono.d.ts',
   'diagnostics.d.ts',
   'jsx.d.ts',
   'source-map.d.ts',
@@ -163,13 +199,23 @@ const declarationFiles = [
 ]
 for (const relativePath of declarationFiles) {
   const declarationPath = path.join(publicOutDir, relativePath)
-  const declaration = readFileSync(declarationPath, 'utf8').replace(
+  let declaration = readFileSync(declarationPath, 'utf8').replace(
     /(['"])(\.\.?\/[^'"]+)\1/g,
     (match, quote, specifier) =>
       specifier.endsWith('.ts') && !specifier.endsWith('.d.ts')
         ? `${quote}${specifier.slice(0, -3)}.js${quote}`
         : match,
   )
+  if (relativePath === 'vite.d.ts' || relativePath === 'vite-routes.d.ts') {
+    declaration = declaration.replace(
+      "import type { Plugin } from 'vite-plus';",
+      'type Plugin = { readonly name: string }',
+    )
+  }
+  // vite入口の実装bundleにはroute pluginも含めるが、宣言はre-export先の
+  // 補助ファイルを同梱する。純粋なroutes.d.tsへVite型を混ぜないためである。
+  if (relativePath === 'vite.d.ts')
+    declaration = declaration.replaceAll('./routes.js', './vite-routes.js')
   writeFileSync(declarationPath, declaration)
 }
 rmSync(declarationOutDir, { recursive: true, force: true })

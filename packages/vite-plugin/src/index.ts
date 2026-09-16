@@ -6,6 +6,8 @@
 import path from 'node:path'
 import { compileProject, type CompileResult } from '../../compiler/src/compiler.ts'
 import type { HmrContext, Plugin, ResolvedConfig } from 'vite-plus'
+export { irisoutRoutes, irisoutFileRoutes } from './routes.ts'
+export type { IrisoutRoutesPluginOptions } from './routes.ts'
 
 const DEFAULT_VIRTUAL_MODULE_ID = 'virtual:irisout-entry'
 const DEFAULT_HTML_MARKER = '<!--irisout-html-->'

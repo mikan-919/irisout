@@ -45,6 +45,7 @@
     "@jridgewell/trace-mapping": "^0.3.31",
     "@mizchi/vlmkit": "0.22.0",
     "@types/node": "^24.0.0",
+    "hono": "^4.13.8",
     "husky": "^9.1.7",
     "typescript": "^5.9.0",
     "vite-plus": "0.3.0"

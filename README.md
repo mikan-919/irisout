@@ -88,8 +88,9 @@ bun run build:inspect
 ```
 
 出力先は`apps/demos/dist/`です。`dist/index.html`にはbuild時の初期値が反映され、
-`dist/app.js`にはDOM更新処理が含まれます。現行の公開入口はclient build用で、要求ごとの
-SSR HTML生成は対応していません。
+`dist/app.js`にはDOM更新処理が含まれます。`irisout/ssr`は要求ごとのHTMLとhydrate stateを
+生成します。`irisout/hono`と`irisoutRoutes`を使うと、`page.jsx`のファイル経路、loader、
+リンク遷移を接続できます。
 
 ### デモ一覧
 

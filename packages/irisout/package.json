@@ -26,6 +26,14 @@
       "types": "./dist/browser.d.ts",
       "import": "./dist/browser.js"
     },
+    "./routes": {
+      "types": "./dist/routes.d.ts",
+      "import": "./dist/routes.js"
+    },
+    "./hono": {
+      "types": "./dist/hono.d.ts",
+      "import": "./dist/hono.js"
+    },
     "./runtime": {
       "types": "./dist/runtime.d.ts",
       "import": "./dist/runtime.js"
@@ -41,6 +49,7 @@
     "./jsx": "./dist/jsx.d.ts"
   },
   "peerDependencies": {
+    "hono": ">=4.0.0",
     "vite-plus": ">=0.3.0"
   }
 }

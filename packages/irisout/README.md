@@ -6,6 +6,12 @@ JSXから静的HTMLと直接DOM更新コードを生成する開発基盤です�
 npm install irisout vite-plus
 ```
 
+ファイル経路を使う場合は`hono`も導入します。
+
+```bash
+npm install irisout vite-plus hono
+```
+
 Vite連携は`irisout/vite`、JSX型定義は`irisout/jsx`から参照します。
 
 ```ts
@@ -44,6 +50,39 @@ const result = compile(source)
 
 ```ts
 import { irisoutSsr, serializeSsrState } from 'irisout/ssr'
+```
+
+`page.jsx`のディレクトリ構造からHonoのサブルーターとブラウザー遷移を作る場合は、serverで
+`irisout/hono`、Viteで`irisoutRoutes`を使います。`prefix`は両方へ同じ値を渡します。
+
+```ts
+// サーバー設定
+import { Hono } from 'hono'
+import { createFileRouter } from 'irisout/hono'
+
+const app = new Hono()
+app.route('/', createFileRouter('./routes', { prefix: '/apps' }))
+```
+
+```ts
+// Vite設定
+import { irisoutRoutes } from 'irisout/vite'
+
+export default { plugins: [irisoutRoutes({ directory: './routes', prefix: '/apps' })] }
+```
+
+loaderは`loaders`へ経路をキーとして登録できます。HTML文書の外枠は利用側が組み立て、
+初期stateはdocument関数の`stateScript`を使います。`notFound()`と`redirect()`はloaderから返せます。
+
+```ts
+createFileRouter('./routes', {
+  loaders: {
+    '/users/:id': async ({ params, search, request }) => ({
+      name: await loadUser(params.id!, search, request),
+    }),
+  },
+  document: ({ html, stateScript }) => `<!doctype html><div id="app">${html}</div>${stateScript}`,
+})
 ```
 
 ```json

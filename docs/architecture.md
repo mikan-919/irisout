@@ -86,6 +86,34 @@ linked source + module-scope補助宣言
 イベント・lifecycle・actionのサーバー実行はSSR入口のscope limitである。仮想SSR moduleのsource mapは
 未実装のため`null`を返す。
 
+### ファイル経路と要求単位SSR
+
+`packages/routes/src/node.ts`は指定ディレクトリを再帰走査し、名前が`page.jsx`のファイルだけを
+`FileRouteDefinition`へ変換する。通常のディレクトリは静的segment、`[id]`は`:id`のparam
+segmentになる。`packages/routes/src/index.ts`の`createRouteTable()`が表記、静的優先、動的衝突を
+確定し、`matchRoute()`がserverとclientで同じURL正規化と一度だけの引数復号を行う。
+
+```
+routes/
+  page.jsx             → /
+  users/page.jsx       → /users
+  users/[id]/page.jsx  → /users/:id
+             │
+             ├─ irisout/hono: compileProject(..., { target: 'ssr' }) + Hono subrouter
+             └─ irisout/vite: client table + virtual hydrate page modules
+```
+
+`packages/hono/src/index.ts`はrouter作成時にpageをSSR targetへコンパイルし、handler呼び出しごとに
+loaderとrenderを実行する。loaderの結果は既存SSRのJSON入力境界を通過し、要求・接続情報はstateへ
+入らない。直接要求は利用側のdocument rendererへHTML、state、`stateScript`を渡し、遷移要求は
+`type`、`routeId`、`html`、`state`だけのJSONを返す。HTMLの外枠はHono入口で固定しない。
+
+`packages/vite-plugin/src/routes.ts`はpageごとのclient target生成物を仮想moduleへ置く。仮想入口は
+`data-irisout-route-state`のscriptを初回だけ読み、対応する`hydrateComponent`を呼ぶ。遷移時の
+`createRouteNavigator()`は通常リンク・historyだけを捕捉し、AbortControllerと世代番号で古い応答を
+無視し、旧instanceの`unmount()`を先に呼ぶ。外部・download・別tab・fragmentと失敗時のURLは
+ブラウザー標準の文書遷移へ委ねる。
+
 `compileComponent()`(4)が受理しないパターンに当たると、常に
 `compile:`+`(scope limit)`エラーで拒否する(ADR-0004の裏面、
 「安全に拒否する」)。この拒否からの公式な逃げ道は`use=`アクション
@@ -109,6 +137,10 @@ triage手続きで捌く — コンパイラの受理条件自体を場当たり
 | `packages/compiler/src/compiler/decl-graph.ts`        | derived を辿ってルート signal 集合へ展開する推移解決                                                                                                                                                |
 | `packages/compiler/src/codegen.ts`                    | 最終 codegen。文字列組み立てのみ、AST もコンパイラ状態も触らない                                                                                                                                    |
 | `packages/vite-plugin/src/index.ts`                   | `compileProject()`の生成結果をViteの仮想module・初期HTML・依存監視・全体再読み込みへ接続                                                                                                            |
+| `packages/vite-plugin/src/routes.ts`                  | `page.jsx`群のclient target、経路表、初回hydrate、ファイル集合変更時の仮想module再生成                                                                                                              |
+| `packages/routes/src/index.ts`                        | fs・Honoに依存しない経路定義、静的優先、衝突検査、URL照合、ブラウザー遷移                                                                                                                           |
+| `packages/routes/src/node.ts`                         | `page.jsx`の走査とfile path付きserver経路表の生成                                                                                                                                                   |
+| `packages/hono/src/index.ts`                          | pageごとのSSR、loader、直接HTML、遷移JSON、not-found・redirect・errorのHonoサブルーター                                                                                                             |
 | `packages/runtime/src/index.ts`                       | 2つの顔を持つ: signal/derived は**ビルド時専用**。mount/hydrate、`use=`返り値のshape検証、List使用時だけimportされるkey照合・binding値キャッシュは**ブラウザ出荷用**の最小ランタイム(ADR-0015/0022) |
 | `packages/compiler/src/template.ts`                   | テンプレートリテラル組み立てヘルパー(render と codegen の共有部)                                                                                                                                    |
 | `apps/demos/vite.config.ts`                           | `irisout/vite`へentry pathを渡し、`dist/index.html`(焼き込み済み HTML)+ `dist/app.js`(hydrate のみ)を生成                                                                                           |
