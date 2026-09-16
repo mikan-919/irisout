@@ -137,8 +137,7 @@ function canonicalDocumentPath(decodedPath) {
 
 function staticCandidates(decodedPath) {
   if (decodedPath === '/') return ['index.html']
-  // 編集画面はトップのSSG生成物を共有する。playground.htmlは共有ページのhydrate用入口である。
-  if (decodedPath === '/playground') return ['index.html']
+  if (decodedPath === '/playground') return ['playground.html']
   if (decodedPath === '/docs') return ['docs/index.html']
   if (decodedPath.startsWith('/docs/')) {
     const relative = decodedPath.slice(1)

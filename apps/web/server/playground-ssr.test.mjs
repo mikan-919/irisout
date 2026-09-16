@@ -35,6 +35,7 @@ describe('共有Playground SSR', () => {
     assert.match(html, /<title>A<\/title>/)
     assert.match(html, /<h1>A<\/h1>/)
     assert.match(html, /未実行/)
+    assert.match(html, /src="\/shared-playground\.js"/)
     assert.equal(inputs.length, 1)
     assert.deepEqual(inputs[0].record, {
       id: firstId,

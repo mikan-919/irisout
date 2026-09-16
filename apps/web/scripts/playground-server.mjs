@@ -120,7 +120,7 @@ function isControllerPath(pathname) {
 }
 
 function staticCandidates(pathname) {
-  if (pathname === '/playground') return ['index.html']
+  if (pathname === '/playground') return ['playground.html']
   const relative = pathname === '/' ? 'index.html' : pathname.slice(1)
   return [relative, path.join(relative, 'index.html'), `${relative}.html`]
 }

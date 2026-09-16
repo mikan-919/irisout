@@ -1,11 +1,8 @@
-import { derived, render, signal } from 'irisout'
+import { render, signal } from 'irisout'
 
 export function App() {
-  const count = signal(0)
-  const selectedExample = signal('counter')
   const menuOpen = signal(false)
   const copied = signal(false)
-  const countLabel = derived(() => `${count()} clicks`)
 
   render(
     <div class="site-shell">
@@ -23,7 +20,7 @@ export function App() {
 
         <nav class="desktop-nav" aria-label="主な項目">
           <a href="#how">仕組み</a>
-          <a href="#playground">試す</a>
+          <a href="/playground">試す</a>
           <a href="#principles">設計</a>
           <a href="https://github.com/mikan-919/irisout">GitHub ↗</a>
         </nav>
@@ -48,7 +45,7 @@ export function App() {
           <a href="#how" onClick={() => menuOpen(false)}>
             仕組み
           </a>
-          <a href="#playground" onClick={() => menuOpen(false)}>
+          <a href="/playground" onClick={() => menuOpen(false)}>
             試す
           </a>
           <a href="#principles" onClick={() => menuOpen(false)}>
@@ -74,7 +71,7 @@ export function App() {
               仮想DOMを使わず、ブラウザへ送る処理を画面に必要な範囲へ絞ります。
             </p>
             <div class="hero-actions">
-              <a class="button button-primary" href="#playground">
+              <a class="button button-primary" href="/playground">
                 動きを試す <span>↗</span>
               </a>
               <a class="button button-quiet" href="#how">
@@ -183,206 +180,6 @@ export function App() {
           </div>
         </section>
 
-        <section class="section playground-section" id="playground">
-          <div class="playground-intro">
-            <p class="eyebrow">
-              <span class="eyebrow-dot" /> Try it live
-            </p>
-            <h2>
-              状態が変わる。
-              <br />
-              <em>更新先は、変わった場所だけ。</em>
-            </h2>
-            <p>同じJSXから生成された小さな例を触って、irisoutの更新モデルを確認できます。</p>
-            <div class="playground-list">
-              <div class="playground-list-item">
-                <span>↳</span>
-                <span>状態を読む式を解析</span>
-              </div>
-              <div class="playground-list-item">
-                <span>↳</span>
-                <span>依存するDOMを特定</span>
-              </div>
-              <div class="playground-list-item">
-                <span>↳</span>
-                <span>イベントから直接更新</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="demo-card">
-            <div class="demo-topbar">
-              <span class="demo-title">
-                <span class="demo-live" /> playground
-              </span>
-              <span class="demo-meta">generated output</span>
-            </div>
-            <div class="demo-tabs" role="tablist" aria-label="デモの切り替え">
-              <button
-                type="button"
-                class={selectedExample() === 'counter' ? 'demo-tab active' : 'demo-tab'}
-                onClick={() => selectedExample('counter')}
-              >
-                Counter
-              </button>
-              <button
-                type="button"
-                class={selectedExample() === 'list' ? 'demo-tab active' : 'demo-tab'}
-                onClick={() => selectedExample('list')}
-              >
-                List
-              </button>
-              <button
-                type="button"
-                class={selectedExample() === 'svg' ? 'demo-tab active' : 'demo-tab'}
-                onClick={() => selectedExample('svg')}
-              >
-                SVG
-              </button>
-            </div>
-
-            {selectedExample() === 'counter' && (
-              <div class="demo-content counter-demo">
-                <p class="demo-kicker">signal state</p>
-                <div class="counter-value">{count()}</div>
-                <p class="counter-caption">
-                  {countLabel()} · derived value {count() * 2}
-                </p>
-                <button class="demo-action" type="button" onClick={() => count(count() + 1)}>
-                  increment <span>+</span>
-                </button>
-                <p class="demo-footnote">クリックすると、依存する値だけが更新されます。</p>
-              </div>
-            )}
-
-            {selectedExample() === 'list' && (
-              <div class="demo-content list-demo">
-                <p class="demo-kicker">keyed list</p>
-                <div class="list-preview">
-                  <div>
-                    <span class="list-key">01</span>
-                    <span>static HTML</span>
-                    <span class="list-status">kept</span>
-                  </div>
-                  <div>
-                    <span class="list-key">02</span>
-                    <span>keyed reuse</span>
-                    <span class="list-status">reused</span>
-                  </div>
-                  <div>
-                    <span class="list-key">03</span>
-                    <span>direct update</span>
-                    <span class="list-status">ready</span>
-                  </div>
-                </div>
-                <p class="demo-footnote">同じkeyの要素は再利用し、変化したitemだけを更新します。</p>
-              </div>
-            )}
-
-            {selectedExample() === 'svg' && (
-              <div class="demo-content svg-demo">
-                <p class="demo-kicker">SVG authoring</p>
-                <svg
-                  class="demo-spark"
-                  viewBox="0 0 260 92"
-                  role="img"
-                  aria-label="更新される折れ線グラフ"
-                >
-                  <path d="M4 74C32 66 38 38 65 48s30 28 52 8 31-38 53-26 33 34 82-20" />
-                  <circle cx="65" cy="48" r="4" />
-                  <circle cx="117" cy="56" r="4" />
-                  <circle cx="170" cy="30" r="4" />
-                </svg>
-                <p class="demo-footnote">SVGも同じ更新モデルで、属性と要素を直接扱えます。</p>
-              </div>
-            )}
-            <div class="demo-status">
-              <span>●</span> no virtual DOM involved
-            </div>
-          </div>
-
-          <div class="playground-editor" data-playground-root>
-            <div class="playground-editor-head">
-              <div>
-                <p class="demo-kicker">browser compiler</p>
-                <h3>JSXを編集して実行する</h3>
-              </div>
-              <div class="playground-actions">
-                <label class="playground-example-label">
-                  例
-                  <select data-playground-example aria-label="公式例">
-                    <option value="counter">Counter</option>
-                  </select>
-                </label>
-                <button class="demo-action" type="button" data-playground-run>
-                  実行
-                </button>
-                <button class="playground-stop" type="button" data-playground-stop disabled>
-                  停止
-                </button>
-                <button class="playground-save" type="button" data-playground-save>
-                  保存／再送
-                </button>
-                <button class="playground-stop" type="button" data-playground-delete disabled>
-                  共有を削除
-                </button>
-                <button class="playground-stop" type="button" data-playground-export disabled>
-                  書き出し
-                </button>
-              </div>
-            </div>
-            <div class="playground-save-fields">
-              <label class="playground-source-label" for="playground-title">
-                共有タイトル
-                <input id="playground-title" data-playground-title value="Irisout Playground" />
-              </label>
-              <label class="playground-source-label" for="playground-description">
-                説明
-                <input id="playground-description" data-playground-description />
-              </label>
-            </div>
-            <label class="playground-source-label" for="playground-source">
-              入力JSX
-            </label>
-            <textarea
-              id="playground-source"
-              class="playground-source"
-              data-playground-source
-              spellcheck="false"
-              readOnly
-              rows="16"
-              aria-describedby="playground-status"
-            />
-            <div
-              class="playground-monaco"
-              data-playground-monaco
-              aria-describedby="playground-status"
-              hidden
-            />
-            <p
-              id="playground-status"
-              class="playground-status"
-              data-playground-status
-              role="status"
-            >
-              例を読み込んでいます
-            </p>
-            <section class="playground-share" data-playground-share hidden aria-live="polite">
-              <p>
-                共有URL: <a data-playground-share-link target="_blank" rel="noreferrer" />
-              </p>
-              <p>
-                削除用の管理鍵:
-                <code data-playground-delete-token />
-              </p>
-              <small>管理鍵を失うと自分で削除できません。書き出して保管してください。</small>
-            </section>
-            <div class="playground-result" data-playground-result>
-              実行結果はここに表示されます
-            </div>
-          </div>
-        </section>
-
         <section class="section principles-section" id="principles">
           <div class="section-heading compact-heading">
             <p class="eyebrow">
@@ -463,7 +260,7 @@ export function App() {
         </a>
         <div class="footer-links">
           <a href="#how">仕組み</a>
-          <a href="#playground">試す</a>
+          <a href="/playground">試す</a>
           <a href="https://github.com/mikan-919/irisout">GitHub ↗</a>
         </div>
         <span class="footer-copy">Apache License 2.0 · 2026</span>

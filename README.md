@@ -72,7 +72,8 @@ bun run dev
 端末に表示されたURLをブラウザで開き、`increment`を押してください。ソースは
 [`apps/demos/counter.jsx`](./apps/demos/counter.jsx)です。
 
-サイト、Playground、別のデモを起動するときも同じ入口へ引数を渡します。
+公式サイトとPlaygroundは同じ`apps/web`へ接続し、Playgroundだけ実行管理画面を追加します。
+別のデモを起動するときも同じ入口へ引数を渡します。
 
 ```bash
 bun run dev site
@@ -192,13 +193,13 @@ bun run pack:smoke
 | コマンド                  | 用途                                                                                 |
 | ------------------------- | ------------------------------------------------------------------------------------ |
 | `bun run dev`             | `apps/demos`のCounterを起動する                                                      |
-| `bun run dev site`        | `apps/web`の公式サイトを起動する                                                     |
+| `bun run dev site`        | `apps/web`の公式サイトと`/playground`ページを起動する                                |
 | `bun run dev playground`  | 公式サイトと実行管理画面を別配信元で起動する                                         |
 | `bun run dev demo <名前>` | `counter`、`list`、`notes`、`heatmap`、`todomvc`、`multi-file`のデモを選んで起動する |
 | `bun run start`           | デモをbuildしてプレビューする                                                        |
 | `bun run dev --help`      | 開発入口の使い方を表示する                                                           |
 
-`bun run dev playground`は、公式サイトを`127.0.0.1:5173`、実行管理画面を
+`bun run dev playground`は、公式サイトと`/playground`ページを`127.0.0.1:5173`、実行管理画面を
 `localhost:5174`で起動します。これは同じマシンでもhostnameを分けてCookieと実行権限の境界を
 保つためです。ポートを変える場合は、片方だけを変えず両方を指定してください。
 

@@ -85,8 +85,10 @@ function playgroundHeaders(): Plugin {
           response.end()
           return
         }
-        // playground.htmlは共有ページの接続用なので、編集画面にはトップのHTMLを使う。
-        if (pathname === '/playground') request.url = `/${search ? `?${search}` : ''}`
+        // /playgroundはLPと別の編集画面へ接続する。
+        if (pathname === '/playground') {
+          request.url = `/playground.html${search ? `?${search}` : ''}`
+        }
         const runtimeResource = isPlaygroundRuntimeResource(pathname)
         if (
           pathname === '/playground-controller.html' ||
@@ -335,11 +337,13 @@ export default defineConfig({
         main: path.resolve(import.meta.dirname, 'index.html'),
         controller: path.resolve(import.meta.dirname, 'playground-controller.html'),
         playground: path.resolve(import.meta.dirname, 'playground.html'),
+        'shared-playground': path.resolve(import.meta.dirname, 'src/playground-page-client.js'),
       },
       output: {
         entryFileNames: (chunk) => {
           if (chunk.name === 'main') return 'app.js'
           if (chunk.name === 'playground') return 'playground.js'
+          if (chunk.name === 'shared-playground') return 'shared-playground.js'
           if (chunk.name === 'controller') return 'assets/controller/[name]-[hash].js'
           return 'assets/[name]-[hash].js'
         },

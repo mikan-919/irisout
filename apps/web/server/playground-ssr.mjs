@@ -16,7 +16,7 @@ export function createPlaygroundPageHandler({
   store,
   render,
   officialOrigin,
-  clientPath = '/playground.js',
+  clientPath = '/shared-playground.js',
 } = {}) {
   if (!store) throw new Error('PlaygroundStoreが必要です')
   if (typeof render !== 'function') throw new Error('Playground SSR renderが必要です')

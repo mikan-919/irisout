@@ -3,7 +3,7 @@
 実装の現在地、完了した段階、既知の制約を記録する。設計判断は`docs/adr/`、受入条件は
 `openspec/specs/`、今後の作業は`ROADMAP.md`を正本とする。
 
-## 現在地（2026-09-15）
+## 現在地（2026-09-16）
 
 ソース版とnpm公開版は0.2.2である。0.2.2は文書とアプリ開発用スキルを更新し、公開入口と生成コードは変更していない。0.2.1では状態更新を
 `signal((previous) => next)`へ統一し、`signal(initial, keyOf)`と`.update()`を削除した。
@@ -99,9 +99,10 @@ JSXタグ・属性・式の色分け、初期値、入力置換、例切替え�
 直接URL、末尾slashの308、404、path traversal、不正なpercent encodingを実サーバー接続で確認した。
 
 同日に本番Bun入口の`/playground`を既存のトップSSGへ接続した。共有SSR用の`playground.html`を編集画面として
-返さず、`/playground`とクエリ付き要求から`data-playground-root`を持つHTMLを返す。`example`は
+返さず、`/playground`とクエリ付き要求から`data-playground-root`を持つHTMLを返す実装を確認した。`example`は
 `examples.json`の登録済み識別子だけを初期選択に使い、不在・未知・重複値は先頭例へ戻す。連続slashと
-符号化slashを含むcontroller専用資産は公式Originで404にする。
+符号化slashを含むcontroller専用資産は公式Originで404にする。この編集画面の入口は2026-09-16に専用ページへ
+整理した。
 
 同日に隔離配信の設定境界を修正した。実行管理Originの未設定時フォールバックを削除し、公式Originと
 異なるhostnameを必須にした。実行管理CSPの`frame-ancestors`は正規化した公式Originから生成し、
@@ -135,6 +136,11 @@ Vite+でビルドし、Bunサーバーは`/playground/:id`の要求ごとにSQLi
 `127.0.0.1`へ転送する。公式サイト単独の起動は`bun run dev site`を使う。
 同日に公式側の開発サーバーへ保存APIを接続し、保存・同一要求の再送を確認した。開発保存値は再起動で消えるため、
 永続共有はBunサーバーのSQLite経路を使う。実行管理Originへ保存APIは置かない。
+
+2026-09-16に公式サイトとPlaygroundの入口を整理した。LPの`App.jsx`から編集欄と動作例を削除し、
+`playground.html`を`/playground`専用の編集画面へ変更した。LPの導線と共有ページからの複製はこのURLへ接続し、
+共有ページのhydrate用JavaScriptは`shared-playground.js`として分離した。公式サイトの`/`には
+`data-playground-root`を出力しないことをブラウザー試験で確認した。
 
 ## 検証
 

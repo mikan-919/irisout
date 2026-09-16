@@ -99,6 +99,9 @@ export function setupPlayground(root) {
           sourceElement.dispatchEvent(new Event('input', { bubbles: true }))
         },
       })
+      // 作成中に入力が変わる場合があるため、完成後の値と編集可否を再同期する。
+      sourceEditor.setValue(sourceElement.value)
+      sourceEditor.setReadOnly(sourceElement.readOnly)
       sourceElement.hidden = true
     })
     .catch(() => {

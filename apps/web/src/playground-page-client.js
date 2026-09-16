@@ -13,7 +13,7 @@ if (container && stateElement) {
         const source = state?.input?.record?.source
         if (typeof source !== 'string') return
         sessionStorage.setItem('irisout.playground.duplicate-source', source)
-        location.href = '/#playground'
+        location.href = '/playground'
       })
     }
   } catch {

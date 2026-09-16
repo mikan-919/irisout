@@ -175,6 +175,12 @@ try {
         url: siteAddress.origin,
       },
     ])
+    const homePage = await context.newPage()
+    await homePage.goto(siteAddress.origin, { waitUntil: 'networkidle' })
+    assert.equal(await homePage.locator('[data-playground-root]').count(), 0)
+    assert.equal(await homePage.locator('a.button-primary').getAttribute('href'), '/playground')
+    await homePage.close()
+
     const page = await context.newPage()
     const examplesRequest = deferred()
     const releaseExamples = deferred()
@@ -190,7 +196,7 @@ try {
       await releaseController.promise
       await route.continue()
     })
-    await page.goto(siteAddress.origin, { waitUntil: 'domcontentloaded' })
+    await page.goto(`${siteAddress.origin}/playground`, { waitUntil: 'domcontentloaded' })
     const source = page.locator('[data-playground-source]')
     const status = page.locator('[data-playground-status]')
     const run = page.locator('[data-playground-run]')
@@ -266,7 +272,7 @@ export function Edited(props: ButtonProps) {
     assertTypeScriptHighlight(await readEditorTokens(page))
 
     const syntaxPage = await context.newPage()
-    await syntaxPage.goto(siteAddress.origin, { waitUntil: 'networkidle' })
+    await syntaxPage.goto(`${siteAddress.origin}/playground`, { waitUntil: 'networkidle' })
     await waitForText(syntaxPage.locator('[data-playground-status]'), '実行できます')
     await syntaxPage.locator('[data-playground-monaco] .monaco-editor').waitFor()
     await syntaxPage.locator('[data-playground-source]').waitFor({ state: 'hidden' })
@@ -381,7 +387,7 @@ export function Edited(props: ButtonProps) {
     await new Promise((resolve) => setTimeout(resolve, 300))
     page.off('request', requestListener)
     assert.deepEqual(blockedRequests, [])
-    assert.equal(page.url(), siteAddress.origin + '/')
+    assert.equal(page.url(), siteAddress.origin + '/playground')
     assert.equal(await page.locator('.playground-controller').count(), 1)
     assert.equal(await page.locator('body').getAttribute('data-playground-pwned'), null)
 
@@ -469,7 +475,7 @@ export function Edited(props: ButtonProps) {
     await duplicatePage.addInitScript((source) => {
       sessionStorage.setItem('irisout.playground.duplicate-source', source)
     }, duplicateSource)
-    await duplicatePage.goto(siteAddress.origin, { waitUntil: 'networkidle' })
+    await duplicatePage.goto(`${siteAddress.origin}/playground`, { waitUntil: 'networkidle' })
     await waitForText(duplicatePage.locator('[data-playground-status]'), '実行できます')
     await duplicatePage.locator('[data-playground-monaco] .monaco-editor').waitFor()
     await duplicatePage.locator('[data-playground-source]').waitFor({ state: 'hidden' })
@@ -491,7 +497,7 @@ export function Edited(props: ButtonProps) {
 
     const editorFallbackPage = await context.newPage()
     await editorFallbackPage.route('**/assets/monaco-editor-*.js', (route) => route.abort())
-    await editorFallbackPage.goto(siteAddress.origin, { waitUntil: 'networkidle' })
+    await editorFallbackPage.goto(`${siteAddress.origin}/playground`, { waitUntil: 'networkidle' })
     await waitForText(editorFallbackPage.locator('[data-playground-status]'), '実行できます')
     const fallbackSource = 'export function Fallback() { render(<p>退避入力</p>) }'
     const fallbackSourceElement = editorFallbackPage.locator('[data-playground-source]')
@@ -527,7 +533,9 @@ export function Edited(props: ButtonProps) {
 
     const languageFallbackPage = await context.newPage()
     await languageFallbackPage.route('**/assets/tsMode-*.js', (route) => route.abort())
-    await languageFallbackPage.goto(siteAddress.origin, { waitUntil: 'networkidle' })
+    await languageFallbackPage.goto(`${siteAddress.origin}/playground`, {
+      waitUntil: 'networkidle',
+    })
     await waitForText(languageFallbackPage.locator('[data-playground-status]'), '実行できます')
     const languageFallbackSource = languageFallbackPage.locator('[data-playground-source]')
     assert.equal(await languageFallbackSource.isVisible(), true)
@@ -537,7 +545,7 @@ export function Edited(props: ButtonProps) {
 
     buildSite(siteAddress.origin)
     const sameHostPage = await context.newPage()
-    await sameHostPage.goto(siteAddress.origin, { waitUntil: 'networkidle' })
+    await sameHostPage.goto(`${siteAddress.origin}/playground`, { waitUntil: 'networkidle' })
     const sameHostStatus = sameHostPage.locator('[data-playground-status]')
     await waitForText(sameHostStatus, '異なるhostname')
     assert.equal(await sameHostPage.locator('[data-playground-run]').isDisabled(), true)
@@ -556,7 +564,7 @@ export function Edited(props: ButtonProps) {
 
     buildSite(undefined)
     const missingConfigPage = await context.newPage()
-    await missingConfigPage.goto(siteAddress.origin, { waitUntil: 'networkidle' })
+    await missingConfigPage.goto(`${siteAddress.origin}/playground`, { waitUntil: 'networkidle' })
     await waitForText(missingConfigPage.locator('[data-playground-status]'), '未設定')
     assert.equal(await missingConfigPage.locator('[data-playground-run]').isDisabled(), true)
     assert.match(

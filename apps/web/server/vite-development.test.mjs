@@ -43,7 +43,7 @@ test('開発用Playgroundの経路と実行時処理を接続する', () => {
   middleware(playgroundRequest, response(), () => {
     playgroundNext = true
   })
-  assert.equal(playgroundRequest.url, '/?example=list')
+  assert.equal(playgroundRequest.url, '/playground.html?example=list')
   assert.equal(playgroundNext, true)
 
   const runtimePaths = [

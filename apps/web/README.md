@@ -24,7 +24,7 @@ hostnameを分けています。実行管理画面は
 公式サイト側のVite+開発サーバーは保存APIを持ちますが、保存値は開発プロセス内だけに保持します。再起動後も
 保存値を残す場合は本番用Bunサーバーを使います。
 投稿JSXは実行ごとのWorkerで変換し、結果は`sandbox="allow-scripts"`のiframeへ表示します。
-編集欄にはMonaco Editorを使います。トップ画面の初期表示には含めず、Playgroundの初期化時に
+編集欄にはMonaco Editorを使います。LPの初期表示には含めず、`/playground`ページの初期化時に
 JavaScript・JSX用の言語機能と作業スレッドを読み込みます。読込みに失敗した場合は元の
 `textarea`を残し、入力、保存、書き出しを続けられます。
 使用中のポートを避ける場合は、両方を指定して起動します。指定したポートを使えない場合は、
@@ -48,8 +48,8 @@ bun run typecheck:web
 bun run build:web
 ```
 
-`build:web`は公式サイトの静的生成物に加えて、共有ページのhydrate用`playground.js`と
-サーバー用`dist/server/playground-page.js`を生成します。Bunサーバーは保存後の
+`build:web`は公式サイトと`/playground`ページの静的生成物（`playground.js`）に加えて、共有ページのhydrate用
+`shared-playground.js`とサーバー用`dist/server/playground-page.js`を生成します。Bunサーバーは保存後の
 `/playground/:id`を再ビルドなしでSQLiteから読み、運営側部品だけをSSRします。保存されたJSXは
 表示用の文字列として扱い、サーバーではコンパイルまたは実行しません。
 
@@ -86,5 +86,5 @@ bun run site:test
 導入手順はnpm公開版を前提にしています。
 
 公式例の入力は`content/examples/`で管理し、文書ビルドは表示用コードと後続のPlaygroundが
-接続する`docs/examples.json`を同じ入力から生成します。トップ画面のPlaygroundはこの索引を
+接続する`docs/examples.json`を同じ入力から生成します。`/playground`ページはこの索引を
 読み込み、公式例の選択とブラウザー内の変換を実行します。
