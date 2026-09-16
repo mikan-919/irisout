@@ -7,6 +7,16 @@
       name="description"
       content="irisoutのPlaygroundでJSXを編集し、ブラウザー内で変換結果を確認できます。"
     />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+    />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 44 44'%3E%3Ccircle cx='22' cy='22' r='19' fill='none' stroke='%230b7cff' stroke-width='2'/%3E%3Cpath d='M22 3c6 7 8 13 7 19-1 7-6 13-15 18M41 22c-7 6-13 8-19 7-7-1-13-6-18-15M22 41c-6-7-8-13-7-19 1-7 6-13 15-18M3 22c7-6 13-8 19-7 7 1 13 6 18 15' fill='none' stroke='%230b7cff' stroke-width='2'/%3E%3C/svg%3E"
+    />
     <title>Playground — irisout</title>
   </head>
   <body>
@@ -23,9 +33,9 @@
           <span class="brand-name">irisout</span>
         </a>
         <nav class="desktop-nav" aria-label="主な項目">
-          <a href="/">ホーム</a>
-          <a href="/docs">文書</a>
-          <a href="https://github.com/mikan-919/irisout">GitHub ↗</a>
+          <a class="nav-link" href="/">ホーム</a>
+          <a class="nav-link" href="/docs">文書</a>
+          <a class="nav-link" href="https://github.com/mikan-919/irisout">GitHub ↗</a>
         </nav>
         <a class="header-cta" href="/">LPへ <span>↗</span></a>
       </header>
@@ -132,16 +142,18 @@
       </main>
 
       <footer class="site-footer">
-        <a class="brand footer-brand" href="/">
-          <span class="brand-name">irisout</span>
-          <span class="footer-tagline">compile the interface</span>
-        </a>
-        <div class="footer-links">
-          <a href="/">ホーム</a>
-          <a href="/docs">文書</a>
-          <a href="https://github.com/mikan-919/irisout">GitHub ↗</a>
+        <div class="content-shell footer-inner">
+          <a class="brand footer-brand" href="/">
+            <span class="brand-name">irisout</span>
+            <span class="footer-tagline">compile the interface</span>
+          </a>
+          <div class="footer-links">
+            <a href="/">ホーム</a>
+            <a href="/docs">文書</a>
+            <a href="https://github.com/mikan-919/irisout">GitHub ↗</a>
+          </div>
+          <span class="footer-copy">Apache License 2.0 · 2026</span>
         </div>
-        <span class="footer-copy">Apache License 2.0 · 2026</span>
       </footer>
     </div>
     <script type="module" src="/src/playground-entry.js"></script>

@@ -78,6 +78,7 @@ export async function createSourceEditor(container, { value, readOnly, onChange 
     minimap: { enabled: false },
     padding: { top: 12, bottom: 12 },
     scrollBeyondLastLine: false,
+    tabFocusMode: true,
     tabSize: 2,
     insertSpaces: true,
     wordWrap: 'on',

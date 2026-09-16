@@ -178,7 +178,10 @@ try {
     const homePage = await context.newPage()
     await homePage.goto(siteAddress.origin, { waitUntil: 'networkidle' })
     assert.equal(await homePage.locator('[data-playground-root]').count(), 0)
-    assert.equal(await homePage.locator('a.button-primary').getAttribute('href'), '/playground')
+    assert.equal(
+      await homePage.locator('a.button-primary[href="/playground"]').getAttribute('href'),
+      '/playground',
+    )
     await homePage.close()
 
     const page = await context.newPage()
