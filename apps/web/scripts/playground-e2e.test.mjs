@@ -344,8 +344,27 @@ export function Edited(props: ButtonProps) {
         width: element.style.width,
         minHeight: element.style.minHeight,
         border: element.style.border,
+        background: element.style.background,
       })),
-      { display: 'block', width: '100%', minHeight: '16rem', border: '0px' },
+      {
+        display: 'block',
+        width: '100%',
+        minHeight: '16rem',
+        border: '0px',
+        background: 'transparent',
+      },
+    )
+    assert.equal(
+      await firstResult
+        .locator('html')
+        .evaluate((element) => getComputedStyle(element).backgroundColor),
+      'rgba(0, 0, 0, 0)',
+    )
+    assert.equal(
+      await firstResult
+        .locator('body')
+        .evaluate((element) => getComputedStyle(element).backgroundColor),
+      'rgba(0, 0, 0, 0)',
     )
     assert.equal(await controllerFrame.locator('iframe').getAttribute('sandbox'), 'allow-scripts')
     assert.match(

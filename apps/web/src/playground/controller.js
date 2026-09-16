@@ -167,7 +167,7 @@ try {
   iframe.style.width = '100%'
   iframe.style.minHeight = '16rem'
   iframe.style.border = '0'
-  iframe.style.background = '#fff'
+  iframe.style.background = 'transparent'
   iframe.srcdoc = createResultDocument(moduleUrl, runtimeUrl)
   const resultRun = { runId, iframe, moduleUrl, messageHandler: null }
   activeResult = resultRun
@@ -209,7 +209,7 @@ function createResultDocument(blobUrl, runtimeUrl) {
     "frame-src 'none'",
     "navigate-to 'none'",
   ].join('; ')
-  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${escapeHtmlAttribute(csp)}"></head><body><div id="app"></div><script type="module" src="${escapeHtmlAttribute(blobUrl)}"></script></body></html>`
+  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${escapeHtmlAttribute(csp)}"><style>html,body { background: transparent; }</style></head><body><div id="app"></div><script type="module" src="${escapeHtmlAttribute(blobUrl)}"></script></body></html>`
 }
 
 function escapeHtmlAttribute(value) {

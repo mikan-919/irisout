@@ -39,5 +39,5 @@ main {
   width: 100%;
   min-height: 16rem;
   border: 0;
-  background: #fff;
+  background: transparent;
 }
