@@ -367,8 +367,54 @@
     width: min(calc(100% - 2 * var(--space-xl)), var(--shell));
   }
 
+  /* コードと実行結果を見比べられる幅では、編集欄と結果欄を左右に置く。 */
+  .playground-editor {
+    display: grid;
+    grid-template-areas:
+      'head head'
+      'save save'
+      'label label'
+      'source result'
+      'status result'
+      'share result';
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .playground-editor-head {
+    grid-area: head;
+  }
+
   .playground-save-fields {
+    grid-area: save;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .playground-editor > .playground-source-label {
+    grid-area: label;
+  }
+
+  .playground-source,
+  .playground-monaco {
+    grid-area: source;
+  }
+
+  .playground-status {
+    grid-area: status;
+  }
+
+  .playground-share {
+    grid-area: share;
+  }
+
+  .playground-result {
+    grid-area: result;
+    min-height: 0;
+    border-top: 0;
+    border-inline-start: var(--rule-hair) solid var(--color-rule);
+  }
+
+  .playground-controller {
+    height: 100%;
   }
 
   .playground-shell .footer-inner {

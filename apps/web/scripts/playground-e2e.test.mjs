@@ -100,24 +100,18 @@ async function waitForEditorToken(page, expected) {
 }
 
 function assertSyntaxHighlight(tokens, { plain = 'Counter' } = {}) {
-  const token = (text) => tokens.find((candidate) => candidate.text === text)
+  const comment = '// 公式文書とPlaygroundが共有するCounter入力。'
+  const token = (text) =>
+    tokens.find((candidate) => candidate.text === text) ??
+    (text === comment ? tokens.find((candidate) => candidate.text.startsWith('//')) : undefined)
   const plainToken = token(plain)
   assert.ok(token('export'), 'キーワードが構文トークンになっていません')
-  assert.ok(
-    token('// 公式文書とPlaygroundが共有するCounter入力。'),
-    'コメントが構文トークンになっていません',
-  )
+  assert.ok(token(comment), 'コメントが構文トークンになっていません')
   assert.ok(token('main'), 'JSXタグが構文トークンになっていません')
   assert.ok(token('type'), 'JSX属性が構文トークンになっていません')
   assert.ok(token('"button"'), '文字列が構文トークンになっていません')
   assert.ok(plainToken, '通常のJSXテキストがありません')
-  for (const syntax of [
-    'export',
-    '// 公式文書とPlaygroundが共有するCounter入力。',
-    'main',
-    'type',
-    '"button"',
-  ]) {
+  for (const syntax of ['export', comment, 'main', 'type', '"button"']) {
     assert.notEqual(token(syntax)?.color, plainToken.color, `${syntax}が通常テキストと同じ色です`)
   }
 }
@@ -269,7 +263,7 @@ export function Edited(props: ButtonProps) {
       <p>置換後</p>
     </main>,
   )
-}`
+    }`
     await fillSource(source, replacedSource)
     await waitForEditorToken(page, 'interface')
     assertTypeScriptHighlight(await readEditorTokens(page))
@@ -366,6 +360,18 @@ export function Edited(props: ButtonProps) {
         .evaluate((element) => getComputedStyle(element).backgroundColor),
       'rgba(0, 0, 0, 0)',
     )
+    await page.setViewportSize({ width: 700, height: 900 })
+    const horizontalSourceBox = await page.locator('[data-playground-monaco]').boundingBox()
+    const horizontalResultBox = await page.locator('[data-playground-result]').boundingBox()
+    assert.ok(horizontalSourceBox && horizontalResultBox)
+    assert.ok(horizontalResultBox.x > horizontalSourceBox.x)
+    assert.ok(Math.abs(horizontalResultBox.y - horizontalSourceBox.y) < 2)
+    await page.setViewportSize({ width: 600, height: 900 })
+    const verticalSourceBox = await page.locator('[data-playground-monaco]').boundingBox()
+    const verticalResultBox = await page.locator('[data-playground-result]').boundingBox()
+    assert.ok(verticalSourceBox && verticalResultBox)
+    assert.ok(verticalResultBox.y > verticalSourceBox.y)
+    await page.setViewportSize({ width: 1280, height: 720 })
     assert.equal(await controllerFrame.locator('iframe').getAttribute('sandbox'), 'allow-scripts')
     assert.match(
       await firstResult
