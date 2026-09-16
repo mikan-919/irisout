@@ -331,6 +331,22 @@ export function Edited(props: ButtonProps) {
     await waitForText(status, '実行しました')
     const firstResult = await resultFrame(page)
     assert.equal(await controllerFrame.locator('#controller-status').isHidden(), true)
+    assert.deepEqual(
+      await controllerFrame.locator('#result-root').evaluate((element) => {
+        const style = getComputedStyle(element)
+        return { borderWidth: style.borderWidth, borderRadius: style.borderRadius }
+      }),
+      { borderWidth: '0px', borderRadius: '0px' },
+    )
+    assert.deepEqual(
+      await controllerFrame.locator('#result-root > iframe').evaluate((element) => ({
+        display: element.style.display,
+        width: element.style.width,
+        minHeight: element.style.minHeight,
+        border: element.style.border,
+      })),
+      { display: 'block', width: '100%', minHeight: '16rem', border: '0px' },
+    )
     assert.equal(await controllerFrame.locator('iframe').getAttribute('sandbox'), 'allow-scripts')
     assert.match(
       await firstResult

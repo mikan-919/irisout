@@ -162,6 +162,12 @@ try {
   iframe.title = 'JSXの実行結果'
   iframe.setAttribute('sandbox', 'allow-scripts')
   iframe.setAttribute('referrerpolicy', 'no-referrer')
+  // CSSが未適用でもブラウザー既定の枠と寸法を表示しない。
+  iframe.style.display = 'block'
+  iframe.style.width = '100%'
+  iframe.style.minHeight = '16rem'
+  iframe.style.border = '0'
+  iframe.style.background = '#fff'
   iframe.srcdoc = createResultDocument(moduleUrl, runtimeUrl)
   const resultRun = { runId, iframe, moduleUrl, messageHandler: null }
   activeResult = resultRun
