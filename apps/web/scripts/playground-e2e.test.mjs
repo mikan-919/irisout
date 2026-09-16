@@ -330,6 +330,7 @@ export function Edited(props: ButtonProps) {
     await run.click()
     await waitForText(status, '実行しました')
     const firstResult = await resultFrame(page)
+    assert.equal(await controllerFrame.locator('#controller-status').isHidden(), true)
     assert.equal(await controllerFrame.locator('iframe').getAttribute('sandbox'), 'allow-scripts')
     assert.match(
       await firstResult

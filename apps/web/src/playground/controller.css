@@ -16,6 +16,7 @@ main {
 }
 
 #controller-status {
+  display: none;
   min-height: 1.3rem;
   margin: 0 0 0.75rem;
   color: #5d596b;
