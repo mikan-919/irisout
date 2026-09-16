@@ -142,6 +142,11 @@ Vite+でビルドし、Bunサーバーは`/playground/:id`の要求ごとにSQLi
 共有ページのhydrate用JavaScriptは`shared-playground.js`として分離した。公式サイトの`/`には
 `data-playground-root`を出力しないことをブラウザー試験で確認した。
 
+同日に公式ホームページの視覚層を再設計した。工程を軸にしたNarrative WorkflowとCobaltの設計値を採用し、
+`App.jsx`はコンパイルの入力・解析・出力を示す構成へ変更した。疑似IDE枠、発光、グラデーションを削除し、
+コマンドパレット、コピー操作、モバイルメニュー、画面内表示を残した。320・375・414・768・1280pxの
+横幅、区画内リンク、検索、キーボード操作、コピー、初期HTMLのハイドレーション、本番ビルドを確認した。
+
 ## 検証
 
 - `bun run check`: 書式、静的検査、TypeScriptとauthored JSXの型検査。

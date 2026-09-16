@@ -1,0 +1,58 @@
+/* irisoutホームページの設計値。色はOKLCH、余白は4点単位で管理する。 */
+:root {
+  /* Cobalt: 明るい寒色の紙面、電気青を一つの信号として使う。 */
+  --color-paper: oklch(98.5% 0.004 250);
+  --color-paper-2: oklch(96.8% 0.006 250);
+  --color-paper-3: oklch(94.2% 0.009 250);
+  --color-ink: oklch(24% 0.02 258);
+  --color-ink-2: oklch(34% 0.018 257);
+  --color-muted: oklch(48% 0.016 257);
+  --color-faint: oklch(62% 0.012 255);
+  --color-rule: oklch(87% 0.012 250);
+  --color-rule-strong: oklch(72% 0.018 255);
+  --color-accent: oklch(58% 0.2 256);
+  --color-accent-ink: oklch(99% 0.004 250);
+  --color-focus: oklch(30% 0.04 255);
+  --color-graphite: oklch(22% 0.016 260);
+  --color-graphite-ink: oklch(94% 0.008 250);
+  --color-graphite-muted: oklch(76% 0.012 255);
+  --color-graphite-rule: oklch(42% 0.02 260);
+  --color-success: oklch(48% 0.15 150);
+  --color-error: oklch(52% 0.18 25);
+  --color-scrim: oklch(18% 0.02 258 / 0.52);
+
+  --font-display: 'Space Grotesk', ui-sans-serif, sans-serif;
+  --font-body: 'Inter', ui-sans-serif, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --space-2xs: 0.25rem;
+  --space-xs: 0.5rem;
+  --space-sm: 0.75rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+  --space-2xl: 3rem;
+  --space-3xl: 4rem;
+  --space-4xl: 6rem;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-md: 1.25rem;
+  --text-lg: 1.5625rem;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-short: 160ms;
+  --dur-standard: 240ms;
+  --dur-reveal: 600ms;
+
+  --rule-hair: 1px;
+  --radius-control: 6px;
+  --radius-card: 10px;
+  --radius-pill: 999px;
+  --shell: 1180px;
+  --shadow-code: 0 1px 2px oklch(24% 0.02 258 / 0.05);
+  --shadow-dialog: 0 1rem 3rem oklch(18% 0.02 258 / 0.2);
+}

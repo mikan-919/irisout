@@ -1,0 +1,31 @@
+{
+  "date": "2026-09-16",
+  "framework": "vite-plus + irisout",
+  "fontStack": {
+    "source": "apps/web/src/styles.css:1",
+    "observed": ["DM Sans", "DM Mono", "Space Grotesk"],
+    "selected": ["Space Grotesk", "Inter", "JetBrains Mono"]
+  },
+  "palette": {
+    "source": "apps/web/src/styles.css:3-18",
+    "observed": "hex and rgb custom properties",
+    "selected": "Cobalt OKLCH tokens in tokens.css"
+  },
+  "motion": {
+    "source": "apps/web/package.json",
+    "observed": "no motion library",
+    "selected": "CSS transitions + IntersectionObserver"
+  },
+  "spacing": {
+    "source": "apps/web/src/styles.css",
+    "observed": "mixed rem and px values",
+    "selected": "4-point named scale in tokens.css"
+  },
+  "preserved": ["irisout content", "routes", "playground link", "GitHub link", "copy interaction"],
+  "introduced": [
+    "Narrative Workflow structure",
+    "Cobalt palette",
+    "N13 command palette",
+    "Ft5 statement footer"
+  ]
+}
