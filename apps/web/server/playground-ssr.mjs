@@ -113,6 +113,12 @@ export function pageHtml({ origin, id, displayRecord, rendered, clientPath }) {
     <meta property="og:title" content="${escapeAttribute(title)}">
     <meta property="og:description" content="${escapeAttribute(description)}">
     <meta property="og:url" content="${escapeAttribute(canonical)}">
+    <meta property="og:image" content="${escapeAttribute(new URL('/og-image.webp', origin).href)}">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:type" content="image/webp">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:image" content="${escapeAttribute(new URL('/og-image.webp', origin).href)}">
     <link rel="canonical" href="${escapeAttribute(canonical)}">
     <title>${escapeText(title)}</title>
   </head>

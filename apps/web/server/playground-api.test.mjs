@@ -35,6 +35,7 @@ describe('playground save API', () => {
     assert.equal(JSON.stringify(created).includes(deleteToken), false)
     const ogp = createPlaygroundOgp(store.findById(created.id), officialOrigin)
     assert.deepEqual(Object.keys(ogp).sort(), ['description', 'image', 'title', 'url'])
+    assert.equal(ogp.image, `${officialOrigin}/og-image.webp`)
     assert.equal(JSON.stringify(ogp).includes(deleteToken), false)
 
     const retry = await save(api, input, deleteToken)

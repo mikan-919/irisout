@@ -196,7 +196,7 @@ export function createPlaygroundOgp(record, officialOrigin) {
     title: record.title,
     description: record.description,
     url: new URL(`/playground/${record.id}`, origin).href,
-    image: new URL('/docs/assets/logo.webp', origin).href,
+    image: new URL('/og-image.webp', origin).href,
   }
 }
 

@@ -702,6 +702,12 @@ function pageShell({ title, description, path, body, scripts = true }) {
     <meta property="og:description" content="${escapeAttribute(description)}" />
     <meta property="og:url" content="${escapeAttribute(canonical)}" />
     <meta property="og:type" content="article" />
+    <meta property="og:image" content="${escapeAttribute(`${SITE_ORIGIN}/og-image.webp`)}" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:type" content="image/webp" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="${escapeAttribute(`${SITE_ORIGIN}/og-image.webp`)}" />
     <link rel="stylesheet" href="/docs/site.css" />
     <title>${escapeHtml(title)} — irisout</title>
   </head>

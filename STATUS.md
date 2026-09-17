@@ -30,6 +30,9 @@
 404を確認した。実ブラウザーの操作試験は実行環境の共有ライブラリ不足で未完了であり、D1の復元手順も
 未確定である。
 
+同日に1200×630のOG画像を追加し、ホーム、Playground、文書、共有ページのOpen Graphと
+Twitter Cardメタデータへ接続した。公開WorkerでWebP画像、寸法、MIME型、メタデータを確認した。
+
 2026-09-14にSSR入口を実装した。`irisout/ssr`の`irisoutSsr()`は指定したルート部品から
 要求単位の`render(input) -> { html, state }`を生成し、入力、テキスト、属性、条件分岐、一覧、
 局所signalを扱う。必須入力は要求時だけ評価し、局所signal初期値をstateからhydrateへ復元する。
