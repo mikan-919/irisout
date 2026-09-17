@@ -1,0 +1,21 @@
+{
+  "$schema": "../../../node_modules/wrangler/config-schema.json",
+  "name": "irisout-site",
+  "main": "./site-worker.mjs",
+  "compatibility_date": "2026-09-17",
+  "workers_dev": true,
+  "assets": {
+    "directory": "../dist",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+    "html_handling": "drop-trailing-slash",
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "irisout-playground",
+      "database_id": "48b50dcb-e3bc-426b-bd23-407b4e242128",
+      "migrations_dir": "./migrations",
+    },
+  ],
+}

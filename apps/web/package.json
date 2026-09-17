@@ -13,6 +13,9 @@
     "dev:playground": "node scripts/dev-playground.mjs",
     "serve:playground": "node scripts/playground-server.mjs",
     "serve:web": "bun server/index.mjs",
+    "deploy:cloudflare:controller": "wrangler deploy --config cloudflare/wrangler.controller.jsonc",
+    "deploy:cloudflare:site": "wrangler deploy --config cloudflare/wrangler.site.jsonc",
+    "deploy:cloudflare:migrate": "wrangler d1 migrations apply irisout-playground --remote --config cloudflare/wrangler.site.jsonc",
     "test:playground": "bun scripts/playground-e2e.test.mjs",
     "test:server": "bun test server",
     "test:save": "bun test scripts/playground-save.test.mjs"
@@ -24,6 +27,7 @@
   "devDependencies": {
     "playwright": "^1.61.1",
     "typescript": "^5.9.0",
-    "vite-plus": "0.3.0"
+    "vite-plus": "0.3.0",
+    "wrangler": "4.133.0"
   }
 }

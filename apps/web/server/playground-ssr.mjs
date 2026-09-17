@@ -52,7 +52,7 @@ export function createPlaygroundPageHandler({
 
     let record
     try {
-      record = store.findById(id)
+      record = await store.findById(id)
     } catch {
       return pageError(503, 'service unavailable')
     }

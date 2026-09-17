@@ -3,7 +3,7 @@
 実装の現在地、完了した段階、既知の制約を記録する。設計判断は`docs/adr/`、受入条件は
 `openspec/specs/`、今後の作業は`ROADMAP.md`を正本とする。
 
-## 現在地（2026-09-16）
+## 現在地（2026-09-17）
 
 ソース版とnpm公開版は0.2.2である。0.2.2は文書とアプリ開発用スキルを更新し、公開入口と生成コードは変更していない。0.2.1では状態更新を
 `signal((previous) => next)`へ統一し、`signal(initial, keyOf)`と`.update()`を削除した。
@@ -21,6 +21,14 @@
 文書表示用コードとPlayground接続用`examples.json`を生成する。ブラウザ用入口、隔離実行、保存・削除、
 共有ページSSRも内部実装と自動試験を確認済みである。実運用の配信先・保存先・復元と、作者以外の人間に
 よる手動試用は未検証である。
+
+2026-09-17に公式サイトと実行管理画面をCloudflare Workersへ分離して配信した。公式側は
+`irisout-site.mikan-919.workers.dev`、実行管理側は`irisout-playground-run.mikan-919.workers.dev`である。
+公式側はWorkers Assets、共有ページSSR、保存APIを一つのWorkerで扱い、共有値はAPACのD1
+`irisout-playground`へ保存する。実行管理側は保存APIを持たず、公式Originだけを`frame-ancestors`へ
+指定する。公開環境で公式ページ、実行管理CSP、専用資産の404、D1への保存、共有ページ表示、削除後の
+404を確認した。実ブラウザーの操作試験は実行環境の共有ライブラリ不足で未完了であり、D1の復元手順も
+未確定である。
 
 2026-09-14にSSR入口を実装した。`irisout/ssr`の`irisoutSsr()`は指定したルート部品から
 要求単位の`render(input) -> { html, state }`を生成し、入力、テキスト、属性、条件分岐、一覧、

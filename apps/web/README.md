@@ -82,6 +82,24 @@ bun run site:check
 bun run site:test
 ```
 
+## Cloudflare Workersへの配信
+
+公式サイトと実行管理画面は別Workerへ配信し、共有PlaygroundはD1へ保存します。最初の配信は
+リポジトリのルートで次を実行します。
+
+```bash
+VITE_IRISOUT_PLAYGROUND_SITE_ORIGIN=https://irisout-site.mikan-919.workers.dev \
+VITE_IRISOUT_PLAYGROUND_CONTROLLER_ORIGIN=https://irisout-playground-run.mikan-919.workers.dev \
+bun run build:web
+bun run --cwd apps/web deploy:cloudflare:migrate
+bun run --cwd apps/web deploy:cloudflare:controller
+bun run --cwd apps/web deploy:cloudflare:site
+```
+
+配信設定は`cloudflare/wrangler.site.jsonc`と`cloudflare/wrangler.controller.jsonc`に置きます。
+独自ドメインへ切り替える場合は、両設定とビルド時の二つのOriginを同時に変更します。実行管理側の
+`IRISOUT_SITE_ORIGIN`は、`frame-ancestors`で公式サイト以外からの埋込みを拒否する値です。
+
 ページ内のCounter、List、SVGは、同じコンパイル経路で生成した操作確認用の表示です。
 導入手順はnpm公開版を前提にしています。
 

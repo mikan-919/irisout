@@ -1,8 +1,6 @@
 // 共有Playgroundの保存・削除APIを扱う。
 // 公式OriginとJSONを検査し、投稿JSXは保存値としてだけSQLiteへ渡す。
 
-import { TextDecoder } from 'node:util'
-
 export const PLAYGROUND_SCHEMA_VERSION = 1
 export const PLAYGROUND_BODY_MAX_BYTES = 128 * 1024
 export const PLAYGROUND_SOURCE_MAX_BYTES = 64 * 1024
@@ -92,7 +90,7 @@ async function handleSave(request, context) {
   if (!input.ok) return jsonError(input.status, input.message)
 
   try {
-    const result = context.store.save({ input: input.value, deleteToken: token })
+    const result = await context.store.save({ input: input.value, deleteToken: token })
     if (result.kind === 'not-found') return jsonError(404, '保存要求が見つかりません')
     if (result.kind === 'deleted') return jsonError(410, '保存要求は削除済みです')
     if (result.kind === 'conflict') return jsonError(409, '保存要求IDが別の入力に使われています')
@@ -119,7 +117,7 @@ async function handleDelete(request, id, context) {
   if (!token) return jsonError(404, '共有が見つかりません')
 
   try {
-    const result = context.store.delete(id, token)
+    const result = await context.store.delete(id, token)
     if (result === 'not-found') return jsonError(404, '共有が見つかりません')
     return new Response(null, {
       status: 204,
@@ -183,7 +181,8 @@ export function readBearerToken(value) {
   const match = value.match(/^Bearer ([A-Za-z0-9_-]+)$/)
   if (!match || match[1].length !== 43) return null
   try {
-    if (Buffer.from(match[1], 'base64url').byteLength !== PLAYGROUND_TOKEN_BYTES) return null
+    const base64 = match[1].replaceAll('-', '+').replaceAll('_', '/')
+    if (atob(`${base64}=`).length !== PLAYGROUND_TOKEN_BYTES) return null
   } catch {
     return null
   }
