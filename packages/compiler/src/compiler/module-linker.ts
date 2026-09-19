@@ -44,6 +44,8 @@ interface ModuleRecord {
   moduleIndex: number
 }
 
+type SourceTransform = (source: string, filePath: string) => string
+
 export interface LinkedProject {
   source: string
   supportStatements: string[]
@@ -421,7 +423,11 @@ function resolveModule(fromFile: string, specifier: string): string {
   throw compileError(`cannot resolve relative import "${specifier}" from "${fromFile}"`)
 }
 
-function loadModule(filePath: string, records: Map<string, ModuleRecord>): ModuleRecord {
+function loadModule(
+  filePath: string,
+  records: Map<string, ModuleRecord>,
+  transformSource?: SourceTransform,
+): ModuleRecord {
   const existing = records.get(filePath)
   if (existing) return existing
   let source: string
@@ -436,7 +442,7 @@ function loadModule(filePath: string, records: Map<string, ModuleRecord>): Modul
       { filePath, source: '' },
     )
   }
-  const record = parseModule(filePath, source)
+  const record = parseModule(filePath, transformSource ? transformSource(source, filePath) : source)
   records.set(filePath, record)
   return record
 }
@@ -583,11 +589,14 @@ function renameModuleBindingsUnchecked(
   record.ast.program.body = body
 }
 
-function linkGraph(entryPath: string): { entry: ModuleRecord; order: ModuleRecord[] } {
+function linkGraph(
+  entryPath: string,
+  transformSource?: SourceTransform,
+): { entry: ModuleRecord; order: ModuleRecord[] } {
   const records = new Map<string, ModuleRecord>()
   const order: ModuleRecord[] = []
   const visit = (filePath: string, stack: string[]): ModuleRecord => {
-    const record = loadModule(filePath, records)
+    const record = loadModule(filePath, records, transformSource)
     if (record.state === 'visiting') {
       const cycle = [...stack, filePath].join(' -> ')
       throw withCompileDiagnostic(
@@ -618,7 +627,7 @@ function linkGraph(entryPath: string): { entry: ModuleRecord; order: ModuleRecor
   return { entry, order }
 }
 
-export function linkProject(entryPath: string): LinkedProject {
+export function linkProject(entryPath: string, transformSource?: SourceTransform): LinkedProject {
   const absoluteEntry = path.resolve(entryPath)
   if (!isFile(absoluteEntry)) {
     throw withCompileDiagnostic(compileError(`entry module "${absoluteEntry}" does not exist`), {
@@ -636,7 +645,7 @@ export function linkProject(entryPath: string): LinkedProject {
     )
   }
 
-  const { order } = linkGraph(absoluteEntry)
+  const { order } = linkGraph(absoluteEntry, transformSource)
   const sourceParts: string[] = []
   const origins: DiagnosticOrigin[] = []
   const supportStatements: string[] = []

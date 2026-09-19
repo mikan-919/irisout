@@ -16,7 +16,9 @@
     "moduleResolution": "bundler",
     // types/testはこのtsconfigの外にあるため、workspace packageの型入口を直接指定する。
     "paths": {
-      "irisout": ["../../packages/irisout/dist/index.d.ts"]
+      "irisout": ["../../packages/irisout/dist/index.d.ts"],
+      "irisout/motion": ["../../packages/motion/src/runtime.ts"],
+      "irisout/motion/vite": ["../../packages/motion/src/vite.ts"]
     },
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "allowJs": true,

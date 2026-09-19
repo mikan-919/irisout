@@ -18,6 +18,28 @@ Vite連携は`irisout/vite`、JSX型定義は`irisout/jsx`から参照します�
 import { irisout } from 'irisout/vite'
 ```
 
+Motionを使う場合は`motion`を導入し、Vite設定だけをMotion用入口へ替えます。
+
+```bash
+npm install irisout motion vite-plus
+```
+
+```ts
+import { irisoutMotion } from 'irisout/motion/vite'
+
+export default { plugins: [irisoutMotion({ entry: './src/App.jsx' })] }
+```
+
+JSXでは`irisout/motion`の`motion`を使います。`layout`、`layoutId`、`initial`、`animate`、`transition`を
+Motionの`animate()`へ接続します。`variants`、`exit`、gesture属性は未対応で、
+通常のDOM属性として残さずコンパイル前にエラーにします。
+
+```jsx
+import { motion } from 'irisout/motion'
+
+render(<motion.div layout layoutId="card" animate={{ opacity: 1 }} />)
+```
+
 authored JSXの記述APIは`irisout`から名前付きでimportします。このimportはコンパイル時に
 取り除かれ、生成物の実行時依存にはなりません。
 

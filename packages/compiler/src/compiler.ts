@@ -81,6 +81,8 @@ export function useContext<T>(_context: IrisContext<T>): T {
 export interface CompileProjectOptions {
   /** clientは既存入口、ssrは要求単位のrender moduleを追加生成する。 */
   target?: 'client' | 'ssr'
+  /** 外部拡張が各moduleをirisoutの標準記法へ下げる前処理。 */
+  transformSource?: (source: string, filePath: string) => string
 }
 
 // Node側のbuild入口。module graphの読込はここで行い、既存compile(source)の
@@ -95,7 +97,7 @@ export function compileProject(
   let diagnosticOrigins: DiagnosticOrigin[] | undefined
   try {
     diagnosticSource = readFileSync(diagnosticFilePath, 'utf8')
-    const linked = linkProject(entryPath)
+    const linked = linkProject(entryPath, projectOptions.transformSource)
     diagnosticSource = linked.source
     diagnosticOrigins = linked.origins
     const options: CompileOptions = {

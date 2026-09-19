@@ -22,6 +22,8 @@ export interface IrisoutPluginOptions {
   htmlMarker?: string
   /** main.jsからimportする仮想module名。 */
   virtualModuleId?: string
+  /** JSX拡張を標準irisout記法へ変換する前処理。 */
+  transformSource?: (source: string, filePath: string) => string
 }
 
 export interface IrisoutSsrPluginOptions {
@@ -57,7 +59,7 @@ export function irisout(options: IrisoutPluginOptions): Plugin {
   let dependencies = new Set<string>()
 
   const compile = (): CompileResult => {
-    const next = compileProject(entryPath)
+    const next = compileProject(entryPath, { transformSource: options.transformSource })
     result = next
     dependencies = new Set(next.dependencies.map(normalizePath))
     return next

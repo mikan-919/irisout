@@ -46,10 +46,24 @@
       "types": "./dist/compiler/state.d.ts",
       "import": "./dist/state.js"
     },
+    "./motion": {
+      "types": "./dist/motion.d.ts",
+      "import": "./dist/motion.js"
+    },
+    "./motion/vite": {
+      "types": "./dist/motion-vite.d.ts",
+      "import": "./dist/motion-vite.js"
+    },
     "./jsx": "./dist/jsx.d.ts"
   },
   "peerDependencies": {
     "hono": ">=4.0.0",
+    "motion": ">=13.0.0",
     "vite-plus": ">=0.3.0"
+  },
+  "peerDependenciesMeta": {
+    "motion": {
+      "optional": true
+    }
   }
 }

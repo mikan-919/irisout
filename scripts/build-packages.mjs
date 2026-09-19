@@ -49,6 +49,26 @@ const publicEntries = [
     paths: {},
   },
   {
+    name: 'motion',
+    source: 'packages/motion/src/runtime.ts',
+    external: (id) => id === 'motion' || id.startsWith('node:'),
+    paths: {},
+  },
+  {
+    name: 'motion-vite',
+    source: 'packages/motion/src/vite.ts',
+    external: (id) =>
+      id === 'vite-plus' ||
+      id.startsWith('node:') ||
+      id.includes('vite-plugin/src/index') ||
+      id.includes('compiler/src/compiler'),
+    paths: (id) => {
+      if (id.includes('vite-plugin/src/index')) return './vite.js'
+      if (id.includes('compiler/src/compiler')) return './index.js'
+      return id
+    },
+  },
+  {
     name: 'vite',
     source: 'packages/vite-plugin/src/index.ts',
     external: (id) =>
@@ -152,6 +172,14 @@ copyFileSync(
   path.join(publicOutDir, 'routes.d.ts'),
 )
 copyFileSync(
+  path.join(declarationOutDir, 'motion/src/runtime.d.ts'),
+  path.join(publicOutDir, 'motion.d.ts'),
+)
+copyFileSync(
+  path.join(declarationOutDir, 'motion/src/vite.d.ts'),
+  path.join(publicOutDir, 'motion-vite.d.ts'),
+)
+copyFileSync(
   path.join(declarationOutDir, 'hono/src/index.d.ts'),
   path.join(publicOutDir, 'hono.d.ts'),
 )
@@ -190,6 +218,8 @@ const declarationFiles = [
   'vite-routes.d.ts',
   'ssr.d.ts',
   'routes.d.ts',
+  'motion.d.ts',
+  'motion-vite.d.ts',
   'hono.d.ts',
   'diagnostics.d.ts',
   'jsx.d.ts',
