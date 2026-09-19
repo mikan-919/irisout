@@ -4,14 +4,12 @@ import path from 'node:path'
 import { describe, expect, it, vi } from 'vite-plus/test'
 import { transformMotionSource } from '../../motion/src/vite.js'
 import { mountMotionElement } from '../../motion/src/runtime.js'
-import { compileProject } from '../src/compiler.js'
-import { createContainer } from './helpers.js'
-
-const animateCalls = vi.hoisted(() => [] as unknown[][])
+import { beginDomUpdate, endDomUpdate, observeDomUpdates } from '../../runtime/src/index.js'
+import { compile, compileProject } from '../src/compiler.js'
+import { createContainer, loadGenerated } from './helpers.js'
 
 vi.mock('motion', () => ({
-  animate(element: Element, ...args: unknown[]) {
-    animateCalls.push(args)
+  animate(element: Element) {
     element.setAttribute('data-animated', 'true')
     return {
       complete() {},
@@ -23,6 +21,44 @@ vi.mock('motion', () => ({
 }))
 
 describe('irisout/motion extension', () => {
+  it('notifies projection observers once for a nested DOM update', () => {
+    const calls: string[] = []
+    const stop = observeDomUpdates({
+      before: () => calls.push('before'),
+      after: () => calls.push('after'),
+    })
+    beginDomUpdate()
+    beginDomUpdate()
+    endDomUpdate()
+    endDomUpdate()
+    stop()
+    expect(calls).toEqual(['before', 'after'])
+  })
+
+  it('wraps generated reactive DOM writes in a DOM update transaction', async () => {
+    const result = compile(`import { render, signal } from 'irisout'
+export function App() {
+  const wide = signal(false)
+  render(<button style={wide() ? 'width:200px' : 'width:100px'} onClick={() => wide(!wide())}>resize</button>)
+}`)
+    const generated = await loadGenerated(result.code)
+    const container = createContainer()
+    const calls: string[] = []
+    const stop = observeDomUpdates({
+      before: () => calls.push('before'),
+      after: () => calls.push('after'),
+    })
+    const instance = (generated.mountComponent as (element: Element) => { unmount(): void })(
+      container,
+    )
+    calls.length = 0
+    const EventConstructor = container.ownerDocument.defaultView!.Event
+    container.querySelector('button')!.dispatchEvent(new EventConstructor('click'))
+    stop()
+    instance.unmount()
+    expect(calls).toEqual(['before', 'after'])
+  })
+
   it('lowers motion JSX without adding Motion knowledge to the core compiler', () => {
     const source = `import { render } from 'irisout'
 import { motion } from 'irisout/motion'
@@ -53,43 +89,6 @@ export function App() {
     expect(element.getAttribute('data-animated')).toBe('true')
     controller.destroy()
     expect(element.getAttribute('data-stopped')).toBe('true')
-  })
-
-  it('animates between elements with the same layoutId', () => {
-    const container = createContainer()
-    const previous = container.ownerDocument.createElement('div')
-    container.append(previous)
-    previous.getBoundingClientRect = vi.fn(() => ({
-      left: 10,
-      top: 20,
-      width: 100,
-      height: 50,
-    })) as unknown as typeof previous.getBoundingClientRect
-    const previousController = mountMotionElement(previous, { layoutId: 'card' })
-    previousController.destroy()
-    previous.remove()
-
-    const next = container.ownerDocument.createElement('div')
-    container.append(next)
-    next.getBoundingClientRect = vi.fn(() => ({
-      left: 110,
-      top: 40,
-      width: 200,
-      height: 100,
-    })) as unknown as typeof next.getBoundingClientRect
-    const originalRequestAnimationFrame = globalThis.requestAnimationFrame
-    globalThis.requestAnimationFrame = (callback: FrameRequestCallback) => {
-      callback(0)
-      return 1
-    }
-    const nextController = mountMotionElement(next, { layoutId: 'card' })
-
-    expect(animateCalls.at(-1)).toEqual([
-      expect.objectContaining({ x: [-100, 0], y: [-20, 0], scaleX: [0.5, 1] }),
-      undefined,
-    ])
-    nextController.destroy()
-    globalThis.requestAnimationFrame = originalRequestAnimationFrame
   })
 
   it('rejects unsupported Motion props before the irisout compiler', () => {

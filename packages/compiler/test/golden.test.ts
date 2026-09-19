@@ -97,7 +97,7 @@ describe('golden: signal/derived ラッパー非混入(ADR-0006 回帰チェッ�
 })
 
 describe('golden: 手書き基準に対するサイズ予算', () => {
-  it('dist/app.js は手書き基準(apps/demos/counter.handwritten.js)の5.5倍以内', () => {
+  it('dist/app.js は手書き基準(apps/demos/counter.handwritten.js)の6.5倍以内', () => {
     const outDir = mkdtempSync(path.join(tmpdir(), 'irisout-size-test-'))
     const result = spawnSync(path.resolve('node_modules/.bin/vp'), ['-C', 'apps/demos', 'build'], {
       env: {
@@ -131,10 +131,12 @@ describe('golden: 手書き基準に対するサイズ予算', () => {
     // 4.38xになったため、予算を更新した。
     // 2026-09-05: ADR-0022のexplicit unmount/lifecycle固定費を含む実測で
     // 5.33xとなったため、直近の余白だけを持つ5.5xへ更新した。
+    // 2026-09-19: 配置投影拡張が購読する汎用DOM更新境界の固定費を含む実測で
+    // 6.17xとなったため、6.5xへ更新した。
     console.log(
-      `[size budget] dist/app.js=${appBytes}B / handwritten=${baselineBytes}B = ${ratio.toFixed(2)}x (budget 5.5x)`,
+      `[size budget] dist/app.js=${appBytes}B / handwritten=${baselineBytes}B = ${ratio.toFixed(2)}x (budget 6.5x)`,
     )
 
-    expect(appBytes).toBeLessThanOrEqual(baselineBytes * 5.5)
+    expect(appBytes).toBeLessThanOrEqual(baselineBytes * 6.5)
   })
 })

@@ -1,12 +1,13 @@
 // authored JSXを再利用可能なirisout Vite連携へ渡すデモ設定。
 import { defineConfig } from 'vite-plus'
+import { irisoutMotion } from 'irisout/motion/vite'
 import { irisout } from 'irisout/vite'
 
 export default defineConfig(() => {
   return {
     base: process.env.IRISOUT_BASE ?? '/',
     plugins: [
-      irisout({
+      (process.env.IRISOUT_MOTION === 'true' ? irisoutMotion : irisout)({
         entry: process.env.IRISOUT_ENTRY ?? 'counter.jsx',
         container: '#app',
       }),

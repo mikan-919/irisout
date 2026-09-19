@@ -19,6 +19,7 @@
     "test:web:playground": "bun run --cwd apps/web test:playground",
     "test:web:server": "bun run --cwd apps/web test:server",
     "test:web:save": "bun run --cwd apps/web test:save",
+    "test:motion-layout": "bun apps/web/scripts/motion-layout-e2e.test.mjs",
     "build:inspect": "IRISOUT_MINIFY=false vp -C apps/demos build",
     "start": "bun run build && vp -C apps/demos preview",
     "check": "vp check && bun run typecheck:tsc",
@@ -51,7 +52,7 @@
     "@types/node": "^24.0.0",
     "hono": "^4.13.8",
     "husky": "^9.1.7",
-    "motion": "^13.4.0",
+    "motion": "13.4.0",
     "typescript": "^5.9.0",
     "vite-plus": "0.3.0"
   },

@@ -13,6 +13,45 @@
 type DeclId = string
 type DeclKind = 'signal' | 'derived'
 
+export interface DomUpdateObserver {
+  before(): void
+  after(): void
+}
+
+const domUpdateObservers = new Set<DomUpdateObserver>()
+let domUpdateDepth = 0
+
+// DOM更新の前後を一つの測定単位として外部機能へ通知する。入れ子更新は最外周だけを
+// 通知し、コンパイラ本体へ配置測定などの用途別処理を持ち込まない。
+export function observeDomUpdates(observer: DomUpdateObserver): () => void {
+  domUpdateObservers.add(observer)
+  return () => domUpdateObservers.delete(observer)
+}
+
+export function beginDomUpdate(): void {
+  if (domUpdateDepth++ > 0) return
+  try {
+    for (const observer of domUpdateObservers) observer.before()
+  } catch (error) {
+    domUpdateDepth = 0
+    throw error
+  }
+}
+
+export function endDomUpdate(): void {
+  if (domUpdateDepth === 0) throw new Error('endDomUpdate called without beginDomUpdate')
+  if (--domUpdateDepth > 0) return
+  let firstError: unknown
+  for (const observer of domUpdateObservers) {
+    try {
+      observer.after()
+    } catch (error) {
+      firstError ??= error
+    }
+  }
+  if (firstError) throw firstError
+}
+
 // CONCEPT.v3: List 全体を再描画せず、listId / itemId / bindingId の3段アドレスで
 // 更新先を特定する。文字列の連結やハッシュはホットパスで作らず、List と item は
 // Map、binding は各 item の Map で分離して保持する。

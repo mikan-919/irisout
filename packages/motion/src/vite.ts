@@ -56,12 +56,20 @@ function motionAction(
   transition: t.Expression | undefined,
   layout: t.Expression | undefined,
   layoutId: t.Expression | undefined,
+  layoutScroll: t.Expression | undefined,
+  layoutRoot: t.Expression | undefined,
+  layoutCrossfade: t.Expression | undefined,
 ): t.JSXAttribute {
   const element = t.identifier('__motion_element__')
   const controller = t.identifier('__motion_controller__')
   const optionProperties: t.ObjectProperty[] = []
   if (layout) optionProperties.push(t.objectProperty(t.identifier('layout'), layout))
   if (layoutId) optionProperties.push(t.objectProperty(t.identifier('layoutId'), layoutId))
+  if (layoutScroll)
+    optionProperties.push(t.objectProperty(t.identifier('layoutScroll'), layoutScroll))
+  if (layoutRoot) optionProperties.push(t.objectProperty(t.identifier('layoutRoot'), layoutRoot))
+  if (layoutCrossfade)
+    optionProperties.push(t.objectProperty(t.identifier('layoutCrossfade'), layoutCrossfade))
   if (initial) optionProperties.push(t.objectProperty(t.identifier('initial'), initial))
   if (transition) optionProperties.push(t.objectProperty(t.identifier('transition'), transition))
   const options = t.objectExpression(optionProperties)
@@ -153,6 +161,9 @@ export function transformMotionSource(source: string, filePath = 'source.jsx'): 
       let transition: t.Expression | undefined
       let layout: t.Expression | undefined
       let layoutId: t.Expression | undefined
+      let layoutScroll: t.Expression | undefined
+      let layoutRoot: t.Expression | undefined
+      let layoutCrossfade: t.Expression | undefined
       const hostAttributes: (t.JSXAttribute | t.JSXSpreadAttribute)[] = []
       for (const attribute of opening.attributes) {
         if (attribute.type === 'JSXSpreadAttribute') {
@@ -167,10 +178,24 @@ export function transformMotionSource(source: string, filePath = 'source.jsx'): 
         else if (name === 'transition') transition = attrExpression(attribute)
         else if (name === 'layout') layout = attrExpression(attribute)
         else if (name === 'layoutId') layoutId = attrExpression(attribute)
+        else if (name === 'layoutScroll') layoutScroll = attrExpression(attribute)
+        else if (name === 'layoutRoot') layoutRoot = attrExpression(attribute)
+        else if (name === 'layoutCrossfade') layoutCrossfade = attrExpression(attribute)
         else if (name === 'use') throw new Error('motion: motion elements cannot also use use=')
         else hostAttributes.push(attribute)
       }
-      hostAttributes.push(motionAction(initial, animateTarget, transition, layout, layoutId))
+      hostAttributes.push(
+        motionAction(
+          initial,
+          animateTarget,
+          transition,
+          layout,
+          layoutId,
+          layoutScroll,
+          layoutRoot,
+          layoutCrossfade,
+        ),
+      )
       opening.name = t.jsxIdentifier(tagName)
       opening.attributes = hostAttributes
       if (path.node.closingElement) path.node.closingElement.name = t.jsxIdentifier(tagName)

@@ -1,7 +1,152 @@
-// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
 
-exports[`golden: 生成コードの構造スナップショット > ADR-0009 ブロック本体ハンドラの code を固定する 1`] = `
-"import { mount as __mount__, hydrate as __hydrate__ } from 'irisout/runtime';
+exports[`golden: 生成コードの構造スナップショット M1 フィクスチャの code と initialHtml を固定する 1`] = `
+"import { mount as __mount__, hydrate as __hydrate__, beginDomUpdate as __beginDomUpdate__, endDomUpdate as __endDomUpdate__ } from 'irisout/runtime';
+
+export function createComponent() {
+  let count = 0;
+  let doubled = count * 2;
+
+  const __INITIAL_HTML__ = "<div data-iris-id=\\"m0\\">0</div>";
+
+  const __MARKER_IDS__ = ["m0"];
+
+  let __markers__;
+  let __container__;
+  let __mounted__ = false;
+  let __unmounted__ = false;
+  function mount(container) {
+    if (__mounted__ || __unmounted__) throw new Error("component instance can only be mounted or hydrated once");
+    ({ markers: __markers__ } = __mount__(container, __INITIAL_HTML__, __MARKER_IDS__));
+    __container__ = container;
+    __mounted__ = true;
+  }
+
+  function hydrateComponentInstance(container) {
+    if (__mounted__ || __unmounted__) throw new Error("component instance can only be mounted or hydrated once");
+    ({ markers: __markers__ } = __hydrate__(container, __MARKER_IDS__));
+    __container__ = container;
+    __mounted__ = true;
+  }
+
+  function unmount() {
+    if (!__mounted__ || __unmounted__) return;
+    __beginDomUpdate__();
+    try {
+    __unmounted__ = true;
+    __mounted__ = false;
+    if (__container__) __container__.replaceChildren();
+    __container__ = null;
+    if (__markers__) __markers__.clear();
+    __markers__ = undefined;
+    } finally {
+      __endDomUpdate__();
+    }
+  }
+
+  function update_count() {
+    if (!__mounted__ || __unmounted__) return;
+    __beginDomUpdate__(); try {
+    doubled = count * 2;
+    { const __el = __markers__.get("m0"); if (__el) { __el.textContent = \`\${count + doubled}\`; } }
+    } finally { __endDomUpdate__(); }
+  }
+
+  return { mount, hydrate: hydrateComponentInstance, unmount, update_count };
+}
+
+export function mountComponent(container) {
+  const instance = createComponent();
+  instance.mount(container);
+  return instance;
+}
+
+export function hydrateComponent(container) {
+  const instance = createComponent();
+  instance.hydrate(container);
+  return instance;
+}
+"
+`;
+
+exports[`golden: 生成コードの構造スナップショット M1 フィクスチャの code と initialHtml を固定する 2`] = `"<div data-iris-id="m0">0</div>"`;
+
+exports[`golden: 生成コードの構造スナップショット M2 フィクスチャの code を固定する 1`] = `
+"import { mount as __mount__, hydrate as __hydrate__, beginDomUpdate as __beginDomUpdate__, endDomUpdate as __endDomUpdate__ } from 'irisout/runtime';
+
+export function createComponent() {
+  let count = 0;
+  let doubled = count * 2;
+
+  const __INITIAL_HTML__ = "<div><span data-iris-id=\\"m0\\">0</span><button data-iris-id=\\"m1\\">+</button></div>";
+
+  const __MARKER_IDS__ = ["m0","m1"];
+
+  const __handler_m1_click = (...__args) => { count = count + 1; update_count(); };
+
+  let __markers__;
+  let __container__;
+  let __mounted__ = false;
+  let __unmounted__ = false;
+  function mount(container) {
+    if (__mounted__ || __unmounted__) throw new Error("component instance can only be mounted or hydrated once");
+    ({ markers: __markers__ } = __mount__(container, __INITIAL_HTML__, __MARKER_IDS__));
+    __container__ = container;
+    __mounted__ = true;
+    __markers__.get("m1")?.addEventListener("click", __handler_m1_click);
+  }
+
+  function hydrateComponentInstance(container) {
+    if (__mounted__ || __unmounted__) throw new Error("component instance can only be mounted or hydrated once");
+    ({ markers: __markers__ } = __hydrate__(container, __MARKER_IDS__));
+    __container__ = container;
+    __mounted__ = true;
+    __markers__.get("m1")?.addEventListener("click", __handler_m1_click);
+  }
+
+  function unmount() {
+    if (!__mounted__ || __unmounted__) return;
+    __beginDomUpdate__();
+    try {
+    __unmounted__ = true;
+    __mounted__ = false;
+    __markers__?.get("m1")?.removeEventListener("click", __handler_m1_click);
+    if (__container__) __container__.replaceChildren();
+    __container__ = null;
+    if (__markers__) __markers__.clear();
+    __markers__ = undefined;
+    } finally {
+      __endDomUpdate__();
+    }
+  }
+
+  function update_count() {
+    if (!__mounted__ || __unmounted__) return;
+    __beginDomUpdate__(); try {
+    doubled = count * 2;
+    { const __el = __markers__.get("m0"); if (__el) { __el.textContent = \`\${count + doubled}\`; } }
+    } finally { __endDomUpdate__(); }
+  }
+
+  return { mount, hydrate: hydrateComponentInstance, unmount, update_count };
+}
+
+export function mountComponent(container) {
+  const instance = createComponent();
+  instance.mount(container);
+  return instance;
+}
+
+export function hydrateComponent(container) {
+  const instance = createComponent();
+  instance.hydrate(container);
+  return instance;
+}
+"
+`;
+
+exports[`golden: 生成コードの構造スナップショット ADR-0009 ブロック本体ハンドラの code を固定する 1`] = `
+"import { mount as __mount__, hydrate as __hydrate__, beginDomUpdate as __beginDomUpdate__, endDomUpdate as __endDomUpdate__ } from 'irisout/runtime';
 
 export function createComponent() {
   let count = 0;
@@ -36,6 +181,8 @@ export function createComponent() {
 
   function unmount() {
     if (!__mounted__ || __unmounted__) return;
+    __beginDomUpdate__();
+    try {
     __unmounted__ = true;
     __mounted__ = false;
     __markers__?.get("m1")?.removeEventListener("click", __handler_m1_click);
@@ -43,142 +190,16 @@ export function createComponent() {
     __container__ = null;
     if (__markers__) __markers__.clear();
     __markers__ = undefined;
+    } finally {
+      __endDomUpdate__();
+    }
   }
 
   function update_count() {
     if (!__mounted__ || __unmounted__) return;
+    __beginDomUpdate__(); try {
     { const __el = __markers__.get("m0"); if (__el) { __el.textContent = \`\${count}\`; } }
-  }
-
-  return { mount, hydrate: hydrateComponentInstance, unmount, update_count };
-}
-
-export function mountComponent(container) {
-  const instance = createComponent();
-  instance.mount(container);
-  return instance;
-}
-
-export function hydrateComponent(container) {
-  const instance = createComponent();
-  instance.hydrate(container);
-  return instance;
-}
-"
-`;
-
-exports[`golden: 生成コードの構造スナップショット > M1 フィクスチャの code と initialHtml を固定する 1`] = `
-"import { mount as __mount__, hydrate as __hydrate__ } from 'irisout/runtime';
-
-export function createComponent() {
-  let count = 0;
-  let doubled = count * 2;
-
-  const __INITIAL_HTML__ = "<div data-iris-id=\\"m0\\">0</div>";
-
-  const __MARKER_IDS__ = ["m0"];
-
-  let __markers__;
-  let __container__;
-  let __mounted__ = false;
-  let __unmounted__ = false;
-  function mount(container) {
-    if (__mounted__ || __unmounted__) throw new Error("component instance can only be mounted or hydrated once");
-    ({ markers: __markers__ } = __mount__(container, __INITIAL_HTML__, __MARKER_IDS__));
-    __container__ = container;
-    __mounted__ = true;
-  }
-
-  function hydrateComponentInstance(container) {
-    if (__mounted__ || __unmounted__) throw new Error("component instance can only be mounted or hydrated once");
-    ({ markers: __markers__ } = __hydrate__(container, __MARKER_IDS__));
-    __container__ = container;
-    __mounted__ = true;
-  }
-
-  function unmount() {
-    if (!__mounted__ || __unmounted__) return;
-    __unmounted__ = true;
-    __mounted__ = false;
-    if (__container__) __container__.replaceChildren();
-    __container__ = null;
-    if (__markers__) __markers__.clear();
-    __markers__ = undefined;
-  }
-
-  function update_count() {
-    if (!__mounted__ || __unmounted__) return;
-    doubled = count * 2;
-    { const __el = __markers__.get("m0"); if (__el) { __el.textContent = \`\${count + doubled}\`; } }
-  }
-
-  return { mount, hydrate: hydrateComponentInstance, unmount, update_count };
-}
-
-export function mountComponent(container) {
-  const instance = createComponent();
-  instance.mount(container);
-  return instance;
-}
-
-export function hydrateComponent(container) {
-  const instance = createComponent();
-  instance.hydrate(container);
-  return instance;
-}
-"
-`;
-
-exports[`golden: 生成コードの構造スナップショット > M1 フィクスチャの code と initialHtml を固定する 2`] = `"<div data-iris-id="m0">0</div>"`;
-
-exports[`golden: 生成コードの構造スナップショット > M2 フィクスチャの code を固定する 1`] = `
-"import { mount as __mount__, hydrate as __hydrate__ } from 'irisout/runtime';
-
-export function createComponent() {
-  let count = 0;
-  let doubled = count * 2;
-
-  const __INITIAL_HTML__ = "<div><span data-iris-id=\\"m0\\">0</span><button data-iris-id=\\"m1\\">+</button></div>";
-
-  const __MARKER_IDS__ = ["m0","m1"];
-
-  const __handler_m1_click = (...__args) => { count = count + 1; update_count(); };
-
-  let __markers__;
-  let __container__;
-  let __mounted__ = false;
-  let __unmounted__ = false;
-  function mount(container) {
-    if (__mounted__ || __unmounted__) throw new Error("component instance can only be mounted or hydrated once");
-    ({ markers: __markers__ } = __mount__(container, __INITIAL_HTML__, __MARKER_IDS__));
-    __container__ = container;
-    __mounted__ = true;
-    __markers__.get("m1")?.addEventListener("click", __handler_m1_click);
-  }
-
-  function hydrateComponentInstance(container) {
-    if (__mounted__ || __unmounted__) throw new Error("component instance can only be mounted or hydrated once");
-    ({ markers: __markers__ } = __hydrate__(container, __MARKER_IDS__));
-    __container__ = container;
-    __mounted__ = true;
-    __markers__.get("m1")?.addEventListener("click", __handler_m1_click);
-  }
-
-  function unmount() {
-    if (!__mounted__ || __unmounted__) return;
-    __unmounted__ = true;
-    __mounted__ = false;
-    __markers__?.get("m1")?.removeEventListener("click", __handler_m1_click);
-    if (__container__) __container__.replaceChildren();
-    __container__ = null;
-    if (__markers__) __markers__.clear();
-    __markers__ = undefined;
-  }
-
-  function update_count() {
-    if (!__mounted__ || __unmounted__) return;
-    doubled = count * 2;
-    { const __el = __markers__.get("m0"); if (__el) { __el.textContent = \`\${count + doubled}\`; } }
+    } finally { __endDomUpdate__(); }
   }
 
   return { mount, hydrate: hydrateComponentInstance, unmount, update_count };

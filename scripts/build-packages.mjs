@@ -51,8 +51,8 @@ const publicEntries = [
   {
     name: 'motion',
     source: 'packages/motion/src/runtime.ts',
-    external: (id) => id === 'motion' || id.startsWith('node:'),
-    paths: {},
+    external: (id) => id === 'motion' || id.startsWith('node:') || id.includes('runtime/src/index'),
+    paths: (id) => (id.includes('runtime/src/index') ? './runtime.js' : id),
   },
   {
     name: 'motion-vite',

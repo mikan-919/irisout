@@ -13,7 +13,9 @@
 `irisout/motion/vite`が`<motion.div layout animate={{...}}>`を標準JSXと`use=`へ変換し、
 `irisout/motion`の実行時処理が公式Motionの`animate()`を呼ぶ。コンパイラ本体にはMotion固有の
 要素名・属性名を置かず、汎用のソース変換関数だけを受け取る。対応属性は`layout`、`layoutId`、
-`initial`、`animate`、`transition`である。`variants`、`exit`、gesture属性はエラーにする。
+`initial`、`animate`、`transition`である。配置処理はMotion 13.4の投影木へ委譲し、親子補正、
+スクロール補正、共有要素crossfade、実行中の配置変更を扱う。irisout実行時処理には用途非依存の
+同期DOM更新取引を追加した。`variants`、`exit`、gesture属性はエラーにする。
 
 公開物は`packages/irisout`の単一パッケージである。コンパイラ、実行時処理、Vite連携の
 ソースは責務別のディレクトリに置くが、内部パッケージとしては梱包しない。旧JavaScript実装は

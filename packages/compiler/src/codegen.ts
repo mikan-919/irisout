@@ -592,6 +592,7 @@ function generateFactoryLegacy(
     ])
 
     lines.push(`function ${updateName}(__handle__, __next__) {`)
+    lines.push('  __beginDomUpdate__(); try {')
     lines.push(`  const ${itemParam} = __handle__.value = __next__;`)
     lines.push('  const __item__ = __handle__.item;')
     for (const id of refIds) lines.push(`  const __${id}__ = __handle__.refs.${id};`)
@@ -610,7 +611,7 @@ function generateFactoryLegacy(
         `  if (__updateListBinding__(__item__, ${JSON.stringify(bindingId)}, ${valueVar})) ${renderAttrSet(`__${b.markerId}__`, { ...b, rendered: valueVar })}`,
       )
     })
-    lines.push('}')
+    lines.push('  } finally { __endDomUpdate__(); }', '}')
     lines.push(`function ${factoryName}(${itemParam}, __item__) {`)
     lines.push(`  const __node__ = ${templateVar}.content.cloneNode(true);`)
     lines.push('  const __el__ = __node__.firstElementChild;')
@@ -931,6 +932,7 @@ function generateLifecycleFactory(
     `  function ${updateName}(${itemParam ? '__next__, ' : ''}__effect_trigger__ = null, __force_effects__ = false) {`,
   )
   lines.push('    if (__unit_destroyed__) return;')
+  lines.push('    __beginDomUpdate__(); try {')
   if (itemParam) {
     lines.push('    const __item_changed__ = !Object.is(__current_item__, __next__);')
     lines.push('    __current_item__ = __next__;')
@@ -995,7 +997,7 @@ function generateLifecycleFactory(
       `    if (__force_effects__ || __item_changed__ || ${triggerCheck}) __run_unit_effect_${index}__();`,
     )
   }
-  lines.push('  }')
+  lines.push('    } finally { __endDomUpdate__(); }', '  }')
   if (needsUpdate) lines.push(`  ${updateName}(${itemParam ?? ''});`)
 
   lines.push('  function __mount_unit__() {')
@@ -1483,6 +1485,7 @@ export function generateModule({
   const runtimeImports = hasStructuralUnits
     ? ['mountWithRanges as __mount__', 'hydrateWithRanges as __hydrate__']
     : ['mount as __mount__', 'hydrate as __hydrate__']
+  runtimeImports.push('beginDomUpdate as __beginDomUpdate__', 'endDomUpdate as __endDomUpdate__')
   if (actions.some((a) => a.resultRendered) || markersHaveResultActions(markers)) {
     runtimeImports.push('normalizeUseActionResult as __normalizeUseActionResult__')
   }
@@ -1865,6 +1868,8 @@ export function generateModule({
     '',
     'function unmount() {',
     '  if (!__mounted__ || __unmounted__) return;',
+    '  __beginDomUpdate__();',
+    '  try {',
     '  __unmounted__ = true;',
     '  __mounted__ = false;',
     ...(effects.length > 0 ? ['  __initializing__ = false;'] : []),
@@ -1886,6 +1891,9 @@ export function generateModule({
     ...documentCleanupLines,
     ...templateCleanupLines,
     ...destroyErrorThrow,
+    '  } finally {',
+    '    __endDomUpdate__();',
+    '  }',
     '}',
     '',
   )
@@ -2024,6 +2032,7 @@ export function generateModule({
     const name = declOutputName.get(signalId)
     instanceLines.push(`function update_${name}() {`)
     instanceLines.push('  if (!__mounted__ || __unmounted__) return;')
+    instanceLines.push('  __beginDomUpdate__(); try {')
     for (const derivedId of signalToDerivedRecomputes.get(signalId) ?? []) {
       if (sharedDerivedIds.has(derivedId)) continue
       instanceLines.push(`  ${declOutputName.get(derivedId)} = ${derivedRecompute.get(derivedId)};`)
@@ -2042,7 +2051,7 @@ export function generateModule({
       for (const mId of markerIds) appendMarkerUpdate(instanceLines, mId)
     }
     appendEffectUpdates(instanceLines, [signalId])
-    instanceLines.push('}', '')
+    instanceLines.push('  } finally { __endDomUpdate__(); }', '}', '')
   }
 
   // 同じ同期スコープで複数 root signal が書き込まれ、marker 集合が重なる
@@ -2054,6 +2063,7 @@ export function generateModule({
     const derivedIds = derivedForRoots(batch.signalIds)
     instanceLines.push(`function ${batch.name}() {`)
     instanceLines.push('  if (!__mounted__ || __unmounted__) return;')
+    instanceLines.push('  __beginDomUpdate__(); try {')
     for (const derivedId of derivedIds) {
       if (sharedDerivedIds.has(derivedId)) continue
       instanceLines.push(`  ${declOutputName.get(derivedId)} = ${derivedRecompute.get(derivedId)};`)
@@ -2076,7 +2086,7 @@ export function generateModule({
       for (const markerId of batch.markerIds) appendMarkerUpdate(instanceLines, markerId)
     }
     appendEffectUpdates(instanceLines, batch.signalIds)
-    instanceLines.push('}', '')
+    instanceLines.push('  } finally { __endDomUpdate__(); }', '}', '')
   }
 
   const updateNames = [...signalToMarkers.keys()].map((id) => `update_${declOutputName.get(id)}`)

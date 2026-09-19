@@ -58,7 +58,7 @@
   },
   "peerDependencies": {
     "hono": ">=4.0.0",
-    "motion": ">=13.0.0",
+    "motion": "13.4.x",
     "vite-plus": ">=0.3.0"
   },
   "peerDependenciesMeta": {

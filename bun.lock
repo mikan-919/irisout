@@ -14,7 +14,7 @@
         "@types/node": "^24.0.0",
         "hono": "^4.13.8",
         "husky": "^9.1.7",
-        "motion": "^13.4.0",
+        "motion": "13.4.0",
         "typescript": "^5.9.0",
         "vite-plus": "0.3.0",
       },
@@ -25,6 +25,7 @@
       "dependencies": {
         "@libraz/suzume": "0.9.10",
         "irisout": "workspace:*",
+        "motion": "13.4.0",
         "react": "^19.2.7",
         "react-dom": "^19.2.7",
       },
@@ -79,7 +80,7 @@
       "version": "0.2.2",
       "peerDependencies": {
         "hono": ">=4.0.0",
-        "motion": ">=13.0.0",
+        "motion": "13.4.x",
         "vite-plus": ">=0.3.0",
       },
       "optionalPeers": [

@@ -31,7 +31,9 @@ export default { plugins: [irisoutMotion({ entry: './src/App.jsx' })] }
 ```
 
 JSXでは`irisout/motion`の`motion`を使います。`layout`、`layoutId`、`initial`、`animate`、`transition`を
-Motionの`animate()`へ接続します。`variants`、`exit`、gesture属性は未対応で、
+Motionへ接続します。`layout="position"`、`layout="size"`、`layoutScroll`、`layoutRoot`、
+`layoutCrossfade`も指定できます。配置測定、親子補正、共有要素、スクロール補正、割り込み、
+角丸と影の拡縮補正はMotionの配置投影エンジンを使います。`variants`、`exit`、gesture属性は未対応で、
 通常のDOM属性として残さずコンパイル前にエラーにします。
 
 ```jsx

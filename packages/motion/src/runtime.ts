@@ -2,38 +2,25 @@
 // 変換器は`irisout/motion/vite`へ分離し、ここへBabel依存を含めない。
 
 import { animate } from 'motion'
+import { registerProjectionElement } from './projection.js'
 
 export type MotionTarget = Record<string, unknown>
 export type MotionTransition = Record<string, unknown>
-export type MotionLayout = boolean | 'position' | 'size' | 'x' | 'y'
+export type MotionLayout = boolean | 'position' | 'size' | 'preserve-aspect'
 
 export interface MotionElementOptions {
   layout?: MotionLayout
   layoutId?: string
+  layoutScroll?: boolean
+  layoutRoot?: boolean
+  layoutCrossfade?: boolean
   initial?: MotionTarget | false
   transition?: MotionTransition
 }
 
-const sharedLayouts = new Map<string, { element: Element | null; rect: DOMRect }>()
-
 export interface MotionElementController {
   update(target: MotionTarget | undefined, transition?: MotionTransition): void
   destroy(): void
-}
-
-function layoutTarget(previous: DOMRect, next: DOMRect, layout: MotionLayout): MotionTarget | null {
-  const x = previous.left - next.left
-  const y = previous.top - next.top
-  const scaleX = next.width === 0 ? 1 : previous.width / next.width
-  const scaleY = next.height === 0 ? 1 : previous.height / next.height
-  const position = layout !== 'size'
-  const size = layout !== 'position' && layout !== 'x' && layout !== 'y'
-  const target: MotionTarget = {}
-  if (position && layout !== 'y' && x) target.x = [x, 0]
-  if (position && layout !== 'x' && y) target.y = [y, 0]
-  if (size && scaleX !== 1) target.scaleX = [scaleX, 1]
-  if (size && scaleY !== 1) target.scaleY = [scaleY, 1]
-  return Object.keys(target).length > 0 ? target : null
 }
 
 export function mountMotionElement(
@@ -41,56 +28,19 @@ export function mountMotionElement(
   options: MotionElementOptions,
 ): MotionElementController {
   let animation: ReturnType<typeof animate> | null = null
-  const ownRect = element.getBoundingClientRect()
-  const shared = options.layoutId ? sharedLayouts.get(options.layoutId) : undefined
-  let previous = shared?.rect ?? ownRect
-  let frame = 0
-  const usesLayout = Boolean(options.layout || options.layoutId)
   const transition = options.transition
-  if (options.layoutId) sharedLayouts.set(options.layoutId, { element, rect: ownRect })
+  const unregisterProjection =
+    options.layout || options.layoutId ? registerProjectionElement(element, options) : null
   if (options.initial !== false && options.initial) {
     animate(element, options.initial, { ...transition, duration: 0 }).complete()
   }
-  const measure = () => {
-    frame = 0
-    if (!usesLayout || !element.isConnected) return
-    const next = element.getBoundingClientRect()
-    const target = layoutTarget(previous, next, options.layout ?? true)
-    previous = next
-    if (options.layoutId) sharedLayouts.set(options.layoutId, { element, rect: next })
-    if (!target) return
-    animation?.stop()
-    animation = animate(element, target, transition)
-  }
-  const schedule = () => {
-    if (!usesLayout || frame || typeof requestAnimationFrame === 'undefined') return
-    frame = requestAnimationFrame(measure)
-  }
-  const observer =
-    usesLayout && typeof MutationObserver !== 'undefined' ? new MutationObserver(schedule) : null
-  if (observer) {
-    observer.observe(element.ownerDocument, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-    })
-  }
-  if (shared) schedule()
   return {
     update(target, nextTransition = transition) {
       animation?.stop()
       if (target) animation = animate(element, target, nextTransition)
-      schedule()
     },
     destroy() {
-      if (frame && typeof cancelAnimationFrame !== 'undefined') cancelAnimationFrame(frame)
-      observer?.disconnect()
-      if (options.layoutId && sharedLayouts.get(options.layoutId)?.element === element) {
-        sharedLayouts.set(options.layoutId, {
-          element: null,
-          rect: element.getBoundingClientRect(),
-        })
-      }
+      unregisterProjection?.()
       animation?.stop()
       animation = null
     },
@@ -118,6 +68,9 @@ type UnsupportedMotionProps = {
 type MotionProps = {
   layout?: MotionLayout
   layoutId?: string
+  layoutScroll?: boolean
+  layoutRoot?: boolean
+  layoutCrossfade?: boolean
   initial?: MotionTarget | false
   animate?: MotionTarget
   transition?: MotionTransition
