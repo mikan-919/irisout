@@ -1,5 +1,5 @@
 // 共有レイアウトの形状変形と、内容のぼかし交差フェードを組み合わせる。
-// Motion拡張の対応範囲に合わせ、exitではなく条件分岐とinitial/animateを使う。
+// Motion拡張の対応範囲に合わせ、退場BCFだけWeb Animations APIで補う。
 import { render, signal } from 'irisout'
 import { motion } from 'irisout/motion'
 
@@ -9,22 +9,22 @@ export function MorphBcf() {
       id: 'focus',
       kicker: 'Interaction 01',
       title: 'Focus Shift',
-      meta: 'irisout + Motion',
-      copy: '外枠はlayoutIdで変形します。内容は別速度のぼかし交差フェードで切り替えます。',
+      meta: 'React + Motion',
+      copy: '外枠は Motion の layoutId で変形します。内容だけを別速度の blur crossfade で切り替えます。',
     },
     {
       id: 'context',
       kicker: 'Interaction 02',
       title: 'Context',
       meta: 'Shared layout',
-      copy: '開閉で同じlayoutIdを共有し、カードと詳細画面の位置と大きさを補間します。',
+      copy: '開閉の両方で同じ layoutId を共有するため、カードと詳細画面の位置・大きさを Motion が補間します。',
     },
     {
       id: 'quiet',
       kicker: 'Interaction 03',
       title: 'Quiet Motion',
       meta: '300 ms / 900 ms',
-      copy: '形状変形を短く、BCFを長くすると、形状が先に決まり、焦点があとから移ります。',
+      copy: 'morph を短く、BCF を長くすると、形状が先に決まり、そのあと焦点だけが移る動きになります。',
     },
   ])
   const selected = signal(null)
@@ -33,9 +33,6 @@ export function MorphBcf() {
 
   render(
     <main class="morph-page">
-      <a class="back-link" href="/examples">
-        ← 実例一覧
-      </a>
       <section class="stage" aria-label="MorphとBCFの操作例">
         <div class="grid">
           {cards().map((item) => (
@@ -58,7 +55,7 @@ export function MorphBcf() {
                       ? { opacity: 0, filter: 'blur(12px)', scale: 0.985 }
                       : { opacity: 1, filter: 'blur(0px)', scale: 1 }
                   }
-                  transition={{ duration: bcfMs() / 1000 }}
+                  transition={{ duration: bcfMs() / 1000, ease: [0.22, 0.72, 0.2, 1] }}
                 >
                   <span class="kicker">{item.kicker}</span>
                   <span>
@@ -82,7 +79,7 @@ export function MorphBcf() {
                 class="detail-content"
                 initial={{ opacity: 0, filter: 'blur(14px)', y: 8, scale: 0.992 }}
                 animate={{ opacity: 1, filter: 'blur(0px)', y: 0, scale: 1 }}
-                transition={{ duration: bcfMs() / 1000 }}
+                transition={{ duration: bcfMs() / 1000, ease: [0.22, 0.72, 0.2, 1] }}
               >
                 <div class="detail-top">
                   <div>
@@ -93,14 +90,14 @@ export function MorphBcf() {
                     class="close"
                     type="button"
                     aria-label="詳細を閉じる"
-                    onClick={() => selected(null)}
+                    onClick={closeDetail}
                   >
                     ×
                   </button>
                 </div>
                 <div class="detail-copy">
                   <p>{selected().copy}</p>
-                  <p>形状変形は位置と寸法、BCFは内容の焦点移動を担当します。</p>
+                  <p>morph は位置と形状、BCF は内容の焦点移動を担当します。</p>
                 </div>
                 <div class="detail-bottom">
                   <span class="pill">Morph / layoutId</span>
@@ -140,4 +137,31 @@ export function MorphBcf() {
       </section>
     </main>,
   )
+
+  function closeDetail(event) {
+    const shell = event.currentTarget.closest('.expanded-shell')
+    const detail = /** @type {HTMLElement | null} */ (shell?.querySelector('.detail-content'))
+    const stage = shell?.closest('.stage')
+    if (detail && stage) {
+      // Motion拡張はexitを持たないため、退場完了まで表示内容だけを保持する。
+      const exiting = /** @type {HTMLElement} */ (detail.cloneNode(true))
+      exiting.classList.add('exit-detail')
+      exiting.inert = true
+      exiting.setAttribute('aria-hidden', 'true')
+      stage.append(exiting)
+      const exitAnimation = exiting.animate(
+        [
+          { opacity: 1, filter: 'blur(0px)', transform: 'translateY(0) scale(1)' },
+          { opacity: 0, filter: 'blur(14px)', transform: 'translateY(8px) scale(.992)' },
+        ],
+        {
+          duration: bcfMs(),
+          easing: 'cubic-bezier(.22,.72,.2,1)',
+          fill: 'forwards',
+        },
+      )
+      void exitAnimation.finished.then(() => exiting.remove())
+    }
+    selected(null)
+  }
 }

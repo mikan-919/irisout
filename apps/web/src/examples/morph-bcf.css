@@ -6,12 +6,14 @@
 }
 
 body {
+  display: grid;
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
   background: radial-gradient(circle at 18% 8%, #fff 0 16%, transparent 40%), #efefef;
   color: #171717;
   font-family: var(--font-body);
+  place-items: center;
 }
 
 button,
@@ -21,29 +23,16 @@ input {
 }
 
 .morph-page {
-  position: relative;
   display: grid;
-  min-height: 100vh;
-  padding: 4rem var(--space-md) var(--space-md);
+  width: 100%;
   place-items: center;
-}
-
-.back-link {
-  position: absolute;
-  z-index: 60;
-  top: var(--space-md);
-  left: var(--space-lg);
-  color: #666;
-  font: 500 var(--text-sm) / 1.4 var(--font-mono);
-  text-decoration: none;
 }
 
 .stage {
   position: relative;
   isolation: isolate;
   width: min(61.25rem, calc(100vw - 2rem));
-  height: min(42.5rem, calc(100vh - 5rem));
-  min-height: 34rem;
+  height: min(42.5rem, calc(100vh - 2rem));
   overflow: hidden;
   border-radius: 1.875rem;
   background: #f7f7f7;
@@ -145,6 +134,12 @@ input {
   will-change: opacity, filter, transform;
 }
 
+.exit-detail {
+  z-index: 21;
+  inset: 3.375rem;
+  pointer-events: none;
+}
+
 .detail-top,
 .detail-bottom {
   display: flex;
@@ -236,15 +231,14 @@ input {
 }
 
 @media (max-width: 47.5rem) {
+  body,
   .morph-page {
-    padding: 3.5rem 0 0;
     place-items: stretch;
   }
 
   .stage {
     width: 100vw;
-    height: calc(100vh - 3.5rem);
-    min-height: 36rem;
+    height: 100vh;
     border-radius: 0;
   }
 
@@ -264,19 +258,15 @@ input {
     padding: 1.5rem;
   }
 
+  .exit-detail {
+    inset: 0.75rem;
+  }
+
   .controls label {
     grid-template-columns: 2.875rem minmax(5.625rem, 1fr) 3.75rem;
   }
 
   .controls input {
     width: 100%;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .compact-content,
-  .detail-content {
-    filter: none !important;
-    transition: none !important;
   }
 }
