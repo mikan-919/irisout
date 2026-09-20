@@ -112,6 +112,18 @@ test('本番Webサーバーの公式Originと実行管理Originを分離する',
     assert.equal(playgroundRedirect.status, 308)
     assert.equal(playgroundRedirect.headers.get('location'), '/playground?example=list')
 
+    const examples = await fetch(`${officialOrigin}/examples`)
+    assert.equal(examples.status, 200)
+    assert.match(await examples.text(), /BCF Copy Button/)
+    const bcfExample = await fetch(`${officialOrigin}/examples/bcf-copy-button`)
+    assert.equal(bcfExample.status, 200)
+    assert.match(await bcfExample.text(), /id="bcf-copy-button-app"/)
+    const examplesRedirect = await fetch(`${officialOrigin}/examples/?q=1`, {
+      redirect: 'manual',
+    })
+    assert.equal(examplesRedirect.status, 308)
+    assert.equal(examplesRedirect.headers.get('location'), '/examples?q=1')
+
     const input = {
       schemaVersion: 1,
       title: '本番入口',

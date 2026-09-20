@@ -9,8 +9,8 @@ export function BcfCopyButton() {
 
   render(
     <main class="demo">
-      <a class="back-link" href="/">
-        ← irisout
+      <a class="back-link" href="/examples">
+        ← 実例一覧
       </a>
       <section class="demo-card" aria-labelledby="demo-title">
         <div class="demo-heading">

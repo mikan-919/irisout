@@ -279,6 +279,30 @@ function isPlaygroundRuntimeResource(pathname: string) {
   )
 }
 
+// 開発時も本番と同じ実例URLを使い、HTML拡張子を利用者へ見せない。
+function exampleCleanUrls(): Plugin {
+  return {
+    name: 'irisout-example-clean-urls',
+    configureServer(server) {
+      server.middlewares.use((request, response, next) => {
+        const [pathname, search] = (request.url ?? '').split('?', 2)
+        if (pathname === '/examples/') {
+          response.statusCode = 308
+          response.setHeader('Location', `/examples${search ? `?${search}` : ''}`)
+          response.end()
+          return
+        }
+        if (pathname === '/examples') {
+          request.url = `/examples/index.html${search ? `?${search}` : ''}`
+        } else if (pathname === '/examples/bcf-copy-button') {
+          request.url = `/examples/bcf-copy-button.html${search ? `?${search}` : ''}`
+        }
+        next()
+      })
+    },
+  }
+}
+
 // SSRと同じ解析結果からhydrate用moduleを作る。投稿sourceはこの入口へ渡さない。
 function playgroundPageClient(): Plugin {
   const virtualModuleId = 'virtual:irisout-playground-page'
@@ -330,6 +354,7 @@ export default defineConfig({
       htmlMarker: '<!--irisout-bcf-copy-button-html-->',
       virtualModuleId: 'virtual:irisout-bcf-copy-button',
     }),
+    exampleCleanUrls(),
     playgroundPageClient(),
     playgroundHeaders(),
     playgroundSaveApi(),
@@ -343,6 +368,7 @@ export default defineConfig({
         main: path.resolve(import.meta.dirname, 'index.html'),
         controller: path.resolve(import.meta.dirname, 'playground-controller.html'),
         playground: path.resolve(import.meta.dirname, 'playground.html'),
+        examples: path.resolve(import.meta.dirname, 'examples/index.html'),
         'examples/bcf-copy-button': path.resolve(
           import.meta.dirname,
           'examples/bcf-copy-button.html',

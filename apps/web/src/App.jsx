@@ -58,6 +58,9 @@ export function App() {
           <a class="nav-link" href="#how">
             仕組み
           </a>
+          <a class="nav-link" href="/examples">
+            実例
+          </a>
           <a class="nav-link" href="#principles">
             設計
           </a>
@@ -105,6 +108,9 @@ export function App() {
           </a>
           <a href="/playground" onClick={() => menuOpen(false)}>
             試す
+          </a>
+          <a href="/examples" onClick={() => menuOpen(false)}>
+            実例
           </a>
           <a href="#principles" onClick={() => menuOpen(false)}>
             設計
@@ -408,6 +414,7 @@ export function App() {
             <div class="footer-links">
               <a href="#how">仕組み</a>
               <a href="/playground">試す</a>
+              <a href="/examples">実例</a>
               <a href="https://github.com/mikan-919/irisout">GitHub ↗</a>
             </div>
             <span class="footer-copy">Apache License 2.0 · 2026</span>

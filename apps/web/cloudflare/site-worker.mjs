@@ -26,11 +26,21 @@ export default {
 
     if (pathname === '/playground/') return redirect('/playground', request.url)
     if (pathname === '/docs/') return redirect('/docs', request.url)
+    if (pathname === '/examples/') return redirect('/examples', request.url)
     const documentMatch = pathname.match(/^\/docs\/([a-z0-9]+(?:-[a-z0-9]+)*)\/$/)
     if (documentMatch) return redirect(`/docs/${documentMatch[1]}`, request.url)
 
-    return env.ASSETS.fetch(request)
+    return env.ASSETS.fetch(exampleAssetRequest(request))
   },
+}
+
+function exampleAssetRequest(request) {
+  const url = new URL(request.url)
+  if (url.pathname === '/examples') url.pathname = '/examples/index.html'
+  if (url.pathname === '/examples/bcf-copy-button') {
+    url.pathname = '/examples/bcf-copy-button.html'
+  }
+  return url.href === request.url ? request : new Request(url, request)
 }
 
 function getApplication(env, officialOrigin) {

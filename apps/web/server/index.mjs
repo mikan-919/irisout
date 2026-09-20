@@ -131,6 +131,7 @@ function isControllerOnlyPath(decodedPath) {
 
 function canonicalDocumentPath(decodedPath) {
   if (decodedPath === '/docs/') return '/docs'
+  if (decodedPath === '/examples/') return '/examples'
   const match = /^\/docs\/([a-z0-9]+(?:-[a-z0-9]+)*)\/$/.exec(decodedPath)
   return match ? `/docs/${match[1]}` : null
 }
@@ -139,6 +140,10 @@ function staticCandidates(decodedPath) {
   if (decodedPath === '/') return ['index.html']
   if (decodedPath === '/playground') return ['playground.html']
   if (decodedPath === '/docs') return ['docs/index.html']
+  if (decodedPath === '/examples') return ['examples/index.html']
+  if (decodedPath === '/examples/bcf-copy-button') {
+    return ['examples/bcf-copy-button.html']
+  }
   if (decodedPath.startsWith('/docs/')) {
     const relative = decodedPath.slice(1)
     return [relative, path.join(relative, 'index.html'), `${relative}.html`]
