@@ -324,6 +324,12 @@ export default defineConfig({
   ...(cacheDir ? { cacheDir } : {}),
   plugins: [
     irisout({ entry: 'src/App.jsx', container: '#app' }),
+    irisout({
+      entry: 'src/examples/BcfCopyButton.jsx',
+      container: '#bcf-copy-button-app',
+      htmlMarker: '<!--irisout-bcf-copy-button-html-->',
+      virtualModuleId: 'virtual:irisout-bcf-copy-button',
+    }),
     playgroundPageClient(),
     playgroundHeaders(),
     playgroundSaveApi(),
@@ -337,6 +343,10 @@ export default defineConfig({
         main: path.resolve(import.meta.dirname, 'index.html'),
         controller: path.resolve(import.meta.dirname, 'playground-controller.html'),
         playground: path.resolve(import.meta.dirname, 'playground.html'),
+        'examples/bcf-copy-button': path.resolve(
+          import.meta.dirname,
+          'examples/bcf-copy-button.html',
+        ),
         'shared-playground': path.resolve(import.meta.dirname, 'src/playground-page-client.js'),
       },
       output: {
