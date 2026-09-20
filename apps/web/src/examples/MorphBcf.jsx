@@ -43,7 +43,7 @@ export function MorphBcf() {
               class="card"
               key={item.id}
               layoutId={`card-${item.id}`}
-              transition={{ duration: morphMs() / 1000 }}
+              transition={{ duration: morphMs() / 1000, ease: [0.22, 0.72, 0.2, 1] }}
             >
               <button
                 class="card-button"
@@ -76,7 +76,7 @@ export function MorphBcf() {
             <motion.article
               class="expanded-shell"
               layoutId={`card-${selected().id}`}
-              transition={{ duration: morphMs() / 1000 }}
+              transition={{ duration: morphMs() / 1000, ease: [0.22, 0.72, 0.2, 1] }}
             >
               <motion.div
                 class="detail-content"
