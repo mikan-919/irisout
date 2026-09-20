@@ -109,6 +109,7 @@ main {
 
 .example-grid {
   display: grid;
+  gap: var(--space-md);
   padding-block: var(--space-xl);
 }
 
@@ -145,6 +146,15 @@ main {
   font-size: var(--text-sm);
   font-weight: 700;
   box-shadow: 0 8px 24px rgb(0 0 0 / 12%);
+}
+
+.morph-preview span {
+  width: min(100%, 9rem);
+  height: 5rem;
+  border-radius: 1rem;
+  background: #fff;
+  color: #171717;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 8%);
 }
 
 .example-copy h3 {

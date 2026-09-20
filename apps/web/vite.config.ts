@@ -3,6 +3,7 @@ import path from 'node:path'
 import type { IncomingMessage } from 'node:http'
 import { defineConfig, type Plugin, type ViteDevServer } from 'vite-plus'
 import { compileProject, type CompileResult } from 'irisout'
+import { irisoutMotion } from 'irisout/motion/vite'
 import { irisout } from 'irisout/vite'
 import { PLAYGROUND_BODY_MAX_BYTES, createPlaygroundApi } from './server/playground-api.mjs'
 import { parseTrustedProxyAddresses, resolveClientAddress } from './server/client-address.mjs'
@@ -296,6 +297,8 @@ function exampleCleanUrls(): Plugin {
           request.url = `/examples/index.html${search ? `?${search}` : ''}`
         } else if (pathname === '/examples/bcf-copy-button') {
           request.url = `/examples/bcf-copy-button.html${search ? `?${search}` : ''}`
+        } else if (pathname === '/examples/morph-bcf') {
+          request.url = `/examples/morph-bcf.html${search ? `?${search}` : ''}`
         }
         next()
       })
@@ -354,6 +357,12 @@ export default defineConfig({
       htmlMarker: '<!--irisout-bcf-copy-button-html-->',
       virtualModuleId: 'virtual:irisout-bcf-copy-button',
     }),
+    irisoutMotion({
+      entry: 'src/examples/MorphBcf.jsx',
+      container: '#morph-bcf-app',
+      htmlMarker: '<!--irisout-morph-bcf-html-->',
+      virtualModuleId: 'virtual:irisout-morph-bcf',
+    }),
     exampleCleanUrls(),
     playgroundPageClient(),
     playgroundHeaders(),
@@ -373,6 +382,7 @@ export default defineConfig({
           import.meta.dirname,
           'examples/bcf-copy-button.html',
         ),
+        'examples/morph-bcf': path.resolve(import.meta.dirname, 'examples/morph-bcf.html'),
         'shared-playground': path.resolve(import.meta.dirname, 'src/playground-page-client.js'),
       },
       output: {

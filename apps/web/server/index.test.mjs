@@ -118,6 +118,9 @@ test('本番Webサーバーの公式Originと実行管理Originを分離する',
     const bcfExample = await fetch(`${officialOrigin}/examples/bcf-copy-button`)
     assert.equal(bcfExample.status, 200)
     assert.match(await bcfExample.text(), /id="bcf-copy-button-app"/)
+    const morphBcfExample = await fetch(`${officialOrigin}/examples/morph-bcf`)
+    assert.equal(morphBcfExample.status, 200)
+    assert.match(await morphBcfExample.text(), /id="morph-bcf-app"/)
     const examplesRedirect = await fetch(`${officialOrigin}/examples/?q=1`, {
       redirect: 'manual',
     })

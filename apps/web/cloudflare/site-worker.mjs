@@ -40,6 +40,7 @@ function exampleAssetRequest(request) {
   if (url.pathname === '/examples/bcf-copy-button') {
     url.pathname = '/examples/bcf-copy-button.html'
   }
+  if (url.pathname === '/examples/morph-bcf') url.pathname = '/examples/morph-bcf.html'
   return url.href === request.url ? request : new Request(url, request)
 }
 
