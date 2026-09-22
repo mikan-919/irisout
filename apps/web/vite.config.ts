@@ -11,6 +11,7 @@ import { createControllerCsp, validateSeparateOrigins } from './src/playground/s
 
 const cacheDir = process.env.IRISOUT_VITE_CACHE_DIR
 const developmentRole = process.env.IRISOUT_PLAYGROUND_DEV_ROLE
+const developmentSiteOrigin = process.env.VITE_IRISOUT_PLAYGROUND_SITE_ORIGIN
 const runtimeDependencyPath = `/@fs${path.resolve(import.meta.dirname, '../../packages/irisout/dist/runtime.js')}`
 
 type DevelopmentPlaygroundInput = {
@@ -272,6 +273,13 @@ export function playgroundDevelopmentRedirect(
   return `${siteOrigin}${requestUrl?.startsWith('/') ? requestUrl : '/'}`
 }
 
+export function playgroundDevelopmentProxy(
+  role: string | undefined,
+  siteOrigin: string | undefined,
+) {
+  return role === 'controller' && siteOrigin ? { '/docs': siteOrigin } : undefined
+}
+
 function isPlaygroundRuntimeResource(pathname: string) {
   return (
     pathname === '/src/playground/runtime.js' ||
@@ -352,6 +360,7 @@ function playgroundPageClient(): Plugin {
 
 export default defineConfig({
   base: '/',
+  server: { proxy: playgroundDevelopmentProxy(developmentRole, developmentSiteOrigin) },
   resolve: {
     alias: {
       '@playground/shared': path.resolve(import.meta.dirname, 'src/playground/shared.js'),

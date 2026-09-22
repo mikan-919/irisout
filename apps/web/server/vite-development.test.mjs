@@ -3,7 +3,11 @@ import path from 'node:path'
 import { test } from 'bun:test'
 import { compileProject } from 'irisout'
 import * as irisoutRuntime from 'irisout/runtime'
-import config, { playgroundDevelopmentRedirect, playgroundSaveApi } from '../vite.config.ts'
+import config, {
+  playgroundDevelopmentProxy,
+  playgroundDevelopmentRedirect,
+  playgroundSaveApi,
+} from '../vite.config.ts'
 import * as playgroundRuntime from '../src/playground/runtime.js'
 
 test('開発用Playgroundの経路と実行時処理を接続する', () => {
@@ -25,6 +29,9 @@ test('開発用Playgroundの経路と実行時処理を接続する', () => {
     ),
     null,
   )
+  assert.deepEqual(playgroundDevelopmentProxy('controller', 'http://127.0.0.1:5173'), {
+    '/docs': 'http://127.0.0.1:5173',
+  })
 
   const plugin = config.plugins.find((candidate) => candidate.name === 'irisout-playground-headers')
   assert.ok(plugin)
