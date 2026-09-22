@@ -69,3 +69,12 @@
 
 - **WHEN** 共通経路表をブラウザー用へ変換する
 - **THEN** 経路照合がNode fsやHonoなしで実行でき、server専用file pathを持たない
+
+### Requirement: pageのソース変換
+
+Honoのファイル経路は、各pageをSSRする前に任意のファイル単位ソース変換を適用できなければならない(SHALL)。変換を指定しないpageの動作を変更してはならない(SHALL NOT)。
+
+#### Scenario: Motion pageを標準記法へ変換する
+
+- **WHEN** Motion変換を指定して`page.tsx`をファイル経路へ登録する
+- **THEN** 各pageを標準irisout記法へ変換してからSSRする

@@ -152,4 +152,19 @@ describe('irisout Hono経路', () => {
       rmSync(root, { recursive: true, force: true })
     }
   })
+
+  it('pageごとのソース変換をSSR前に適用する', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'irisout-hono-transform-'))
+    try {
+      writePage(root, '', 'export function Page() { render(<p>__LABEL__</p>); }')
+      const router = createFileRouter(root, {
+        transformSource: (source) => source.replace('__LABEL__', 'ready'),
+      })
+      const response = await router.request('http://example.test/')
+      expect(response.status).toBe(200)
+      expect(await response.text()).toContain('<p>ready</p>')
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
 })

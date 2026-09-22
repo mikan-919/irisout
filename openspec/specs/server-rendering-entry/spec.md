@@ -55,12 +55,24 @@ SSR入力とstateは、配列、`null` prototypeまたは`Object.prototype`のob
 
 ### Requirement: SSRで実行しない処理
 
-SSRはイベント処理、`onMount`、`effect`、`use=`を実行してはならない(SHALL NOT)。module共有状態、外部moduleの任意実行、対応外記法は`compile:` scope limit診断で拒否しなければならない(SHALL)。相対moduleは関数宣言だけの場合も含め、初期SSRでは拒否しなければならない(SHALL)。404・503の応答で正常ページ用stateを生成しないことは、要求処理層の契約であり、この入口の受入条件には含めない。ファイル経路のloader実装、要求オブジェクト、接続情報をブラウザー応答へ含めてはならない(SHALL NOT)。
+SSRはイベント処理、`onMount`、`effect`、`use=`を実行してはならない(SHALL NOT)。相対moduleの補助関数と補助定数は`render()`内へ配置し、要求間で共有してはならない(SHALL NOT)。module共有状態、SSR描画から到達する外部module binding、対応外記法は`compile:` scope limit診断で拒否しなければならない(SHALL)。イベント、ライフサイクル、actionだけが参照する外部importはSSR生成物へ含めてはならない(SHALL NOT)。404・503の応答で正常ページ用stateを生成しないことは、要求処理層の契約であり、この入口の受入条件には含めない。ファイル経路のloader実装、要求オブジェクト、接続情報をブラウザー応答へ含めてはならない(SHALL NOT)。
 
 #### Scenario: クライアント専用処理をSSRしない
 
 - **WHEN** ルート部品にイベント、`onMount`、`effect`、`use=`を含めてSSRする
 - **THEN** 初期HTMLは生成するが、それらの処理はサーバーで実行しない
+
+#### Scenario: 相対moduleを要求ごとに分離する
+
+- **WHEN** pageが相対moduleの部品と補助定数を使う
+- **THEN** 補助宣言を要求ごとの`render()`内で生成し、HTMLをSSRする
+
+#### Scenario: 外部importの実行境界を分ける
+
+- **WHEN** 外部importをイベントだけが参照するpageをSSRする
+- **THEN** importをSSR生成物から除外し、HTMLを生成する
+- **WHEN** SSR対象のJSX式が外部importを参照する
+- **THEN** 対象moduleを示すscope limit診断で拒否する
 
 #### Scenario: loaderの失敗情報を隠す
 

@@ -2,7 +2,7 @@
 // Motion拡張の対応範囲に合わせ、退場BCFだけWeb Animations APIで補う。
 import { render, signal } from 'irisout'
 import { motion } from 'irisout/motion'
-import { SiteHeader } from '../SiteHeader.jsx'
+import { SiteHeader } from '../../../src/SiteHeader.jsx'
 
 export function MorphBcf() {
   const cards = signal([

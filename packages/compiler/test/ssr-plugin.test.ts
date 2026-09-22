@@ -47,7 +47,7 @@ describe('irisoutSsr Vite+連携', () => {
     expect(resolveId('virtual:irisout-ssr')).toBe('\0virtual:irisout-ssr')
   })
 
-  it('相対moduleのmodule stateをSSR入口で拒否する', () => {
+  it('相対moduleの補助値を要求ごとに作る', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'irisout-ssr-module-state-'))
     const entry = path.join(root, 'Page.jsx')
     writeFileSync(path.join(root, 'state.js'), 'export const state = { value: 0 }')
@@ -56,12 +56,15 @@ describe('irisoutSsr Vite+連携', () => {
       "import { state } from './state.js'; export function Page() { render(<p>{state.value}</p>); }",
     )
 
-    expect(() => compileProject(entry, { target: 'ssr' })).toThrow(
-      /compile: relative modules are not supported in SSR \(scope limit\)/,
+    const result = compileProject(entry, { target: 'ssr' })
+    expect(result.ssrCode).toContain('export function render')
+    expect(result.ssrCode).toContain('const IrisM0_state =')
+    expect(result.ssrCode?.indexOf('const IrisM0_state =')).toBeGreaterThan(
+      result.ssrCode?.indexOf('export function render') ?? Number.POSITIVE_INFINITY,
     )
   })
 
-  it('相対moduleの関数宣言もSSR入口で拒否する', () => {
+  it('相対moduleの関数宣言をSSR入口で使う', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'irisout-ssr-relative-function-'))
     const entry = path.join(root, 'Page.jsx')
     writeFileSync(path.join(root, 'helper.js'), 'export function label() { return "ready" }')
@@ -70,8 +73,32 @@ describe('irisoutSsr Vite+連携', () => {
       "import { label } from './helper.js'; export function Page() { render(<p>{label()}</p>); }",
     )
 
+    const result = compileProject(entry, { target: 'ssr' })
+    expect(result.ssrCode).toContain('function IrisM0_label')
+    expect(result.ssrCode).toContain('${__esc__(IrisM0_label())}')
+  })
+
+  it('client専用処理だけが使う外部importをSSR生成物から除外する', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'irisout-ssr-client-import-'))
+    const entry = path.join(root, 'Page.jsx')
+    writeFileSync(
+      entry,
+      "import { browserOnly } from 'client-helper'; export function Page() { render(<button onClick={run}>run</button>); function run() { browserOnly(); } }",
+    )
+    const result = compileProject(entry, { target: 'ssr' })
+    expect(result.ssrCode).not.toContain('client-helper')
+    expect(result.code).toContain('client-helper')
+  })
+
+  it('SSR描画が使う外部importを拒否する', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'irisout-ssr-render-import-'))
+    const entry = path.join(root, 'Page.jsx')
+    writeFileSync(
+      entry,
+      "import { label } from 'server-helper'; export function Page() { render(<p>{label()}</p>); }",
+    )
     expect(() => compileProject(entry, { target: 'ssr' })).toThrow(
-      /compile: relative modules are not supported in SSR \(scope limit\)/,
+      /external module "server-helper" is used during SSR render/,
     )
   })
 })

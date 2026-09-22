@@ -155,6 +155,8 @@ export interface IrisoutFileRouterOptions {
   readonly document?: IrisoutDocumentRenderer
   /** documentの別名。 */
   readonly renderDocument?: IrisoutDocumentRenderer
+  /** pageを標準irisout記法へ下げるファイル単位の前処理。 */
+  readonly transformSource?: (source: string, filePath: string) => string
 }
 
 export interface IrisoutFileRouter extends Hono {
@@ -284,7 +286,10 @@ export function createFileRouter(
   const clientRoutes = toClientRouteTable(routeTable)
   const pages = new Map<string, CompiledPage>()
   for (const route of routeTable.routes) {
-    const result = compileProject(route.filePath, { target: 'ssr' })
+    const result = compileProject(route.filePath, {
+      target: 'ssr',
+      transformSource: options.transformSource,
+    })
     if (!result.ssrCode) throw new Error(`compile: missing SSR module for "${route.filePath}"`)
     pages.set(route.id, { route, render: compileRender(result.ssrCode) })
   }

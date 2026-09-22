@@ -1,7 +1,7 @@
 // BCFによるラベルの交差フェードを、irisoutの状態更新とWeb Animations APIで示す。
 // クリップボード操作は含めず、ボタン表示の切り替えだけを扱う。
 import { render, signal } from 'irisout'
-import { SiteHeader } from '../SiteHeader.jsx'
+import { SiteHeader } from '../../../src/SiteHeader.jsx'
 
 export function BcfCopyButton() {
   const copied = signal(false)

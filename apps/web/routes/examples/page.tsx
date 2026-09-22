@@ -1,6 +1,6 @@
 // 公式実例の索引をJSXで宣言し、個別のIrisout画面へ案内する。
 import { render } from 'irisout'
-import { SiteHeader } from '../SiteHeader.jsx'
+import { SiteHeader } from '../../src/SiteHeader.jsx'
 
 export function Examples() {
   render(

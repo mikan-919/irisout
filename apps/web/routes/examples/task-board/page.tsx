@@ -1,7 +1,7 @@
 // signal、derived、key付き一覧を一画面で試せるタスク管理例。
 // 永続化は持たず、入力・絞り込み・更新・削除・並べ替えに範囲を限定する。
 import { derived, render, signal } from 'irisout'
-import { SiteHeader } from '../SiteHeader.jsx'
+import { SiteHeader } from '../../../src/SiteHeader.jsx'
 
 export function TaskBoard() {
   const tasks = signal([

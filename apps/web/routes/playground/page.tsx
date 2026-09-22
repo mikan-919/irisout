@@ -1,7 +1,7 @@
 // Playgroundの画面構造・状態・操作をirisout JSXへ集約する。
 // Monaco、保存通信、実行iframeのプロトコルだけをブラウザー境界のJSへ委ねる。
 import { derived, onMount, render, signal } from 'irisout'
-import { SiteHeader } from './SiteHeader.jsx'
+import { SiteHeader } from '../../src/SiteHeader.jsx'
 // @ts-ignore authored JSXではVite aliasをコンパイラ境界として使う。
 import {
   clearPendingSave,

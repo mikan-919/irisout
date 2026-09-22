@@ -362,31 +362,31 @@ export default defineConfig({
   plugins: [
     irisout({ entry: 'routes/page.tsx', container: '#app' }),
     irisout({
-      entry: 'src/examples/Examples.jsx',
+      entry: 'routes/examples/page.tsx',
       container: '#examples-app',
       htmlMarker: '<!--irisout-examples-html-->',
       virtualModuleId: 'virtual:irisout-examples',
     }),
     irisout({
-      entry: 'src/Playground.jsx',
+      entry: 'routes/playground/page.tsx',
       container: '#playground-app',
       htmlMarker: '<!--irisout-playground-html-->',
       virtualModuleId: 'virtual:irisout-playground',
     }),
     irisout({
-      entry: 'src/examples/BcfCopyButton.jsx',
+      entry: 'routes/examples/bcf-copy-button/page.tsx',
       container: '#bcf-copy-button-app',
       htmlMarker: '<!--irisout-bcf-copy-button-html-->',
       virtualModuleId: 'virtual:irisout-bcf-copy-button',
     }),
     irisout({
-      entry: 'src/examples/TaskBoard.jsx',
+      entry: 'routes/examples/task-board/page.tsx',
       container: '#task-board-app',
       htmlMarker: '<!--irisout-task-board-html-->',
       virtualModuleId: 'virtual:irisout-task-board',
     }),
     irisoutMotion({
-      entry: 'src/examples/MorphBcf.jsx',
+      entry: 'routes/examples/morph-bcf/page.tsx',
       container: '#morph-bcf-app',
       htmlMarker: '<!--irisout-morph-bcf-html-->',
       virtualModuleId: 'virtual:irisout-morph-bcf',

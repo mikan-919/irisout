@@ -95,6 +95,23 @@ test('本番Webサーバーの公式Originと実行管理Originを分離する',
     assert.match(homeHtml, /<main>/)
     assert.match(homeHtml, /href="\/playground"/)
 
+    for (const [pathname, routeId] of [
+      ['/playground', '/playground'],
+      ['/examples', '/examples'],
+      ['/examples/bcf-copy-button', '/examples/bcf-copy-button'],
+      ['/examples/task-board', '/examples/task-board'],
+      ['/examples/morph-bcf', '/examples/morph-bcf'],
+    ]) {
+      const navigation = await fetch(`${officialOrigin}${pathname}`, {
+        headers: { 'X-Irisout-Navigation': '1', accept: 'application/json' },
+      })
+      assert.equal(navigation.status, 200, pathname)
+      const body = await navigation.json()
+      assert.equal(body.type, 'page', pathname)
+      assert.equal(body.routeId, routeId, pathname)
+      assert.match(body.html, /<(?:div|main)/, pathname)
+    }
+
     const playground = await fetch(`${officialOrigin}/playground`)
     assert.equal(playground.status, 200)
     const playgroundHtml = await playground.text()

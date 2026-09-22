@@ -1,56 +1,11 @@
 // 公式ホームページをファイル経路の要求単位SSRと静的生成の両方へ渡す。
-// SSRが相対moduleを扱わないため、共通ヘッダーはこのpage内で完結させる。
 import { render } from 'irisout'
-
-const GITHUB_URL = 'https://github.com/mikan-919/irisout'
-
-function SiteHeader() {
-  render(
-    <header class="site-header">
-      <a class="site-brand" href="/" aria-label="irisout ホーム">
-        <svg viewBox="0 0 44 44" aria-hidden="true">
-          <circle cx="22" cy="22" r="19" />
-          <path d="M22 3c6 7 8 13 7 19-1 7-6 13-15 18" />
-          <path d="M41 22c-7 6-13 8-19 7-7-1-13-6-18-15" />
-          <path d="M22 41c-6-7-8-13-7-19 1-7 6-13 15-18" />
-          <path d="M3 22c7-6 13-8 19-7 7 1 13 6 18 15" />
-        </svg>
-        <span>irisout</span>
-      </a>
-      <nav aria-label="主な項目">
-        <a href="/" aria-current="page">
-          ホーム
-        </a>
-        <a href="/docs">文書</a>
-        <a href="/examples">実例</a>
-        <a href="/playground">Playground</a>
-        <a href={GITHUB_URL}>GitHub ↗</a>
-      </nav>
-      <div class="site-actions">
-        <a class="site-cta" href="/playground">
-          試す <span aria-hidden="true">↗</span>
-        </a>
-        <details>
-          <summary aria-label="メニューを開く">☰</summary>
-          <div class="site-mobile-nav">
-            <a href="/" aria-current="page">
-              ホーム
-            </a>
-            <a href="/docs">文書</a>
-            <a href="/examples">実例</a>
-            <a href="/playground">Playground</a>
-            <a href={GITHUB_URL}>GitHub ↗</a>
-          </div>
-        </details>
-      </div>
-    </header>,
-  )
-}
+import { SiteHeader } from '../src/SiteHeader.jsx'
 
 export default function Page() {
   render(
     <div class="site-shell" id="top">
-      <SiteHeader />
+      <SiteHeader current="home" search={false} onSearch={null} />
       <main>
         <section class="hero" aria-labelledby="hero-title">
           <div class="content-shell hero-grid">
@@ -81,7 +36,7 @@ export default function Page() {
 
             <figure class="code-proof" data-reveal>
               <figcaption class="code-proof-caption">
-                <span>入力 / src/App.jsx</span>
+                <span>入力 / routes/page.tsx</span>
                 <span class="code-status">BUILD READY</span>
               </figcaption>
               <pre>

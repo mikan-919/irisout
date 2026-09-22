@@ -82,8 +82,9 @@ linked source + module-scope補助宣言
 ビルド時実行しない。初期SSRは単一module入口に限り、構造unit内のsignal/derivedはscope limitで
 拒否する。構造unitは条件・一覧を初期HTMLへ展開してから対応するrange markerを残す。client生成物は
 `render()`が返したstateを`hydrateComponent(container, state)`または`mountComponent(container, state)`へ
-渡してsignal初期値を復元する。raw inputとの推測は行わない。module共有state、相対module、外部module、
-イベント・lifecycle・actionのサーバー実行はSSR入口のscope limitである。仮想SSR moduleのsource mapは
+渡してsignal初期値を復元する。raw inputとの推測は行わない。相対moduleの補助宣言は要求ごとの
+`render()`内へ配置する。module共有stateとSSR描画から到達する外部module bindingはscope limitである。
+イベント・lifecycle・actionだけが使う外部importはSSR生成物から除外し、これらをサーバーで実行しない。仮想SSR moduleのsource mapは
 未実装のため`null`を返す。
 
 ### ファイル経路と要求単位SSR
@@ -103,7 +104,7 @@ routes/
              └─ irisout/vite: client table + virtual hydrate page modules
 ```
 
-`packages/hono/src/index.ts`はrouter作成時にpageをSSR targetへコンパイルし、handler呼び出しごとに
+`packages/hono/src/index.ts`はrouter作成時にpageへ任意の`transformSource`を適用してSSR targetへコンパイルし、handler呼び出しごとに
 loaderとrenderを実行する。loaderの結果は既存SSRのJSON入力境界を通過し、要求・接続情報はstateへ
 入らない。直接要求は利用側のdocument rendererへHTML、state、`stateScript`を渡し、遷移要求は
 `type`、`routeId`、`html`、`state`だけのJSONを返す。HTMLの外枠はHono入口で固定しない。

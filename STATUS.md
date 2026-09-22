@@ -205,6 +205,12 @@ Web Component実装は削除した。さらにHTMLのinline moduleとViteのvirt
 入力に使い、Cloudflare Workers向けの静的配信を維持する。文書、Playground、実例の既存経路は変更せず、
 型検査、本番ビルド、Bunサーバー22試験で確認した。
 
+同日にPlayground、実例一覧、BCF、Task Board、Morphの入口も`routes/**/page.tsx`へ移し、Bunサーバーの
+直接要求を同じ`irisout/hono`経路からSSRする構成へ変更した。相対moduleの補助宣言を要求ごとの
+`render()`内へ閉じ込め、イベント、ライフサイクル、actionだけが参照する外部importをSSR生成物から除外する。
+SSR描画が外部bindingへ到達する場合はscope limitで拒否する。Hono経路へ`transformSource`を追加し、Morphへ
+Motion変換を適用した。Markdown文書と保存済みPlaygroundの動的経路は既存の専用処理を維持する。
+
 ## 検証
 
 - `bun run check`: 書式、静的検査、TypeScriptとauthored JSXの型検査。
@@ -241,8 +247,8 @@ Web Component実装は削除した。さらにHTMLのinline moduleとViteのvirt
 - SSR入口のstateは配列、`null` prototypeまたは`Object.prototype`のobject、有限number、string、
   boolean、`null`だけを受け付ける。`Map`、`Set`、`Date`、`toJSON`、function、symbol、循環参照、
   accessor propertyは対象外である。
-- 初期SSRは単一module入口に限る。構造unit内の`signal()`と`derived()`は対象外で、ルート部品直下の
-  signalだけstateへ保存してhydrateする。
+- 初期SSRは相対moduleの補助宣言を要求ごとに生成する。module共有state、構造unit内の`signal()`と
+  `derived()`は対象外で、ルート部品直下のsignalだけstateへ保存してhydrateする。
 - ルート入力bindingが生成moduleの内部名と衝突する場合は`compile:` scope limitで拒否する。
 - SSR仮想moduleのsource mapは未実装で`null`を返す。404・503で正常ページ用stateを生成しない
   判定は要求処理層の責務である。

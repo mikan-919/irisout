@@ -72,7 +72,7 @@ test('開発用Playgroundの経路と実行時処理を接続する', () => {
 })
 
 test('Playground生成moduleは開発時に未変換のimport.meta.envを実行しない', () => {
-  const result = compileProject(path.resolve(import.meta.dirname, '../src/Playground.jsx'))
+  const result = compileProject(path.resolve(import.meta.dirname, '../routes/playground/page.tsx'))
   assert.doesNotMatch(result.code, /import\.meta/)
 })
 

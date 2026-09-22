@@ -519,7 +519,6 @@ const SSR_JSON_HELPER = `function __irisout_clone_json__(value) {
 }`
 
 interface SsrModuleInput {
-  externalImports: string[]
   supportStatements: string[]
   inputPattern: string | null
   instrumentedDeclStatements: string[]
@@ -527,7 +526,6 @@ interface SsrModuleInput {
 }
 
 function generateSsrModule({
-  externalImports,
   supportStatements,
   inputPattern,
   instrumentedDeclStatements,
@@ -545,13 +543,14 @@ function generateSsrModule({
   const hasSignalState = instrumentedDeclStatements.some((statement) =>
     /^const [A-Za-z_$][A-Za-z0-9_$]* = signal\(/.test(statement),
   )
-  if (externalImports.length > 0) lines.push(...externalImports, '')
   lines.push("import { signal, derived } from 'irisout/runtime';", '', SSR_JSON_HELPER, '')
-  if (supportStatements.length > 0) lines.push(...supportStatements, '')
   lines.push(
     'export function render(__rawInput__) {',
     '  const __input__ = __irisout_clone_json__(arguments.length === 0 ? {} : __rawInput__);',
   )
+  if (supportStatements.length > 0) {
+    lines.push(...supportStatements.map((statement) => `  ${statement}`))
+  }
   if (inputPattern) lines.push(`  const ${inputPattern} = __input__;`)
   if (hasSignalState) {
     lines.push(
@@ -571,6 +570,63 @@ function generateSsrModule({
     '',
   )
   return lines.join('\n')
+}
+
+function importBindings(statement: string): { source: string; names: string[] } {
+  const program = parse(statement, { sourceType: 'module', plugins: ['typescript', 'jsx'] }).program
+  const declaration = program.body[0]
+  if (declaration?.type !== 'ImportDeclaration') return { source: statement, names: [] }
+  return {
+    source: declaration.source.value,
+    names: declaration.specifiers.map((specifier) => specifier.local.name),
+  }
+}
+
+function declaredSupportNames(statement: string): string[] {
+  const program = parse(statement, { sourceType: 'module', plugins: ['typescript', 'jsx'] }).program
+  const declaration = program.body[0]
+  if (declaration?.type === 'FunctionDeclaration' && declaration.id) return [declaration.id.name]
+  if (declaration?.type !== 'VariableDeclaration') return []
+  return declaration.declarations.flatMap((item) =>
+    item.id.type === 'Identifier' ? [item.id.name] : [],
+  )
+}
+
+function referencesName(source: string, name: string): boolean {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`(?:^|[^A-Za-z0-9_$])${escaped}(?:$|[^A-Za-z0-9_$])`).test(source)
+}
+
+// ADR-0058: SSRで実行される式から到達する外部bindingだけを拒否する。
+// handler、lifecycle、actionだけが使うimportはSSR生成物へ含めない。
+function assertSsrExternalImportsUnused(
+  externalImports: string[],
+  supportStatements: string[],
+  executedSource: string,
+): void {
+  let reachableSource = executedSource
+  const pending = [...supportStatements]
+  let changed = true
+  while (changed) {
+    changed = false
+    for (let index = pending.length - 1; index >= 0; index--) {
+      const statement = pending[index]!
+      if (!declaredSupportNames(statement).some((name) => referencesName(reachableSource, name))) {
+        continue
+      }
+      reachableSource += `\n${statement}`
+      pending.splice(index, 1)
+      changed = true
+    }
+  }
+  for (const statement of externalImports) {
+    const imported = importBindings(statement)
+    if (imported.names.some((name) => referencesName(reachableSource, name))) {
+      throw new Error(
+        `compile: external module "${imported.source}" is used during SSR render (scope limit)`,
+      )
+    }
+  }
 }
 
 export function compileSource(source: string, options: CompileOptions = {}): CompileResult {
@@ -600,13 +656,6 @@ export function compileSource(source: string, options: CompileOptions = {}): Com
   if (options.target === 'ssr' && ctx.sharedDeclIds.size > 0) {
     throw new Error('compile: module shared state is not supported in SSR (scope limit)')
   }
-  if (options.target === 'ssr' && options.hasRelativeModule) {
-    throw new Error('compile: relative modules are not supported in SSR (scope limit)')
-  }
-  if (options.target === 'ssr' && (options.externalImports?.length ?? 0) > 0) {
-    throw new Error('compile: external modules are not supported in SSR (scope limit)')
-  }
-
   const out = {
     declStatements: [] as string[],
     instrumentedDeclStatements: [] as string[],
@@ -1134,13 +1183,19 @@ export function compileSource(source: string, options: CompileOptions = {}): Com
 
   const ssrCode =
     options.target === 'ssr'
-      ? generateSsrModule({
-          externalImports: options.externalImports ?? [],
-          supportStatements: options.supportStatements ?? [],
-          inputPattern,
-          instrumentedDeclStatements: out.instrumentedDeclStatements,
-          rootHtmlSource: ssrHtmlSource,
-        })
+      ? (() => {
+          assertSsrExternalImportsUnused(
+            options.externalImports ?? [],
+            options.supportStatements ?? [],
+            [...out.instrumentedDeclStatements, ssrHtmlSource].join('\n'),
+          )
+          return generateSsrModule({
+            supportStatements: options.supportStatements ?? [],
+            inputPattern,
+            instrumentedDeclStatements: out.instrumentedDeclStatements,
+            rootHtmlSource: ssrHtmlSource,
+          })
+        })()
       : undefined
 
   return {

@@ -1,7 +1,8 @@
 # irisoutホームページ
 
-irisout自身のファイル経路とHono連携で配信するホームページです。`routes/page.tsx`を
-`irisout/hono`が要求単位でSSRし、Vite+も同じ入口から静的配信用HTMLを生成します。
+irisout自身のファイル経路とHono連携で配信する公式サイトです。ホーム、Playground、実例を
+`routes/**/page.tsx`へ置き、`irisout/hono`が要求単位でSSRします。Vite+も同じ入口から
+静的配信用HTMLとブラウザー用生成物を作ります。Markdown文書は既存の静的生成を使います。
 
 ## 実行
 
