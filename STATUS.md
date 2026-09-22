@@ -72,6 +72,8 @@ Vite構築のSSOTとして使う。Vite設定への経路ディレクトリと�
 ブラウザー向け経路表から除外した。各ページは動的import境界とし、チャンク構成と最適化はViteへ委ねる。
 ブラウザー入口は`irisout-client.js`として自動発行し、利用側の仮想モジュールimportを不要にした。公式サイトは
 同じHono appからSSRと静的HTMLを生成し、差し込みコメントを持つHTMLテンプレートとページ別Vite設定を削除した。
+同日に開発時のHTML配信も`irisoutHono(app)`へ移した。登録済みpage経路へのGET要求をHonoへ渡し、
+利用側にあった経路一覧とHTML配信用Viteプラグインを削除した。
 
 ## 段階
 

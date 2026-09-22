@@ -7,7 +7,7 @@ import { irisoutHono } from 'irisout/hono/vite'
 import { PLAYGROUND_BODY_MAX_BYTES, createPlaygroundApi } from '../server/playground-api.mjs'
 import { parseTrustedProxyAddresses, resolveClientAddress } from '../server/client-address.mjs'
 import { createControllerCsp, validateSeparateOrigins } from '../src/playground/shared.js'
-import { pageDocuments, siteApp } from '../server/index.mjs'
+import { siteApp } from '../server/index.mjs'
 
 const cacheDir = process.env.IRISOUT_VITE_CACHE_DIR
 const developmentRole = process.env.IRISOUT_PLAYGROUND_DEV_ROLE
@@ -284,34 +284,6 @@ function isPlaygroundRuntimeResource(pathname: string) {
   )
 }
 
-// 開発時もHono appから完成HTMLを返し、Viteは生成資産だけを担当する。
-function siteDevelopmentPages(): Plugin {
-  return {
-    name: 'irisout-site-development-pages',
-    configureServer(server) {
-      server.middlewares.use((request, response, next) => {
-        const pathname = new URL(request.url ?? '/', 'http://irisout.local').pathname
-        if (pathname === '/site.js') request.url = '/src/site-entry.js'
-        else if (pathname === '/irisout-client.js') request.url = '/@id/virtual:irisout-routes'
-        next()
-      })
-      return () => {
-        server.middlewares.use(async (request, response, next) => {
-          const pathname = new URL(request.url ?? '/', 'http://irisout.local').pathname
-          if (!pageDocuments.has(pathname) && !pathname.startsWith('/docs')) {
-            next()
-            return
-          }
-          const result = await siteApp.fetch(await createFetchRequest(request, server))
-          response.statusCode = result.status
-          result.headers.forEach((value, name) => response.setHeader(name, value))
-          response.end(Buffer.from(await result.arrayBuffer()))
-        })
-      }
-    },
-  }
-}
-
 // SSRと同じ解析結果からhydrate用moduleを作る。投稿sourceはこの入口へ渡さない。
 function playgroundPageClient(): Plugin {
   const virtualModuleId = 'virtual:irisout-playground-page'
@@ -360,17 +332,12 @@ export default defineConfig({
   resolve: {
     alias: {
       '@playground/shared': path.resolve(import.meta.dirname, '../src/playground/shared.js'),
+      '/site.js': path.resolve(import.meta.dirname, '../src/site-entry.js'),
     },
   },
   // Playground開発時は二つのVite+を同時に起動するため、依存最適化の保存先を分ける。
   ...(cacheDir ? { cacheDir } : {}),
-  plugins: [
-    irisoutHono(siteApp),
-    siteDevelopmentPages(),
-    playgroundPageClient(),
-    playgroundHeaders(),
-    playgroundSaveApi(),
-  ],
+  plugins: [irisoutHono(siteApp), playgroundPageClient(), playgroundHeaders(), playgroundSaveApi()],
   build: {
     outDir: 'dist',
     emptyOutDir: true,

@@ -114,7 +114,8 @@ loaderとrenderを実行する。loaderの結果は既存SSRのJSON入力境界�
 `packages/vite-plugin/src/hono.ts`はHonoへmountされた処理関数の明示情報を読み、最終的な経路を
 `packages/vite-plugin/src/routes.ts`へ渡す。利用側は経路ディレクトリと接頭辞をVite設定へ再記述しない。
 Honoの登録済み経路をSSOTとするが、client targetのチャンク分割、共有コード抽出、圧縮、ハッシュ付与は
-Viteへ委ねる。`packages/vite-plugin/src/routes.ts`はpageごとのclient target生成物を仮想moduleへ置き、
+Viteへ委ねる。開発時は登録済みpage経路へのGET要求だけを同じHono appへ渡し、利用側がHTML配信用の
+Viteプラグインを重ねない。`packages/vite-plugin/src/routes.ts`はpageごとのclient target生成物を仮想moduleへ置き、
 各pageを動的import境界にする。仮想入口は
 `data-irisout-route-state`のscriptを初回だけ読み、対応する`hydrateComponent`を呼ぶ。遷移時の
 `createRouteNavigator()`は通常リンク・historyだけを捕捉し、AbortControllerと世代番号で古い応答を
@@ -148,7 +149,7 @@ triage手続きで捌く — コンパイラの受理条件自体を場当たり
 | `packages/motion/src/runtime.ts`                      | 変換後の`use=`から公式Motionの`animate()`と配置投影要素登録を実行する                                                                                                                               |
 | `packages/motion/src/projection.ts`                   | 汎用DOM更新取引をMotionの`HTMLProjectionNode`へ接続し、配置測定・親子補正・共有要素・終了時crossfadeを管理する                                                                                      |
 | `packages/vite-plugin/src/routes.ts`                  | `page.tsx`/`page.jsx`群のclient target、経路表、初回hydrate、ファイル集合変更時の仮想module再生成                                                                                                   |
-| `packages/vite-plugin/src/hono.ts`                    | Honoへmount済みのirisout経路をSSOTとして選び、Viteのpage入口生成へ接続                                                                                                                              |
+| `packages/vite-plugin/src/hono.ts`                    | Honoへmount済みのirisout経路をSSOTとして選び、Viteのpage入口生成と開発時のHTML応答へ接続                                                                                                            |
 | `packages/routes/src/index.ts`                        | fs・Honoに依存しない経路定義、静的優先、衝突検査、URL照合、ブラウザー遷移                                                                                                                           |
 | `packages/routes/src/node.ts`                         | `page.tsx`/`page.jsx`の走査とfile path付きserver経路表の生成                                                                                                                                        |
 | `packages/hono/src/index.ts`                          | pageごとのSSR、loader、直接HTML、遷移JSON、not-found・redirect・errorのHonoサブルーター                                                                                                             |

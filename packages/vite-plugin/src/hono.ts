@@ -2,7 +2,8 @@
 // ファイル探索や経路接頭辞の再指定は行わず、Honoの登録済み経路をSSOTとして扱う。
 
 import type { Hono } from 'hono'
-import type { Plugin } from 'vite-plus'
+import type { IncomingMessage } from 'node:http'
+import type { Plugin, ViteDevServer } from 'vite-plus'
 import { irisoutExplicitRoutes, type IrisoutExplicitRouteDefinition } from './routes.ts'
 
 const irisoutHonoPageMetadata = Symbol.for('irisout.hono.page-metadata')
@@ -56,13 +57,74 @@ function collectRoutes(app: Hono): IrisoutExplicitRouteDefinition[] {
   return routes
 }
 
+function routePattern(pathname: string): RegExp {
+  const source = pathname
+    .split('/')
+    .map((segment) =>
+      segment.startsWith(':') ? '[^/]+' : segment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+    )
+    .join('/')
+  return new RegExp(`^${source}/?$`)
+}
+
+function createRequest(request: IncomingMessage, server: ViteDevServer): Request {
+  const host = request.headers.host
+  if (!host) throw new Error('開発サーバーのHostがありません')
+  const protocol = server.config.server.https ? 'https' : 'http'
+  const headers = new Headers()
+  for (const [name, value] of Object.entries(request.headers)) {
+    if (value !== undefined) headers.set(name, Array.isArray(value) ? value.join(', ') : value)
+  }
+  return new Request(new URL(request.url ?? '/', `${protocol}://${host}`), {
+    method: request.method,
+    headers,
+  })
+}
+
+function developmentPages(app: Hono, routes: readonly IrisoutExplicitRouteDefinition[]): Plugin {
+  const patterns = routes.map((route) => routePattern(route.path))
+  return {
+    name: 'irisout-hono-development-pages',
+    configureServer(server) {
+      server.middlewares.use((request, _response, next) => {
+        if (new URL(request.url ?? '/', 'http://irisout.local').pathname === '/irisout-client.js') {
+          request.url = '/@id/virtual:irisout-routes'
+        }
+        next()
+      })
+      server.middlewares.use(async (request, response, next) => {
+        if (request.method !== 'GET') return next()
+        const pathname = new URL(request.url ?? '/', 'http://irisout.local').pathname
+        if (!patterns.some((pattern) => pattern.test(pathname))) return next()
+
+        const result = await app.fetch(createRequest(request, server))
+        response.statusCode = result.status
+        result.headers.forEach((value, name) => response.setHeader(name, value))
+        response.end(Buffer.from(await result.arrayBuffer()))
+      })
+    },
+  }
+}
+
 /** Hono appの登録済みirisout経路をViteのclient生成へ接続する。 */
 export function irisoutHono(app: Hono, options: IrisoutHonoOptions = {}): Plugin {
   const routes = collectRoutes(app)
   if (routes.length === 0) {
     throw new Error('compile: irisoutHono found no createFileRouter routes (scope limit)')
   }
-  return irisoutExplicitRoutes({ ...options, routes, emitEntry: true })
+  const routesPlugin = irisoutExplicitRoutes({ ...options, routes, emitEntry: true })
+  const pagesPlugin = developmentPages(app, routes)
+  const configureRoutes = routesPlugin.configureServer
+  const configurePages = pagesPlugin.configureServer
+  return {
+    ...routesPlugin,
+    configureServer(server) {
+      if (typeof configureRoutes === 'function') void configureRoutes.call(this, server)
+      else void configureRoutes?.handler.call(this, server)
+      if (typeof configurePages === 'function') void configurePages.call(this, server)
+      else void configurePages?.handler.call(this, server)
+    },
+  }
 }
 
 export default irisoutHono

@@ -168,6 +168,7 @@ function createRoutesPlugin(
   )
   let result: RouteBuild | null = null
   let pageIds = new Map<string, string>()
+  let build = false
 
   const pageRawId = (routeId: string): string =>
     `${virtualModuleId}${PAGE_MODULE_MARKER}${encodeURIComponent(routeId)}`
@@ -227,20 +228,20 @@ function createRoutesPlugin(
     name: 'irisout-routes',
     configResolved(config: ResolvedConfig) {
       root = config.root
+      build = config.command === 'build'
       directoryPath = explicitRoutes
         ? root
         : normalizePath(path.resolve(root, requireDirectory(options)))
-      resolvedVirtualModuleId =
-        config.command === 'serve'
-          ? `\0${virtualModuleId}`
-          : path.join(root, `.irisout-${encodeURIComponent(virtualModuleId)}.js`)
+      resolvedVirtualModuleId = build
+        ? path.join(root, `.irisout-${encodeURIComponent(virtualModuleId)}.js`)
+        : `\0${virtualModuleId}`
       result = null
       pageIds = new Map()
     },
     buildStart() {
       compile()
       watch((filePath) => this.addWatchFile(filePath))
-      if (emitEntry)
+      if (emitEntry && build)
         this.emitFile({ type: 'chunk', id: virtualModuleId, fileName: 'irisout-client.js' })
     },
     configureServer(server) {
