@@ -40,6 +40,8 @@ void test('文書SSGが正本、一覧、検索索引を生成する', () => {
     const examples = readFileSync(join(outputDir, 'examples.json'), 'utf8')
     assert.match(detail, /npm公開版から始める/)
     assert.match(detail, /id="1-パッケージを導入する"/)
+    assert.match(detail, /次の文書<\/span>状態と派生値/)
+    assert.doesNotMatch(detail, /前の文書<\/span>/)
     assert.match(detail, /rel="canonical"/)
     assert.match(index, /Counter/)
     assert.match(index, /ドキュメント/)
