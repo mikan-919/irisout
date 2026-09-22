@@ -1,5 +1,15 @@
 [
   {
+    "date": "2026-09-22",
+    "macrostructure": "Line Seed",
+    "theme": "Graphite",
+    "theme_axes": "light / grotesk-sans / neutral",
+    "enrichment": "interactive compiler strip",
+    "nav": "wordmark-line",
+    "footer": "utility-line",
+    "brief": "irisout multipage redesign · supplied line-seed reference"
+  },
+  {
     "date": "2026-09-16",
     "macrostructure": "Narrative Workflow",
     "theme": "Cobalt",

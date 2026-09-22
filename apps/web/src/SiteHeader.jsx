@@ -7,21 +7,15 @@ export function SiteHeader({ current, search, onSearch }) {
   render(
     <header class="site-header">
       <a class="site-brand" href="/" aria-label="irisout ホーム">
-        <svg viewBox="0 0 44 44" aria-hidden="true">
-          <circle cx="22" cy="22" r="19" />
-          <path d="M22 3c6 7 8 13 7 19-1 7-6 13-15 18" />
-          <path d="M41 22c-7 6-13 8-19 7-7-1-13-6-18-15" />
-          <path d="M22 41c-6-7-8-13-7-19 1-7 6-13 15-18" />
-          <path d="M3 22c7-6 13-8 19-7 7 1 13 6 18 15" />
-        </svg>
         <span>irisout</span>
+        <small>0.2.2</small>
       </a>
       <nav aria-label="主な項目">
         <a href="/" aria-current={current === 'home' ? 'page' : null}>
           ホーム
         </a>
         <a href="/docs" aria-current={current === 'docs' ? 'page' : null}>
-          ドキュメント
+          仕組み
         </a>
         <a href="/examples" aria-current={current === 'examples' ? 'page' : null}>
           実例
@@ -31,9 +25,9 @@ export function SiteHeader({ current, search, onSearch }) {
           data-irisout-document
           aria-current={current === 'playground' ? 'page' : null}
         >
-          Playground
+          実行
         </a>
-        <a href={GITHUB_URL}>GitHub ↗</a>
+        <a href={GITHUB_URL}>GitHub</a>
       </nav>
       <div class="site-actions">
         {search && (
@@ -48,8 +42,8 @@ export function SiteHeader({ current, search, onSearch }) {
             <kbd>⌘ K</kbd>
           </button>
         )}
-        <a class="site-cta" href="/playground" data-irisout-document>
-          試す <span aria-hidden="true">↗</span>
+        <a class="site-cta" href="/docs">
+          制約
         </a>
         <details>
           <summary aria-label="メニューを開く">☰</summary>
