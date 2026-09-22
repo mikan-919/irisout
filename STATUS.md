@@ -3,7 +3,7 @@
 実装の現在地、完了した段階、既知の制約を記録する。設計判断は`docs/adr/`、受入条件は
 `openspec/specs/`、今後の作業は`ROADMAP.md`を正本とする。
 
-## 現在地（2026-09-19）
+## 現在地（2026-09-22）
 
 ソース版とnpm公開版は0.2.2である。0.2.2は文書とアプリ開発用スキルを更新し、公開入口と生成コードは変更していない。0.2.1では状態更新を
 `signal((previous) => next)`へ統一し、`signal(initial, keyOf)`と`.update()`を削除した。
@@ -65,6 +65,11 @@ HonoサブルーターとしてpageをSSR targetへ接続し、page別loaderのp
 404、redirect、500を分離した。`irisoutRoutes`はclient経路表とhydrate用page moduleを生成する。
 初回stateを再取得せず、管理対象リンク、履歴、検索引数変更、旧画面の破棄、競合抑止、失敗時の
 通常文書遷移を実DOM試験で確認した。公開bundle、宣言、tarball、Hono peer依存を更新した。
+
+2026-09-22に`irisout/hono/vite`の`irisoutHono(app)`を追加した。`createFileRouter()`由来の処理関数へ
+ページのファイルパス、依存ファイル、ソース変換を明示情報として付け、Honoへmountされた後の登録済み経路を
+Vite構築のSSOTとして使う。Vite設定への経路ディレクトリと接頭辞の重複指定を削除し、通常のHono経路を
+ブラウザー向け経路表から除外した。各ページは動的import境界とし、チャンク構成と最適化はViteへ委ねる。
 
 ## 段階
 

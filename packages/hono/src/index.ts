@@ -166,6 +166,20 @@ export interface IrisoutFileRouter extends Hono {
   readonly dependencies: readonly string[]
 }
 
+export interface IrisoutHonoPageMetadata {
+  readonly route: IrisoutFileRouteDefinition
+  readonly rootDirectory: string
+  readonly dependencies: readonly string[]
+  readonly transformSource?: (source: string, filePath: string) => string
+}
+
+/** Honoがmount後も保持するhandlerへ、Vite連携が読む明示情報を付ける鍵。 */
+export const irisoutHonoPageMetadata = Symbol.for('irisout.hono.page-metadata')
+
+export type IrisoutHonoPageHandler = ((context: Context) => Response | Promise<Response>) & {
+  readonly [irisoutHonoPageMetadata]?: IrisoutHonoPageMetadata
+}
+
 interface CompiledPage {
   readonly route: FileRouteDefinition
   readonly render: (input?: unknown) => { html: string; state: unknown }
@@ -374,9 +388,16 @@ export function createFileRouter(
     }
   }
   for (const route of routeTable.routes) {
-    router.all(joinRoutePath(routeTable.basePath, route.path), (context) =>
-      handleRequest(context, route),
-    )
+    const handler: IrisoutHonoPageHandler = (context) => handleRequest(context, route)
+    Object.defineProperty(handler, irisoutHonoPageMetadata, {
+      value: {
+        route,
+        rootDirectory: manifest.rootDirectory,
+        dependencies: manifest.dependencies,
+        transformSource: options.transformSource,
+      } satisfies IrisoutHonoPageMetadata,
+    })
+    router.all(joinRoutePath(routeTable.basePath, route.path), handler)
   }
   // 未一致URLも遷移JSONの契約へ入れる。ページ経路以外のAPIは利用側の
   // Honoへ登録し、このサブルーターへmountする順序で分離する。

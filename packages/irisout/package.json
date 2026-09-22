@@ -34,6 +34,10 @@
       "types": "./dist/hono.d.ts",
       "import": "./dist/hono.js"
     },
+    "./hono/vite": {
+      "types": "./dist/hono-vite.d.ts",
+      "import": "./dist/hono-vite.js"
+    },
     "./runtime": {
       "types": "./dist/runtime.d.ts",
       "import": "./dist/runtime.js"

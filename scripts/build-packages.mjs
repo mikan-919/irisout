@@ -97,6 +97,16 @@ const publicEntries = [
       return id
     },
   },
+  {
+    name: 'hono-vite',
+    source: 'packages/vite-plugin/src/hono.ts',
+    external: (id) =>
+      id === 'hono' ||
+      id === 'vite-plus' ||
+      id.startsWith('node:') ||
+      id.includes('compiler/src/compiler'),
+    paths: (id) => (id.includes('compiler/src/compiler') ? './index.js' : id),
+  },
 ]
 
 for (const entry of publicEntries) {
@@ -184,6 +194,10 @@ copyFileSync(
   path.join(publicOutDir, 'hono.d.ts'),
 )
 copyFileSync(
+  path.join(declarationOutDir, 'vite-plugin/src/hono.d.ts'),
+  path.join(publicOutDir, 'hono-vite.d.ts'),
+)
+copyFileSync(
   path.join(declarationOutDir, 'vite-plugin/src/routes.d.ts'),
   path.join(publicOutDir, 'vite-routes.d.ts'),
 )
@@ -221,6 +235,7 @@ const declarationFiles = [
   'motion.d.ts',
   'motion-vite.d.ts',
   'hono.d.ts',
+  'hono-vite.d.ts',
   'diagnostics.d.ts',
   'jsx.d.ts',
   'source-map.d.ts',
@@ -236,7 +251,11 @@ for (const relativePath of declarationFiles) {
         ? `${quote}${specifier.slice(0, -3)}.js${quote}`
         : match,
   )
-  if (relativePath === 'vite.d.ts' || relativePath === 'vite-routes.d.ts') {
+  if (
+    relativePath === 'vite.d.ts' ||
+    relativePath === 'vite-routes.d.ts' ||
+    relativePath === 'hono-vite.d.ts'
+  ) {
     declaration = declaration.replace(
       "import type { Plugin } from 'vite-plus';",
       'type Plugin = { readonly name: string }',

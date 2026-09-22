@@ -5,6 +5,7 @@
 import path from 'node:path'
 import { compileProject, type CompileResult } from '../../compiler/src/compiler.ts'
 import {
+  createRouteDefinition,
   createRouteTable,
   toClientRouteTable,
   type ClientRouteDefinition,
@@ -30,6 +31,21 @@ export interface IrisoutRoutesPluginOptions {
   container?: string
   /** main.jsからimportする仮想module名。 */
   virtualModuleId?: string
+}
+
+export interface IrisoutExplicitRouteDefinition {
+  readonly id: string
+  readonly path: string
+  readonly filePath: string
+  readonly rootDirectory?: string
+  readonly dependencies?: readonly string[]
+  readonly transformSource?: (source: string, filePath: string) => string
+}
+
+export interface IrisoutExplicitRoutesPluginOptions {
+  readonly routes: readonly IrisoutExplicitRouteDefinition[]
+  readonly container?: string
+  readonly virtualModuleId?: string
 }
 
 interface RoutePage {
@@ -70,22 +86,18 @@ function pageModuleSource(
   pages: readonly RoutePage[],
   containerSelector: string,
 ): string {
-  const imports = pages.map(
-    (page, index) => `import * as __irisout_page_${index}__ from ${JSON.stringify(page.rawId)};`,
-  )
   const pagesByRoute = clientTable.routes
     .map((route) => {
       const page = pages.find((candidate) => candidate.route.id === route.id)
       if (!page) return null
       const index = pages.indexOf(page)
-      return `${JSON.stringify(route.id)}: __irisout_page_${index}__,`
+      return `${JSON.stringify(route.id)}: () => import(${JSON.stringify(pages[index]!.rawId)}),`
     })
     .filter((entry): entry is string => entry != null)
   const container = JSON.stringify(containerSelector)
   const missingContainer = JSON.stringify(`irisout route container not found: ${containerSelector}`)
 
   return [
-    ...imports,
     "import { createRouteNavigator } from 'irisout/routes';",
     '',
     `const __irisout_route_table__ = ${JSON.stringify(clientTable)};`,
@@ -102,13 +114,15 @@ function pageModuleSource(
     `  if (!__route_id__) throw new Error('irisout initial route state has no route id');`,
     `  return { routeId: __route_id__, state: JSON.parse(__script__.textContent ?? '') };`,
     `};`,
-    `const __irisout_page_for__ = (routeId) => {`,
-    `  const __page__ = __irisout_pages__[routeId];`,
-    `  if (!__page__ || typeof __page__.hydrateComponent !== 'function') throw new Error('irisout route page module not found');`,
+    `const __irisout_page_for__ = async (routeId) => {`,
+    `  const __load__ = __irisout_pages__[routeId];`,
+    `  if (!__load__) throw new Error('irisout route page module not found');`,
+    `  const __page__ = await __load__();`,
+    `  if (typeof __page__.hydrateComponent !== 'function') throw new Error('irisout route page module has no hydrateComponent');`,
     `  return __page__;`,
     `};`,
     `const __irisout_render__ = async (response, match, containerElement) => {`,
-    `  const __page__ = __irisout_page_for__(response.routeId);`,
+    `  const __page__ = await __irisout_page_for__(response.routeId);`,
     `  containerElement.innerHTML = response.html;`,
     `  return __page__.hydrateComponent(containerElement, response.state);`,
     `};`,
@@ -116,7 +130,7 @@ function pageModuleSource(
     `  const __initial__ = __irisout_read_initial__();`,
     `  if (!__initial__) throw new Error('irisout initial route state was not found');`,
     `  if (__initial__.routeId !== match.route.id) throw new Error('irisout initial route state does not match URL');`,
-    `  return __irisout_page_for__(__initial__.routeId).hydrateComponent(containerElement, __initial__.state);`,
+    `  return (await __irisout_page_for__(__initial__.routeId)).hydrateComponent(containerElement, __initial__.state);`,
     `};`,
     `const __irisout_fallback__ = (url) => window.location.assign(url.href);`,
     `export const routeTable = __irisout_route_table__;`,
@@ -132,12 +146,20 @@ function pageModuleSource(
   ].join('\n')
 }
 
-/** page.tsx/page.jsx群からclient経路表とhydrate入口を生成するVite plugin。 */
-export function irisoutRoutes(options: IrisoutRoutesPluginOptions): Plugin {
+function createRoutesPlugin(
+  options: IrisoutRoutesPluginOptions,
+  explicitRoutes?: readonly IrisoutExplicitRouteDefinition[],
+): Plugin {
   const virtualModuleId = options.virtualModuleId ?? DEFAULT_VIRTUAL_MODULE_ID
   const containerSelector = options.container ?? DEFAULT_CONTAINER
+  const routeDirectories = [
+    ...new Set(explicitRoutes?.flatMap((route) => route.rootDirectory ?? []) ?? []),
+  ].map(normalizePath)
+  const knownPageFiles = new Set(explicitRoutes?.map((route) => normalizePath(route.filePath)))
   let root = process.cwd()
-  let directoryPath = normalizePath(path.resolve(root, requireDirectory(options)))
+  let directoryPath = explicitRoutes
+    ? root
+    : normalizePath(path.resolve(root, requireDirectory(options)))
   let resolvedVirtualModuleId = path.join(
     root,
     `.irisout-${encodeURIComponent(virtualModuleId)}.js`,
@@ -151,16 +173,35 @@ export function irisoutRoutes(options: IrisoutRoutesPluginOptions): Plugin {
     path.join(root, `.irisout-${encodeURIComponent(rawId)}.js`)
 
   const compile = (): RouteBuild => {
-    const manifest = scanFileRoutes(directoryPath)
-    const table = createRouteTable(manifest.routes, {
-      basePath: options.basePath ?? options.prefix,
-    })
+    const manifest = explicitRoutes
+      ? {
+          rootDirectory: root,
+          routes: explicitRoutes.map(({ id, path: routePath, filePath }) => ({
+            ...createRouteDefinition(routePath, id, filePath),
+            filePath: normalizePath(filePath),
+          })),
+          basePath: '/',
+          dependencies: explicitRoutes.flatMap((route) => route.dependencies ?? [route.filePath]),
+        }
+      : scanFileRoutes(directoryPath)
+    const table = createRouteTable(
+      manifest.routes,
+      explicitRoutes ? {} : { basePath: options.basePath ?? options.prefix },
+    )
     const clientTable = toClientRouteTable(table)
     const nextPageIds = new Map<string, string>()
     const pages: RoutePage[] = []
-    const dependencies = new Set<string>([directoryPath, ...manifest.dependencies])
+    const dependencies = new Set<string>(
+      explicitRoutes ? manifest.dependencies : [directoryPath, ...manifest.dependencies],
+    )
     for (const route of manifest.routes) {
-      const compiled = compileProject(route.filePath, { target: 'ssr' })
+      const explicit = explicitRoutes?.find(
+        (candidate) => normalizePath(candidate.filePath) === route.filePath,
+      )
+      const compiled = compileProject(route.filePath, {
+        target: 'ssr',
+        transformSource: explicit?.transformSource,
+      })
       const rawId = pageRawId(route.filePath)
       const resolvedId = pageResolvedId(rawId)
       nextPageIds.set(resolvedId, route.filePath)
@@ -184,7 +225,9 @@ export function irisoutRoutes(options: IrisoutRoutesPluginOptions): Plugin {
     name: 'irisout-routes',
     configResolved(config: ResolvedConfig) {
       root = config.root
-      directoryPath = normalizePath(path.resolve(root, requireDirectory(options)))
+      directoryPath = explicitRoutes
+        ? root
+        : normalizePath(path.resolve(root, requireDirectory(options)))
       resolvedVirtualModuleId =
         config.command === 'serve'
           ? `\0${virtualModuleId}`
@@ -198,7 +241,29 @@ export function irisoutRoutes(options: IrisoutRoutesPluginOptions): Plugin {
     },
     configureServer(server) {
       const current = ensureCompiled()
-      server.watcher.add([directoryPath, ...current.dependencies])
+      server.watcher.add(
+        explicitRoutes
+          ? [...routeDirectories, ...current.dependencies]
+          : [directoryPath, ...current.dependencies],
+      )
+      if (explicitRoutes) {
+        const isPage = (filePath: string): boolean =>
+          (filePath.endsWith('/page.tsx') || filePath.endsWith('/page.jsx')) &&
+          routeDirectories.some((directory) => isWithin(directory, normalizePath(filePath)))
+        const added = (filePath: string): void => {
+          if (isPage(filePath) && !knownPageFiles.has(normalizePath(filePath)))
+            void server.restart()
+        }
+        const removed = (filePath: string): void => {
+          if (isPage(filePath) && knownPageFiles.has(normalizePath(filePath))) void server.restart()
+        }
+        server.watcher.on('add', added)
+        server.watcher.on('unlink', removed)
+        server.httpServer?.once('close', () => {
+          server.watcher.off('add', added)
+          server.watcher.off('unlink', removed)
+        })
+      }
     },
     resolveId(id: string) {
       if (id === virtualModuleId) return resolvedVirtualModuleId
@@ -224,11 +289,19 @@ export function irisoutRoutes(options: IrisoutRoutesPluginOptions): Plugin {
     async handleHotUpdate(context: HmrContext) {
       const changedPath = normalizePath(context.file)
       const current = ensureCompiled()
-      if (!isWithin(directoryPath, changedPath) && !current.dependencies.has(changedPath)) return
+      if (
+        (explicitRoutes || !isWithin(directoryPath, changedPath)) &&
+        !current.dependencies.has(changedPath)
+      )
+        return
       const previous = result
       try {
         compile()
-        context.server.watcher.add([directoryPath, ...ensureCompiled().dependencies])
+        context.server.watcher.add(
+          explicitRoutes
+            ? [...ensureCompiled().dependencies]
+            : [directoryPath, ...ensureCompiled().dependencies],
+        )
       } catch (error) {
         result = previous
         throw error
@@ -237,6 +310,19 @@ export function irisoutRoutes(options: IrisoutRoutesPluginOptions): Plugin {
       return []
     },
   }
+}
+
+/** 明示されたHono経路情報からclient経路表とhydrate入口を生成する内部境界。 */
+export function irisoutExplicitRoutes(options: IrisoutExplicitRoutesPluginOptions): Plugin {
+  return createRoutesPlugin(
+    { container: options.container, virtualModuleId: options.virtualModuleId },
+    options.routes,
+  )
+}
+
+/** pageディレクトリを走査してclient経路表とhydrate入口を生成するVite plugin。 */
+export function irisoutRoutes(options: IrisoutRoutesPluginOptions): Plugin {
+  return createRoutesPlugin(options)
 }
 
 export const irisoutFileRoutes = irisoutRoutes

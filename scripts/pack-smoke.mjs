@@ -120,6 +120,8 @@ if (!registryPackage) {
 import { compile as compileBrowser } from 'irisout/browser'
 import { irisoutSsr, serializeSsrState } from 'irisout/ssr'
 import { createFileRouter, createRouteStateScript } from 'irisout/hono'
+import { irisoutHono } from 'irisout/hono/vite'
+import { Hono } from 'hono'
 import { createRouteDefinition, createRouteTable } from 'irisout/routes'
 import { irisoutRoutes } from 'irisout/vite'
 import { motion, mountMotionElement } from 'irisout/motion'
@@ -149,10 +151,12 @@ const serializedState = serializeSsrState({ ok: true })
 const routeTable = createRouteTable([createRouteDefinition('/')])
 const routePlugin = irisoutRoutes({ directory: 'src' })
 const fileRouter = createFileRouter('src')
+const honoApp = new Hono().route('/', fileRouter)
+const honoPlugin = irisoutHono(honoApp)
 const routeStateScript = createRouteStateScript('/', { ok: true })
 const motionPlugin = irisoutMotion({ entry: 'src/App.jsx' })
 
-void [compilerState, ids, clientResult, projectResult, browserResult, ssrPlugin, serializedState, routeTable, routePlugin, fileRouter, routeStateScript, motion, mountMotionElement, motionPlugin]
+void [compilerState, ids, clientResult, projectResult, browserResult, ssrPlugin, serializedState, routeTable, routePlugin, fileRouter, honoPlugin, routeStateScript, motion, mountMotionElement, motionPlugin]
 `,
   )
 }
@@ -167,7 +171,7 @@ try {
     [
       '--input-type=module',
       '-e',
-      "const compiler = await import('irisout'); const browser = await import('irisout/browser'); const ssr = await import('irisout/ssr'); const state = await import('irisout/state'); const routes = await import('irisout/routes'); const hono = await import('irisout/hono'); const vite = await import('irisout/vite'); const motion = await import('irisout/motion'); const motionVite = await import('irisout/motion/vite'); if (typeof compiler.compile !== 'function' || typeof browser.compile !== 'function' || typeof ssr.irisoutSsr !== 'function' || typeof ssr.serializeSsrState !== 'function' || typeof state.toDeclId !== 'function' || typeof routes.matchRoute !== 'function' || typeof hono.createFileRouter !== 'function' || typeof vite.irisoutRoutes !== 'function' || typeof motion.mountMotionElement !== 'function' || typeof motionVite.irisoutMotion !== 'function') throw new Error('pack smoke: public export missing')",
+      "const compiler = await import('irisout'); const browser = await import('irisout/browser'); const ssr = await import('irisout/ssr'); const state = await import('irisout/state'); const routes = await import('irisout/routes'); const hono = await import('irisout/hono'); const honoVite = await import('irisout/hono/vite'); const vite = await import('irisout/vite'); const motion = await import('irisout/motion'); const motionVite = await import('irisout/motion/vite'); if (typeof compiler.compile !== 'function' || typeof browser.compile !== 'function' || typeof ssr.irisoutSsr !== 'function' || typeof ssr.serializeSsrState !== 'function' || typeof state.toDeclId !== 'function' || typeof routes.matchRoute !== 'function' || typeof hono.createFileRouter !== 'function' || typeof honoVite.irisoutHono !== 'function' || typeof vite.irisoutRoutes !== 'function' || typeof motion.mountMotionElement !== 'function' || typeof motionVite.irisoutMotion !== 'function') throw new Error('pack smoke: public export missing')",
     ],
     fixtureDir,
   )

@@ -8,7 +8,7 @@ order: 2
 
 # Honoとpage.tsxのファイル経路
 
-`irisout/hono`は`page.tsx`または`page.jsx`のディレクトリ構造をHonoのサブルーターへ接続する。Vite側で`irisoutRoutes`を使うと、同じ経路表で初回hydrateとブラウザー遷移を行う。
+`irisout/hono`は`page.tsx`または`page.jsx`のディレクトリ構造をHonoのサブルーターへ接続する。`irisout/hono/vite`はHonoへ登録された経路をSSOTとして読み、初回hydrateとブラウザー遷移に必要な生成物をViteへ渡す。
 
 ## 経路を作る
 
@@ -28,7 +28,11 @@ routes/
 import { render } from 'irisout'
 
 export function UserPage({ name }) {
-  render(<main><h1>{name}</h1></main>)
+  render(
+    <main>
+      <h1>{name}</h1>
+    </main>,
+  )
 }
 ```
 
@@ -38,18 +42,20 @@ export function UserPage({ name }) {
 import { Hono } from 'hono'
 import { createFileRouter, notFound } from 'irisout/hono'
 
-const app = new Hono()
+export const app = new Hono()
 
-app.route('/', createFileRouter('./routes', {
-  loaders: {
-    '/users/:id': async ({ params }) => {
-      const user = await findUser(params.id)
-      return user ? { name: user.name } : notFound()
+app.route(
+  '/',
+  createFileRouter('./routes', {
+    loaders: {
+      '/users/:id': async ({ params }) => {
+        const user = await findUser(params.id)
+        return user ? { name: user.name } : notFound()
+      },
     },
-  },
-  document: ({ html, stateScript }) =>
-    `<!doctype html><div id="app">${html}</div>${stateScript}`,
-}))
+    document: ({ html, stateScript }) => `<!doctype html><div id="app">${html}</div>${stateScript}`,
+  }),
+)
 ```
 
 loaderの戻り値はJSONで表せる値に限る。`request`はloader内で利用できるが、ブラウザへ渡すstateには含まれない。別URLへ移す場合は`redirect(location, status)`を返す。
@@ -58,11 +64,17 @@ loaderの戻り値はJSONで表せる値に限る。`request`はloader内で利�
 
 ```ts
 import { defineConfig } from 'vite-plus'
-import { irisoutRoutes } from 'irisout/vite'
+import { irisoutHono } from 'irisout/hono/vite'
+import { app } from './server/app.ts'
 
 export default defineConfig({
-  plugins: [irisoutRoutes({ directory: './routes' })],
+  plugins: [
+    irisoutHono(app),
+    // 通常のViteプラグインを続けて登録できる。
+  ],
 })
 ```
 
-`prefix`を使う場合はHono側とVite側へ同じ値を渡す。通常の同一配信元リンクはクライアント遷移の対象になり、外部リンク、別タブ、download、fragmentだけの移動はブラウザ標準の動作へ任せる。
+経路ディレクトリと接頭辞はHono側だけに書く。`irisoutHono(app)`は`createFileRouter()`由来の経路だけを選び、HonoのAPI経路は無視する。app定義はVite設定からも読み込まれるため、`Bun.serve()`などの待受開始は別の起動ファイルに置く。
+
+各ページは動的`import()`になる。irisoutは経路表とページ入口だけを生成し、チャンク分割、共有チャンク、圧縮、ファイル名のハッシュはViteが処理する。通常の同一配信元リンクはクライアント遷移の対象になり、外部リンク、別タブ、download、fragmentだけの移動はブラウザー標準の動作へ任せる。

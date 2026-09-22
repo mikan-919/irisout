@@ -100,8 +100,10 @@ routes/
   users/page.tsx       → /users
   users/[id]/page.tsx  → /users/:id
              │
-             ├─ irisout/hono: compileProject(..., { target: 'ssr' }) + Hono subrouter
-             └─ irisout/vite: client table + virtual hydrate page modules
+             └─ irisout/hono: compileProject(..., { target: 'ssr' }) + Hono subrouter
+                                      │ mount後の登録済み経路がSSOT
+                                      ▼
+                irisout/hono/vite: client table + 動的なhydrate page modules
 ```
 
 `packages/hono/src/index.ts`はrouter作成時にpageへ任意の`transformSource`を適用してSSR targetへコンパイルし、handler呼び出しごとに
@@ -109,7 +111,11 @@ loaderとrenderを実行する。loaderの結果は既存SSRのJSON入力境界�
 入らない。直接要求は利用側のdocument rendererへHTML、state、`stateScript`を渡し、遷移要求は
 `type`、`routeId`、`html`、`state`だけのJSONを返す。HTMLの外枠はHono入口で固定しない。
 
-`packages/vite-plugin/src/routes.ts`はpageごとのclient target生成物を仮想moduleへ置く。仮想入口は
+`packages/vite-plugin/src/hono.ts`はHonoへmountされた処理関数の明示情報を読み、最終的な経路を
+`packages/vite-plugin/src/routes.ts`へ渡す。利用側は経路ディレクトリと接頭辞をVite設定へ再記述しない。
+Honoの登録済み経路をSSOTとするが、client targetのチャンク分割、共有コード抽出、圧縮、ハッシュ付与は
+Viteへ委ねる。`packages/vite-plugin/src/routes.ts`はpageごとのclient target生成物を仮想moduleへ置き、
+各pageを動的import境界にする。仮想入口は
 `data-irisout-route-state`のscriptを初回だけ読み、対応する`hydrateComponent`を呼ぶ。遷移時の
 `createRouteNavigator()`は通常リンク・historyだけを捕捉し、AbortControllerと世代番号で古い応答を
 無視し、旧instanceの`unmount()`を先に呼ぶ。外部・download・別tab・fragmentと失敗時のURLは
@@ -142,6 +148,7 @@ triage手続きで捌く — コンパイラの受理条件自体を場当たり
 | `packages/motion/src/runtime.ts`                      | 変換後の`use=`から公式Motionの`animate()`と配置投影要素登録を実行する                                                                                                                               |
 | `packages/motion/src/projection.ts`                   | 汎用DOM更新取引をMotionの`HTMLProjectionNode`へ接続し、配置測定・親子補正・共有要素・終了時crossfadeを管理する                                                                                      |
 | `packages/vite-plugin/src/routes.ts`                  | `page.tsx`/`page.jsx`群のclient target、経路表、初回hydrate、ファイル集合変更時の仮想module再生成                                                                                                   |
+| `packages/vite-plugin/src/hono.ts`                    | Honoへmount済みのirisout経路をSSOTとして選び、Viteのpage入口生成へ接続                                                                                                                              |
 | `packages/routes/src/index.ts`                        | fs・Honoに依存しない経路定義、静的優先、衝突検査、URL照合、ブラウザー遷移                                                                                                                           |
 | `packages/routes/src/node.ts`                         | `page.tsx`/`page.jsx`の走査とfile path付きserver経路表の生成                                                                                                                                        |
 | `packages/hono/src/index.ts`                          | pageごとのSSR、loader、直接HTML、遷移JSON、not-found・redirect・errorのHonoサブルーター                                                                                                             |

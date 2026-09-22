@@ -78,3 +78,26 @@ Honoのファイル経路は、各pageをSSRする前に任意のファイル単
 
 - **WHEN** Motion変換を指定して`page.tsx`をファイル経路へ登録する
 - **THEN** 各pageを標準irisout記法へ変換してからSSRする
+
+### Requirement: Hono経路をVite構築のSSOTとして使う
+
+`createFileRouter()`が登録した処理関数は、ページのファイルパスと生成条件を明示情報として保持しなければならない(SHALL)。`irisoutHono(app)`はHonoへmountされた後の経路だけを読み、ブラウザー向け経路とページ入口を生成しなければならない(SHALL)。Vite設定へ経路ディレクトリまたは接頭辞を再指定させてはならず(SHALL NOT)、irisout以外のHono経路をページ入口へ含めてはならない(SHALL NOT)。
+
+#### Scenario: mount後の経路を構築へ渡す
+
+- **WHEN** `createFileRouter('./routes')`をHono appの`/apps`へmountし、そのappを`irisoutHono(app)`へ渡す
+- **THEN** `/apps`以下のブラウザー向け経路が生成され、Vite設定に`./routes`または`/apps`を再記述しない
+
+#### Scenario: 通常のHono経路を除外する
+
+- **WHEN** 同じappに`/api/health`とirisoutのページ経路が登録されている
+- **THEN** `/api/health`はirisoutのブラウザー向け経路表へ含まれない
+
+### Requirement: ページ単位のVite分割
+
+ブラウザー向け仮想入口は各ページを動的importとして参照しなければならない(SHALL)。チャンク分割、共有チャンク抽出、圧縮、ハッシュ付与はViteへ委ね、irisout側で再実装してはならない(SHALL NOT)。
+
+#### Scenario: ページ入口を動的に読み込む
+
+- **WHEN** 複数のページを含むHono appをViteで構築する
+- **THEN** 各ページは動的import境界になり、Viteが出力チャンクを決める

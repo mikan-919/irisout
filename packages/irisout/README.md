@@ -76,23 +76,24 @@ const result = compile(source)
 import { irisoutSsr, serializeSsrState } from 'irisout/ssr'
 ```
 
-`page.tsx`または`page.jsx`のディレクトリ構造からHonoのサブルーターとブラウザー遷移を作る場合は、serverで
-`irisout/hono`、Viteで`irisoutRoutes`を使います。`prefix`は両方へ同じ値を渡します。
+`page.tsx`または`page.jsx`のディレクトリ構造からHonoのサブルーターとブラウザー遷移を作る場合は、
+`irisout/hono`で経路を作り、`irisout/hono/vite`で同じHono appをViteへ渡します。Honoの登録済み経路がSSOTになります。
 
 ```ts
 // サーバー設定
 import { Hono } from 'hono'
 import { createFileRouter } from 'irisout/hono'
 
-const app = new Hono()
-app.route('/', createFileRouter('./routes', { prefix: '/apps' }))
+export const app = new Hono()
+app.route('/apps', createFileRouter('./routes'))
 ```
 
 ```ts
 // Vite設定
-import { irisoutRoutes } from 'irisout/vite'
+import { irisoutHono } from 'irisout/hono/vite'
+import { app } from './server/app.ts'
 
-export default { plugins: [irisoutRoutes({ directory: './routes', prefix: '/apps' })] }
+export default { plugins: [irisoutHono(app)] }
 ```
 
 loaderは`loaders`へ経路をキーとして登録できます。HTML文書の外枠は利用側が組み立て、
