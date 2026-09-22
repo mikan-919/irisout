@@ -1,41 +1,89 @@
 ---
-title: 記述API一覧
-description: irisoutから取り込む記述用APIの役割と呼び出し形式
+title: APIリファレンス
+description: 記述用API、JSX属性、コンパイラ、Vite連携、SSR、Hono経路の公開入口
 slug: api
 section: API
 order: 1
 ---
 
-# 記述API一覧
+# APIリファレンス
 
-記述用APIは`irisout`から名前付きで取り込む。コンパイラが解析して生成物から取り除くため、コンパイルせずに直接実行する用途には使えない。
+画面の記述には`irisout`を使う。記述用APIはコンパイラが解析し、ブラウザー用の直接DOM操作へ変換する。未変換のまま実行する関数ではない。
 
-## 状態と描画
+## 記述用API
 
-- `signal(initial)` — 読み書きできる状態を作る。`value()`で読み、`value(next)`または`value(previous => next)`で更新する。
-- `derived(compute)` — ほかの状態から計算する読み取り専用値を作る。
-- `render(element)` — 部品が所有するJSXのルートを宣言する。
+### `signal(initial)`
 
-## ライフサイクル
+```ts
+function signal<T>(initial: T): IrisSignal<T>
+```
 
-- `onMount(callback)` — DOM接続後に一度実行する。callbackは破棄関数を返せる。
-- `effect(callback)` — 参照した状態の変更後に処理する。callbackは次回実行前と破棄時の後始末関数を返せる。
-- `use={action}` — JSX属性として実DOMへ処理を接続する。actionは`update`と`destroy`を返せる。
+読み出しと更新を一つの関数で行う状態を作る。引数なしで読み出し、値または更新関数を渡して更新する。
+
+### `derived(compute)`
+
+```ts
+function derived<T>(compute: () => T): () => T
+```
+
+ほかの状態から計算する読み取り専用値を作る。
+
+### `render(element)`
+
+部品が所有するJSXのルートを宣言する。部品はJSXを返さず、内部で`render()`を呼ぶ。
+
+### `onMount(callback)`と`effect(callback)`
+
+`onMount`はDOM接続後に一度実行する。`effect`はコールバック内で参照した状態の変更に反応する。どちらも破棄関数を返せる。
+
+### `use={action}`
+
+`use`は取り込む関数ではなくJSX属性である。接続時に実DOMを受け取り、更新関数または`update`と`destroy`を持つオブジェクトを返せる。
 
 ## コンテキスト
 
-- `createContext(defaultValue)` — 同期値のコンテキストを作る。
-- `createAsyncContext(defaultValue)` — `PromiseLike`値のコンテキストを作る。
-- `provideContext(context, value)` — 現在の部品または構造範囲から子孫へ値を渡す。
-- `useContext(context)` — 最も近い提供値を読み、なければ既定値を使う。
+```ts
+createContext<T>(defaultValue: T): IrisContext<T>
+createAsyncContext<T>(defaultValue: PromiseLike<T>): IrisAsyncContext<T>
+provideContext<T>(context: IrisContext<T>, value: T): void
+useContext<T>(context: IrisContext<T>): T
+```
 
-## コンパイラ入口
+最も近い提供値を子孫から読み、提供値がなければ作成時の既定値を使う。
 
-アプリケーションでは通常`irisout/vite`を使う。道具を作る場合は次の入口を利用できる。
+## JSX共通属性
 
-- `compile(source)` — 単一ソースを変換する。
-- `compileProject(entryPath, options)` — 相対moduleをたどって変換する。
-- `compileSSR(source)` — 要求単位SSR用のmoduleを生成する。
-- `irisout/browser`の`compile(source)` — Workerなどブラウザ内で単一ソースを変換する。
+- `onXxx` — DOMイベントを接続する。
+- `key` — 一覧内の要素や部品を識別する。
+- `use` — 実DOMへアクションを接続する。
+- `children` — 部品へ子要素を渡す。
+- `class`、`data-*`、`aria-*` — DOM属性へ反映する。
 
-Vite連携、ブラウザ内変換、SSRは実行環境と信頼境界が異なる。投稿コードはWorkerとsandbox付きiframeで隔離し、サーバーで直接実行しない。
+## コンパイラ
+
+```ts
+compile(source: string): CompileResult
+compileSSR(source: string): CompileResult
+compileProject(entryPath: string, options?): CompileResult
+```
+
+`CompileResult`にはブラウザー用の`code`、ソースマップ`map`、初期描画`initialHtml`、SSR用の`ssrCode`、読み込んだ`dependencies`が入る。
+
+`irisout/browser`の`compile()`はNode.jsのファイル機能を使わず、Workerなどで単一ソースを変換する。
+
+## ViteとSSR
+
+- `irisout/vite`の`irisout(options)` — 入口、対象要素、HTML差し込み位置、仮想モジュール、前処理を設定する。
+- `irisout/ssr`の`irisoutSsr(options)` — 要求単位のSSRモジュールをViteへ接続する。
+- `serializeSsrState(value)` — 状態を`script`要素へ埋め込める形へ変換する。
+
+## Honoファイル経路
+
+- `createFileRouter(directory, options)` — `page.tsx`と`page.jsx`をHonoサブルーターへ接続する。
+- `notFound()` — loaderから404を返す。
+- `redirect(location, status?)` — loaderからHTTP転送を返す。
+- `createRouteStateScript(routeId, state)` — 初期状態を安全な`script`要素へ変換する。
+
+## 診断
+
+`irisout/diagnostics`の`CompileDiagnostic`は`filePath`、`line`、`column`、`message`を持つ。対応範囲外の記述や構文エラーを位置情報付きで扱える。

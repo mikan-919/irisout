@@ -802,6 +802,8 @@ function renderCss() {
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 20rem; background: #0d0d12; color: #f4f3f8; line-height: 1.7; }
 a { color: #b98aff; }
+body .site-header { --h-accent: #b98aff; --h-ink: #f4f3f8; --h-muted: #b9b4c9; --h-paper: #0d0d12; --h-rule: #2b2937; width: 100%; padding-inline: max(1rem, calc((100% - 72rem) / 2)); }
+body .site-header .site-cta { color: #19131f; }
 .site-footer, .docs-page { width: min(72rem, calc(100% - 2rem)); margin: 0 auto; }
 .site-footer { display: flex; justify-content: space-between; margin-top: 4rem; padding: 1.5rem 0 3rem; border-top: 1px solid #2b2937; color: #9b99ad; font-size: .85rem; }
 .docs-page { padding: 4rem 0; }
