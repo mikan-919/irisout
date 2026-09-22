@@ -32,7 +32,7 @@ void test('文書SSGが正本、一覧、検索索引を生成する', () => {
   const outputDir = mkdtempSync(join(tmpdir(), 'irisout-site-test-'))
   try {
     const result = buildSite({ outputDir })
-    assert.equal(result.documents.length, 1)
+    assert.equal(result.documents.length, 9)
     assert.equal(result.examples.length, 3)
     const detail = readFileSync(join(outputDir, 'getting-started/index.html'), 'utf8')
     const index = readFileSync(join(outputDir, 'index.html'), 'utf8')
@@ -42,6 +42,7 @@ void test('文書SSGが正本、一覧、検索索引を生成する', () => {
     assert.match(detail, /id="1-パッケージを導入する"/)
     assert.match(detail, /rel="canonical"/)
     assert.match(index, /Counter/)
+    assert.match(index, /ドキュメント/)
     for (const section of DOCUMENT_SECTIONS) assert.match(index, new RegExp(section))
     assert.match(examples, /"id": "counter"/)
     assert.match(examples, /"sourceFile": "counter\.jsx"/)

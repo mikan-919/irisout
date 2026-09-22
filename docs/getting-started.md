@@ -97,6 +97,8 @@ import 'virtual:irisout-entry'
 `src/App.jsx`:
 
 ```jsx
+import { derived, render, signal } from 'irisout'
+
 export function App() {
   const count = signal(0)
   const doubled = derived(() => count() * 2)
@@ -156,7 +158,7 @@ npm run dev
 
 ## 記述時の制約
 
-- `signal`、`derived`、`render`は取り込まない。コンパイラが認識する記述用APIである。
+- `signal`、`derived`、`render`は`irisout`から名前付きで取り込む。コンパイラが認識して取り除くため、生成物には残らない。
 - ルート部品は一つにし、状態宣言を`render()`より前、イベント処理を後へ置く。
 - 繰り返しは直接の`.map()`、条件分岐は三項演算子または`&&`で記述する。
 - `try`、`for`、`switch`など、更新位置を静的に決められない制御構文は拒否される場合がある。
@@ -195,6 +197,8 @@ render(
 条件分岐やリストから要素を外したときの破棄は、`use=`が返す`destroy`で確認できる。
 
 ```jsx
+import { render, signal } from 'irisout'
+
 export function App() {
   const visible = signal(true)
 

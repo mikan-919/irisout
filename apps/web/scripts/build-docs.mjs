@@ -699,7 +699,7 @@ function renderDocumentList(documents) {
 }
 
 function renderSearchForm() {
-  return `<form class="doc-search" data-doc-search-form="true" role="search"><label for="doc-search">文書を検索</label><div><input id="doc-search" name="q" type="search" placeholder="タイトルや見出し" autocomplete="off" /><button type="submit">検索</button></div><output data-doc-search-results="true" aria-live="polite"></output></form>`
+  return `<form class="doc-search" data-doc-search-form="true" role="search"><label for="doc-search">ドキュメントを検索</label><div><input id="doc-search" name="q" type="search" placeholder="タイトルや見出し" autocomplete="off" /><button type="submit">検索</button></div><output data-doc-search-results="true" aria-live="polite"></output></form>`
 }
 
 function pageShell({ title, description, path, body, scripts = true }) {
@@ -741,10 +741,10 @@ function renderIndexPage(documents, examples) {
         `<li><a href="/playground?example=${encodeURIComponent(example.id)}"><strong>${escapeHtml(example.title)}</strong><span>${escapeHtml(example.description)}</span></a><pre><code class="language-jsx">${highlightCode(example.source, 'jsx')}</code></pre></li>`,
     )
     .join('')
-  const body = `<main class="docs-page docs-index"><div class="docs-heading"><p class="eyebrow">Documentation</p><h1>文書</h1><p>irisoutの導入、状態更新、部品、ライフサイクル、対応範囲を説明します。</p></div>${renderSearchForm()}<div class="docs-index-grid"><div>${renderDocumentList(documents)}</div><aside class="docs-examples"><h2>公式例</h2><p>表示用コードと、後続のPlaygroundが接続するexamples.jsonは同じJSXから生成しています。</p><ul>${exampleList}</ul></aside></div></main>`
+  const body = `<main class="docs-page docs-index"><div class="docs-heading"><p class="eyebrow">Documentation</p><h1>ドキュメント</h1><p>irisoutの導入、状態更新、部品、ライフサイクル、対応範囲を説明します。</p></div>${renderSearchForm()}<div class="docs-index-grid"><div>${renderDocumentList(documents)}</div><aside class="docs-examples"><h2>公式例</h2><p>表示用コードと、後続のPlaygroundが接続するexamples.jsonは同じJSXから生成しています。</p><ul>${exampleList}</ul></aside></div></main>`
   return pageShell({
-    title: '文書',
-    description: 'irisoutの公式文書と公式例',
+    title: 'ドキュメント',
+    description: 'irisoutの公式ドキュメントと公式例',
     path: '/docs',
     body,
   })

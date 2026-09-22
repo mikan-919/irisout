@@ -13,6 +13,30 @@
   "documents": [
     {
       "source": "../../../../docs/getting-started.md"
+    },
+    {
+      "source": "../../../../docs/authoring-state.md"
+    },
+    {
+      "source": "../../../../docs/events-and-actions.md"
+    },
+    {
+      "source": "../../../../docs/conditionals-and-lists.md"
+    },
+    {
+      "source": "../../../../docs/components-and-modules.md"
+    },
+    {
+      "source": "../../../../docs/lifecycle-and-context.md"
+    },
+    {
+      "source": "../../../../docs/api-reference.md"
+    },
+    {
+      "source": "../../../../docs/hono-file-routing.md"
+    },
+    {
+      "source": "../../../../docs/diagnostics-and-limits.md"
     }
   ]
 }
