@@ -1,23 +1,28 @@
 # file-routing Specification
 
 ## Purpose
-`page.jsx`のファイル構造をサーバーとブラウザーが共有できる経路定義へ変換し、二重の経路記述なしで同じページ選択と引数解決を提供する。
+`page.tsx`または`page.jsx`のファイル構造をサーバーとブラウザーが共有できる経路定義へ変換し、二重の経路記述なしで同じページ選択と引数解決を提供する。
 
 ## Requirements
 
-### Requirement: page.jsxからの経路生成
+### Requirement: page.tsxからの経路生成
 
-指定ディレクトリの各階層にある`page.jsx`だけをページとして登録しなければならない(SHALL)。指定ディレクトリ直下は`/`、通常の階層名はその階層の経路、`[name]`という階層名は`:name`という動的引数へ変換しなければならない(SHALL)。`page.jsx`以外のファイルと、対応外の角括弧表記は登録してはならない(SHALL NOT)。
+指定ディレクトリの各階層にある`page.tsx`または`page.jsx`をページとして登録しなければならない(SHALL)。指定ディレクトリ直下は`/`、通常の階層名はその階層の経路、`[name]`という階層名は`:name`という動的引数へ変換しなければならない(SHALL)。同じ階層に両方ある場合は曖昧な経路として拒否しなければならない(SHALL)。それ以外のファイルと、対応外の角括弧表記は登録してはならない(SHALL NOT)。
 
-#### Scenario: page.jsxを経路へ変換する
+#### Scenario: page.tsxを経路へ変換する
 
-- **WHEN** `page.jsx`、`users/page.jsx`、`users/[id]/page.jsx`を走査する
+- **WHEN** `page.tsx`、`users/page.tsx`、`users/[id]/page.tsx`を走査する
 - **THEN** `/`、`/users`、`/users/:id`の経路定義が生成される
 
-#### Scenario: page.jsx以外を除外する
+#### Scenario: ページ以外を除外する
 
 - **WHEN** 指定ディレクトリに`users.js`や`users/view.jsx`がある
 - **THEN** それらはページ経路に含まれない
+
+#### Scenario: 同じ階層のページ名を一意にする
+
+- **WHEN** 同じディレクトリに`page.tsx`と`page.jsx`がある
+- **THEN** 両方の存在を示す診断で生成が失敗する
 
 ### Requirement: 決定的な優先順位と衝突診断
 
@@ -30,7 +35,7 @@
 
 #### Scenario: 動的経路の衝突を拒否する
 
-- **WHEN** `users/[id]/page.jsx`と`users/[name]/page.jsx`を同じ表へ生成する
+- **WHEN** `users/[id]/page.tsx`と`users/[name]/page.tsx`を同じ表へ生成する
 - **THEN** 両方のファイル名を含む衝突診断で生成が失敗する
 
 ### Requirement: 共通照合と正規化
@@ -49,11 +54,11 @@
 
 ### Requirement: 現在のファイル集合の再生成
 
-経路生成を再実行した結果は、その時点で存在する`page.jsx`だけを含まなければならない(SHALL)。削除または名前変更されたページの経路を以前の生成結果から残してはならない(SHALL NOT)。
+経路生成を再実行した結果は、その時点で存在する`page.tsx`または`page.jsx`だけを含まなければならない(SHALL)。削除または名前変更されたページの経路を以前の生成結果から残してはならない(SHALL NOT)。
 
 #### Scenario: ページ削除後に再生成する
 
-- **WHEN**`old/page.jsx`を削除して`new/page.jsx`を追加した後に生成を実行する
+- **WHEN**`old/page.tsx`を削除して`new/page.tsx`を追加した後に生成を実行する
 - **THEN** `/new`だけが存在し、`/old`は未一致になる
 
 ### Requirement: ブラウザー向け境界

@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vite-plus/test'
 import { createFileRouter, notFound, redirect } from '../../hono/src/index.ts'
 
 function writePage(root: string, relative: string, source: string): string {
-  const filePath = path.join(root, relative, 'page.jsx')
+  const filePath = path.join(root, relative, 'page.tsx')
   mkdirSync(path.dirname(filePath), { recursive: true })
   writeFileSync(filePath, source)
   return filePath
@@ -23,7 +23,11 @@ describe('irisout Hono経路', () => {
   it('prefixをHonoのmount側へ委ねてもpage経路を照合する', async () => {
     const root = mkdtempSync(path.join(tmpdir(), 'irisout-hono-mount-'))
     try {
-      writePage(root, 'users/[id]', 'export function Page({ id }) { render(<p>{id}</p>); }')
+      writePage(
+        root,
+        'users/[id]',
+        "import type { Missing } from './types.ts'; interface Input { id: string; unused?: Missing } export function Page({ id }: Input): void { render(<p>{id as string}</p>); }",
+      )
       const router = createFileRouter(root, {
         loaders: { '/users/:id': ({ params }) => ({ id: params.id! }) },
       })

@@ -13,7 +13,7 @@ import {
   PLAYGROUND_COMPILE_TIMEOUT_MS,
   PLAYGROUND_MESSAGE_MAX_BYTES,
   PLAYGROUND_RESULT_MAX_BYTES,
-} from './protocol.js'
+} from './shared.js'
 
 const statusElement = document.querySelector('#controller-status')
 const resultRoot = document.querySelector('#result-root')

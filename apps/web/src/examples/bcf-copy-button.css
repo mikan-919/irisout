@@ -1,5 +1,6 @@
 /* BCFコピーボタン例の画面全体と操作部品を定義する。 */
 @import '../../../../tokens.css';
+@import '../site-header.css';
 
 :where(*, *::before, *::after) {
   box-sizing: border-box;

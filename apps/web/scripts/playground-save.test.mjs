@@ -8,7 +8,7 @@ import {
   exportSaveBundle,
   readPendingSave,
   savePlayground,
-} from '../src/playground/save-share.js'
+} from '../src/playground/shared.js'
 
 test('通信断後の再送はrequestIdと管理鍵を保持する', async () => {
   const values = new Map()

@@ -1,5 +1,6 @@
 /* 共有レイアウトの形状変形とBCFを確認する単独画面。 */
 @import '../../../../tokens.css';
+@import '../site-header.css';
 
 :where(*, *::before, *::after) {
   box-sizing: border-box;

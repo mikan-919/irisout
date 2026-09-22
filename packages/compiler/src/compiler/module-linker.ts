@@ -1,6 +1,6 @@
 // compileProject()が使う静的module linker。入口から相対importを辿り、ASTの
 // bindingをmodule固有名へ変更してから一つのprogramへ連結する。対象は小規模な
-// .js/.jsx moduleで、外部moduleとViteの資源importはそのまま生成moduleへ渡す。
+// .js/.jsx/.ts/.tsx moduleで、外部moduleとViteの資源importはそのまま生成moduleへ渡す。
 
 import { readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
@@ -11,6 +11,7 @@ import traverseImport from '@babel/traverse'
 import * as t from '@babel/types'
 import { withCompileDiagnostic, type DiagnosticOrigin } from '../diagnostics.ts'
 import { stripAuthoringImports } from './authoring-import.ts'
+import { stripTypeScript } from './strip-typescript.ts'
 
 const traverse =
   (traverseImport as unknown as { default?: typeof traverseImport }).default ?? traverseImport
@@ -85,6 +86,7 @@ function parseModuleUnchecked(filePath: string, source: string): ModuleRecord {
       { cause: error },
     )
   }
+  stripTypeScript(ast)
   stripAuthoringImports(ast)
 
   const imports: ImportSpec[] = []
@@ -334,7 +336,14 @@ function resolveResource(specifier: string, fromFile: string): string | null {
   const resourceSpecifier = specifier.split(/[?#]/, 1)[0] ?? specifier
   const extension = path.extname(resourceSpecifier)
   const hasQuery = resourceSpecifier !== specifier
-  if (!hasQuery && (extension === '' || extension === '.js' || extension === '.jsx')) {
+  if (
+    !hasQuery &&
+    (extension === '' ||
+      extension === '.js' ||
+      extension === '.jsx' ||
+      extension === '.ts' ||
+      extension === '.tsx')
+  ) {
     return null
   }
   const resourcePath = path.resolve(path.dirname(fromFile), resourceSpecifier)
@@ -412,11 +421,11 @@ function resolveModule(fromFile: string, specifier: string): string {
     throw compileError(`non-relative import "${specifier}" is not supported yet`)
   }
   const base = path.resolve(path.dirname(fromFile), specifier)
-  const candidates = [base, `${base}.jsx`, `${base}.js`]
+  const candidates = [base, `${base}.tsx`, `${base}.ts`, `${base}.jsx`, `${base}.js`]
   for (const candidate of candidates) {
     if (!isFile(candidate)) continue
-    if (!candidate.endsWith('.js') && !candidate.endsWith('.jsx')) {
-      throw compileError(`module "${candidate}" must use .js or .jsx`)
+    if (!/\.(?:[jt]sx?)$/.test(candidate)) {
+      throw compileError(`module "${candidate}" must use .js, .jsx, .ts, or .tsx`)
     }
     return candidate
   }
@@ -635,9 +644,9 @@ export function linkProject(entryPath: string, transformSource?: SourceTransform
       source: '',
     })
   }
-  if (!absoluteEntry.endsWith('.js') && !absoluteEntry.endsWith('.jsx')) {
+  if (!/\.(?:[jt]sx?)$/.test(absoluteEntry)) {
     throw withCompileDiagnostic(
-      compileError(`entry module "${absoluteEntry}" must use .js or .jsx`),
+      compileError(`entry module "${absoluteEntry}" must use .js, .jsx, .ts, or .tsx`),
       {
         filePath: absoluteEntry,
         source: '',

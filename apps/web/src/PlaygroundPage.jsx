@@ -25,9 +25,14 @@ export function PlaygroundPage({ record }) {
       <pre class="shared-playground-source">
         <code data-playground-source>{record.source}</code>
       </pre>
-      <button type="button" data-playground-duplicate>
+      <button type="button" data-playground-duplicate onClick={duplicate}>
         複製して実行
       </button>
     </main>,
   )
+
+  function duplicate() {
+    sessionStorage.setItem('irisout.playground.duplicate-source', record.source)
+    location.href = '/playground'
+  }
 }

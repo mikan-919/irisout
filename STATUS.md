@@ -57,7 +57,7 @@ tarballには`compiler/source.d.ts`、公開state宣言、`source-map.d.ts`な�
 
 2026-09-15にauthored JSXの記述APIを`irisout`からの明示的な名前付きimportへ整理した。`signal`、`derived`、`render`などは公開入口の型宣言を使い、source parserとmodule linkerがコンパイル前にimportを取り除く。`irisout/jsx`から大域宣言を削除し、実例と型検査用入力を移行した。既存の`compile(source)`へ渡す裸の記述API名は互換性のため当面受理する。
 
-2026-09-16にファイル経路とブラウザー遷移を実装した。`page.jsx`だけを走査し、`/`、`/users`、
+2026-09-16にファイル経路とブラウザー遷移を実装した。`page.tsx`または`page.jsx`を走査し、`/`、`/users`、
 `/users/:id`の共通経路表を作る。静的優先、動的衝突、末尾斜線、引数の一度だけの復号、検索引数、
 不正な符号化、復号後の`/`、未一致をserverとclientで共有する。`irisout/hono`はprefix付きの
 HonoサブルーターとしてpageをSSR targetへ接続し、page別loaderのparams、検索引数、Requestを
@@ -68,19 +68,19 @@ HonoサブルーターとしてpageをSSR targetへ接続し、page別loaderのp
 
 ## 段階
 
-| 段階               | 状態 | 結果                                                      |
-| ------------------ | ---- | --------------------------------------------------------- |
-| M1〜M6             | 完了 | 状態、イベント、静的HTML、属性、構造単位、横断試験        |
-| 部品合成           | 完了 | 同一ファイル、相対module、直接のchildren位置、局所状態    |
-| ライフサイクル     | 完了 | `use=`、`onMount`、`effect`、破棄、部品インスタンス       |
-| Context            | 完了 | インスタンス単位の静的置換、構造単位のprovider            |
-| SVG                | 完了 | SVG要素、`foreignObject`、静的名前空間属性                |
-| 共有状態           | 完了 | module共有signal/derived、複数インスタンスへの同期通知    |
-| R1                 | 完了 | 元ファイル位置を含む診断と実行時ソースマップ              |
-| R2                 | 完了 | Workerを使うヒートマップ利用例と操作・性能検証            |
-| R3                 | 完了 | 1万件一覧の初期化を同一条件で14.5%短縮                    |
-| R4                 | 完了 | 単一npmパッケージ、外部梱包検査、隔離試用                 |
-| ファイル経路・遷移 | 完了 | `page.jsx`走査、Hono SSR、loader、client遷移、tarball検査 |
+| 段階               | 状態 | 結果                                                                 |
+| ------------------ | ---- | -------------------------------------------------------------------- |
+| M1〜M6             | 完了 | 状態、イベント、静的HTML、属性、構造単位、横断試験                   |
+| 部品合成           | 完了 | 同一ファイル、相対module、直接のchildren位置、局所状態               |
+| ライフサイクル     | 完了 | `use=`、`onMount`、`effect`、破棄、部品インスタンス                  |
+| Context            | 完了 | インスタンス単位の静的置換、構造単位のprovider                       |
+| SVG                | 完了 | SVG要素、`foreignObject`、静的名前空間属性                           |
+| 共有状態           | 完了 | module共有signal/derived、複数インスタンスへの同期通知               |
+| R1                 | 完了 | 元ファイル位置を含む診断と実行時ソースマップ                         |
+| R2                 | 完了 | Workerを使うヒートマップ利用例と操作・性能検証                       |
+| R3                 | 完了 | 1万件一覧の初期化を同一条件で14.5%短縮                               |
+| R4                 | 完了 | 単一npmパッケージ、外部梱包検査、隔離試用                            |
+| ファイル経路・遷移 | 完了 | `page.tsx`/`page.jsx`走査、Hono SSR、loader、client遷移、tarball検査 |
 
 作者以外の人間による手動試用は未実施である。隔離したエージェントによる導入、型検査、
 本番ビルド、開発サーバー、状態更新、条件分岐、一覧、ファイル分割、診断修正は確認済みである。
@@ -188,6 +188,18 @@ Vite+でビルドし、Bunサーバーは`/playground/:id`の要求ごとにSQLi
 同日に実行管理iframeの結果箱が実行結果を囲む枠として表示される不具合を修正した。親画面の実行領域だけを枠として
 残し、管理側の結果箱と結果iframeの背景を透明にして結果を直接表示する。実ブラウザー試験へ枠と背景の表示を確認する条件を追加した。
 
+2026-09-21にPlaygroundの画面構造・状態・操作を`Playground.jsx`へ移し、手続き的な
+`playground/client.js`を削除した。`playground-entry.js`には、authored JSXで未対応のdynamic importを使う
+Monacoの遅延読込み境界だけを残した。ホーム、Playground、実例一覧、3件の実例は共通の
+`SiteHeader.jsx`を合成し、実例一覧とPlaygroundの外枠も静的HTMLからJSXへ移した。配信専用の
+Web Component実装は削除した。さらにHTMLのinline moduleとViteのvirtual SSR入口を直接使い、画面ごとの
+1〜4行のJS入口6件、CSS集約入口、SSR中継入口の計8ファイルを削除した。型検査、本番ビルド、隔離実行の
+ブラウザー試験を確認した。同日の統合直後、開発用virtual module内の`import.meta.env`がVite変換を受けず、
+`/playground`のhydrate開始時に例外となって画面全体を消す不具合を発見した。環境値の読取りを通常のVite module境界へ
+移し、開発サーバーの実Chromium表示と生成コードの回帰試験を追加した。また、JS入口からCSSを読み込む間に静的HTMLが
+無装飾で描画されていたため、PlaygroundのCSSをHTMLの描画阻止stylesheetへ移した。ホームと実例一覧から装飾目的の
+検索・コピー・スクロール演出を除き、ビルド時HTML生成だけを使ってhydrate用JavaScriptの配信を廃止した。
+
 ## 検証
 
 - `bun run check`: 書式、静的検査、TypeScriptとauthored JSXの型検査。
@@ -229,7 +241,7 @@ Vite+でビルドし、Bunサーバーは`/playground/:id`の要求ごとにSQLi
 - ルート入力bindingが生成moduleの内部名と衝突する場合は`compile:` scope limitで拒否する。
 - SSR仮想moduleのsource mapは未実装で`null`を返す。404・503で正常ページ用stateを生成しない
   判定は要求処理層の責務である。
-- ファイル経路はディレクトリ単位の`page.jsx`だけを受け付け、入れ子layout、catch-all、任意の
+- ファイル経路はディレクトリ単位の`page.tsx`または`page.jsx`を受け付け、入れ子layout、catch-all、任意の
   経路制約、先読み、状態保持、フォーム更新、APIの自動登録は対象外である。loaderは利用側が
   `irisout/hono`のpage経路へ登録し、HTML文書の外枠は利用側が組み立てる。
 - `irisoutRoutes`の初回hydrateは、文書へ`data-irisout-route-state` scriptを埋め込んだ場合に

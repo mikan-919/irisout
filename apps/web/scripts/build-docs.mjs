@@ -14,7 +14,7 @@ import {
 import { fileURLToPath } from 'node:url'
 import { dirname, join, normalize, relative, resolve, sep } from 'node:path'
 import { tmpdir } from 'node:os'
-import { compile } from 'irisout'
+import { compile, compileProject } from 'irisout'
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url))
 const WEB_DIR = resolve(SCRIPT_DIR, '..')
@@ -22,6 +22,19 @@ const ROOT_DIR = resolve(WEB_DIR, '../..')
 const DOC_MANIFEST_PATH = join(WEB_DIR, 'content/docs/manifest.json')
 const EXAMPLE_MANIFEST_PATH = join(WEB_DIR, 'content/examples/manifest.json')
 const DEFAULT_OUTPUT_DIR = join(WEB_DIR, 'public/docs')
+const SITE_HEADER_CSS_PATH = join(WEB_DIR, 'src/site-header.css')
+const DOCS_HEADER_ENTRY = join(WEB_DIR, `.docs-header-${process.pid}.jsx`)
+const DOCS_HEADER_HTML = (() => {
+  writeFileSync(
+    DOCS_HEADER_ENTRY,
+    `import { render } from 'irisout'\nimport { SiteHeader } from './src/SiteHeader.jsx'\nexport function DocsHeader() { render(<SiteHeader current="docs" search={false} onSearch={null} />) }\n`,
+  )
+  try {
+    return compileProject(DOCS_HEADER_ENTRY).initialHtml
+  } finally {
+    rmSync(DOCS_HEADER_ENTRY, { force: true })
+  }
+})()
 const SITE_ORIGIN = process.env.IRISOUT_SITE_ORIGIN ?? 'https://irisout.dev'
 const SITE_VERSION = '0.2.2'
 
@@ -712,7 +725,7 @@ function pageShell({ title, description, path, body, scripts = true }) {
     <title>${escapeHtml(title)} — irisout</title>
   </head>
   <body>
-    <header class="site-header"><a class="brand" href="/">irisout</a><nav aria-label="サイト内"><a href="/docs">文書</a><a href="/playground">Playground</a></nav></header>
+    ${DOCS_HEADER_HTML}
     ${body}
     <footer class="site-footer"><a href="/">irisout</a><span>対象版 irisout@${SITE_VERSION}</span></footer>
     ${scripts ? '<script type="module" src="/docs/search.js"></script>' : ''}
@@ -785,11 +798,7 @@ function renderCss() {
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 20rem; background: #0d0d12; color: #f4f3f8; line-height: 1.7; }
 a { color: #b98aff; }
-.site-header, .site-footer, .docs-page { width: min(72rem, calc(100% - 2rem)); margin: 0 auto; }
-.site-header { display: flex; align-items: center; justify-content: space-between; padding: 1.25rem 0; border-bottom: 1px solid #2b2937; }
-.brand { color: #f4f3f8; font-size: 1.2rem; font-weight: 700; text-decoration: none; }
-.site-header nav { display: flex; gap: 1rem; }
-.site-header nav a { color: #b9b4c9; text-decoration: none; }
+.site-footer, .docs-page { width: min(72rem, calc(100% - 2rem)); margin: 0 auto; }
 .site-footer { display: flex; justify-content: space-between; margin-top: 4rem; padding: 1.5rem 0 3rem; border-top: 1px solid #2b2937; color: #9b99ad; font-size: .85rem; }
 .docs-page { padding: 4rem 0; }
 .eyebrow { color: #b98aff; font-size: .75rem; letter-spacing: .12em; text-transform: uppercase; }
@@ -935,7 +944,10 @@ export function buildSite({ outputDir = DEFAULT_OUTPUT_DIR } = {}) {
       ) + '\n',
     )
     writeFileSync(join(stagingDir, 'search.js'), renderSearchScript())
-    writeFileSync(join(stagingDir, 'site.css'), renderCss())
+    writeFileSync(
+      join(stagingDir, 'site.css'),
+      `${renderCss()}\n${readFileSync(SITE_HEADER_CSS_PATH, 'utf8')}`,
+    )
     writeFileSync(
       join(stagingDir, 'sitemap.xml'),
       `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${[

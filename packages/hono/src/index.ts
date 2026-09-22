@@ -1,4 +1,4 @@
-// `page.jsx`を要求単位のSSRへ接続するHono入口。経路照合はroutesの共通表を
+// `page.tsx`または`page.jsx`を要求単位のSSRへ接続するHono入口。経路照合はroutesの共通表を
 // 使い、loader・要求・SSR stateはhandler呼び出しごとの値として閉じ込める。
 
 import { Hono } from 'hono'
@@ -272,7 +272,7 @@ function routeRequestUrl(
   return new URL(`${pathname}${requestUrl.search}`, request.url).href
 }
 
-/** 指定ディレクトリの`page.jsx`をHonoサブルーターへ接続する。 */
+/** 指定ディレクトリの`page.tsx`または`page.jsx`をHonoサブルーターへ接続する。 */
 export function createFileRouter(
   directory: string,
   options: IrisoutFileRouterOptions = {},

@@ -7,7 +7,7 @@
 
 ### Requirement: SSR入口の明示指定
 
-公開パッケージは`irisout/ssr`と`irisoutSsr()`を提供し、指定したルート部品一つの初期描画全体をSSRしなければならない(SHALL)。部品単位のSSR指定とSSR可能性の自動判定を行ってはならない(SHALL NOT)。ファイル経路を使う場合は`irisout/hono`のサブルーターが`page.jsx`ごとのSSR生成物を明示的に対応付けなければならない(SHALL)。
+公開パッケージは`irisout/ssr`と`irisoutSsr()`を提供し、指定したルート部品一つの初期描画全体をSSRしなければならない(SHALL)。部品単位のSSR指定とSSR可能性の自動判定を行ってはならない(SHALL NOT)。ファイル経路を使う場合は`irisout/hono`のサブルーターが`page.tsx`または`page.jsx`ごとのSSR生成物を明示的に対応付けなければならない(SHALL)。
 
 #### Scenario: 指定したルートだけをSSRする
 
@@ -16,7 +16,7 @@
 
 #### Scenario: ファイル経路のpageをSSRする
 
-- **WHEN** `page.jsx`から生成したHonoサブルーターへ`/users/123`を要求する
+- **WHEN** `page.tsx`から生成したHonoサブルーターへ`/users/123`を要求する
 - **THEN** `/users/:id`に対応するpageだけを要求単位でSSRする
 
 ### Requirement: HTMLとhydrate state

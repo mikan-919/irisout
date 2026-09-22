@@ -1,4 +1,3 @@
-import path from 'node:path'
 import { defineConfig } from 'vite-plus'
 import { irisoutSsr } from 'irisout/ssr'
 
@@ -10,10 +9,11 @@ export default defineConfig({
     }),
   ],
   build: {
-    ssr: path.resolve(import.meta.dirname, 'src/playground-page-server.js'),
+    ssr: true,
     outDir: 'dist/server',
     emptyOutDir: false,
     rollupOptions: {
+      input: 'virtual:irisout-playground-ssr',
       output: {
         format: 'es',
         entryFileNames: 'playground-page.js',

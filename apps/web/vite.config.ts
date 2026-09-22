@@ -7,7 +7,7 @@ import { irisoutMotion } from 'irisout/motion/vite'
 import { irisout } from 'irisout/vite'
 import { PLAYGROUND_BODY_MAX_BYTES, createPlaygroundApi } from './server/playground-api.mjs'
 import { parseTrustedProxyAddresses, resolveClientAddress } from './server/client-address.mjs'
-import { createControllerCsp, validateSeparateOrigins } from './src/playground/origin.js'
+import { createControllerCsp, validateSeparateOrigins } from './src/playground/shared.js'
 
 const cacheDir = process.env.IRISOUT_VITE_CACHE_DIR
 const developmentRole = process.env.IRISOUT_PLAYGROUND_DEV_ROLE
@@ -297,6 +297,8 @@ function exampleCleanUrls(): Plugin {
           request.url = `/examples/index.html${search ? `?${search}` : ''}`
         } else if (pathname === '/examples/bcf-copy-button') {
           request.url = `/examples/bcf-copy-button.html${search ? `?${search}` : ''}`
+        } else if (pathname === '/examples/task-board') {
+          request.url = `/examples/task-board.html${search ? `?${search}` : ''}`
         } else if (pathname === '/examples/morph-bcf') {
           request.url = `/examples/morph-bcf.html${search ? `?${search}` : ''}`
         }
@@ -340,22 +342,48 @@ function playgroundPageClient(): Plugin {
     load(id) {
       if (id !== resolvedId) return null
       const current = result ?? compile()
-      return { code: current.code, map: current.map }
+      return {
+        code: `${current.code}\nconst container = document.getElementById('app')\nconst stateElement = document.getElementById('playground-state')\nif (container && stateElement) {\n  try {\n    hydrateComponent(container, JSON.parse(stateElement.textContent ?? ''))\n  } catch {\n    // state不正時はSSR本文を残し、ページ全体を空にしない。\n  }\n}`,
+        map: current.map,
+      }
     },
   }
 }
 
 export default defineConfig({
   base: '/',
+  resolve: {
+    alias: {
+      '@playground/shared': path.resolve(import.meta.dirname, 'src/playground/shared.js'),
+    },
+  },
   // Playground開発時は二つのVite+を同時に起動するため、依存最適化の保存先を分ける。
   ...(cacheDir ? { cacheDir } : {}),
   plugins: [
     irisout({ entry: 'src/App.jsx', container: '#app' }),
     irisout({
+      entry: 'src/examples/Examples.jsx',
+      container: '#examples-app',
+      htmlMarker: '<!--irisout-examples-html-->',
+      virtualModuleId: 'virtual:irisout-examples',
+    }),
+    irisout({
+      entry: 'src/Playground.jsx',
+      container: '#playground-app',
+      htmlMarker: '<!--irisout-playground-html-->',
+      virtualModuleId: 'virtual:irisout-playground',
+    }),
+    irisout({
       entry: 'src/examples/BcfCopyButton.jsx',
       container: '#bcf-copy-button-app',
       htmlMarker: '<!--irisout-bcf-copy-button-html-->',
       virtualModuleId: 'virtual:irisout-bcf-copy-button',
+    }),
+    irisout({
+      entry: 'src/examples/TaskBoard.jsx',
+      container: '#task-board-app',
+      htmlMarker: '<!--irisout-task-board-html-->',
+      virtualModuleId: 'virtual:irisout-task-board',
     }),
     irisoutMotion({
       entry: 'src/examples/MorphBcf.jsx',
@@ -383,7 +411,8 @@ export default defineConfig({
           'examples/bcf-copy-button.html',
         ),
         'examples/morph-bcf': path.resolve(import.meta.dirname, 'examples/morph-bcf.html'),
-        'shared-playground': path.resolve(import.meta.dirname, 'src/playground-page-client.js'),
+        'examples/task-board': path.resolve(import.meta.dirname, 'examples/task-board.html'),
+        'shared-playground': 'virtual:irisout-playground-page',
       },
       output: {
         entryFileNames: (chunk) => {

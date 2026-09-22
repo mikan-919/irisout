@@ -1,4 +1,0 @@
-/* Hallmark · macrostructure: Narrative Workflow · tone: technical · anchor hue: cobalt */
-/* ホームページの入口を保ち、設計値と視覚層を分離する。 */
-@import '../../../tokens.css';
-@import './home.css';

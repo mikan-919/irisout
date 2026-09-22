@@ -1,7 +1,7 @@
 # irisoutホームページ
 
 irisout自身のVite連携で生成するホームページです。`src/App.jsx`がauthored JSXの入口で、
-`src/main.js`の`virtual:irisout-entry`が初期HTMLとhydrate用生成コードを読み込みます。
+`index.html`のinline moduleが初期HTMLとhydrate用生成コードを読み込みます。
 
 ## 実行
 

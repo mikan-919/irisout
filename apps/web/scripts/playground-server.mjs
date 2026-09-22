@@ -5,7 +5,7 @@ import { createServer } from 'node:http'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { createControllerCsp, validateSeparateOrigins } from '../src/playground/origin.js'
+import { createControllerCsp, validateSeparateOrigins } from '../src/playground/shared.js'
 import { resolvePublicPath } from '../server/static-files.mjs'
 
 const MIME_TYPES = {

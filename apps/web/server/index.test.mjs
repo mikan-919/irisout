@@ -10,7 +10,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { test } from 'bun:test'
 import { createPlaygroundServer } from '../scripts/playground-server.mjs'
-import { createManagementKey, createRequestId } from '../src/playground/save-share.js'
+import { createManagementKey, createRequestId } from '../src/playground/shared.js'
 import { decodeRequestPath } from './static-files.mjs'
 
 const webRoot = path.resolve(import.meta.dirname, '..')
@@ -121,6 +121,9 @@ test('本番Webサーバーの公式Originと実行管理Originを分離する',
     const morphBcfExample = await fetch(`${officialOrigin}/examples/morph-bcf`)
     assert.equal(morphBcfExample.status, 200)
     assert.match(await morphBcfExample.text(), /id="morph-bcf-app"/)
+    const taskBoardExample = await fetch(`${officialOrigin}/examples/task-board`)
+    assert.equal(taskBoardExample.status, 200)
+    assert.match(await taskBoardExample.text(), /id="task-board-app"/)
     const examplesRedirect = await fetch(`${officialOrigin}/examples/?q=1`, {
       redirect: 'manual',
     })

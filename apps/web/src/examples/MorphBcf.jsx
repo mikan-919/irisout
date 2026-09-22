@@ -2,6 +2,7 @@
 // Motion拡張の対応範囲に合わせ、退場BCFだけWeb Animations APIで補う。
 import { render, signal } from 'irisout'
 import { motion } from 'irisout/motion'
+import { SiteHeader } from '../SiteHeader.jsx'
 
 export function MorphBcf() {
   const cards = signal([
@@ -32,110 +33,113 @@ export function MorphBcf() {
   const bcfMs = signal(900)
 
   render(
-    <main class="morph-page">
-      <section class="stage" aria-label="MorphとBCFの操作例">
-        <div class="grid">
-          {cards().map((item) => (
-            <motion.article
-              class="card"
-              key={item.id}
-              layoutId={`card-${item.id}`}
-              transition={{ duration: morphMs() / 1000, ease: [0.22, 0.72, 0.2, 1] }}
-            >
-              <button
-                class="card-button"
-                type="button"
-                aria-label={`${item.title}を開く`}
-                onClick={() => selected(item)}
+    <div>
+      <SiteHeader current="examples" search={false} onSearch={null} />
+      <main class="morph-page">
+        <section class="stage" aria-label="MorphとBCFの操作例">
+          <div class="grid">
+            {cards().map((item) => (
+              <motion.article
+                class="card"
+                key={item.id}
+                layoutId={`card-${item.id}`}
+                transition={{ duration: morphMs() / 1000, ease: [0.22, 0.72, 0.2, 1] }}
+              >
+                <button
+                  class="card-button"
+                  type="button"
+                  aria-label={`${item.title}を開く`}
+                  onClick={() => selected(item)}
+                >
+                  <motion.div
+                    class="compact-content"
+                    animate={
+                      selected()?.id === item.id
+                        ? { opacity: 0, filter: 'blur(12px)', scale: 0.985 }
+                        : { opacity: 1, filter: 'blur(0px)', scale: 1 }
+                    }
+                    transition={{ duration: bcfMs() / 1000, ease: [0.22, 0.72, 0.2, 1] }}
+                  >
+                    <span class="kicker">{item.kicker}</span>
+                    <span>
+                      <strong class="title">{item.title}</strong>
+                      <small class="meta">{item.meta}</small>
+                    </span>
+                  </motion.div>
+                </button>
+              </motion.article>
+            ))}
+          </div>
+
+          {selected() && (
+            <div class="overlay">
+              <motion.article
+                class="expanded-shell"
+                layoutId={`card-${selected().id}`}
+                transition={{ duration: morphMs() / 1000, ease: [0.22, 0.72, 0.2, 1] }}
               >
                 <motion.div
-                  class="compact-content"
-                  animate={
-                    selected()?.id === item.id
-                      ? { opacity: 0, filter: 'blur(12px)', scale: 0.985 }
-                      : { opacity: 1, filter: 'blur(0px)', scale: 1 }
-                  }
+                  class="detail-content"
+                  initial={{ opacity: 0, filter: 'blur(14px)', y: 8, scale: 0.992 }}
+                  animate={{ opacity: 1, filter: 'blur(0px)', y: 0, scale: 1 }}
                   transition={{ duration: bcfMs() / 1000, ease: [0.22, 0.72, 0.2, 1] }}
                 >
-                  <span class="kicker">{item.kicker}</span>
-                  <span>
-                    <strong class="title">{item.title}</strong>
-                    <small class="meta">{item.meta}</small>
-                  </span>
-                </motion.div>
-              </button>
-            </motion.article>
-          ))}
-        </div>
-
-        {selected() && (
-          <div class="overlay">
-            <motion.article
-              class="expanded-shell"
-              layoutId={`card-${selected().id}`}
-              transition={{ duration: morphMs() / 1000, ease: [0.22, 0.72, 0.2, 1] }}
-            >
-              <motion.div
-                class="detail-content"
-                initial={{ opacity: 0, filter: 'blur(14px)', y: 8, scale: 0.992 }}
-                animate={{ opacity: 1, filter: 'blur(0px)', y: 0, scale: 1 }}
-                transition={{ duration: bcfMs() / 1000, ease: [0.22, 0.72, 0.2, 1] }}
-              >
-                <div class="detail-top">
-                  <div>
-                    <span class="kicker">{selected().kicker}</span>
-                    <h1>{selected().title}</h1>
+                  <div class="detail-top">
+                    <div>
+                      <span class="kicker">{selected().kicker}</span>
+                      <h1>{selected().title}</h1>
+                    </div>
+                    <button
+                      class="close"
+                      type="button"
+                      aria-label="詳細を閉じる"
+                      onClick={closeDetail}
+                    >
+                      ×
+                    </button>
                   </div>
-                  <button
-                    class="close"
-                    type="button"
-                    aria-label="詳細を閉じる"
-                    onClick={closeDetail}
-                  >
-                    ×
-                  </button>
-                </div>
-                <div class="detail-copy">
-                  <p>{selected().copy}</p>
-                  <p>morph は位置と形状、BCF は内容の焦点移動を担当します。</p>
-                </div>
-                <div class="detail-bottom">
-                  <span class="pill">Morph / layoutId</span>
-                  <span class="pill">Blur Crossfade</span>
-                </div>
-              </motion.div>
-            </motion.article>
-          </div>
-        )}
+                  <div class="detail-copy">
+                    <p>{selected().copy}</p>
+                    <p>morph は位置と形状、BCF は内容の焦点移動を担当します。</p>
+                  </div>
+                  <div class="detail-bottom">
+                    <span class="pill">Morph / layoutId</span>
+                    <span class="pill">Blur Crossfade</span>
+                  </div>
+                </motion.div>
+              </motion.article>
+            </div>
+          )}
 
-        <div class="controls">
-          <label>
-            <span>Morph</span>
-            <input
-              type="range"
-              min="120"
-              max="1200"
-              step="20"
-              value={morphMs()}
-              onInput={(event) => morphMs(Number(event.currentTarget.value))}
-            />
-            <output>{morphMs()} ms</output>
-          </label>
-          <label>
-            <span>BCF</span>
-            <input
-              type="range"
-              min="200"
-              max="1800"
-              step="50"
-              value={bcfMs()}
-              onInput={(event) => bcfMs(Number(event.currentTarget.value))}
-            />
-            <output>{bcfMs()} ms</output>
-          </label>
-        </div>
-      </section>
-    </main>,
+          <div class="controls">
+            <label>
+              <span>Morph</span>
+              <input
+                type="range"
+                min="120"
+                max="1200"
+                step="20"
+                value={morphMs()}
+                onInput={(event) => morphMs(Number(event.currentTarget.value))}
+              />
+              <output>{morphMs()} ms</output>
+            </label>
+            <label>
+              <span>BCF</span>
+              <input
+                type="range"
+                min="200"
+                max="1800"
+                step="50"
+                value={bcfMs()}
+                onInput={(event) => bcfMs(Number(event.currentTarget.value))}
+              />
+              <output>{bcfMs()} ms</output>
+            </label>
+          </div>
+        </section>
+      </main>
+    </div>,
   )
 
   function closeDetail(event) {

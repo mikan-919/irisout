@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import path from 'node:path'
 import { test } from 'bun:test'
+import { compileProject } from 'irisout'
 import * as irisoutRuntime from 'irisout/runtime'
 import config, { playgroundDevelopmentRedirect, playgroundSaveApi } from '../vite.config.ts'
 import * as playgroundRuntime from '../src/playground/runtime.js'
@@ -68,6 +69,11 @@ test('開発用Playgroundの経路と実行時処理を接続する', () => {
       .sort(),
     Object.keys(irisoutRuntime).sort(),
   )
+})
+
+test('Playground生成moduleは開発時に未変換のimport.meta.envを実行しない', () => {
+  const result = compileProject(path.resolve(import.meta.dirname, '../src/Playground.jsx'))
+  assert.doesNotMatch(result.code, /import\.meta/)
 })
 
 test('開発用公式Originは保存APIを持ち、実行管理Originは持たない', async () => {

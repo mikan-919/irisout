@@ -61,7 +61,7 @@ generateModule()             ── 6. 依存グラフから ES モジュール�
 `compileProject(entryPath)`の追加段は次の通りである。
 
 ```
-entryPath (.js/.jsx)
+entryPath (.js/.jsx/.ts/.tsx)
   │ module-linker: 相対import解決、依存順、cycle/import/export検証、binding名変更、依存path収集
   ▼
 linked source + module-scope補助宣言
@@ -88,16 +88,16 @@ linked source + module-scope補助宣言
 
 ### ファイル経路と要求単位SSR
 
-`packages/routes/src/node.ts`は指定ディレクトリを再帰走査し、名前が`page.jsx`のファイルだけを
+`packages/routes/src/node.ts`は指定ディレクトリを再帰走査し、`page.tsx`または`page.jsx`を
 `FileRouteDefinition`へ変換する。通常のディレクトリは静的segment、`[id]`は`:id`のparam
 segmentになる。`packages/routes/src/index.ts`の`createRouteTable()`が表記、静的優先、動的衝突を
 確定し、`matchRoute()`がserverとclientで同じURL正規化と一度だけの引数復号を行う。
 
 ```
 routes/
-  page.jsx             → /
-  users/page.jsx       → /users
-  users/[id]/page.jsx  → /users/:id
+  page.tsx             → /
+  users/page.tsx       → /users
+  users/[id]/page.tsx  → /users/:id
              │
              ├─ irisout/hono: compileProject(..., { target: 'ssr' }) + Hono subrouter
              └─ irisout/vite: client table + virtual hydrate page modules
@@ -140,9 +140,9 @@ triage手続きで捌く — コンパイラの受理条件自体を場当たり
 | `packages/motion/src/vite.ts`                         | `<motion.div>`を標準JSXと`use=`へ変換する任意拡張。Motion固有の属性をコンパイラ本体へ持ち込まない                                                                                                   |
 | `packages/motion/src/runtime.ts`                      | 変換後の`use=`から公式Motionの`animate()`と配置投影要素登録を実行する                                                                                                                               |
 | `packages/motion/src/projection.ts`                   | 汎用DOM更新取引をMotionの`HTMLProjectionNode`へ接続し、配置測定・親子補正・共有要素・終了時crossfadeを管理する                                                                                      |
-| `packages/vite-plugin/src/routes.ts`                  | `page.jsx`群のclient target、経路表、初回hydrate、ファイル集合変更時の仮想module再生成                                                                                                              |
+| `packages/vite-plugin/src/routes.ts`                  | `page.tsx`/`page.jsx`群のclient target、経路表、初回hydrate、ファイル集合変更時の仮想module再生成                                                                                                   |
 | `packages/routes/src/index.ts`                        | fs・Honoに依存しない経路定義、静的優先、衝突検査、URL照合、ブラウザー遷移                                                                                                                           |
-| `packages/routes/src/node.ts`                         | `page.jsx`の走査とfile path付きserver経路表の生成                                                                                                                                                   |
+| `packages/routes/src/node.ts`                         | `page.tsx`/`page.jsx`の走査とfile path付きserver経路表の生成                                                                                                                                        |
 | `packages/hono/src/index.ts`                          | pageごとのSSR、loader、直接HTML、遷移JSON、not-found・redirect・errorのHonoサブルーター                                                                                                             |
 | `packages/runtime/src/index.ts`                       | 2つの顔を持つ: signal/derived は**ビルド時専用**。mount/hydrate、`use=`返り値のshape検証、List使用時だけimportされるkey照合・binding値キャッシュは**ブラウザ出荷用**の最小ランタイム(ADR-0015/0022) |
 | `packages/compiler/src/template.ts`                   | テンプレートリテラル組み立てヘルパー(render と codegen の共有部)                                                                                                                                    |

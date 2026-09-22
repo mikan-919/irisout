@@ -145,6 +145,7 @@ function staticCandidates(decodedPath) {
     return ['examples/bcf-copy-button.html']
   }
   if (decodedPath === '/examples/morph-bcf') return ['examples/morph-bcf.html']
+  if (decodedPath === '/examples/task-board') return ['examples/task-board.html']
   if (decodedPath.startsWith('/docs/')) {
     const relative = decodedPath.slice(1)
     return [relative, path.join(relative, 'index.html'), `${relative}.html`]

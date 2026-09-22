@@ -76,7 +76,7 @@ const result = compile(source)
 import { irisoutSsr, serializeSsrState } from 'irisout/ssr'
 ```
 
-`page.jsx`のディレクトリ構造からHonoのサブルーターとブラウザー遷移を作る場合は、serverで
+`page.tsx`または`page.jsx`のディレクトリ構造からHonoのサブルーターとブラウザー遷移を作る場合は、serverで
 `irisout/hono`、Viteで`irisoutRoutes`を使います。`prefix`は両方へ同じ値を渡します。
 
 ```ts

@@ -1,4 +1,4 @@
-// `page.jsx`のclient生成物と純粋な経路表をViteの仮想moduleへまとめる。
+// `page.tsx`または`page.jsx`のclient生成物と純粋な経路表をViteの仮想moduleへまとめる。
 // Node側の走査とcompileProjectはplugin実行中だけに留まり、仮想moduleが
 // ブラウザーへ渡すのはroutes表とhydrate可能なpage moduleだけにする。
 
@@ -18,7 +18,7 @@ const DEFAULT_CONTAINER = '#app'
 const PAGE_MODULE_MARKER = ':page:'
 
 export interface IrisoutRoutesPluginOptions {
-  /** Viteのrootから解決するpage.jsxディレクトリ。絶対pathも受け付ける。 */
+  /** Viteのrootから解決するpage.tsx/page.jsxディレクトリ。絶対pathも受け付ける。 */
   directory?: string
   /** directoryの別名。 */
   routes?: string
@@ -132,7 +132,7 @@ function pageModuleSource(
   ].join('\n')
 }
 
-/** page.jsx群からclient経路表とhydrate入口を生成するVite plugin。 */
+/** page.tsx/page.jsx群からclient経路表とhydrate入口を生成するVite plugin。 */
 export function irisoutRoutes(options: IrisoutRoutesPluginOptions): Plugin {
   const virtualModuleId = options.virtualModuleId ?? DEFAULT_VIRTUAL_MODULE_ID
   const containerSelector = options.container ?? DEFAULT_CONTAINER

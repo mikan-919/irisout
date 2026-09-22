@@ -1,6 +1,8 @@
 /* Hallmark · macrostructure: Narrative Workflow · tone: technical · anchor hue: cobalt */
 /* Hallmark · pre-emit critique: P5 H5 E5 S5 R5 V5 */
 /* modern-minimal / Cobalt。工程の順序を主役にし、装飾を境界線へ絞る。 */
+@import '../../../tokens.css';
+@import './site-header.css';
 
 :where(*, *::before, *::after) {
   box-sizing: border-box;

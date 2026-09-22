@@ -9,7 +9,7 @@ import {
   PLAYGROUND_MESSAGE_MAX_BYTES,
   PLAYGROUND_PROTOCOL_VERSION,
   PLAYGROUND_RESULT_MAX_BYTES,
-} from './protocol.js'
+} from './shared.js'
 
 self.addEventListener('message', (event) => {
   const message = event.data

@@ -8,7 +8,7 @@ import path from 'node:path'
 import { afterEach, describe, test } from 'bun:test'
 import { createPlaygroundApi, createPlaygroundOgp } from './playground-api.mjs'
 import { PlaygroundStore } from './playground-store.mjs'
-import { createManagementKey, createRequestId } from '../src/playground/save-share.js'
+import { createManagementKey, createRequestId } from '../src/playground/shared.js'
 
 const officialOrigin = 'https://irisout.example'
 const openStores = []

@@ -1,4 +1,4 @@
-// `page.jsx`のディレクトリ規約をNodeで走査し、ブラウザーへ渡せる情報と
+// `page.tsx`と`page.jsx`のディレクトリ規約をNodeで走査し、ブラウザーへ渡せる情報と
 // サーバーだけが使うpage file pathを持つ共通経路表を作る。
 
 import { readdirSync, statSync } from 'node:fs'
@@ -40,17 +40,25 @@ function walk(directory: string, visit: (filePath: string) => void): void {
   const entries = readdirSync(directory, { withFileTypes: true }).sort((a, b) =>
     a.name.localeCompare(b.name),
   )
+  const pages = entries.filter(
+    (entry) => entry.isFile() && (entry.name === 'page.tsx' || entry.name === 'page.jsx'),
+  )
+  if (pages.length > 1) {
+    throw new Error(
+      `compile: route directory "${directory}" contains both page.tsx and page.jsx (scope limit)`,
+    )
+  }
   for (const entry of entries) {
     const filePath = path.join(directory, entry.name)
     if (entry.isDirectory()) {
       walk(filePath, visit)
-    } else if (entry.isFile() && entry.name === 'page.jsx') {
+    } else if (pages[0]?.name === entry.name) {
       visit(filePath)
     }
   }
 }
 
-/** 指定ディレクトリの現在の`page.jsx`だけから経路を作り直す。 */
+/** 指定ディレクトリの現在の`page.tsx`または`page.jsx`から経路を作り直す。 */
 export function scanFileRoutes(directory: string): FileRouteManifest {
   const rootDirectory = path.resolve(directory)
   let isDirectory = false

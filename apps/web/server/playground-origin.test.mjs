@@ -4,7 +4,7 @@ import {
   createControllerCsp,
   normalizeOrigin,
   validateSeparateOrigins,
-} from '../src/playground/origin.js'
+} from '../src/playground/shared.js'
 
 test('Originを正規化し、CSPへ値をそのまま注入しない', () => {
   assert.equal(normalizeOrigin('https://site.example/'), 'https://site.example')

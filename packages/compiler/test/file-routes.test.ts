@@ -10,14 +10,14 @@ import {
 } from '../../routes/src/index.ts'
 import { scanFileRoutes } from '../../routes/src/node.ts'
 
-function writeRoute(root: string, relative: string): string {
-  const filePath = path.join(root, relative, 'page.jsx')
+function writeRoute(root: string, relative: string, fileName = 'page.tsx'): string {
+  const filePath = path.join(root, relative, fileName)
   mkdirSync(path.dirname(filePath), { recursive: true })
   writeFileSync(filePath, 'export function Page() { render(<p>page</p>) }')
   return filePath
 }
 
-describe('page.jsxファイル経路', () => {
+describe('page.tsxファイル経路', () => {
   it('静的経路と動的経路を同じ表から照合する', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'irisout-file-routes-'))
     try {
@@ -26,11 +26,13 @@ describe('page.jsxファイル経路', () => {
       writeRoute(root, 'users/[id]')
       writeRoute(root, 'users/new')
       writeFileSync(path.join(root, 'users', 'ignored.js'), 'not a page')
+      writeRoute(root, 'legacy', 'page.jsx')
 
       const manifest = scanFileRoutes(root)
       const client = toClientRouteTable(manifest)
       expect(manifest.routes.map((route) => route.path)).toEqual([
         '/',
+        '/legacy',
         '/users',
         '/users/new',
         '/users/:id',
@@ -87,7 +89,18 @@ describe('page.jsxファイル経路', () => {
       const next = scanFileRoutes(root)
       expect(next.routes.map((route) => route.path)).toEqual(['/new'])
       expect(matchRoute(next, '/old')).toBeNull()
-      expect(matchRoute(next, '/new')?.route.filePath).toBe(path.join(root, 'new', 'page.jsx'))
+      expect(matchRoute(next, '/new')?.route.filePath).toBe(path.join(root, 'new', 'page.tsx'))
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('同じディレクトリのpage.tsxとpage.jsxを拒否する', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'irisout-file-routes-duplicate-'))
+    try {
+      writeRoute(root, '')
+      writeRoute(root, '', 'page.jsx')
+      expect(() => scanFileRoutes(root)).toThrow('contains both page.tsx and page.jsx')
     } finally {
       rmSync(root, { recursive: true, force: true })
     }

@@ -13,5 +13,5 @@
     "isolatedModules": true,
     "strict": false
   },
-  "include": ["src/**/*.jsx"]
+  "include": ["src/**/*.jsx", "src/**/*.d.ts"]
 }

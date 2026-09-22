@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vite-plus/test'
 import { irisoutRoutes } from '../../vite-plugin/src/index.ts'
 
 function writePage(root: string, relative: string, text: string): string {
-  const filePath = path.join(root, relative, 'page.jsx')
+  const filePath = path.join(root, relative, 'page.tsx')
   mkdirSync(path.dirname(filePath), { recursive: true })
   writeFileSync(filePath, text)
   return filePath
@@ -36,8 +36,8 @@ describe('irisoutRoutes Vite連携', () => {
         addWatchFile(filePath: string): void
       }) => void
       buildStart.call({ addWatchFile: (filePath) => watched.push(filePath) })
-      expect(watched).toContain(path.join(root, 'page.jsx'))
-      expect(watched).toContain(path.join(root, 'users', '[id]', 'page.jsx'))
+      expect(watched).toContain(path.join(root, 'page.tsx'))
+      expect(watched).toContain(path.join(root, 'users', '[id]', 'page.tsx'))
 
       const resolveId = plugin.resolveId as unknown as (id: string) => string | null
       const mainId = resolveId('virtual:irisout-routes')
@@ -51,7 +51,7 @@ describe('irisoutRoutes Vite連携', () => {
       expect(main?.code).not.toContain("from 'hono'")
 
       const pageRawId =
-        'virtual:irisout-routes:page:' + encodeURIComponent(path.join(root, 'page.jsx'))
+        'virtual:irisout-routes:page:' + encodeURIComponent(path.join(root, 'page.tsx'))
       const pageId = resolveId(pageRawId)
       expect(pageId).not.toBeNull()
       const page = load(pageId!)
