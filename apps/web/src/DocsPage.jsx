@@ -1,5 +1,6 @@
 // 静的な文書本文へ共通ヘッダー、見出し、前後リンクを付ける。
 import { render } from 'irisout'
+import { DocsSidebar } from './DocsSidebar.jsx'
 import { SiteHeader } from './SiteHeader.jsx'
 
 export function DocsPage({
@@ -15,7 +16,8 @@ export function DocsPage({
   render(
     <div id="top">
       <SiteHeader current="docs" search={false} onSearch={null} />
-      <main class="docs-page docs-detail">
+      <main class="docs-page docs-shell docs-detail">
+        <DocsSidebar />
         <article>
           <p class="eyebrow">{section}</p>
           <h1>{title}</h1>
