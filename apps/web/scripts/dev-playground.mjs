@@ -1,7 +1,7 @@
 // 公式サイトと実行管理画面を異なる配信元で起動する開発入口。
 // cookieとpostMessageの境界を開発中から本番に近い形で確認する。
 
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import path from 'node:path'
 
 const root = path.resolve(import.meta.dirname, '../../..')
@@ -13,8 +13,8 @@ if (sitePort === controllerPort) throw new Error('公式サイトと実行管理
 const siteOrigin = `http://127.0.0.1:${sitePort}`
 const controllerOrigin = `http://localhost:${controllerPort}`
 
-function start(args, env) {
-  const child = spawn(vp, args, {
+function start(command, args, env) {
+  const child = spawn(command, args, {
     cwd: root,
     env: { ...process.env, ...env },
     stdio: 'inherit',
@@ -26,16 +26,25 @@ function start(args, env) {
   })
 }
 
+const sharedEnvironment = {
+  VITE_IRISOUT_PLAYGROUND_CONTROLLER_ORIGIN: controllerOrigin,
+  VITE_IRISOUT_PLAYGROUND_SITE_ORIGIN: siteOrigin,
+}
+const build = spawnSync('bun', ['run', 'build:web'], {
+  cwd: root,
+  env: { ...process.env, ...sharedEnvironment },
+  stdio: 'inherit',
+})
+if (build.status !== 0) process.exit(build.status ?? 1)
+
+start('bun', ['apps/web/server/index.mjs'], {
+  ...sharedEnvironment,
+  HOST: '127.0.0.1',
+  PORT: String(sitePort),
+  IRISOUT_SITE_ORIGIN: siteOrigin,
+})
 start(
-  ['-C', 'apps/web', 'dev', '--host', '127.0.0.1', '--port', String(sitePort), '--strictPort'],
-  {
-    IRISOUT_PLAYGROUND_DEV_ROLE: 'site',
-    IRISOUT_VITE_CACHE_DIR: path.join(root, 'apps/web/node_modules/.vite-site'),
-    VITE_IRISOUT_PLAYGROUND_CONTROLLER_ORIGIN: controllerOrigin,
-    VITE_IRISOUT_PLAYGROUND_SITE_ORIGIN: siteOrigin,
-  },
-)
-start(
+  vp,
   [
     '-C',
     'apps/web',
@@ -47,10 +56,9 @@ start(
     '--strictPort',
   ],
   {
+    ...sharedEnvironment,
     IRISOUT_PLAYGROUND_DEV_ROLE: 'controller',
     IRISOUT_VITE_CACHE_DIR: path.join(root, 'apps/web/node_modules/.vite-controller'),
-    VITE_IRISOUT_PLAYGROUND_CONTROLLER_ORIGIN: controllerOrigin,
-    VITE_IRISOUT_PLAYGROUND_SITE_ORIGIN: siteOrigin,
   },
 )
 

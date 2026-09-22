@@ -1,6 +1,6 @@
 // ルートの開発入口。サイト、Playground、デモを一つの引数体系で起動する。
 
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import path from 'node:path'
 
 const root = path.resolve(import.meta.dirname, '..')
@@ -24,7 +24,11 @@ if (target === '--help' || target === '-h') {
 if (!target) {
   run(['-C', 'apps/demos', 'dev'])
 } else if (target === 'site') {
-  run(['-C', 'apps/web', 'dev'])
+  buildWeb()
+  run([path.join(root, 'apps/web/server/index.mjs')], 'bun', {
+    HOST: '127.0.0.1',
+    PORT: process.env.PORT ?? '5173',
+  })
 } else if (target === 'playground') {
   run([path.join(root, 'apps/web/scripts/dev-playground.mjs')], process.execPath)
 } else if (target === 'demo' && name && demos[name]) {
@@ -47,6 +51,15 @@ function run(args, command = vp, extraEnvironment = {}) {
   child.once('exit', (code) => {
     process.exitCode = code ?? 1
   })
+}
+
+function buildWeb() {
+  const result = spawnSync('bun', ['run', 'build:web'], {
+    cwd: root,
+    env: process.env,
+    stdio: 'inherit',
+  })
+  if (result.status !== 0) process.exit(result.status ?? 1)
 }
 
 function printUsage() {

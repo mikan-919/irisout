@@ -41,7 +41,10 @@ const pageTemplates = new Map(
 )
 const pageRouter = createFileRouter(path.resolve(import.meta.dirname, '../routes'), {
   transformSource: transformMotionSource,
-  document: ({ html, route }) => renderPageDocument(route.path, html),
+  document: ({ html, route, stateScript }) =>
+    route.path.startsWith('/docs')
+      ? renderDocsDocument(html, stateScript)
+      : renderPageDocument(route.path, html),
 })
 
 await mkdir(dataDirectory, { recursive: true })
@@ -62,10 +65,25 @@ const server = Bun.serve({
   hostname: host,
   port,
   async fetch(request) {
+    try {
+      decodeURIComponent(extractRawPathname(request.url))
+    } catch {
+      return new Response('bad request', { status: 400 })
+    }
     const pathname = new URL(request.url).pathname
+    const canonicalPath = canonicalDocumentPath(pathname)
+    if (canonicalPath) {
+      const search = new URL(request.url).search
+      return new Response(null, {
+        status: 308,
+        headers: { location: `${canonicalPath}${search}` },
+      })
+    }
     const pageResponse = await playgroundPage(request)
     if (pageResponse) return pageResponse
-    if (pageDocuments.has(pathname)) return pageRouter.fetch(request)
+    if (pageDocuments.has(pathname) || isDocsPagePath(pathname)) {
+      return pageRouter.fetch(request)
+    }
     const socketAddress = server.requestIP(request)?.address
     const apiResponse = await api.handle(request, {
       clientAddress: resolveClientAddress({
@@ -94,6 +112,20 @@ function renderPageDocument(routePath, html) {
     new RegExp(`${start}[\\s\\S]*?${end}`),
     `${start}<div id="${page.container}">${html}</div>${end}`,
   )
+}
+
+function renderDocsDocument(html, stateScript) {
+  return `<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="irisoutの公式ドキュメント" />
+    <link rel="stylesheet" href="/docs/site.css" />
+    <title>ドキュメント — irisout</title>
+  </head>
+  <body><div id="app">${html}</div>${stateScript}</body>
+</html>`
 }
 
 for (const signal of ['SIGINT', 'SIGTERM']) {
@@ -176,6 +208,10 @@ function canonicalDocumentPath(decodedPath) {
   if (decodedPath === '/examples/') return '/examples'
   const match = /^\/docs\/([a-z0-9]+(?:-[a-z0-9]+)*)\/$/.exec(decodedPath)
   return match ? `/docs/${match[1]}` : null
+}
+
+function isDocsPagePath(pathname) {
+  return /^\/docs(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)?\/?$/.test(pathname)
 }
 
 function staticCandidates(decodedPath) {
