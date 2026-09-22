@@ -94,7 +94,7 @@ describe('client route navigation', () => {
 
   it('対象外操作を標準動作へ戻し、最後に開始した応答だけを表示する', async () => {
     const dom = new JSDOM(
-      '<!doctype html><div id="app"><a id="external" href="https://other.test/">external</a><a id="download" href="/file" download>download</a><a id="tab" href="/users/1" target="_blank">tab</a><a id="modifier" href="/users/1">modifier</a></div>',
+      '<!doctype html><div id="app"><a id="external" href="https://other.test/">external</a><a id="download" href="/file" download>download</a><a id="document" href="/users/1" data-irisout-document>document</a><a id="tab" href="/users/1" target="_blank">tab</a><a id="modifier" href="/users/1">modifier</a></div>',
       { url: 'https://example.test/' },
     )
     const container = dom.window.document.querySelector('#app')
@@ -121,7 +121,7 @@ describe('client route navigation', () => {
     })
     await navigator.start()
 
-    for (const id of ['external', 'download', 'tab']) {
+    for (const id of ['external', 'download', 'document', 'tab']) {
       const link = dom.window.document.querySelector(`#${id}`)
       if (!link) throw new Error(`${id} link was not created`)
       const event = new dom.window.MouseEvent('click', {

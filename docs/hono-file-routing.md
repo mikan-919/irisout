@@ -78,3 +78,5 @@ export default defineConfig({
 経路ディレクトリと接頭辞はHono側だけに書く。`irisoutHono(app)`は`createFileRouter()`由来の経路だけを選び、HonoのAPI経路は無視する。app定義はVite設定からも読み込まれるため、`Bun.serve()`などの待受開始は別の起動ファイルに置く。
 
 各ページは動的`import()`になる。irisoutは経路表とページ入口だけを生成し、チャンク分割、共有チャンク、圧縮、ファイル名のハッシュはViteが処理する。通常の同一配信元リンクはクライアント遷移の対象になり、外部リンク、別タブ、download、fragmentだけの移動はブラウザー標準の動作へ任せる。
+
+`irisoutHono(app)`はブラウザー入口を`irisout-client.js`として自動的に発行する。利用側のJavaScriptから`virtual:*`をimportする必要はない。Honoの`document`は差し込みコメントを持つHTMLテンプレートではなく、`html`、`stateScript`とVite生成資産を使って完成したHTML文書を返せる。

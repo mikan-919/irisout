@@ -3,11 +3,11 @@ import path from 'node:path'
 import type { IncomingMessage } from 'node:http'
 import { defineConfig, type Plugin, type ViteDevServer } from 'vite-plus'
 import { compileProject, type CompileResult } from 'irisout'
-import { irisoutMotion } from 'irisout/motion/vite'
-import { irisout } from 'irisout/vite'
+import { irisoutHono } from 'irisout/hono/vite'
 import { PLAYGROUND_BODY_MAX_BYTES, createPlaygroundApi } from './server/playground-api.mjs'
 import { parseTrustedProxyAddresses, resolveClientAddress } from './server/client-address.mjs'
 import { createControllerCsp, validateSeparateOrigins } from './src/playground/shared.js'
+import { pageDocuments, siteApp } from './server/site-app.mjs'
 
 const cacheDir = process.env.IRISOUT_VITE_CACHE_DIR
 const developmentRole = process.env.IRISOUT_PLAYGROUND_DEV_ROLE
@@ -86,10 +86,6 @@ function playgroundHeaders(): Plugin {
           response.setHeader('Location', `/playground${search ? `?${search}` : ''}`)
           response.end()
           return
-        }
-        // /playgroundはLPと別の編集画面へ接続する。
-        if (pathname === '/playground') {
-          request.url = `/playground.html${search ? `?${search}` : ''}`
         }
         const runtimeResource = isPlaygroundRuntimeResource(pathname)
         if (
@@ -288,30 +284,30 @@ function isPlaygroundRuntimeResource(pathname: string) {
   )
 }
 
-// 開発時も本番と同じ実例URLを使い、HTML拡張子を利用者へ見せない。
-function exampleCleanUrls(): Plugin {
+// 開発時もHono appから完成HTMLを返し、Viteは生成資産だけを担当する。
+function siteDevelopmentPages(): Plugin {
   return {
-    name: 'irisout-example-clean-urls',
+    name: 'irisout-site-development-pages',
     configureServer(server) {
       server.middlewares.use((request, response, next) => {
-        const [pathname, search] = (request.url ?? '').split('?', 2)
-        if (pathname === '/examples/') {
-          response.statusCode = 308
-          response.setHeader('Location', `/examples${search ? `?${search}` : ''}`)
-          response.end()
-          return
-        }
-        if (pathname === '/examples') {
-          request.url = `/examples/index.html${search ? `?${search}` : ''}`
-        } else if (pathname === '/examples/bcf-copy-button') {
-          request.url = `/examples/bcf-copy-button.html${search ? `?${search}` : ''}`
-        } else if (pathname === '/examples/task-board') {
-          request.url = `/examples/task-board.html${search ? `?${search}` : ''}`
-        } else if (pathname === '/examples/morph-bcf') {
-          request.url = `/examples/morph-bcf.html${search ? `?${search}` : ''}`
-        }
+        const pathname = new URL(request.url ?? '/', 'http://irisout.local').pathname
+        if (pathname === '/site.js') request.url = '/src/site-entry.js'
+        else if (pathname === '/irisout-client.js') request.url = '/@id/virtual:irisout-routes'
         next()
       })
+      return () => {
+        server.middlewares.use(async (request, response, next) => {
+          const pathname = new URL(request.url ?? '/', 'http://irisout.local').pathname
+          if (!pageDocuments.has(pathname) && !pathname.startsWith('/docs')) {
+            next()
+            return
+          }
+          const result = await siteApp.fetch(await createFetchRequest(request, server))
+          response.statusCode = result.status
+          result.headers.forEach((value, name) => response.setHeader(name, value))
+          response.end(Buffer.from(await result.arrayBuffer()))
+        })
+      }
     },
   }
 }
@@ -369,38 +365,8 @@ export default defineConfig({
   // Playground開発時は二つのVite+を同時に起動するため、依存最適化の保存先を分ける。
   ...(cacheDir ? { cacheDir } : {}),
   plugins: [
-    irisout({ entry: 'routes/page.tsx', container: '#app' }),
-    irisout({
-      entry: 'routes/examples/page.tsx',
-      container: '#examples-app',
-      htmlMarker: '<!--irisout-examples-html-->',
-      virtualModuleId: 'virtual:irisout-examples',
-    }),
-    irisout({
-      entry: 'routes/playground/page.tsx',
-      container: '#playground-app',
-      htmlMarker: '<!--irisout-playground-html-->',
-      virtualModuleId: 'virtual:irisout-playground',
-    }),
-    irisout({
-      entry: 'routes/examples/bcf-copy-button/page.tsx',
-      container: '#bcf-copy-button-app',
-      htmlMarker: '<!--irisout-bcf-copy-button-html-->',
-      virtualModuleId: 'virtual:irisout-bcf-copy-button',
-    }),
-    irisout({
-      entry: 'routes/examples/task-board/page.tsx',
-      container: '#task-board-app',
-      htmlMarker: '<!--irisout-task-board-html-->',
-      virtualModuleId: 'virtual:irisout-task-board',
-    }),
-    irisoutMotion({
-      entry: 'routes/examples/morph-bcf/page.tsx',
-      container: '#morph-bcf-app',
-      htmlMarker: '<!--irisout-morph-bcf-html-->',
-      virtualModuleId: 'virtual:irisout-morph-bcf',
-    }),
-    exampleCleanUrls(),
+    irisoutHono(siteApp),
+    siteDevelopmentPages(),
     playgroundPageClient(),
     playgroundHeaders(),
     playgroundSaveApi(),
@@ -411,22 +377,18 @@ export default defineConfig({
     modulePreload: true,
     rollupOptions: {
       input: {
-        main: path.resolve(import.meta.dirname, 'index.html'),
         controller: path.resolve(import.meta.dirname, 'playground-controller.html'),
-        playground: path.resolve(import.meta.dirname, 'playground.html'),
-        examples: path.resolve(import.meta.dirname, 'examples/index.html'),
-        'examples/bcf-copy-button': path.resolve(
-          import.meta.dirname,
-          'examples/bcf-copy-button.html',
-        ),
-        'examples/morph-bcf': path.resolve(import.meta.dirname, 'examples/morph-bcf.html'),
-        'examples/task-board': path.resolve(import.meta.dirname, 'examples/task-board.html'),
+        site: path.resolve(import.meta.dirname, 'src/site-entry.js'),
         'shared-playground': 'virtual:irisout-playground-page',
       },
       output: {
         entryFileNames: (chunk) => {
-          if (chunk.name === 'main') return 'app.js'
-          if (chunk.name === 'playground') return 'playground.js'
+          if (chunk.name === 'site') return 'site.js'
+          if (
+            chunk.name.startsWith('irisout-client') ||
+            chunk.facadeModuleId?.includes('virtual%3Airisout-routes')
+          )
+            return 'irisout-client.js'
           if (chunk.name === 'shared-playground') return 'shared-playground.js'
           if (chunk.name === 'controller') return 'assets/controller/[name]-[hash].js'
           return 'assets/[name]-[hash].js'
@@ -435,10 +397,14 @@ export default defineConfig({
           isControllerChunk(chunk)
             ? 'assets/controller/[name]-[hash].js'
             : 'assets/[name]-[hash].js',
-        assetFileNames: (asset) =>
-          asset.name?.startsWith('controller')
+        assetFileNames: (asset) => {
+          if (asset.name?.endsWith('.css') && !asset.name.startsWith('controller')) {
+            return 'site.css'
+          }
+          return asset.name?.startsWith('controller')
             ? 'assets/controller/[name]-[hash][extname]'
-            : 'assets/[name]-[hash][extname]',
+            : 'assets/[name]-[hash][extname]'
+        },
       },
     },
   },

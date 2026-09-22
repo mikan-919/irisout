@@ -98,19 +98,19 @@ export default function DocsIndex() {
               <h2>公式例</h2>
               <ul>
                 <li>
-                  <a href="/playground?example=counter">
+                  <a href="/playground?example=counter" data-irisout-document>
                     <strong>Counter</strong>
                     <span>状態更新</span>
                   </a>
                 </li>
                 <li>
-                  <a href="/playground?example=list">
+                  <a href="/playground?example=list" data-irisout-document>
                     <strong>List</strong>
                     <span>キー付き一覧</span>
                   </a>
                 </li>
                 <li>
-                  <a href="/playground?example=svg">
+                  <a href="/playground?example=svg" data-irisout-document>
                     <strong>SVG</strong>
                     <span>SVG要素と属性</span>
                   </a>

@@ -26,7 +26,11 @@ export function SiteHeader({ current, search, onSearch }) {
         <a href="/examples" aria-current={current === 'examples' ? 'page' : null}>
           実例
         </a>
-        <a href="/playground" aria-current={current === 'playground' ? 'page' : null}>
+        <a
+          href="/playground"
+          data-irisout-document
+          aria-current={current === 'playground' ? 'page' : null}
+        >
           Playground
         </a>
         <a href={GITHUB_URL}>GitHub ↗</a>
@@ -44,7 +48,7 @@ export function SiteHeader({ current, search, onSearch }) {
             <kbd>⌘ K</kbd>
           </button>
         )}
-        <a class="site-cta" href="/playground">
+        <a class="site-cta" href="/playground" data-irisout-document>
           試す <span aria-hidden="true">↗</span>
         </a>
         <details>
@@ -59,7 +63,11 @@ export function SiteHeader({ current, search, onSearch }) {
             <a href="/examples" aria-current={current === 'examples' ? 'page' : null}>
               実例
             </a>
-            <a href="/playground" aria-current={current === 'playground' ? 'page' : null}>
+            <a
+              href="/playground"
+              data-irisout-document
+              aria-current={current === 'playground' ? 'page' : null}
+            >
               Playground
             </a>
             <a href={GITHUB_URL}>GitHub ↗</a>

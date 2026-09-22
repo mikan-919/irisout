@@ -1,5 +1,4 @@
-// Playground JSXと、コンパイラ未対応のMonaco遅延読込みだけを起動する。
-import 'virtual:irisout-playground'
+// Playgroundにだけ存在する要素を検出し、Monacoを遅延読込みする。
 
 const sourceElement = document.querySelector('[data-playground-source]')
 const monacoElement = document.querySelector('[data-playground-monaco]')

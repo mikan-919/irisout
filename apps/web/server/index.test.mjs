@@ -136,13 +136,15 @@ test('本番Webサーバーの公式Originと実行管理Originを分離する',
     assert.match(await examples.text(), /BCF Copy Button/)
     const bcfExample = await fetch(`${officialOrigin}/examples/bcf-copy-button`)
     assert.equal(bcfExample.status, 200)
-    assert.match(await bcfExample.text(), /id="bcf-copy-button-app"/)
+    const bcfHtml = await bcfExample.text()
+    assert.match(bcfHtml, /id="app"/)
+    assert.match(bcfHtml, /data-irisout-route-id="\/examples\/bcf-copy-button"/)
     const morphBcfExample = await fetch(`${officialOrigin}/examples/morph-bcf`)
     assert.equal(morphBcfExample.status, 200)
-    assert.match(await morphBcfExample.text(), /id="morph-bcf-app"/)
+    assert.match(await morphBcfExample.text(), /data-irisout-route-id="\/examples\/morph-bcf"/)
     const taskBoardExample = await fetch(`${officialOrigin}/examples/task-board`)
     assert.equal(taskBoardExample.status, 200)
-    assert.match(await taskBoardExample.text(), /id="task-board-app"/)
+    assert.match(await taskBoardExample.text(), /data-irisout-route-id="\/examples\/task-board"/)
     const examplesRedirect = await fetch(`${officialOrigin}/examples/?q=1`, {
       redirect: 'manual',
     })

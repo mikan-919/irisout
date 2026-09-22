@@ -12,7 +12,7 @@
 
 `createFileRouter()`が作るページ処理関数へ、ページのファイルパス、依存ファイル、ソース変換を明示情報として付ける。Honoの`app.route()`は処理関数を保持して最終経路を登録するため、`irisoutHono(app)`は`app.routes`からこの明示情報を持つ経路だけを選ぶ。これによりHonoの登録済み経路をSSOTとし、Vite設定にはappだけを渡す。
 
-ブラウザー向け仮想入口はページを動的`import()`で参照する。irisoutは入口と経路表を提供し、チャンク構成と最適化はViteが決定する。`irisoutHono(app)`は通常のViteプラグインを一つ返すため、他のプラグインと同じ配列へ登録できる。
+内部のブラウザー向け入口はページを動的`import()`で参照する。`irisoutHono(app)`はこの入口を`irisout-client.js`としてViteへ自動発行し、利用側に仮想モジュールのimportを書かせない。irisoutは入口と経路表を提供し、チャンク構成と最適化はViteが決定する。`irisoutHono(app)`は通常のViteプラグインを一つ返すため、他のプラグインと同じ配列へ登録できる。
 
 ## 結果
 

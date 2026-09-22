@@ -46,6 +46,7 @@ export interface IrisoutExplicitRoutesPluginOptions {
   readonly routes: readonly IrisoutExplicitRouteDefinition[]
   readonly container?: string
   readonly virtualModuleId?: string
+  readonly emitEntry?: boolean
 }
 
 interface RoutePage {
@@ -149,6 +150,7 @@ function pageModuleSource(
 function createRoutesPlugin(
   options: IrisoutRoutesPluginOptions,
   explicitRoutes?: readonly IrisoutExplicitRouteDefinition[],
+  emitEntry = false,
 ): Plugin {
   const virtualModuleId = options.virtualModuleId ?? DEFAULT_VIRTUAL_MODULE_ID
   const containerSelector = options.container ?? DEFAULT_CONTAINER
@@ -167,8 +169,8 @@ function createRoutesPlugin(
   let result: RouteBuild | null = null
   let pageIds = new Map<string, string>()
 
-  const pageRawId = (filePath: string): string =>
-    `${virtualModuleId}${PAGE_MODULE_MARKER}${encodeURIComponent(filePath)}`
+  const pageRawId = (routeId: string): string =>
+    `${virtualModuleId}${PAGE_MODULE_MARKER}${encodeURIComponent(routeId)}`
   const pageResolvedId = (rawId: string): string =>
     path.join(root, `.irisout-${encodeURIComponent(rawId)}.js`)
 
@@ -202,7 +204,7 @@ function createRoutesPlugin(
         target: 'ssr',
         transformSource: explicit?.transformSource,
       })
-      const rawId = pageRawId(route.filePath)
+      const rawId = pageRawId(route.id)
       const resolvedId = pageResolvedId(rawId)
       nextPageIds.set(resolvedId, route.filePath)
       pages.push({ route, filePath: route.filePath, result: compiled, rawId, resolvedId })
@@ -238,6 +240,8 @@ function createRoutesPlugin(
     buildStart() {
       compile()
       watch((filePath) => this.addWatchFile(filePath))
+      if (emitEntry)
+        this.emitFile({ type: 'chunk', id: virtualModuleId, fileName: 'irisout-client.js' })
     },
     configureServer(server) {
       const current = ensureCompiled()
@@ -317,6 +321,7 @@ export function irisoutExplicitRoutes(options: IrisoutExplicitRoutesPluginOption
   return createRoutesPlugin(
     { container: options.container, virtualModuleId: options.virtualModuleId },
     options.routes,
+    options.emitEntry,
   )
 }
 

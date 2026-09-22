@@ -372,6 +372,7 @@ function isManagedLink(
 ): URL | null {
   if (event.defaultPrevented || hasModifiedClick(event)) return null
   if (link.hasAttribute('download')) return null
+  if (link.hasAttribute('data-irisout-document')) return null
   const target = link.getAttribute('target')
   if (target && target.toLowerCase() !== '_self') return null
   const url = resolveUrl(link.href, currentUrl.href)

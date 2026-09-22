@@ -20,7 +20,7 @@ export default function Page() {
                 irisoutは、JSXから静的HTMLと状態ごとのDOM更新コードを生成するUIコンパイラです。仮想DOMを経由せず、画面に必要な仕事だけを残します。
               </p>
               <div class="hero-actions">
-                <a class="button button-primary" href="/playground">
+                <a class="button button-primary" href="/playground" data-irisout-document>
                   動きを試す <span>↗</span>
                 </a>
                 <a class="button button-quiet" href="#how">
@@ -185,7 +185,9 @@ export default function Page() {
             </a>
             <div class="footer-links">
               <a href="#how">仕組み</a>
-              <a href="/playground">試す</a>
+              <a href="/playground" data-irisout-document>
+                試す
+              </a>
               <a href="/examples">実例</a>
               <a href="https://github.com/mikan-919/irisout">GitHub ↗</a>
             </div>

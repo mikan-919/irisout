@@ -62,7 +62,7 @@ export function irisoutHono(app: Hono, options: IrisoutHonoOptions = {}): Plugin
   if (routes.length === 0) {
     throw new Error('compile: irisoutHono found no createFileRouter routes (scope limit)')
   }
-  return irisoutExplicitRoutes({ ...options, routes })
+  return irisoutExplicitRoutes({ ...options, routes, emitEntry: true })
 }
 
 export default irisoutHono

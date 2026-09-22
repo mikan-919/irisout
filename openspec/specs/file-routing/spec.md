@@ -95,9 +95,14 @@ Honoのファイル経路は、各pageをSSRする前に任意のファイル単
 
 ### Requirement: ページ単位のVite分割
 
-ブラウザー向け仮想入口は各ページを動的importとして参照しなければならない(SHALL)。チャンク分割、共有チャンク抽出、圧縮、ハッシュ付与はViteへ委ね、irisout側で再実装してはならない(SHALL NOT)。
+`irisoutHono(app)`はブラウザー入口をViteの出力として自動的に発行しなければならず(SHALL)、利用側へ仮想モジュールのimportを要求してはならない(SHALL NOT)。内部のブラウザー向け入口は各ページを動的importとして参照しなければならない(SHALL)。チャンク分割、共有チャンク抽出、圧縮、ハッシュ付与はViteへ委ね、irisout側で再実装してはならない(SHALL NOT)。
 
 #### Scenario: ページ入口を動的に読み込む
 
 - **WHEN** 複数のページを含むHono appをViteで構築する
 - **THEN** 各ページは動的import境界になり、Viteが出力チャンクを決める
+
+#### Scenario: ブラウザー入口を自動発行する
+
+- **WHEN** Vite設定のプラグイン配列へ`irisoutHono(app)`を登録する
+- **THEN** `irisout-client.js`が構築され、利用側のJavaScriptに`virtual:*`のimportを書かない

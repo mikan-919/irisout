@@ -12,7 +12,7 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "build": "vp -C apps/demos build",
-    "build:web": "node apps/web/scripts/build-docs.mjs && vp -C apps/web build && bun run --cwd apps/web build:ssr",
+    "build:web": "node apps/web/scripts/build-docs.mjs && vp -C apps/web build && node apps/web/scripts/prerender-site.mjs && bun run --cwd apps/web build:ssr",
     "site:build": "node apps/web/scripts/build-docs.mjs",
     "site:check": "node apps/web/scripts/build-docs.mjs --check",
     "site:test": "node --test apps/web/scripts/site-docs.test.mjs",
@@ -21,7 +21,7 @@
     "test:web:save": "bun run --cwd apps/web test:save",
     "test:motion-layout": "bun apps/web/scripts/motion-layout-e2e.test.mjs",
     "build:inspect": "IRISOUT_MINIFY=false vp -C apps/demos build",
-    "start": "bun run build && vp -C apps/demos preview",
+    "start": "bun run build:web && bun apps/web/server/index.mjs",
     "check": "vp check && bun run typecheck:tsc",
     "check:fix": "vp check --fix && bun run typecheck:tsc",
     "lint": "vp lint",

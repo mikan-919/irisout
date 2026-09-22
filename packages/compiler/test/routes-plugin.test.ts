@@ -50,8 +50,7 @@ describe('irisoutRoutes Vite連携', () => {
       expect(main?.code).not.toContain('node:fs')
       expect(main?.code).not.toContain("from 'hono'")
 
-      const pageRawId =
-        'virtual:irisout-routes:page:' + encodeURIComponent(path.join(root, 'page.tsx'))
+      const pageRawId = 'virtual:irisout-routes:page:' + encodeURIComponent('/')
       const pageId = resolveId(pageRawId)
       expect(pageId).not.toBeNull()
       const page = load(pageId!)

@@ -37,9 +37,20 @@ describe('irisoutHono Vite連携', () => {
       const watched: string[] = []
       const buildStart = plugin.buildStart as unknown as (this: {
         addWatchFile(filePath: string): void
+        emitFile(file: unknown): string
       }) => void
-      buildStart.call({ addWatchFile: (filePath) => watched.push(filePath) })
+      const emitted: unknown[] = []
+      buildStart.call({
+        addWatchFile: (filePath) => watched.push(filePath),
+        emitFile: (file) => {
+          emitted.push(file)
+          return 'irisout-client'
+        },
+      })
       expect(watched).toContain(userPage)
+      expect(emitted).toEqual([
+        { type: 'chunk', id: 'virtual:irisout-routes', fileName: 'irisout-client.js' },
+      ])
 
       const resolveId = plugin.resolveId as unknown as (id: string) => string | null
       const mainId = resolveId('virtual:irisout-routes')
@@ -71,7 +82,7 @@ describe('irisoutHono Vite連携', () => {
         path.join(root, 'index.html'),
         '<!doctype html><div id="app"></div><script type="module" src="/main.js"></script>',
       )
-      writeFileSync(path.join(root, 'main.js'), "import 'virtual:irisout-routes'\n")
+      writeFileSync(path.join(root, 'main.js'), "console.log('application entry')\n")
       const app = new Hono().route('/', createFileRouter(root))
 
       await build({

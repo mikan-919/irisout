@@ -3,13 +3,12 @@
 
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
-import { createFileRouter } from 'irisout/hono'
-import { transformMotionSource } from 'irisout/motion/vite'
 import { PlaygroundStore } from './playground-store.mjs'
 import { createPlaygroundApi } from './playground-api.mjs'
 import { createPlaygroundPageHandler } from './playground-ssr.mjs'
 import { parseTrustedProxyAddresses, resolveClientAddress } from './client-address.mjs'
 import { decodeRequestPath, resolveDecodedPublicPath } from './static-files.mjs'
+import { pageDocuments, siteApp } from './site-app.mjs'
 
 const root = path.resolve(import.meta.dirname, '../dist')
 const dataDirectory = path.resolve(
@@ -20,33 +19,6 @@ const port = Number(process.env.PORT ?? 3000)
 const host = process.env.HOST ?? '127.0.0.1'
 const officialOrigin = process.env.IRISOUT_SITE_ORIGIN ?? `http://${host}:${port}`
 const trustedProxyAddresses = parseTrustedProxyAddresses(process.env.IRISOUT_TRUSTED_PROXY)
-const pageDocuments = new Map([
-  ['/', { file: 'index.html', container: 'app' }],
-  ['/playground', { file: 'playground.html', container: 'playground-app' }],
-  ['/examples', { file: 'examples/index.html', container: 'examples-app' }],
-  [
-    '/examples/bcf-copy-button',
-    { file: 'examples/bcf-copy-button.html', container: 'bcf-copy-button-app' },
-  ],
-  ['/examples/task-board', { file: 'examples/task-board.html', container: 'task-board-app' }],
-  ['/examples/morph-bcf', { file: 'examples/morph-bcf.html', container: 'morph-bcf-app' }],
-])
-const pageTemplates = new Map(
-  await Promise.all(
-    [...pageDocuments].map(async ([routePath, page]) => [
-      routePath,
-      await Bun.file(path.join(root, page.file)).text(),
-    ]),
-  ),
-)
-const pageRouter = createFileRouter(path.resolve(import.meta.dirname, '../routes'), {
-  transformSource: transformMotionSource,
-  document: ({ html, route, stateScript }) =>
-    route.path.startsWith('/docs')
-      ? renderDocsDocument(html, stateScript)
-      : renderPageDocument(route.path, html),
-})
-
 await mkdir(dataDirectory, { recursive: true })
 const store = new PlaygroundStore(databasePath)
 const api = createPlaygroundApi({ store, officialOrigin })
@@ -82,7 +54,7 @@ const server = Bun.serve({
     const pageResponse = await playgroundPage(request)
     if (pageResponse) return pageResponse
     if (pageDocuments.has(pathname) || isDocsPagePath(pathname)) {
-      return pageRouter.fetch(request)
+      return siteApp.fetch(request)
     }
     const socketAddress = server.requestIP(request)?.address
     const apiResponse = await api.handle(request, {
@@ -98,35 +70,6 @@ const server = Bun.serve({
 })
 
 console.log(`irisout web server: http://${host}:${server.port}`)
-
-function renderPageDocument(routePath, html) {
-  const page = pageDocuments.get(routePath)
-  const template = pageTemplates.get(routePath)
-  if (!page || !template) throw new Error(`ページ文書がありません: ${routePath}`)
-  const start = '<!--irisout-page-start-->'
-  const end = '<!--irisout-page-end-->'
-  if (!template.includes(start) || !template.includes(end)) {
-    throw new Error(`ページ文書の差し込み位置がありません: ${routePath}`)
-  }
-  return template.replace(
-    new RegExp(`${start}[\\s\\S]*?${end}`),
-    `${start}<div id="${page.container}">${html}</div>${end}`,
-  )
-}
-
-function renderDocsDocument(html, stateScript) {
-  return `<!doctype html>
-<html lang="ja">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="irisoutの公式ドキュメント" />
-    <link rel="stylesheet" href="/docs/site.css" />
-    <title>ドキュメント — irisout</title>
-  </head>
-  <body><div id="app">${html}</div>${stateScript}</body>
-</html>`
-}
 
 for (const signal of ['SIGINT', 'SIGTERM']) {
   process.once(signal, () => {
