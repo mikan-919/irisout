@@ -12,7 +12,7 @@
     "dev": "vp dev",
     "dev:playground": "node scripts/dev-playground.mjs",
     "serve:playground": "node scripts/playground-server.mjs",
-    "serve:web": "bun server/index.mjs",
+    "serve:web": "bun server/start.mjs",
     "deploy:cloudflare:controller": "wrangler deploy --config cloudflare/wrangler.controller.jsonc",
     "deploy:cloudflare:site": "wrangler deploy --config cloudflare/wrangler.site.jsonc",
     "deploy:cloudflare:migrate": "wrangler d1 migrations apply irisout-playground --remote --config cloudflare/wrangler.site.jsonc",

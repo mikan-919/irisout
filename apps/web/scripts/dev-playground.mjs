@@ -37,7 +37,7 @@ const build = spawnSync('bun', ['run', 'build:web'], {
 })
 if (build.status !== 0) process.exit(build.status ?? 1)
 
-start('bun', ['apps/web/server/index.mjs'], {
+start('bun', ['apps/web/server/start.mjs'], {
   ...sharedEnvironment,
   HOST: '127.0.0.1',
   PORT: String(sitePort),

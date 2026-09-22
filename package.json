@@ -21,7 +21,7 @@
     "test:web:save": "bun run --cwd apps/web test:save",
     "test:motion-layout": "bun apps/web/scripts/motion-layout-e2e.test.mjs",
     "build:inspect": "IRISOUT_MINIFY=false vp -C apps/demos build",
-    "start": "bun run build:web && bun apps/web/server/index.mjs",
+    "start": "bun run build:web && bun apps/web/server/start.mjs",
     "check": "vp check && bun run typecheck:tsc",
     "check:fix": "vp check --fix && bun run typecheck:tsc",
     "lint": "vp lint",

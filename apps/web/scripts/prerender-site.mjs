@@ -3,7 +3,7 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { irisoutHonoPageMetadata } from 'irisout/hono'
-import { siteApp } from '../server/site-app.mjs'
+import { siteApp } from '../server/index.mjs'
 
 const dist = path.resolve(import.meta.dirname, '../dist')
 const routes = siteApp.routes

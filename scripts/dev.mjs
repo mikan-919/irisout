@@ -25,7 +25,7 @@ if (!target) {
   run(['-C', 'apps/demos', 'dev'])
 } else if (target === 'site') {
   buildWeb()
-  run([path.join(root, 'apps/web/server/index.mjs')], 'bun', {
+  run([path.join(root, 'apps/web/server/start.mjs')], 'bun', {
     HOST: '127.0.0.1',
     PORT: process.env.PORT ?? '5173',
   })

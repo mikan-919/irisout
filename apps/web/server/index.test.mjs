@@ -265,7 +265,7 @@ async function reservePort() {
 }
 
 function startProductionServer({ port, officialOrigin, dataDirectory }) {
-  const child = spawn(process.execPath, ['server/index.mjs'], {
+  const child = spawn(process.execPath, ['server/start.mjs'], {
     cwd: webRoot,
     env: {
       ...process.env,
