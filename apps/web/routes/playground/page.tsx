@@ -265,7 +265,7 @@ export function Playground() {
           </a>
           <div class="footer-links">
             <a href="/">ホーム</a>
-            <a href="/docs">文書</a>
+            <a href="/docs">ドキュメント</a>
             <a href="https://github.com/mikan-919/irisout">GitHub ↗</a>
           </div>
           <span class="footer-copy">Apache License 2.0 · 2026</span>

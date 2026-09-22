@@ -21,7 +21,7 @@ export function SiteHeader({ current, search, onSearch }) {
           ホーム
         </a>
         <a href="/docs" aria-current={current === 'docs' ? 'page' : null}>
-          文書
+          ドキュメント
         </a>
         <a href="/examples" aria-current={current === 'examples' ? 'page' : null}>
           実例
@@ -54,7 +54,7 @@ export function SiteHeader({ current, search, onSearch }) {
               ホーム
             </a>
             <a href="/docs" aria-current={current === 'docs' ? 'page' : null}>
-              文書
+              ドキュメント
             </a>
             <a href="/examples" aria-current={current === 'examples' ? 'page' : null}>
               実例
