@@ -824,7 +824,7 @@ h1 { font-size: clamp(2rem, 5vw, 3.5rem); }
 .doc-group li { margin: .8rem 0; }
 .doc-group li a { font-weight: 600; }
 .doc-group li p { margin: .15rem 0 0; color: #9b99ad; font-size: .9rem; }
-.docs-examples { padding: 1.25rem; border: 1px solid #2b2937; border-radius: .75rem; background: #15151d; }
+.docs-examples { align-self: start; padding: 1.25rem; border: 1px solid #2b2937; border-radius: .75rem; background: #15151d; }
 .docs-examples p { color: #9b99ad; font-size: .9rem; }
 .docs-examples li + li { margin-top: 1.5rem; }
 .docs-examples a { display: flex; justify-content: space-between; gap: .5rem; text-decoration: none; }
