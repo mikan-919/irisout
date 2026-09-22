@@ -91,6 +91,8 @@ test('本番Webサーバーの公式Originと実行管理Originを分離する',
     assert.equal(home.status, 200)
     const homeHtml = await home.text()
     assert.doesNotMatch(homeHtml, /data-playground-root/)
+    assert.doesNotMatch(homeHtml, /irisout-html/)
+    assert.match(homeHtml, /<main>/)
     assert.match(homeHtml, /href="\/playground"/)
 
     const playground = await fetch(`${officialOrigin}/playground`)

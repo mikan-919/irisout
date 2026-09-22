@@ -21,6 +21,7 @@
     "test:save": "bun test scripts/playground-save.test.mjs"
   },
   "dependencies": {
+    "hono": "^4.13.8",
     "irisout": "workspace:*",
     "monaco-editor": "0.56.0"
   },

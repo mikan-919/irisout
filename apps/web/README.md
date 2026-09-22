@@ -1,7 +1,7 @@
 # irisoutホームページ
 
-irisout自身のVite連携で生成するホームページです。`src/App.jsx`がauthored JSXの入口で、
-`index.html`のinline moduleが初期HTMLとhydrate用生成コードを読み込みます。
+irisout自身のファイル経路とHono連携で配信するホームページです。`routes/page.tsx`を
+`irisout/hono`が要求単位でSSRし、Vite+も同じ入口から静的配信用HTMLを生成します。
 
 ## 実行
 

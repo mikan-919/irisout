@@ -360,7 +360,7 @@ export default defineConfig({
   // Playground開発時は二つのVite+を同時に起動するため、依存最適化の保存先を分ける。
   ...(cacheDir ? { cacheDir } : {}),
   plugins: [
-    irisout({ entry: 'src/App.jsx', container: '#app' }),
+    irisout({ entry: 'routes/page.tsx', container: '#app' }),
     irisout({
       entry: 'src/examples/Examples.jsx',
       container: '#examples-app',

@@ -200,6 +200,11 @@ Web Component実装は削除した。さらにHTMLのinline moduleとViteのvirt
 無装飾で描画されていたため、PlaygroundのCSSをHTMLの描画阻止stylesheetへ移した。ホームと実例一覧から装飾目的の
 検索・コピー・スクロール演出を除き、ビルド時HTML生成だけを使ってhydrate用JavaScriptの配信を廃止した。
 
+2026-09-22に公式ホームの入口を`apps/web/routes/page.tsx`へ移し、本番Bunサーバーの`/`を
+`irisout/hono`のファイル経路から要求単位SSRする構成へ変更した。Vite+の静的配信用HTMLも同じpageを
+入力に使い、Cloudflare Workers向けの静的配信を維持する。文書、Playground、実例の既存経路は変更せず、
+型検査、本番ビルド、Bunサーバー22試験で確認した。
+
 ## 検証
 
 - `bun run check`: 書式、静的検査、TypeScriptとauthored JSXの型検査。

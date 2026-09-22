@@ -3,6 +3,7 @@
 
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
+import { createFileRouter } from 'irisout/hono'
 import { PlaygroundStore } from './playground-store.mjs'
 import { createPlaygroundApi } from './playground-api.mjs'
 import { createPlaygroundPageHandler } from './playground-ssr.mjs'
@@ -18,6 +19,10 @@ const port = Number(process.env.PORT ?? 3000)
 const host = process.env.HOST ?? '127.0.0.1'
 const officialOrigin = process.env.IRISOUT_SITE_ORIGIN ?? `http://${host}:${port}`
 const trustedProxyAddresses = parseTrustedProxyAddresses(process.env.IRISOUT_TRUSTED_PROXY)
+const homeTemplate = await Bun.file(path.join(root, 'index.html')).text()
+const homeRouter = createFileRouter(path.resolve(import.meta.dirname, '../routes'), {
+  document: ({ html }) => renderHomeDocument(homeTemplate, html),
+})
 
 await mkdir(dataDirectory, { recursive: true })
 const store = new PlaygroundStore(databasePath)
@@ -37,6 +42,7 @@ const server = Bun.serve({
   hostname: host,
   port,
   async fetch(request) {
+    if (new URL(request.url).pathname === '/') return homeRouter.fetch(request)
     const pageResponse = await playgroundPage(request)
     if (pageResponse) return pageResponse
     const socketAddress = server.requestIP(request)?.address
@@ -53,6 +59,18 @@ const server = Bun.serve({
 })
 
 console.log(`irisout web server: http://${host}:${server.port}`)
+
+function renderHomeDocument(template, html) {
+  const start = '<!--irisout-home-start-->'
+  const end = '<!--irisout-home-end-->'
+  if (!template.includes(start) || !template.includes(end)) {
+    throw new Error('ホーム文書の差し込み位置がありません')
+  }
+  return template.replace(
+    new RegExp(`${start}[\\s\\S]*?${end}`),
+    `${start}<div id="app">${html}</div>${end}`,
+  )
+}
 
 for (const signal of ['SIGINT', 'SIGTERM']) {
   process.once(signal, () => {
