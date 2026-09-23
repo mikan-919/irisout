@@ -194,7 +194,7 @@ input {
   font-size: 0.82rem;
 }
 
-.controls {
+.morph-page .controls {
   position: absolute;
   z-index: 50;
   bottom: 1.25rem;
@@ -210,19 +210,19 @@ input {
   backdrop-filter: blur(12px);
 }
 
-.controls label {
+.morph-page .controls label {
   display: grid;
   grid-template-columns: 3.125rem 9.375rem 4rem;
   gap: 0.625rem;
   align-items: center;
 }
 
-.controls input {
+.morph-page .controls input {
   width: 9.375rem;
   accent-color: var(--color-accent);
 }
 
-.controls output {
+.morph-page .controls output {
   font-variant-numeric: tabular-nums;
 }
 
@@ -263,11 +263,11 @@ input {
     inset: 0.75rem;
   }
 
-  .controls label {
+  .morph-page .controls label {
     grid-template-columns: 2.875rem minmax(5.625rem, 1fr) 3.75rem;
   }
 
-  .controls input {
+  .morph-page .controls input {
     width: 100%;
   }
 }

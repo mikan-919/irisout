@@ -572,7 +572,7 @@ body:has(.reference-site) > #app {
   line-height: 1.85;
   white-space: pre;
 }
-.demo {
+.reference-site .demo {
   position: static;
   display: flex;
   min-height: 0;
@@ -583,7 +583,7 @@ body:has(.reference-site) > #app {
   padding: 0;
   place-items: normal;
 }
-.demo button {
+.reference-site .demo button {
   width: 42px;
   height: 42px;
   border: 1px solid #64645c;
