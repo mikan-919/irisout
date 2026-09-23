@@ -353,20 +353,60 @@ body > #app > div > main:not(.docs-page) {
 }
 
 /* 参照HTMLのホーム画面。寸法と状態遷移は参照値を保つ。 */
+body:has(.reference-site) {
+  display: block;
+  background: #f7f7f5;
+}
+body:has(.reference-site) > #app {
+  width: 100%;
+}
 .reference-site {
+  --bg: #f7f7f5;
+  --ink: #0d0d0c;
+  --muted: #74746e;
+  --panel: #111210;
+  --panel-2: #1a1b18;
+  --panel-ink: #f4f4ef;
+  --panel-muted: #96968c;
+  --semantic: #42c07a;
+  --max: 1180px;
+  --ease: cubic-bezier(0.22, 0.75, 0.2, 1);
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
   letter-spacing: -0.018em;
   font-family: 'LINE Seed JP', 'Hiragino Sans', 'Yu Gothic', system-ui, sans-serif;
+  line-height: normal;
+}
+.reference-site,
+.reference-site *,
+.reference-site *::before,
+.reference-site *::after {
+  box-sizing: border-box;
+}
+.reference-site a { color: inherit; }
+.reference-site button { font: inherit; }
+.reference-site code,
+.reference-site pre { font-family: 'SFMono-Regular', 'Cascadia Code', 'Roboto Mono', monospace; }
+.reference-site h1,
+.reference-site h2,
+.reference-site h3 {
+  color: var(--ink);
+  font-family: inherit;
+  font-style: normal;
+  overflow-wrap: normal;
 }
 .reference-site main,
-.reference-site .reference-footer {
+.reference-site footer {
   width: 100%;
   margin-inline: 0;
 }
+.reference-site main { padding: 0; }
 .reference-site .wrap {
-  width: min(1180px, calc(100% - 36px));
+  width: min(var(--max), calc(100% - 36px));
   margin: auto;
 }
-.reference-header {
+.reference-site header {
   position: sticky;
   z-index: 40;
   top: 0;
@@ -375,10 +415,10 @@ body > #app > div > main:not(.docs-page) {
   backdrop-filter: blur(14px) saturate(120%);
   border-bottom: 1px solid transparent;
 }
-.reference-header.is-scrolled {
+.reference-site header.is-scrolled {
   border-bottom-color: #ddddd7;
 }
-.reference-header .nav {
+.reference-site .nav {
   height: 100%;
   display: flex;
   align-items: center;
@@ -390,25 +430,44 @@ body > #app > div > main:not(.docs-page) {
   align-items: baseline;
   gap: 10px;
 }
-.reference-header .brand {
+.reference-site .brand {
   font-size: 20px;
   font-weight: 800;
   letter-spacing: -0.05em;
   text-decoration: none;
 }
-.reference-header .version {
+.reference-site .version {
   color: #74746e;
   font: 11px/1 var(--line-mono);
 }
-.reference-header .links {
+.reference-site .links {
+  align-items: center;
   display: flex;
   gap: 24px;
   font-size: 13px;
 }
-.reference-header .links a {
+.reference-site .links a {
+  position: relative;
   color: #74746e;
   text-decoration: none;
 }
+.reference-site .links a::after {
+  position: absolute;
+  right: 0;
+  bottom: -6px;
+  left: 0;
+  height: 1px;
+  background: currentColor;
+  content: '';
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 180ms var(--ease);
+}
+.reference-site .links a:hover,
+.reference-site .links a:focus-visible { color: var(--ink); }
+.reference-site .links a:hover::after,
+.reference-site .links a:focus-visible::after { transform: scaleX(1); }
+.reference-site .links a:focus-visible { outline: none; }
 .reference-site .intro {
   padding: 72px 0 54px;
 }
@@ -454,15 +513,22 @@ body > #app > div > main:not(.docs-page) {
 .copy-done {
   position: absolute;
   inset: 0;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
   transition:
     opacity 300ms var(--ease),
-    filter 380ms var(--ease);
+    filter 380ms var(--ease),
+    transform 380ms var(--ease);
 }
+.copy-face svg { width: 15px; height: 15px; flex: none; }
+.copy-idle { opacity: 1; filter: blur(0); transform: scale(1); }
 .copy-done {
   opacity: 0;
   filter: blur(7px);
+  transform: scale(0.94);
   font-size: 12px;
 }
 .install button.is-copied {
@@ -473,10 +539,12 @@ body > #app > div > main:not(.docs-page) {
 .install button.is-copied .copy-idle {
   opacity: 0;
   filter: blur(7px);
+  transform: scale(0.94);
 }
 .install button.is-copied .copy-done {
   opacity: 1;
   filter: none;
+  transform: scale(1);
 }
 .reference-site .playground {
   min-height: 610px;
@@ -516,11 +584,15 @@ body > #app > div > main:not(.docs-page) {
   white-space: pre;
 }
 .demo {
+  position: static;
+  display: flex;
+  min-height: 0;
+  align-items: center;
   align-self: center;
   justify-self: center;
-  display: flex;
-  align-items: center;
   gap: 18px;
+  padding: 0;
+  place-items: normal;
 }
 .demo button {
   width: 42px;
@@ -535,17 +607,38 @@ body > #app > div > main:not(.docs-page) {
   text-align: center;
   font-size: 58px;
   font-weight: 600;
+  letter-spacing: -0.06em;
+}
+.editor .dim { color: #7c7c72; }
+.editor .hot { color: #fff; }
+.write span { display: inline-block; transition: color 220ms ease, background 220ms ease; }
+.write span.active { color: #09150f; background: var(--semantic); }
+.flash { animation: flash 0.45s ease; }
+@keyframes flash {
+  0% { filter: brightness(1); }
+  35% { filter: brightness(1.7); }
+  100% { filter: brightness(1); }
 }
 .explain {
   padding: 110px 0 120px;
 }
-.explain h2,
-.detail h2 {
+.explain h2 {
   max-width: 850px;
   margin: 0;
   font-size: clamp(34px, 4.5vw, 58px);
   line-height: 1.05;
   letter-spacing: -0.05em;
+}
+.detail h2 {
+  max-width: 860px;
+  margin: 0;
+  font-size: clamp(32px, 4vw, 52px);
+  font-weight: 700;
+  line-height: 1.07;
+  letter-spacing: -0.045em;
+}
+.explain p {
+  max-width: 720px;
 }
 .explain p,
 .positioning p,
@@ -556,6 +649,9 @@ body > #app > div > main:not(.docs-page) {
   font-size: 17px;
   line-height: 1.7;
 }
+.explain p { max-width: 720px; }
+.positioning p { margin-top: 18px; }
+.detail p { margin-top: 22px; line-height: 1.72; }
 .code-pair {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -597,9 +693,38 @@ body > #app > div > main:not(.docs-page) {
   font-size: 36px;
   letter-spacing: -0.04em;
 }
+.plain-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 34px;
+  padding: 0;
+  list-style: none;
+}
+.plain-list li { font-size: 17px; }
+.plain-list strong { font-weight: 700; }
 .detail {
   padding: 72px 0 104px;
 }
+.single-code {
+  margin-top: 40px;
+  overflow: auto;
+  padding: 24px;
+  background: #171815;
+  color: #f2f2ec;
+}
+.single-code .label {
+  margin-bottom: 18px;
+  color: #8e8e85;
+  font: 12px/1.2 'LINE Seed JP', system-ui, sans-serif;
+}
+.single-code pre { margin: 0; font-size: 12px; line-height: 1.8; }
+.runtime-notes { display: flex; flex-direction: column; gap: 14px; max-width: 760px; margin-top: 32px; }
+.runtime-notes p { margin: 0; }
+.measure { max-width: 760px; margin-top: 38px; font-size: 15px; line-height: 1.75; }
+.measure code { padding: 2px 5px; background: #ecece8; }
+.scope { max-width: 760px; margin-top: 34px; }
+.scope p { margin: 0 0 14px; color: var(--ink); font-size: 16px; }
 .vite-code {
   max-width: 720px;
   margin-top: 34px;
@@ -614,7 +739,7 @@ body > #app > div > main:not(.docs-page) {
   line-height: 1.1;
   letter-spacing: -0.045em;
 }
-.reference-footer {
+.reference-site footer {
   padding: 26px 0 24px;
   background: #edede9;
   color: #74746e;
@@ -626,18 +751,19 @@ body > #app > div > main:not(.docs-page) {
   gap: 32px;
   align-items: end;
 }
-.reference-footer .footer-meta,
-.reference-footer .footer-links {
+.reference-site .footer-brand { color: var(--ink); font-size: 18px; font-weight: 800; letter-spacing: -0.045em; }
+.reference-site .footer-meta,
+.reference-site .footer-links {
   display: flex;
   flex-wrap: wrap;
   gap: 8px 14px;
   margin-top: 8px;
 }
-.reference-footer .footer-links {
+.reference-site .footer-links {
   justify-content: flex-end;
   gap: 16px 22px;
 }
-.reference-footer a {
+.reference-site .footer-links a {
   color: #0d0d0c;
   text-decoration: none;
 }
@@ -672,20 +798,20 @@ body > #app > div > main:not(.docs-page) {
   .reference-site .intro h1 {
     font-size: 48px;
   }
-  .reference-header .version {
+  .reference-site .version {
     display: none;
   }
-  .reference-header .links {
+  .reference-site .links {
     gap: 14px;
     font-size: 12px;
   }
-  .reference-header .links a:nth-child(2) {
+  .reference-site .links a:nth-child(2) {
     display: none;
   }
   .footer-grid {
     grid-template-columns: 1fr;
   }
-  .reference-footer .footer-links {
+  .reference-site .footer-links {
     justify-content: flex-start;
   }
 }

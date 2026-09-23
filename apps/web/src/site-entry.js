@@ -8,7 +8,7 @@ import './examples/morph-bcf.css'
 import './line-seed.css'
 import './playground-entry.js'
 
-const header = document.querySelector('.reference-header')
+const header = document.querySelector('.reference-site #siteHeader')
 if (header) {
   const updateHeader = () => header.classList.toggle('is-scrolled', window.scrollY > 8)
   window.addEventListener('scroll', updateHeader, { passive: true })
@@ -25,15 +25,51 @@ const observer = new IntersectionObserver(
   },
   { threshold: 0.12, rootMargin: '0px 0px -12% 0px' },
 )
-for (const element of document.querySelectorAll('.reveal')) observer.observe(element)
+document.querySelectorAll('.reference-site .reveal').forEach((element, index) => {
+  if (element.getBoundingClientRect().top < innerHeight * 0.94) {
+    setTimeout(() => element.classList.add('on'), 140 + (index % 3) * 70)
+  } else {
+    observer.observe(element)
+  }
+})
 
-const copyButton = document.querySelector('.install-copy')
+const copyButton = document.querySelector('.reference-site #copy')
+let copyResetTimer
 copyButton?.addEventListener('click', async () => {
-  await navigator.clipboard.writeText('npm install irisout')
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText('npm install irisout')
+    } else {
+      throw new Error('Clipboard API unavailable')
+    }
+  } catch {
+    const textarea = document.createElement('textarea')
+    textarea.value = 'npm install irisout'
+    textarea.setAttribute('readonly', '')
+    textarea.style.position = 'fixed'
+    textarea.style.opacity = '0'
+    document.body.appendChild(textarea)
+    textarea.select()
+    document.execCommand('copy')
+    textarea.remove()
+  }
   copyButton.classList.add('is-copied')
   copyButton.setAttribute('aria-label', 'コピーしました')
-  setTimeout(() => {
+  clearTimeout(copyResetTimer)
+  copyResetTimer = setTimeout(() => {
     copyButton.classList.remove('is-copied')
     copyButton.setAttribute('aria-label', 'npm install irisout をコピー')
   }, 1200)
 })
+
+const resultPane = document.querySelector('.reference-site #resultPane')
+const writeTarget = document.querySelector('.reference-site #writeTarget')
+for (const button of document.querySelectorAll('.reference-site #plus, .reference-site #minus')) {
+  button.addEventListener('click', () => {
+    writeTarget?.classList.add('active')
+    resultPane?.classList.remove('flash')
+    if (resultPane) void resultPane.offsetWidth
+    resultPane?.classList.add('flash')
+    setTimeout(() => writeTarget?.classList.remove('active'), 420)
+  })
+}

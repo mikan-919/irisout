@@ -23,7 +23,7 @@ describe('client route navigation', () => {
       table,
       window: dom.window as unknown as Window,
       document: dom.window.document as unknown as Document,
-      container: dom.window.document.querySelector('#app'),
+      container: dom.window.document.querySelector('#app')!,
       hydrateInitial: () => {
         throw new Error('hydrate failed')
       },
