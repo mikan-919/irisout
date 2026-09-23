@@ -8,31 +8,6 @@ import './examples/morph-bcf.css'
 import './line-seed.css'
 import './playground-entry.js'
 
-const revealedElements = new WeakSet()
-const revealObserver = new IntersectionObserver(
-  (entries) => {
-    for (const entry of entries) {
-      if (!entry.isIntersecting) continue
-      entry.target.classList.add('on')
-      revealObserver.unobserve(entry.target)
-    }
-  },
-  { threshold: 0.12, rootMargin: '0px 0px -12% 0px' },
-)
-
-function initializeReferenceSite() {
-  document.querySelectorAll('.reference-site .reveal').forEach((element, index) => {
-    if (revealedElements.has(element)) return
-    revealedElements.add(element)
-    if (element.getBoundingClientRect().top < innerHeight * 0.94) {
-      setTimeout(() => element.isConnected && element.classList.add('on'), 140 + (index % 3) * 70)
-    } else {
-      revealObserver.observe(element)
-    }
-  })
-  updateHeader()
-}
-
 function updateHeader() {
   document
     .querySelector('.reference-site #siteHeader')
@@ -40,11 +15,7 @@ function updateHeader() {
 }
 
 window.addEventListener('scroll', updateHeader, { passive: true })
-new MutationObserver(initializeReferenceSite).observe(document.querySelector('#app'), {
-  childList: true,
-  subtree: true,
-})
-initializeReferenceSite()
+updateHeader()
 
 let copyResetTimer
 document.addEventListener('click', async (event) => {

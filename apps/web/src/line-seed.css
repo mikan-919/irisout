@@ -768,9 +768,9 @@ body:has(.reference-site) > #app {
   text-decoration: none;
 }
 .reveal {
-  opacity: 0;
-  filter: blur(8px);
-  transform: translateY(8px);
+  opacity: 1;
+  filter: blur(0);
+  transform: none;
   transition:
     opacity 420ms var(--ease),
     filter 500ms var(--ease),
@@ -780,6 +780,13 @@ body:has(.reference-site) > #app {
   opacity: 1;
   filter: none;
   transform: none;
+}
+@starting-style {
+  .reveal {
+    opacity: 0;
+    filter: blur(8px);
+    transform: translateY(8px);
+  }
 }
 @media (max-width: 840px) {
   .pg-wrap,
