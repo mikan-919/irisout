@@ -43,7 +43,11 @@ propsの別名分割、spread props、再帰部品、部品を変数として受
 import { render } from 'irisout'
 
 export function Card({ title }) {
-  render(<article><h2>{title}</h2></article>)
+  render(
+    <article>
+      <h2>{title}</h2>
+    </article>,
+  )
 }
 ```
 
@@ -53,7 +57,11 @@ import { render } from 'irisout'
 import { Card } from './Card.jsx'
 
 export function App() {
-  render(<main><Card title="概要" /></main>)
+  render(
+    <main>
+      <Card title="概要" />
+    </main>,
+  )
 }
 ```
 

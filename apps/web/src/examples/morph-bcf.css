@@ -6,7 +6,7 @@
   box-sizing: border-box;
 }
 
-body {
+body:has(.morph-page) {
   display: grid;
   min-width: 320px;
   min-height: 100vh;

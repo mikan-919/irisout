@@ -20,7 +20,9 @@ export function Notice() {
 
   render(
     <section>
-      <button type="button" onClick={() => open(!open())}>切り替え</button>
+      <button type="button" onClick={() => open(!open())}>
+        切り替え
+      </button>
       {open() ? <p>表示中</p> : <p>非表示</p>}
     </section>,
   )

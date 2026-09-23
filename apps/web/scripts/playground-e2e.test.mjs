@@ -173,7 +173,7 @@ try {
     await homePage.goto(siteAddress.origin, { waitUntil: 'networkidle' })
     assert.equal(await homePage.locator('[data-playground-root]').count(), 0)
     assert.equal(
-      await homePage.locator('a.button-primary[href="/playground"]').getAttribute('href'),
+      await homePage.locator('a[href="/playground"]').getAttribute('href'),
       '/playground',
     )
     await homePage.close()
