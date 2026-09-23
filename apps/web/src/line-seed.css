@@ -503,6 +503,7 @@ body:has(.reference-site) > #app {
 }
 .install {
   display: inline-flex;
+  align-items: stretch;
   margin-top: 28px;
   overflow: hidden;
   border-radius: 8px;
@@ -513,6 +514,7 @@ body:has(.reference-site) > #app {
   display: flex;
   align-items: center;
   padding: 10px 12px;
+  background: transparent;
 }
 .install button {
   position: relative;
@@ -521,7 +523,21 @@ body:has(.reference-site) > #app {
   overflow: hidden;
   border: 0;
   background: transparent;
+  padding: 0;
+  color: var(--muted);
   cursor: pointer;
+  transition:
+    width 360ms var(--ease),
+    background 260ms var(--ease),
+    color 260ms var(--ease);
+}
+.install button:hover {
+  background: #e2e2dd;
+  color: var(--ink);
+}
+.install button:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: -3px;
 }
 .copy-idle,
 .copy-done {
@@ -557,6 +573,10 @@ body:has(.reference-site) > #app {
   width: 82px;
   background: #0d0d0c;
   color: #f7f7f5;
+}
+.install button.is-copied:hover {
+  background: var(--ink);
+  color: var(--bg);
 }
 .install button.is-copied .copy-idle {
   opacity: 0;
