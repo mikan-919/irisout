@@ -59,8 +59,9 @@ function playgroundHeaders(): Plugin {
       const siteOrigin = config.env.VITE_IRISOUT_PLAYGROUND_SITE_ORIGIN
       const controllerOrigin = config.env.VITE_IRISOUT_PLAYGROUND_CONTROLLER_ORIGIN
       if (typeof siteOrigin === 'string' && typeof controllerOrigin === 'string') {
-        playgroundDevSiteOrigin = validateSeparateOrigins(siteOrigin, controllerOrigin).siteOrigin
-        playgroundDevCsp = createControllerCsp(playgroundDevSiteOrigin)
+        const origins = validateSeparateOrigins(siteOrigin, controllerOrigin)
+        playgroundDevSiteOrigin = origins.siteOrigin
+        playgroundDevCsp = playgroundDevelopmentCsp(origins.siteOrigin, origins.controllerOrigin)
       } else if (typeof siteOrigin === 'string') {
         playgroundDevSiteOrigin = new URL(siteOrigin).origin
         playgroundDevCsp = createControllerCsp(siteOrigin)
@@ -108,6 +109,14 @@ function playgroundHeaders(): Plugin {
       })
     },
   }
+}
+
+export function playgroundDevelopmentCsp(siteOrigin: string, controllerOrigin: string) {
+  const socketOrigin = new URL(controllerOrigin)
+  socketOrigin.protocol = socketOrigin.protocol === 'https:' ? 'wss:' : 'ws:'
+  return createControllerCsp(siteOrigin)
+    .replace("style-src 'self'", "style-src 'self' 'unsafe-inline'")
+    .replace("connect-src 'none'", `connect-src 'self' ${socketOrigin.origin}`)
 }
 
 export function playgroundSaveApi(): Plugin {

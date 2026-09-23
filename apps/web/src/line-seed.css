@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=LINE+Seed+JP:wght@400;700;800&display=swap');
 /* Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V5 */
 /* Hallmark · macrostructure: Line Seed · theme: graphite · nav: wordmark-line · footer: utility-line */
 :root {
@@ -348,5 +349,350 @@ body > #app > div > main:not(.docs-page) {
   .line-hero h1,
   .line-notes p {
     transition: none;
+  }
+}
+
+/* 参照HTMLのホーム画面。寸法と状態遷移は参照値を保つ。 */
+.reference-site {
+  letter-spacing: -0.018em;
+  font-family: 'LINE Seed JP', 'Hiragino Sans', 'Yu Gothic', system-ui, sans-serif;
+}
+.reference-site main,
+.reference-site .reference-footer {
+  width: 100%;
+  margin-inline: 0;
+}
+.reference-site .wrap {
+  width: min(1180px, calc(100% - 36px));
+  margin: auto;
+}
+.reference-header {
+  position: sticky;
+  z-index: 40;
+  top: 0;
+  height: 62px;
+  background: rgb(247 247 245 / 78%);
+  backdrop-filter: blur(14px) saturate(120%);
+  border-bottom: 1px solid transparent;
+}
+.reference-header.is-scrolled {
+  border-bottom-color: #ddddd7;
+}
+.reference-header .nav {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+}
+.brand-group {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.reference-header .brand {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.05em;
+  text-decoration: none;
+}
+.reference-header .version {
+  color: #74746e;
+  font: 11px/1 var(--line-mono);
+}
+.reference-header .links {
+  display: flex;
+  gap: 24px;
+  font-size: 13px;
+}
+.reference-header .links a {
+  color: #74746e;
+  text-decoration: none;
+}
+.reference-site .intro {
+  padding: 72px 0 54px;
+}
+.reference-site .intro h1 {
+  max-width: 900px;
+  margin: 0;
+  filter: none;
+  font-size: clamp(44px, 6.5vw, 84px);
+  font-weight: 700;
+  line-height: 0.98;
+  letter-spacing: -0.065em;
+}
+.reference-site .intro p {
+  max-width: 650px;
+  margin: 28px 0 0;
+  color: #74746e;
+  font-size: 18px;
+  line-height: 1.6;
+}
+.install {
+  display: inline-flex;
+  margin-top: 28px;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #ecece8;
+  font-size: 14px;
+}
+.install code {
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+}
+.install button {
+  position: relative;
+  width: 42px;
+  min-height: 38px;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.copy-idle,
+.copy-done {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  transition:
+    opacity 300ms var(--ease),
+    filter 380ms var(--ease);
+}
+.copy-done {
+  opacity: 0;
+  filter: blur(7px);
+  font-size: 12px;
+}
+.install button.is-copied {
+  width: 82px;
+  background: #0d0d0c;
+  color: #f7f7f5;
+}
+.install button.is-copied .copy-idle {
+  opacity: 0;
+  filter: blur(7px);
+}
+.install button.is-copied .copy-done {
+  opacity: 1;
+  filter: none;
+}
+.reference-site .playground {
+  min-height: 610px;
+  background: #111210;
+  color: #f4f4ef;
+}
+.pg-wrap {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: min(1400px, 100%);
+  min-height: 610px;
+  margin: auto;
+}
+.source,
+.result {
+  min-width: 0;
+  padding: 26px 28px 30px;
+}
+.result {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  background: #1a1b18;
+}
+.pane-title,
+.write {
+  color: #96968c;
+  font-size: 12px;
+}
+.pane-title {
+  margin-bottom: 20px;
+}
+.editor {
+  margin: 0;
+  overflow: auto;
+  font-size: 13px;
+  line-height: 1.85;
+  white-space: pre;
+}
+.demo {
+  align-self: center;
+  justify-self: center;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.demo button {
+  width: 42px;
+  height: 42px;
+  border: 1px solid #64645c;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+}
+.demo-value {
+  min-width: 110px;
+  text-align: center;
+  font-size: 58px;
+  font-weight: 600;
+}
+.explain {
+  padding: 110px 0 120px;
+}
+.explain h2,
+.detail h2 {
+  max-width: 850px;
+  margin: 0;
+  font-size: clamp(34px, 4.5vw, 58px);
+  line-height: 1.05;
+  letter-spacing: -0.05em;
+}
+.explain p,
+.positioning p,
+.detail p {
+  max-width: 760px;
+  margin: 24px 0 0;
+  color: #74746e;
+  font-size: 17px;
+  line-height: 1.7;
+}
+.code-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 54px;
+}
+.codebox,
+.vite-code {
+  min-height: 220px;
+  overflow: auto;
+  padding: 22px;
+  background: #edede9;
+}
+.codebox.dark {
+  background: #171815;
+  color: #f2f2ec;
+}
+.codebox .label,
+.vite-code .label {
+  margin-bottom: 18px;
+  color: #74746e;
+  font-size: 12px;
+}
+.codebox pre,
+.vite-code pre {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.positioning {
+  padding: 22px 0 110px;
+}
+.positioning-copy,
+.detail-copy {
+  max-width: 820px;
+}
+.positioning h2 {
+  margin: 0;
+  font-size: 36px;
+  letter-spacing: -0.04em;
+}
+.detail {
+  padding: 72px 0 104px;
+}
+.vite-code {
+  max-width: 720px;
+  margin-top: 34px;
+}
+.end {
+  padding: 28px 0 80px;
+}
+.endline {
+  max-width: 760px;
+  margin: 0;
+  font-size: clamp(26px, 4vw, 44px);
+  line-height: 1.1;
+  letter-spacing: -0.045em;
+}
+.reference-footer {
+  padding: 26px 0 24px;
+  background: #edede9;
+  color: #74746e;
+  font-size: 12px;
+}
+.footer-grid {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 32px;
+  align-items: end;
+}
+.reference-footer .footer-meta,
+.reference-footer .footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-top: 8px;
+}
+.reference-footer .footer-links {
+  justify-content: flex-end;
+  gap: 16px 22px;
+}
+.reference-footer a {
+  color: #0d0d0c;
+  text-decoration: none;
+}
+.reveal {
+  opacity: 0;
+  filter: blur(8px);
+  transform: translateY(8px);
+  transition:
+    opacity 420ms var(--ease),
+    filter 500ms var(--ease),
+    transform 500ms var(--ease);
+}
+.reveal.on {
+  opacity: 1;
+  filter: none;
+  transform: none;
+}
+@media (max-width: 840px) {
+  .pg-wrap,
+  .code-pair {
+    grid-template-columns: 1fr;
+  }
+  .source,
+  .result {
+    min-height: 360px;
+  }
+}
+@media (max-width: 560px) {
+  .reference-site .intro {
+    padding-top: 46px;
+  }
+  .reference-site .intro h1 {
+    font-size: 48px;
+  }
+  .reference-header .version {
+    display: none;
+  }
+  .reference-header .links {
+    gap: 14px;
+    font-size: 12px;
+  }
+  .reference-header .links a:nth-child(2) {
+    display: none;
+  }
+  .footer-grid {
+    grid-template-columns: 1fr;
+  }
+  .reference-footer .footer-links {
+    justify-content: flex-start;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    filter: none;
+    transform: none;
   }
 }

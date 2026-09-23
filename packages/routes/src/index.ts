@@ -527,13 +527,13 @@ export function createRouteNavigator<Route extends RouteDefinition = ClientRoute
         const container = getContainer()
         if (!container) throw new Error('irisout route navigation container was not found')
         active = await options.hydrateInitial(match, container)
-      } catch {
+      } catch (error) {
         doc.removeEventListener('click', onClick)
         win.removeEventListener('popstate', onPopState)
         started = false
         sequence += 1
         stopActive()
-        if (initialUrl) loadFallback(initialUrl)
+        throw error
       }
     },
     stop(): void {

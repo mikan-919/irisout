@@ -74,6 +74,9 @@ Vite構築のSSOTとして使う。Vite設定への経路ディレクトリと�
 同じHono appからSSRと静的HTMLを生成し、差し込みコメントを持つHTMLテンプレートとページ別Vite設定を削除した。
 同日に開発時のHTML配信も`irisoutHono(app)`へ移した。登録済みpage経路へのGET要求をHonoへ渡し、
 利用側にあった経路一覧とHTML配信用Viteプラグインを削除した。
+2026-09-23に初回hydrate失敗が現在URLへの再読込を繰り返す不具合を修正した。SSR本文を残して
+例外を返し、同一文書へfallbackしない。Playground開発画面では重複したmeta CSPを削除し、
+開発時だけViteのWebSocketとMonacoのinline styleをHTTP CSPで許可する。
 
 ## 段階
 

@@ -14,6 +14,29 @@ function waitForNavigation(): Promise<void> {
 }
 
 describe('client route navigation', () => {
+  it('初回hydrate失敗時に同じ文書を再読込しない', async () => {
+    const dom = new JSDOM('<!doctype html><div id="app"><p>server</p></div>', {
+      url: 'https://example.test/',
+    })
+    const fallbacks: string[] = []
+    const navigator = createRouteNavigator({
+      table,
+      window: dom.window as unknown as Window,
+      document: dom.window.document as unknown as Document,
+      container: dom.window.document.querySelector('#app'),
+      hydrateInitial: () => {
+        throw new Error('hydrate failed')
+      },
+      fetchPage: async () => ({ type: 'error', status: 500 }),
+      renderPage: async () => undefined,
+      fallback: (url) => fallbacks.push(url.href),
+    })
+
+    await expect(navigator.start()).rejects.toThrow('hydrate failed')
+    expect(fallbacks).toEqual([])
+    expect(dom.window.document.querySelector('#app')?.textContent).toBe('server')
+  })
+
   it('初回stateを再取得せず、リンクと履歴で画面を切り替える', async () => {
     const dom = new JSDOM(
       '<!doctype html><a id="fragment" href="#part">part</a><div id="app"><p>server</p><a id="user" href="/users/123?tab=posts">user</a></div>',

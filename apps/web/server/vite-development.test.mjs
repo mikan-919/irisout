@@ -6,11 +6,15 @@ import * as irisoutRuntime from 'irisout/runtime'
 import config, {
   playgroundDevelopmentProxy,
   playgroundDevelopmentRedirect,
+  playgroundDevelopmentCsp,
   playgroundSaveApi,
 } from '../vite.config.ts'
 import * as playgroundRuntime from '../src/playground/runtime.js'
 
 test('開発用Playgroundの経路と実行時処理を接続する', () => {
+  const developmentCsp = playgroundDevelopmentCsp('http://127.0.0.1:5173', 'http://localhost:5174')
+  assert.match(developmentCsp, /style-src 'self' 'unsafe-inline'/)
+  assert.match(developmentCsp, /connect-src 'self' ws:\/\/localhost:5174/)
   assert.equal(
     playgroundDevelopmentRedirect(
       'site',

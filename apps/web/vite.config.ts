@@ -3,5 +3,6 @@ export { default } from './vite/site.ts'
 export {
   playgroundDevelopmentProxy,
   playgroundDevelopmentRedirect,
+  playgroundDevelopmentCsp,
   playgroundSaveApi,
 } from './vite/site.ts'
