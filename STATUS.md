@@ -280,6 +280,8 @@ Motion変換を適用した。Markdown文書と保存済みPlaygroundの動的�
 - PlaygroundのMonaco 0.56.0は、最小構成のエディターAPI上で標準のコードレンズ・入力候補・インレイヒントなどの
   寄与機能を初期化すると、開発時コンソールへ不足サービスの例外を出す。構文色分け、入力、保存、実行は継続
   できるが、これらの機能の一部は現在の監査対象外である。
+- 2026-09-23時点で`vp -C apps/web dev`から文書ページを開くと、hydrate用の経路仮想moduleが404となる。
+  サーバー描画した本文とCSSは表示される。`bun run dev site`の構築済み配信では再現しない。
 
 対応範囲の詳細と拒否例は`docs/getting-started.md`、`docs/architecture.md`、
 `openspec/specs/`を参照する。

@@ -76,29 +76,8 @@ export function Playground() {
       <main>
         <section class="section playground-section playground-page-section">
           <div class="playground-intro">
-            <p class="eyebrow">
-              <span class="eyebrow-dot" /> Try it live
-            </p>
-            <h1>
-              JSXを編集して、
-              <br />
-              <em>その場で試す。</em>
-            </h1>
+            <h1>JSXを編集して、その場で試す。</h1>
             <p>公式例を選び、ブラウザー内で変換と実行を確認できます。</p>
-            <div class="playground-list">
-              <div class="playground-list-item">
-                <span>↳</span>
-                <span>状態を読む式を解析</span>
-              </div>
-              <div class="playground-list-item">
-                <span>↳</span>
-                <span>依存するDOMを特定</span>
-              </div>
-              <div class="playground-list-item">
-                <span>↳</span>
-                <span>イベントから直接更新</span>
-              </div>
-            </div>
           </div>
           <div class="playground-editor" data-playground-root>
             <div class="playground-editor-head">

@@ -7,11 +7,12 @@
   --line-panel: #161714;
   --line-panel-alt: #1c1d1a;
   --line-on-dark: #f4f4f2;
-  --line-muted: #71716d;
+  --line-muted: #6b6b65;
   --line-faint: #a3a39d;
   --line-rule: #d8d8d3;
   --line-rule-dark: #4a4b46;
   --line-focus: #494945;
+  --line-header-bg: rgb(247 247 245 / 78%);
   --line-font: Arial, 'Helvetica Neue', sans-serif;
   --line-mono: 'SFMono-Regular', Consolas, monospace;
   --line-shell: 1180px;
@@ -53,15 +54,20 @@ body {
 }
 
 .site-header {
-  position: relative;
-  top: auto;
-  width: min(calc(100% - 3rem), var(--line-shell));
-  min-height: 4rem;
-  margin-inline: auto;
-  border: 0;
-  background: transparent;
+  position: sticky;
+  z-index: 40;
+  top: 0;
+  width: 100%;
+  min-height: 62px;
+  padding-inline: max(18px, calc((100% - var(--line-shell)) / 2));
+  border-bottom: 1px solid transparent;
+  background: var(--line-header-bg);
+  backdrop-filter: blur(14px) saturate(120%);
   color: var(--line-ink);
   font-family: var(--line-font);
+}
+.site-header.is-scrolled {
+  border-bottom-color: var(--line-rule);
 }
 .site-header .site-brand {
   gap: 0.5rem;
@@ -261,6 +267,15 @@ body > #app > div > main:not(.docs-page) {
 .playground-intro > p {
   color: var(--line-muted);
 }
+.docs-sidebar .docs-sidebar-title {
+  color: var(--line-ink);
+}
+.playground-editor > .playground-source-label {
+  color: var(--line-faint);
+}
+.playground-shell .footer-copy {
+  color: var(--line-muted);
+}
 .docs-page h1,
 .docs-page h2,
 .page-heading h1,
@@ -308,7 +323,7 @@ body > #app > div > main:not(.docs-page) {
 }
 @media (max-width: 768px) {
   .site-header {
-    width: min(calc(100% - 2rem), var(--line-shell));
+    padding-inline: 16px;
   }
   .line-hero {
     width: calc(100% - 2rem);
@@ -413,74 +428,6 @@ body:has(.reference-site) > #app {
 .reference-site .wrap {
   width: min(var(--max), calc(100% - 36px));
   margin: auto;
-}
-.reference-site header {
-  position: sticky;
-  z-index: 40;
-  top: 0;
-  height: 62px;
-  background: rgb(247 247 245 / 78%);
-  backdrop-filter: blur(14px) saturate(120%);
-  border-bottom: 1px solid transparent;
-}
-.reference-site header.is-scrolled {
-  border-bottom-color: #ddddd7;
-}
-.reference-site .nav {
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 28px;
-}
-.brand-group {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-}
-.reference-site .brand {
-  font-size: 20px;
-  font-weight: 800;
-  letter-spacing: -0.05em;
-  text-decoration: none;
-}
-.reference-site .version {
-  color: #74746e;
-  font: 11px/1 var(--line-mono);
-}
-.reference-site .links {
-  align-items: center;
-  display: flex;
-  gap: 24px;
-  font-size: 13px;
-}
-.reference-site .links a {
-  position: relative;
-  color: #74746e;
-  text-decoration: none;
-}
-.reference-site .links a::after {
-  position: absolute;
-  right: 0;
-  bottom: -6px;
-  left: 0;
-  height: 1px;
-  background: currentColor;
-  content: '';
-  transform: scaleX(0);
-  transform-origin: left;
-  transition: transform 180ms var(--ease);
-}
-.reference-site .links a:hover,
-.reference-site .links a:focus-visible {
-  color: var(--ink);
-}
-.reference-site .links a:hover::after,
-.reference-site .links a:focus-visible::after {
-  transform: scaleX(1);
-}
-.reference-site .links a:focus-visible {
-  outline: none;
 }
 .reference-site .intro {
   padding: 72px 0 54px;
@@ -912,16 +859,6 @@ body:has(.reference-site) > #app {
   }
   .reference-site .intro h1 {
     font-size: 48px;
-  }
-  .reference-site .version {
-    display: none;
-  }
-  .reference-site .links {
-    gap: 14px;
-    font-size: 12px;
-  }
-  .reference-site .links a:nth-child(2) {
-    display: none;
   }
   .footer-grid {
     grid-template-columns: 1fr;

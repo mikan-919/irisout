@@ -94,6 +94,7 @@ test('本番Webサーバーの公式Originと実行管理Originを分離する',
     assert.doesNotMatch(homeHtml, /irisout-html/)
     assert.match(homeHtml, /<main>/)
     assert.match(homeHtml, /href="\/playground"/)
+    assert.match(homeHtml, /id="siteHeader"/)
 
     for (const [pathname, routeId] of [
       ['/playground', '/playground'],
@@ -183,7 +184,16 @@ test('本番Webサーバーの公式Originと実行管理Originを分離する',
 
     const docs = await fetch(`${officialOrigin}/docs`)
     assert.equal(docs.status, 200)
-    assert.match(await docs.text(), /<title>/)
+    const docsHtml = await docs.text()
+    assert.match(docsHtml, /<title>/)
+    assert.match(docsHtml, /id="siteHeader"/)
+    assert.match(docsHtml, /href="\/site\.css"/)
+    assert.match(docsHtml, /href="\/docs\/site\.css"/)
+    for (const cssPath of ['/site.css', '/docs/site.css']) {
+      const css = await fetch(`${officialOrigin}${cssPath}`)
+      assert.equal(css.status, 200, cssPath)
+      assert.match(css.headers.get('content-type') ?? '', /text\/css/, cssPath)
+    }
     const detail = await fetch(`${officialOrigin}/docs/getting-started`)
     assert.equal(detail.status, 200)
     assert.match(await detail.text(), /getting-started|導入/)

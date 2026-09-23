@@ -111,6 +111,19 @@ function playgroundHeaders(): Plugin {
   }
 }
 
+function siteCssDevelopmentAlias(): Plugin {
+  return {
+    name: 'irisout-site-css-development-alias',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use((request, _response, next) => {
+        if (request.url === '/site.css') request.url = '/src/site.css?direct'
+        next()
+      })
+    },
+  }
+}
+
 export function playgroundDevelopmentCsp(siteOrigin: string, controllerOrigin: string) {
   const socketOrigin = new URL(controllerOrigin)
   socketOrigin.protocol = socketOrigin.protocol === 'https:' ? 'wss:' : 'ws:'
@@ -346,7 +359,13 @@ export default defineConfig({
   },
   // Playground開発時は二つのVite+を同時に起動するため、依存最適化の保存先を分ける。
   ...(cacheDir ? { cacheDir } : {}),
-  plugins: [irisoutHono(siteApp), playgroundPageClient(), playgroundHeaders(), playgroundSaveApi()],
+  plugins: [
+    siteCssDevelopmentAlias(),
+    irisoutHono(siteApp),
+    playgroundPageClient(),
+    playgroundHeaders(),
+    playgroundSaveApi(),
+  ],
   build: {
     outDir: 'dist',
     emptyOutDir: true,

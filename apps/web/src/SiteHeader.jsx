@@ -5,7 +5,7 @@ const GITHUB_URL = 'https://github.com/mikan-919/irisout'
 
 export function SiteHeader({ current, search, onSearch }) {
   render(
-    <header class="site-header">
+    <header class="site-header" id="siteHeader">
       <a class="site-brand" href="/" aria-label="irisout ホーム">
         <span>irisout</span>
         <small>0.2.2</small>

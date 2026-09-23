@@ -1,25 +1,11 @@
 import { render, signal } from 'irisout'
+import { SiteHeader } from '../src/SiteHeader.jsx'
 
 export default function Page() {
   const count = signal(0)
   render(
     <div class="reference-site">
-      <header id="siteHeader">
-        <div class="wrap nav">
-          <div class="brand-group">
-            <a class="brand" href="#">
-              irisout
-            </a>
-            <span class="version">0.1.1</span>
-          </div>
-          <nav class="links" aria-label="Main navigation">
-            <a href="#how">How it works</a>
-            <a href="#runtime">Runtime</a>
-            <a href="#limits">Limits</a>
-            <a href="/playground">Playground</a>
-          </nav>
-        </div>
-      </header>
+      <SiteHeader current="home" search={false} onSearch={null} />
       <main>
         <section class="intro">
           <div class="wrap">

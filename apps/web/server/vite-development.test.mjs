@@ -82,6 +82,24 @@ test('開発用Playgroundの経路と実行時処理を接続する', () => {
   )
 })
 
+test('開発時も公開HTMLのsite.css経路から共通CSSを配信する', () => {
+  const plugin = config.plugins.find(
+    (candidate) => candidate.name === 'irisout-site-css-development-alias',
+  )
+  assert.ok(plugin)
+  let middleware
+  plugin.configureServer({
+    middlewares: {
+      use(candidate) {
+        middleware = candidate
+      },
+    },
+  })
+  const request = { url: '/site.css' }
+  middleware(request, response(), () => {})
+  assert.equal(request.url, '/src/site.css?direct')
+})
+
 test('Playground生成moduleは開発時に未変換のimport.meta.envを実行しない', () => {
   const result = compileProject(path.resolve(import.meta.dirname, '../routes/playground/page.tsx'))
   assert.doesNotMatch(result.code, /import\.meta/)
