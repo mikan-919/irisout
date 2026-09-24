@@ -173,7 +173,7 @@ try {
     await homePage.goto(siteAddress.origin, { waitUntil: 'networkidle' })
     assert.equal(await homePage.locator('[data-playground-root]').count(), 0)
     assert.equal(
-      await homePage.locator('a[href="/playground"]').getAttribute('href'),
+      await homePage.locator('.site-header nav > a[href="/playground"]').getAttribute('href'),
       '/playground',
     )
     await homePage.close()
@@ -232,6 +232,7 @@ export function Preserved(props: CounterProps) {
     await source.waitFor({ state: 'hidden' })
     assert.equal(await source.inputValue(), initialTsxSource)
     await waitForEditorToken(page, 'interface')
+    await waitForEditorToken(page, 'export')
     assertTypeScriptHighlight(await readEditorTokens(page))
     assert.equal(await source.evaluate((element) => element.readOnly), false)
     await editor.click()
@@ -360,13 +361,13 @@ export function Edited(props: ButtonProps) {
         .evaluate((element) => getComputedStyle(element).backgroundColor),
       'rgba(0, 0, 0, 0)',
     )
-    await page.setViewportSize({ width: 700, height: 900 })
+    await page.setViewportSize({ width: 900, height: 900 })
     const horizontalSourceBox = await page.locator('[data-playground-monaco]').boundingBox()
     const horizontalResultBox = await page.locator('[data-playground-result]').boundingBox()
     assert.ok(horizontalSourceBox && horizontalResultBox)
     assert.ok(horizontalResultBox.x > horizontalSourceBox.x)
     assert.ok(Math.abs(horizontalResultBox.y - horizontalSourceBox.y) < 2)
-    await page.setViewportSize({ width: 600, height: 900 })
+    await page.setViewportSize({ width: 700, height: 900 })
     const verticalSourceBox = await page.locator('[data-playground-monaco]').boundingBox()
     const verticalResultBox = await page.locator('[data-playground-result]').boundingBox()
     assert.ok(verticalSourceBox && verticalResultBox)
@@ -558,7 +559,9 @@ export function Edited(props: ButtonProps) {
     assert.equal(await editorFallbackPage.locator('.monaco-editor').count(), 0)
     await fillSource(fallbackSourceElement, fallbackSource)
     assert.equal(await fallbackSourceElement.inputValue(), fallbackSource)
+    let saveRequests = 0
     await editorFallbackPage.route('**/api/playgrounds', async (route) => {
+      saveRequests++
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -569,10 +572,13 @@ export function Edited(props: ButtonProps) {
         }),
       })
     })
+    await editorFallbackPage.locator('[data-playground-save]').scrollIntoViewIfNeeded()
     await editorFallbackPage.locator('[data-playground-save]').click()
     await waitForText(editorFallbackPage.locator('[data-playground-status]'), '保存しました')
+    assert.equal(saveRequests, 1)
     assert.equal(await fallbackSourceElement.inputValue(), fallbackSource)
     const downloadPromise = editorFallbackPage.waitForEvent('download')
+    await editorFallbackPage.locator('[data-playground-export]').scrollIntoViewIfNeeded()
     await editorFallbackPage.locator('[data-playground-export]').click()
     const download = await downloadPromise
     assert.equal(download.suggestedFilename(), 'irisout-playground-share.json')

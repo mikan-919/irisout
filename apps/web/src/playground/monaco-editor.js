@@ -67,15 +67,25 @@ export async function createSourceEditor(container, { value, readOnly, onChange 
     'typescript',
     monaco.Uri.parse('file:///playground.tsx'),
   )
+  monaco.editor.defineTheme('irisout-playground', {
+    base: 'vs-dark',
+    inherit: true,
+    rules: [],
+    colors: { 'editor.background': '#111210' },
+  })
   const editor = monaco.editor.create(container, {
     model,
-    theme: 'vs-dark',
+    theme: 'irisout-playground',
     automaticLayout: true,
     readOnly,
     ariaLabel: '入力TypeScriptとJSX',
     fontSize: 13,
     lineHeight: 21,
     minimap: { enabled: false },
+    lineNumbers: 'off',
+    lineDecorationsWidth: 20,
+    glyphMargin: false,
+    folding: false,
     padding: { top: 12, bottom: 12 },
     scrollBeyondLastLine: false,
     tabFocusMode: true,

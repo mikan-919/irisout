@@ -1,182 +1,250 @@
-/* Playground編集画面の配置と状態表示を定義する。入力はMonaco、結果は隔離iframeの範囲に限る。 */
-
+/* Hallmark · pre-emit critique: P4 H4 E4 S5 R5 V4 */
+/* Playgroundだけを参照画面の紙面、操作列、暗い作業領域へ合わせる。 */
 .playground-shell {
+  --pg-paper: #f7f7f5;
+  --pg-ink: #0d0d0c;
+  --pg-muted: #64645e;
+  --pg-surface: #ecece8;
+  --pg-surface-hover: #e2e2dd;
+  --pg-panel: #111210;
+  --pg-panel-alt: #191a17;
+  --pg-panel-ink: #f5f5ef;
+  --pg-panel-muted: #a6a69e;
+  --pg-success: #46c27c;
+  --pg-error: #ee8d7d;
+  --pg-line: #ddddd7;
+  --pg-font: 'LINE Seed JP', 'Hiragino Sans', 'Yu Gothic', system-ui, sans-serif;
+  --pg-mono: 'SFMono-Regular', 'Cascadia Code', 'Roboto Mono', monospace;
   display: flex;
   min-height: 100vh;
   flex-direction: column;
+  background: var(--pg-paper);
+  color: var(--pg-ink);
+  font-family: var(--pg-font);
+  letter-spacing: -0.018em;
 }
 
 .playground-shell main {
   flex: 1;
   min-width: 0;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+.playground-shell .site-header {
+  --line-shell: 1480px;
+  --line-header-bg: rgb(247 247 245 / 78%);
+  min-height: 62px;
+  font-family: var(--pg-font);
+}
+
+.playground-shell .site-header .site-brand {
+  font-size: 20px;
+}
+
+.playground-shell .site-header .site-brand small {
+  font-family: var(--pg-mono);
+  font-size: 11px;
+}
+
+.playground-shell .site-header .site-actions {
+  display: none;
+}
+
+.playground-shell .site-header nav a:nth-child(3),
+.playground-shell .site-header nav a:nth-child(4),
+.playground-shell .site-header .site-cta {
+  display: none;
 }
 
 .playground-section {
-  display: grid;
-  width: min(var(--line-shell), calc(100% - 36px));
+  width: min(1480px, calc(100% - 36px));
   margin-inline: auto;
-  gap: 54px;
-  border-bottom: var(--rule-hair) solid var(--color-rule);
-  padding: 72px 0 54px;
+  padding: 30px 0 70px;
 }
 
 .playground-intro {
+  display: flex;
   min-width: 0;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 18px;
 }
 
 .playground-intro h1 {
-  max-width: 900px;
   margin: 0;
-  font-size: clamp(44px, 6.5vw, 84px);
-  font-weight: 700;
-  line-height: 0.98;
-  letter-spacing: -0.065em;
+  color: var(--pg-ink);
+  font: 700 28px/1 var(--pg-font);
+  letter-spacing: -0.045em;
+  overflow-wrap: anywhere;
 }
 
-.playground-intro > p {
-  max-width: 650px;
-  margin: 28px 0 0;
-  color: var(--color-muted);
-  font-size: 18px;
-  line-height: 1.6;
+.playground-intro > div > p {
+  margin: 8px 0 0;
+  color: var(--pg-muted);
+  font-size: 13px;
+}
+
+.playground-status {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--pg-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.playground-status-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--pg-success);
+}
+
+.playground-status[data-state='error'] {
+  color: #ad3d32;
+}
+
+.playground-status[data-state='error'] .playground-status-dot {
+  background: var(--pg-error);
 }
 
 .playground-editor {
   min-width: 0;
-  overflow: hidden;
-  border: var(--rule-hair) solid var(--color-rule-strong);
-  border-radius: var(--radius-card);
-  background: var(--color-paper-2);
-  box-shadow: var(--shadow-code);
+  border: 0;
+  background: transparent;
 }
 
 .playground-editor-head {
-  display: grid;
-  gap: var(--space-md);
-  border-bottom: var(--rule-hair) solid var(--color-rule);
-  padding: var(--space-lg);
-  background: var(--color-paper-2);
-}
-
-.playground-editor-head > div:first-child {
-  min-width: 0;
-}
-
-.demo-kicker {
-  margin-block-end: var(--space-xs);
-  color: var(--color-accent);
-  font: 500 var(--text-xs) / 1.2 var(--font-mono);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.playground-editor-head h3 {
-  margin-block-end: 0;
-  font-size: var(--text-lg);
-  line-height: 1.2;
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
 }
 
 .playground-actions {
   display: flex;
+  min-width: 0;
+  align-items: center;
   flex-wrap: wrap;
-  gap: var(--space-xs);
-  align-items: center;
+  gap: 8px;
 }
 
-.playground-example-label {
-  display: inline-flex;
-  min-height: 2.75rem;
-  align-items: center;
-  gap: var(--space-xs);
-  color: var(--color-muted);
-  font: 500 var(--text-xs) / 1 var(--font-mono);
+.playground-example-label select,
+.playground-control {
+  height: 38px;
+  border: 0;
+  border-radius: 8px;
+  padding: 0 12px;
+  background: var(--pg-surface);
+  color: var(--pg-ink);
+  font: 400 13px/1 var(--pg-font);
   white-space: nowrap;
 }
 
-.playground-actions button,
 .playground-example-label select {
-  min-height: 2.75rem;
-  border: var(--rule-hair) solid var(--color-rule-strong);
-  border-radius: var(--radius-control);
-  padding-inline: var(--space-sm);
-  background: var(--color-paper);
-  color: var(--color-ink-2);
-  font-size: var(--text-sm);
-  white-space: nowrap;
-}
-
-.playground-actions button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  max-width: min(50vw, 280px);
   cursor: pointer;
 }
 
-.playground-actions .demo-action {
-  border-color: var(--color-accent);
-  background: var(--color-accent);
-  color: var(--color-accent-ink);
-  font-weight: 600;
+.playground-control {
+  cursor: pointer;
 }
 
-.playground-actions .playground-save {
-  border-color: var(--color-ink-2);
-  background: var(--color-ink-2);
-  color: var(--color-paper);
+.playground-control:hover,
+.playground-example-label select:hover {
+  background: var(--pg-surface-hover);
 }
 
-.playground-actions button:disabled,
+.playground-primary,
+.playground-primary:hover {
+  background: var(--pg-ink);
+  color: var(--pg-paper);
+}
+
+.playground-primary:hover {
+  background: #2a2a27;
+}
+
+.playground-control:disabled,
 .playground-example-label select:disabled {
   cursor: not-allowed;
   opacity: 0.5;
 }
 
-.playground-save-fields {
+.playground-shortcut {
+  color: var(--pg-muted);
+  font: 11px/1 var(--pg-font);
+  white-space: nowrap;
+}
+
+.playground-workspace {
   display: grid;
-  gap: var(--space-md);
-  border-bottom: var(--rule-hair) solid var(--color-rule);
-  padding: var(--space-md) var(--space-lg);
-  background: var(--color-paper);
+  min-height: 560px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  background: var(--pg-panel);
+  color: var(--pg-panel-ink);
 }
 
-.playground-source-label {
+.playground-pane {
   display: grid;
-  gap: var(--space-2xs);
-  color: var(--color-muted);
-  font: 500 var(--text-xs) / 1.2 var(--font-mono);
-  letter-spacing: 0.03em;
+  min-width: 0;
+  min-height: 560px;
+  grid-template-rows: 42px minmax(0, 1fr);
 }
 
-.playground-source-label input {
-  width: 100%;
-  min-height: 2.75rem;
-  border: var(--rule-hair) solid var(--color-rule-strong);
-  border-radius: var(--radius-control);
-  padding-inline: var(--space-sm);
-  background: var(--color-paper-2);
-  color: var(--color-ink);
-  font: 400 var(--text-sm) / 1.4 var(--font-body);
+.playground-preview-pane {
+  background: var(--pg-panel-alt);
 }
 
-.playground-editor > .playground-source-label {
-  padding: var(--space-md) var(--space-lg) var(--space-xs);
+.playground-pane-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  color: var(--pg-panel-muted);
+  font-size: 12px;
+}
+
+.playground-pane-head strong {
+  color: var(--pg-panel-ink);
+  font-weight: 400;
+}
+
+.playground-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .playground-source,
 .playground-monaco {
   width: 100%;
-  min-height: 22rem;
+  min-width: 0;
+  min-height: 518px;
+  grid-row: 2;
+  background: var(--pg-panel);
+  color: var(--pg-panel-ink);
 }
 
 .playground-source {
   display: block;
   resize: vertical;
   border: 0;
-  border-top: var(--rule-hair) solid var(--color-graphite-rule);
-  padding: var(--space-md) var(--space-lg);
-  background: var(--color-graphite);
-  color: var(--color-graphite-ink);
-  font: 400 var(--text-sm) / 1.65 var(--font-mono);
+  padding: 18px 20px 28px;
+  font: 400 13px/1.8 var(--pg-mono);
+  tab-size: 2;
+  caret-color: var(--pg-panel-ink);
 }
 
 .playground-source[hidden],
@@ -185,10 +253,8 @@
 }
 
 .playground-monaco {
-  height: clamp(22rem, 42vw, 29rem);
+  height: 100%;
   overflow: hidden;
-  border-top: var(--rule-hair) solid var(--color-graphite-rule);
-  background: var(--color-graphite);
 }
 
 .playground-monaco .monaco-editor {
@@ -196,212 +262,257 @@
   height: 100%;
 }
 
-/* Monaco標準のコメント色は紙面上でAA基準を下回るため、背景に対して明るくする。 */
 .playground-monaco .mtk7 {
-  color: #7fb069 !important;
+  color: #90c579 !important;
 }
 
 .playground-monaco .line-numbers {
-  color: #a3a3a3 !important;
-}
-
-.playground-status {
-  display: flex;
-  min-height: 3rem;
-  align-items: center;
-  margin: 0;
-  border-top: var(--rule-hair) solid var(--color-graphite-rule);
-  padding: var(--space-sm) var(--space-lg);
-  background: var(--color-graphite);
-  color: var(--color-graphite-muted);
-  font: 500 var(--text-xs) / 1.4 var(--font-mono);
-}
-
-.playground-status[data-state='success'] {
-  color: #9ad786;
-}
-
-.playground-status[data-state='error'] {
-  color: #ff9d8b;
-}
-
-.playground-share {
-  margin: var(--space-md) var(--space-lg);
-  border: var(--rule-hair) solid var(--color-rule);
-  border-radius: var(--radius-control);
-  padding: var(--space-md);
-  background: var(--color-paper);
-  color: var(--color-ink-2);
-}
-
-.playground-share p {
-  margin-block-end: var(--space-xs);
-  overflow-wrap: anywhere;
-}
-
-.playground-share p:last-of-type {
-  margin-block-end: var(--space-sm);
-}
-
-.playground-share a {
-  color: var(--color-accent);
-  text-decoration: underline;
-  text-underline-offset: 0.15em;
-}
-
-.playground-share code {
-  overflow-wrap: anywhere;
-  color: var(--color-ink);
-  font-family: var(--font-mono);
-}
-
-.playground-share small {
-  color: var(--color-muted);
-  line-height: 1.5;
+  color: var(--pg-panel-muted) !important;
 }
 
 .playground-result {
-  --playground-result-height: clamp(22rem, 40vw, 28rem);
-  min-height: var(--playground-result-height);
-  border-top: var(--rule-hair) solid var(--color-rule);
-  padding: var(--space-md);
-  background: var(--color-paper-3);
-  color: var(--color-muted);
-  font: 500 var(--text-xs) / 1.4 var(--font-mono);
+  min-width: 0;
+  min-height: 518px;
+  grid-row: 2;
+  overflow: hidden;
+  background: var(--pg-panel-alt);
+  color: var(--pg-panel-muted);
+}
+
+.playground-result > p {
+  margin: 34px;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .playground-controller {
   display: block;
-  width: calc(100% + 2 * var(--space-md));
-  height: var(--playground-result-height);
-  margin: calc(-1 * var(--space-md));
+  width: 100%;
+  height: 100%;
+  min-height: 518px;
   border: 0;
-  background: var(--color-paper-3);
+  background: transparent;
+}
+
+.playground-output {
+  margin-top: 16px;
+}
+
+.playground-output h2 {
+  margin: 0 0 12px;
+  color: var(--pg-ink);
+  font-size: 13px;
+  font-weight: 400;
+  text-decoration: underline;
+  text-underline-offset: 5px;
+}
+
+.playground-output-shell {
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--pg-surface);
+}
+
+.playground-output-head {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 14px 8px 16px;
+  color: var(--pg-muted);
+  font-size: 12px;
+}
+
+.playground-output-head .playground-control {
+  height: 32px;
+  background: var(--pg-surface-hover);
+  font-size: 12px;
+}
+
+.playground-output-head .playground-control:hover {
+  background: var(--pg-line);
+}
+
+.playground-save-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  padding: 12px 16px 22px;
+}
+
+.playground-source-label {
+  display: grid;
+  gap: 6px;
+  color: var(--pg-muted);
+  font-size: 12px;
+}
+
+.playground-source-label input {
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+  border: 1px solid var(--pg-line);
+  border-radius: 6px;
+  padding: 0 12px;
+  background: var(--pg-paper);
+  color: var(--pg-ink);
+  font: 13px/1.4 var(--pg-font);
+}
+
+.playground-share {
+  margin: 0 16px 16px;
+  border-top: 1px solid var(--pg-line);
+  padding-top: 12px;
+  color: var(--pg-muted);
+  font-size: 12px;
+}
+
+.playground-share p {
+  margin: 0 0 8px;
+  overflow-wrap: anywhere;
+}
+
+.playground-share a {
+  color: var(--pg-ink);
+  text-decoration: underline;
+}
+
+.playground-share code {
+  color: var(--pg-ink);
+  font-family: var(--pg-mono);
+}
+
+.playground-share small {
+  line-height: 1.5;
 }
 
 .playground-shell .site-footer {
-  border-top: 0;
-  padding-block: var(--space-2xl) var(--space-xl);
+  width: 100%;
+  margin: 0;
+  padding: 26px 0 24px;
+  background: #edede9;
+  color: var(--pg-muted);
+  font-size: 12px;
 }
 
 .playground-shell .footer-inner {
+  --line-shell: 1480px;
   display: grid;
-  gap: var(--space-md);
-  border-top: var(--rule-hair) solid var(--color-rule);
-  padding-block-start: var(--space-md);
+  grid-template-columns: 1fr auto;
+  gap: 8px 32px;
+  width: min(1480px, calc(100% - 36px));
+  align-items: end;
+  border: 0;
+  padding: 0;
+}
+
+.playground-shell .footer-brand {
+  min-height: 0;
+}
+
+.playground-shell .brand-name {
+  font: 800 18px/1 var(--pg-font);
+}
+
+.playground-shell .footer-tagline {
+  display: none;
 }
 
 .playground-shell .footer-links {
-  margin-inline-start: 0;
+  grid-column: 2;
+  grid-row: 1 / 3;
+  gap: 22px;
+  margin: 0;
+}
+
+.playground-shell .footer-links a {
+  min-height: 0;
+  color: var(--pg-ink);
+  font-size: 12px;
 }
 
 .playground-shell .footer-copy {
+  grid-column: 1;
   justify-self: start;
+  color: var(--pg-muted);
+  font-size: 12px;
 }
 
-.playground-actions button:focus-visible,
-.playground-example-label select:focus-visible,
-.playground-source-label input:focus-visible,
-.playground-source:focus-visible,
-.playground-monaco:focus-within,
-.playground-share a:focus-visible {
-  outline: 3px solid var(--color-accent);
+.playground-shell :is(button, select, input, textarea, a):focus-visible,
+.playground-monaco:focus-within {
+  outline: 2px solid var(--pg-ink);
   outline-offset: 2px;
 }
 
-@media (hover: hover) and (pointer: fine) {
-  .playground-actions button:not(:disabled):hover,
-  .playground-example-label select:not(:disabled):hover {
-    border-color: var(--color-accent);
-    color: var(--color-ink);
-  }
-
-  .playground-actions .demo-action:not(:disabled):hover,
-  .playground-actions .playground-save:not(:disabled):hover {
-    border-color: var(--color-ink);
-    background: var(--color-ink);
-    color: var(--color-paper);
-  }
+.playground-workspace :is(button, textarea):focus-visible,
+.playground-monaco:focus-within {
+  outline-color: var(--pg-panel-ink);
+  outline-offset: -2px;
 }
 
-@media (min-width: 40rem) {
-  /* コードと実行結果を見比べられる幅では、編集欄と結果欄を左右に置く。 */
-  .playground-editor {
-    display: grid;
-    grid-template-areas:
-      'head head'
-      'save save'
-      'label label'
-      'source result'
-      'status result'
-      'share result';
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+@media (max-width: 820px) {
+  .playground-workspace {
+    grid-template-columns: minmax(0, 1fr);
   }
 
-  .playground-editor-head {
-    grid-area: head;
-  }
-
-  .playground-save-fields {
-    grid-area: save;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .playground-editor > .playground-source-label {
-    grid-area: label;
+  .playground-pane {
+    min-height: 462px;
   }
 
   .playground-source,
-  .playground-monaco {
-    grid-area: source;
-  }
-
-  .playground-status {
-    grid-area: status;
-  }
-
-  .playground-share {
-    grid-area: share;
-  }
-
-  .playground-result {
-    grid-area: result;
-    min-height: 0;
-    border-top: 0;
-    border-inline-start: var(--rule-hair) solid var(--color-rule);
-  }
-
+  .playground-monaco,
+  .playground-result,
   .playground-controller {
-    height: 100%;
-  }
-
-  .playground-shell .footer-inner {
-    grid-template-columns: auto 1fr auto;
-    align-items: baseline;
-  }
-
-  .playground-shell .footer-links {
-    justify-self: center;
-  }
-
-  .playground-shell .footer-copy {
-    justify-self: end;
+    min-height: 420px;
   }
 }
 
 @media (max-width: 560px) {
-  .playground-section {
-    padding-top: 46px;
+  .playground-intro,
+  .playground-editor-head,
+  .playground-output-head {
+    align-items: flex-start;
+    flex-direction: column;
   }
-  .playground-intro h1 {
-    font-size: 48px;
+
+  .playground-intro {
+    gap: 12px;
+  }
+
+  .playground-editor-head {
+    gap: 8px;
+  }
+
+  .playground-shell .site-header nav {
+    display: flex;
+    gap: 20px;
+  }
+
+  .playground-shell .site-header nav a:nth-child(2),
+  .playground-shell .site-header .site-actions {
+    display: none;
+  }
+
+  .playground-save-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .playground-shell .footer-inner {
+    grid-template-columns: 1fr;
+  }
+
+  .playground-shell .footer-links {
+    grid-column: 1;
+    grid-row: auto;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .playground-actions button,
-  .playground-example-label select,
-  .playground-share a {
-    transition: none;
+  .playground-shell *,
+  .playground-shell *::before,
+  .playground-shell *::after {
+    animation: none !important;
+    transition: none !important;
   }
 }

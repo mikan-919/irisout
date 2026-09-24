@@ -1,8 +1,8 @@
 /* 実行管理iframe内の表示。公式サイトのDOM・CSSへ依存しない。 */
 
 :root {
-  color: #25232e;
-  background: #f5f4f8;
+  color: #f5f5ef;
+  background: transparent;
   font-family: system-ui, sans-serif;
 }
 
@@ -19,12 +19,12 @@ main {
   display: none;
   min-height: 1.3rem;
   margin: 0 0 0.75rem;
-  color: #5d596b;
+  color: #a6a69e;
   font-size: 0.8rem;
 }
 
 #controller-status[data-state='error'] {
-  color: #a73c2c;
+  color: #ee8d7d;
 }
 
 #result-root {
@@ -37,7 +37,7 @@ main {
 #result-root iframe {
   display: block;
   width: 100%;
-  min-height: 16rem;
+  min-height: 100vh;
   border: 0;
   background: transparent;
 }

@@ -74,20 +74,27 @@ export function Playground() {
     <div class="site-shell playground-shell">
       <SiteHeader current="playground" search={false} onSearch={null} />
       <main>
-        <section class="section playground-section playground-page-section">
+        <section class="playground-section playground-page-section">
           <div class="playground-intro">
-            <h1>JSXを編集して、その場で試す。</h1>
-            <p>公式例を選び、ブラウザー内で変換と実行を確認できます。</p>
+            <div>
+              <h1>Playground</h1>
+              <p>JSXと実行結果を並べて確認する。</p>
+            </div>
+            <p
+              id="playground-status"
+              class="playground-status"
+              data-playground-status
+              data-state={statusState()}
+              role="status"
+            >
+              <span class="playground-status-dot" aria-hidden="true" />
+              <span>{statusText()}</span>
+            </p>
           </div>
           <div class="playground-editor" data-playground-root>
             <div class="playground-editor-head">
-              <div>
-                <p class="demo-kicker">browser compiler</p>
-                <h3>JSXを編集して実行する</h3>
-              </div>
               <div class="playground-actions">
                 <label class="playground-example-label">
-                  例
                   <select
                     data-playground-example
                     aria-label="公式例"
@@ -102,8 +109,14 @@ export function Playground() {
                     ))}
                   </select>
                 </label>
+                <button class="playground-control" type="button" onClick={resetSource}>
+                  戻す
+                </button>
+              </div>
+              <div class="playground-actions">
+                <span class="playground-shortcut">⌘ / Ctrl + Enter</span>
                 <button
-                  class="demo-action"
+                  class="playground-control playground-primary"
                   type="button"
                   data-playground-run
                   disabled={!ready() || !controllerOrigin()}
@@ -112,7 +125,7 @@ export function Playground() {
                   実行
                 </button>
                 <button
-                  class="playground-stop"
+                  class="playground-control"
                   type="button"
                   data-playground-stop
                   disabled={!running()}
@@ -120,119 +133,139 @@ export function Playground() {
                 >
                   停止
                 </button>
-                <button
-                  class="playground-save"
-                  type="button"
-                  data-playground-save
-                  disabled={saving()}
-                  onClick={saveSource}
-                >
-                  保存／再送
-                </button>
-                <button
-                  class="playground-stop"
-                  type="button"
-                  data-playground-delete
-                  disabled={!savedId() || !managementKey() || deleting()}
-                  onClick={deleteShare}
-                >
-                  共有を削除
-                </button>
-                <button
-                  class="playground-stop"
-                  type="button"
-                  data-playground-export
-                  disabled={!managementKey()}
-                  onClick={exportShare}
-                >
-                  書き出し
-                </button>
               </div>
             </div>
-            <div class="playground-save-fields">
-              <label class="playground-source-label" for="playground-title">
-                共有タイトル
-                <input
-                  id="playground-title"
-                  data-playground-title
-                  value={title()}
-                  onInput={(event) => title(event.currentTarget.value)}
+            <div class="playground-workspace">
+              <div class="playground-pane playground-source-pane">
+                <div class="playground-pane-head">
+                  <strong>App.jsx</strong>
+                  <span>source</span>
+                </div>
+                <label class="playground-visually-hidden" for="playground-source">
+                  入力JSX
+                </label>
+                <textarea
+                  id="playground-source"
+                  class="playground-source"
+                  data-playground-source
+                  spellcheck="false"
+                  readOnly={!ready()}
+                  rows="16"
+                  aria-describedby="playground-status"
+                  value={source()}
+                  use={announceEditorState}
+                  onInput={editSource}
                 />
-              </label>
-              <label class="playground-source-label" for="playground-description">
-                説明
-                <input
-                  id="playground-description"
-                  data-playground-description
-                  value={description()}
-                  onInput={(event) => description(event.currentTarget.value)}
+                <div
+                  class="playground-monaco"
+                  data-playground-monaco
+                  aria-describedby="playground-status"
+                  hidden
                 />
-              </label>
+              </div>
+              <div class="playground-pane playground-preview-pane">
+                <div class="playground-pane-head">
+                  <strong>Preview</strong>
+                  <span>browser</span>
+                </div>
+                <div class="playground-result" data-playground-result>
+                  {controllerUrl() ? (
+                    <iframe
+                      class="playground-controller"
+                      title="Playground実行管理画面"
+                      referrerpolicy="no-referrer"
+                      src={controllerUrl()}
+                      use={(element) => {
+                        controllerFrame(element)
+                      }}
+                      onLoad={() => {
+                        controllerReady(true)
+                        updateReadyState()
+                      }}
+                    />
+                  ) : (
+                    <p>実行管理画面を設定できないため実行できません。入力は保持されています。</p>
+                  )}
+                </div>
+              </div>
             </div>
-            <label class="playground-source-label" for="playground-source">
-              入力JSX
-            </label>
-            <textarea
-              id="playground-source"
-              class="playground-source"
-              data-playground-source
-              spellcheck="false"
-              readOnly={!ready()}
-              rows="16"
-              aria-describedby="playground-status"
-              value={source()}
-              use={announceEditorState}
-              onInput={editSource}
-            />
-            <div
-              class="playground-monaco"
-              data-playground-monaco
-              aria-describedby="playground-status"
-              hidden
-            />
-            <p
-              id="playground-status"
-              class="playground-status"
-              data-playground-status
-              data-state={statusState()}
-              role="status"
-            >
-              {statusText()}
-            </p>
-            {shareUrl() && (
-              <section class="playground-share" data-playground-share aria-live="polite">
-                <p>
-                  <span>共有URL: </span>
-                  <a data-playground-share-link href={shareUrl()} target="_blank" rel="noreferrer">
-                    {shareUrl()}
-                  </a>
-                </p>
-                <p>
-                  <span>削除用の管理鍵: </span>
-                  <code data-playground-delete-token>{managementKey()}</code>
-                </p>
-                <small>管理鍵を失うと自分で削除できません。書き出して保管してください。</small>
-              </section>
-            )}
-            <div class="playground-result" data-playground-result>
-              {controllerUrl() ? (
-                <iframe
-                  class="playground-controller"
-                  title="Playground実行管理画面"
-                  referrerpolicy="no-referrer"
-                  src={controllerUrl()}
-                  use={(element) => {
-                    controllerFrame(element)
-                  }}
-                  onLoad={() => {
-                    controllerReady(true)
-                    updateReadyState()
-                  }}
-                />
-              ) : (
-                <p>実行管理画面を設定できないため実行できません。入力は保持されています。</p>
-              )}
-            </div>
+            <section class="playground-output" aria-labelledby="playground-share-heading">
+              <h2 id="playground-share-heading">共有</h2>
+              <div class="playground-output-shell">
+                <div class="playground-output-head">
+                  <span>保存設定</span>
+                  <div class="playground-actions">
+                    <button
+                      class="playground-control"
+                      type="button"
+                      data-playground-save
+                      disabled={saving()}
+                      onClick={saveSource}
+                    >
+                      保存／再送
+                    </button>
+                    <button
+                      class="playground-control"
+                      type="button"
+                      data-playground-delete
+                      disabled={!savedId() || !managementKey() || deleting()}
+                      onClick={deleteShare}
+                    >
+                      共有を削除
+                    </button>
+                    <button
+                      class="playground-control"
+                      type="button"
+                      data-playground-export
+                      disabled={!managementKey()}
+                      onClick={exportShare}
+                    >
+                      書き出し
+                    </button>
+                  </div>
+                </div>
+                <div class="playground-save-fields">
+                  <label class="playground-source-label" for="playground-title">
+                    共有タイトル
+                    <input
+                      id="playground-title"
+                      data-playground-title
+                      value={title()}
+                      onInput={(event) => title(event.currentTarget.value)}
+                    />
+                  </label>
+                  <label class="playground-source-label" for="playground-description">
+                    説明
+                    <input
+                      id="playground-description"
+                      data-playground-description
+                      value={description()}
+                      onInput={(event) => description(event.currentTarget.value)}
+                    />
+                  </label>
+                </div>
+                {shareUrl() && (
+                  <div class="playground-share" data-playground-share aria-live="polite">
+                    <p>
+                      <span>共有URL: </span>
+                      <a
+                        data-playground-share-link
+                        href={shareUrl()}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {shareUrl()}
+                      </a>
+                    </p>
+                    <p>
+                      <span>削除用の管理鍵: </span>
+                      <code data-playground-delete-token>{managementKey()}</code>
+                    </p>
+                    <small>管理鍵を失うと自分で削除できません。書き出して保管してください。</small>
+                  </div>
+                )}
+              </div>
+            </section>
           </div>
         </section>
       </main>
@@ -287,6 +320,13 @@ export function Playground() {
       sourceEdited(true)
       source(selected.source)
     }
+  }
+
+  function resetSource() {
+    const selected = examples().find((example) => example.id === selectedExampleId())
+    source(selected?.source ?? DEFAULT_SOURCE)
+    sourceEdited(true)
+    setStatus('入力を戻しました')
   }
 
   function announceEditorState(element) {
@@ -462,8 +502,18 @@ export function Playground() {
       setStatus(status.message ? `${label}: ${status.message}` : label, status.status)
       if (['success', 'error', 'timeout', 'stopped'].includes(status.status)) running(false)
     }
+    const runShortcut = (event) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+        event.preventDefault()
+        runSource()
+      }
+    }
     window.addEventListener('message', receiveStatus)
+    window.addEventListener('keydown', runShortcut)
     updateReadyState()
-    return () => window.removeEventListener('message', receiveStatus)
+    return () => {
+      window.removeEventListener('message', receiveStatus)
+      window.removeEventListener('keydown', runShortcut)
+    }
   })
 }
