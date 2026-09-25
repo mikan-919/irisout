@@ -4,6 +4,7 @@ import path from 'node:path'
 import { describe, expect, it, vi } from 'vite-plus/test'
 import { transformMotionSource } from '../../motion/src/vite.js'
 import { mountMotionElement } from '../../motion/src/runtime.js'
+import { registerProjectionElement } from '../../motion/src/projection.js'
 import { beginDomUpdate, endDomUpdate, observeDomUpdates } from '../../runtime/src/index.js'
 import { compile, compileProject } from '../src/compiler.js'
 import { createContainer, loadGenerated } from './helpers.js'
@@ -18,6 +19,10 @@ vi.mock('motion', () => ({
       },
     }
   },
+}))
+
+vi.mock('../../motion/src/projection.js', () => ({
+  registerProjectionElement: vi.fn(() => () => {}),
 }))
 
 describe('irisout/motion extension', () => {
@@ -89,6 +94,23 @@ export function App() {
     expect(element.getAttribute('data-animated')).toBe('true')
     controller.destroy()
     expect(element.getAttribute('data-stopped')).toBe('true')
+  })
+
+  it.each([
+    ['layoutScroll', { layoutScroll: true }],
+    ['layoutRoot', { layoutRoot: true }],
+  ])('registers a %s parent without enabling layout', (_name, options) => {
+    const register = vi.mocked(registerProjectionElement)
+    register.mockClear()
+    const element = createContainer().ownerDocument.createElement('div')
+
+    const controller = mountMotionElement(element, options)
+
+    expect(register).toHaveBeenCalledTimes(1)
+    expect(register.mock.calls[0]?.[0]).toBe(element)
+    expect(register.mock.calls[0]?.[1]).toBe(options)
+    expect(options).not.toHaveProperty('layout')
+    controller.destroy()
   })
 
   it('rejects unsupported Motion props before the irisout compiler', () => {

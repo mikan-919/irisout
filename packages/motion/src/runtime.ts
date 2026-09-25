@@ -30,7 +30,9 @@ export function mountMotionElement(
   let animation: ReturnType<typeof animate> | null = null
   const transition = options.transition
   const unregisterProjection =
-    options.layout || options.layoutId ? registerProjectionElement(element, options) : null
+    options.layout || options.layoutId || options.layoutScroll || options.layoutRoot
+      ? registerProjectionElement(element, options)
+      : null
   if (options.initial !== false && options.initial) {
     animate(element, options.initial, { ...transition, duration: 0 }).complete()
   }
