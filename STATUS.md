@@ -3,7 +3,7 @@
 実装の現在地、完了した段階、既知の制約を記録する。設計判断は`docs/adr/`、受入条件は
 `openspec/specs/`、今後の作業は`ROADMAP.md`を正本とする。
 
-## 現在地（2026-09-22）
+## 現在地（2026-09-25）
 
 ソース版とnpm公開版は0.2.2である。0.2.2は文書とアプリ開発用スキルを更新し、公開入口と生成コードは変更していない。0.2.1では状態更新を
 `signal((previous) => next)`へ統一し、`signal(initial, keyOf)`と`.update()`を削除した。
@@ -16,7 +16,9 @@
 `layoutScroll`、`layoutRoot`、`layoutCrossfade`、`initial`、`animate`、`transition`である。
 配置処理はMotion 13.4の投影木へ委譲し、親子補正、
 スクロール補正、共有要素crossfade、実行中の配置変更を扱う。irisout実行時処理には用途非依存の
-同期DOM更新取引を追加した。`variants`、`exit`、gesture属性はエラーにする。
+同期DOM更新取引を追加した。`variants`とgesture属性はエラーにする。
+2026-09-25に`AnimatePresence`内の`exit`を追加した。条件分岐とkey付き一覧から削除される
+要素を退場完了まで保持する。対応する`mode`は`sync`だけで、部品全体の破棄では退場しない。
 
 公開物は`packages/irisout`の単一パッケージである。コンパイラ、実行時処理、Vite連携の
 ソースは責務別のディレクトリに置くが、内部パッケージとしては梱包しない。旧JavaScript実装は

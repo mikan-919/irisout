@@ -21,6 +21,10 @@ export interface DomUpdateObserver {
 const domUpdateObservers = new Set<DomUpdateObserver>()
 let domUpdateDepth = 0
 
+export function isDomUpdateInProgress(): boolean {
+  return domUpdateDepth > 0
+}
+
 // DOM更新の前後を一つの測定単位として外部機能へ通知する。入れ子更新は最外周だけを
 // 通知し、コンパイラ本体へ配置測定などの用途別処理を持ち込まない。
 export function observeDomUpdates(observer: DomUpdateObserver): () => void {

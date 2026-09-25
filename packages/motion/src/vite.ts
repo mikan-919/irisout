@@ -22,7 +22,6 @@ const generate =
 const UNSUPPORTED_MOTION_PROPS = new Set([
   'drag',
   'dragConstraints',
-  'exit',
   'variants',
   'whileDrag',
   'whileFocus',
@@ -53,6 +52,8 @@ function attrExpression(attribute: t.JSXAttribute): t.Expression {
 function motionAction(
   initial: t.Expression | undefined,
   animateTarget: t.Expression | undefined,
+  exitTarget: t.Expression | undefined,
+  presence: boolean,
   transition: t.Expression | undefined,
   layout: t.Expression | undefined,
   layoutId: t.Expression | undefined,
@@ -71,6 +72,9 @@ function motionAction(
   if (layoutCrossfade)
     optionProperties.push(t.objectProperty(t.identifier('layoutCrossfade'), layoutCrossfade))
   if (initial) optionProperties.push(t.objectProperty(t.identifier('initial'), initial))
+  if (exitTarget) optionProperties.push(t.objectProperty(t.identifier('exit'), exitTarget))
+  if (presence)
+    optionProperties.push(t.objectProperty(t.identifier('presence'), t.booleanLiteral(true)))
   if (transition) optionProperties.push(t.objectProperty(t.identifier('transition'), transition))
   const options = t.objectExpression(optionProperties)
   const statements: t.Statement[] = [
@@ -121,7 +125,10 @@ function motionAction(
 export function transformMotionSource(source: string, filePath = 'source.jsx'): string {
   const ast = parse(source, { sourceType: 'module', plugins: ['typescript', 'jsx'] })
   let bindingName: string | null = null
+  let presenceBinding: string | null = null
   let used = false
+  let presenceUsed = false
+  const presentElements = new WeakSet<t.JSXElement>()
 
   for (const statement of ast.program.body) {
     if (statement.type !== 'ImportDeclaration' || statement.source.value !== 'irisout/motion') {
@@ -136,9 +143,53 @@ export function transformMotionSource(source: string, filePath = 'source.jsx'): 
       ) {
         bindingName = specifier.local.name
       }
+      if (
+        specifier.type === 'ImportSpecifier' &&
+        (specifier.imported.type === 'Identifier'
+          ? specifier.imported.name
+          : specifier.imported.value) === 'AnimatePresence'
+      ) {
+        presenceBinding = specifier.local.name
+      }
     }
   }
-  if (!bindingName) return source
+  if (!bindingName && !presenceBinding) return source
+
+  if (presenceBinding) {
+    traverse(ast, {
+      JSXElement(path) {
+        const name = path.node.openingElement.name
+        if (name.type !== 'JSXIdentifier' || name.name !== presenceBinding) return
+        if (!path.parentPath.isJSXElement()) {
+          throw new Error('motion: AnimatePresence must be inside an HTML element (scope limit)')
+        }
+        for (const attribute of path.node.openingElement.attributes) {
+          if (attribute.type !== 'JSXAttribute' || attrName(attribute) !== 'mode') {
+            throw new Error('motion: only AnimatePresence mode="sync" is supported')
+          }
+          const modeValue = attrExpression(attribute)
+          if (modeValue.type !== 'StringLiteral' || modeValue.value !== 'sync') {
+            throw new Error('motion: only AnimatePresence mode="sync" is supported')
+          }
+        }
+        path.traverse({
+          JSXElement(child) {
+            const childName = child.node.openingElement.name
+            if (
+              childName.type === 'JSXMemberExpression' &&
+              childName.object.type === 'JSXIdentifier' &&
+              childName.object.name === bindingName &&
+              child.findParent((parent) => parent.isJSXElement()) === path
+            ) {
+              presentElements.add(child.node)
+            }
+          },
+        })
+        presenceUsed = true
+        path.replaceWithMultiple(path.node.children)
+      },
+    })
+  }
 
   traverse(ast, {
     JSXElement(path) {
@@ -158,6 +209,7 @@ export function transformMotionSource(source: string, filePath = 'source.jsx'): 
       }
       let initial: t.Expression | undefined
       let animateTarget: t.Expression | undefined
+      let exitTarget: t.Expression | undefined
       let transition: t.Expression | undefined
       let layout: t.Expression | undefined
       let layoutId: t.Expression | undefined
@@ -175,6 +227,7 @@ export function transformMotionSource(source: string, filePath = 'source.jsx'): 
         }
         if (name === 'initial') initial = attrExpression(attribute)
         else if (name === 'animate') animateTarget = attrExpression(attribute)
+        else if (name === 'exit') exitTarget = attrExpression(attribute)
         else if (name === 'transition') transition = attrExpression(attribute)
         else if (name === 'layout') layout = attrExpression(attribute)
         else if (name === 'layoutId') layoutId = attrExpression(attribute)
@@ -184,10 +237,15 @@ export function transformMotionSource(source: string, filePath = 'source.jsx'): 
         else if (name === 'use') throw new Error('motion: motion elements cannot also use use=')
         else hostAttributes.push(attribute)
       }
+      if (exitTarget && !presentElements.has(path.node)) {
+        throw new Error('motion: exit requires AnimatePresence')
+      }
       hostAttributes.push(
         motionAction(
           initial,
           animateTarget,
+          exitTarget,
+          presentElements.has(path.node),
           transition,
           layout,
           layoutId,
@@ -203,14 +261,15 @@ export function transformMotionSource(source: string, filePath = 'source.jsx'): 
     },
   })
 
-  if (!used) return source
+  if (!used && !presenceUsed) return source
   for (const statement of ast.program.body) {
     if (statement.type !== 'ImportDeclaration' || statement.source.value !== 'irisout/motion') {
       continue
     }
     statement.specifiers = statement.specifiers.filter(
       (specifier) =>
-        !(specifier.type === 'ImportSpecifier' && specifier.local.name === bindingName),
+        specifier.type !== 'ImportSpecifier' ||
+        (specifier.local.name !== bindingName && specifier.local.name !== presenceBinding),
     )
   }
   ast.program.body = ast.program.body.filter(
@@ -219,17 +278,19 @@ export function transformMotionSource(source: string, filePath = 'source.jsx'): 
       statement.source.value !== 'irisout/motion' ||
       statement.specifiers.length > 0,
   )
-  ast.program.body.unshift(
-    t.importDeclaration(
-      [
-        t.importSpecifier(
-          t.identifier('__irisout_mount_motion__'),
-          t.identifier('mountMotionElement'),
-        ),
-      ],
-      t.stringLiteral('irisout/motion'),
-    ),
-  )
+  if (used) {
+    ast.program.body.unshift(
+      t.importDeclaration(
+        [
+          t.importSpecifier(
+            t.identifier('__irisout_mount_motion__'),
+            t.identifier('mountMotionElement'),
+          ),
+        ],
+        t.stringLiteral('irisout/motion'),
+      ),
+    )
+  }
   return generate(ast, { comments: true, retainLines: true }, source).code
 }
 

@@ -102,6 +102,32 @@ try {
     document.querySelector('#detail-card')?.style.transform.includes('translate'),
   )
   assert.equal(await page.locator('#summary-card').count(), 0)
+
+  await page.locator('#exit-conditional').click()
+  assert.equal(await page.locator('#exit-card').count(), 1)
+  await page.waitForFunction(() => {
+    const element = document.querySelector('#exit-card')
+    return element && Number(getComputedStyle(element).opacity) < 1
+  })
+  await page.locator('#exit-card').waitFor({ state: 'detached' })
+
+  await page.locator('#presence-reorder').click()
+  assert.deepEqual(
+    await page
+      .locator('[data-presence-item]')
+      .evaluateAll((elements) =>
+        elements.map((element) => element.getAttribute('data-presence-item')),
+      ),
+    ['y', 'x'],
+  )
+
+  await page.locator('#exit-list').click()
+  assert.equal(await page.locator('[data-presence-item="x"]').count(), 1)
+  assert.equal(await page.locator('[data-presence-item="y"]').count(), 1)
+  assert.equal(await page.locator('[data-presence-item="z"]').count(), 1)
+  await page.locator('[data-presence-item="x"]').waitFor({ state: 'detached' })
+  assert.equal(await page.locator('[data-presence-item="y"]').count(), 1)
+  assert.equal(await page.locator('[data-presence-item="z"]').count(), 1)
   assert.equal(errors.length, 0, errors.join('\n'))
   console.log('motion layout browser test passed')
 } finally {

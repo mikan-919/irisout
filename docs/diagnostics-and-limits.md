@@ -25,7 +25,7 @@ irisoutは静的に安全な更新経路を作れない構文を推測で処理�
 - 状態宣言は`render()`より前、イベントとライフサイクルは後に置く。
 - 部品の再帰、任意の部品値、循環moduleは扱わない。
 - ブラウザ内コンパイラは相対import、外部import、ファイル読込みを扱わない。
-- Motion拡張は`layout`、`layoutId`、`initial`、`animate`、`transition`を扱い、`variants`、`exit`、gesture属性は扱わない。
+- Motion拡張は`layout`、`layoutId`、`initial`、`animate`、`transition`、`AnimatePresence`内の`exit`を扱う。`AnimatePresence`は通常要素の子として置き、退場対象のmotion要素を直下の条件分岐またはkey付き一覧に置く。退場は`mode="sync"`に限る。`variants`とgesture属性は扱わない。
 - 要求単位SSRではサーバーでイベント、ライフサイクル、`use`を実行しない。
 
 ## 不具合を報告する

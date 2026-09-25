@@ -2,6 +2,7 @@
 // 変換器は`irisout/motion/vite`へ分離し、ここへBabel依存を含めない。
 
 import { animate } from 'motion'
+import { isDomUpdateInProgress } from '../../runtime/src/index.js'
 import { registerProjectionElement } from './projection.js'
 
 export type MotionTarget = Record<string, unknown>
@@ -15,6 +16,8 @@ export interface MotionElementOptions {
   layoutRoot?: boolean
   layoutCrossfade?: boolean
   initial?: MotionTarget | false
+  exit?: MotionTarget
+  presence?: boolean
   transition?: MotionTransition
 }
 
@@ -45,6 +48,28 @@ export function mountMotionElement(
       unregisterProjection?.()
       animation?.stop()
       animation = null
+      if (options.presence && options.exit && isDomUpdateInProgress()) {
+        const parent = element.parentNode
+        const next = element.nextSibling
+        // 構造更新による削除の後、退場中の要素だけを元の親へ戻す。
+        queueMicrotask(() => {
+          if (!parent?.isConnected) return
+          if (!element.isConnected) {
+            parent.insertBefore(element, next?.parentNode === parent ? next : null)
+          }
+          let exitAnimation: ReturnType<typeof animate>
+          try {
+            exitAnimation = animate(element, options.exit!, transition)
+          } catch (error) {
+            element.remove()
+            throw error
+          }
+          Promise.resolve(exitAnimation).then(
+            () => element.remove(),
+            () => element.remove(),
+          )
+        })
+      }
     },
   }
 }
@@ -52,12 +77,17 @@ export function mountMotionElement(
 // JSXではコンパイル前変換が参照し、ブラウザ実行時には残らない。
 export const motion = Object.create(null) as MotionElements
 
+// JSX変換器が取り除く範囲指定子であり、実行時の要素は作らない。
+export const AnimatePresence = Object.create(null) as (props: {
+  children?: unknown
+  mode?: 'sync'
+}) => object
+
 type UnsupportedMotionProps = {
   [
     K in
       | 'drag'
       | 'dragConstraints'
-      | 'exit'
       | 'variants'
       | 'whileDrag'
       | 'whileFocus'
@@ -75,6 +105,7 @@ type MotionProps = {
   layoutCrossfade?: boolean
   initial?: MotionTarget | false
   animate?: MotionTarget
+  exit?: MotionTarget
   transition?: MotionTransition
 } & UnsupportedMotionProps
 

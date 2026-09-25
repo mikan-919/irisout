@@ -146,7 +146,7 @@ triage手続きで捌く — コンパイラの受理条件自体を場当たり
 | `packages/compiler/src/codegen.ts`                    | 最終 codegen。文字列組み立てのみ、AST もコンパイラ状態も触らない                                                                                                                                    |
 | `packages/vite-plugin/src/index.ts`                   | `compileProject()`の生成結果をViteの仮想module・初期HTML・依存監視・全体再読み込みへ接続                                                                                                            |
 | `packages/motion/src/vite.ts`                         | `<motion.div>`を標準JSXと`use=`へ変換する任意拡張。Motion固有の属性をコンパイラ本体へ持ち込まない                                                                                                   |
-| `packages/motion/src/runtime.ts`                      | 変換後の`use=`から公式Motionの`animate()`と配置投影要素登録を実行する                                                                                                                               |
+| `packages/motion/src/runtime.ts`                      | 変換後の`use=`から公式Motionの`animate()`と配置投影要素登録を実行する。構造更新で削除された要素は`exit`完了まで保持する                                                                             |
 | `packages/motion/src/projection.ts`                   | 汎用DOM更新取引をMotionの`HTMLProjectionNode`へ接続し、配置測定・親子補正・共有要素・終了時crossfadeを管理する                                                                                      |
 | `packages/vite-plugin/src/routes.ts`                  | `page.tsx`/`page.jsx`群のclient target、経路表、初回hydrate、ファイル集合変更時の仮想module再生成                                                                                                   |
 | `packages/vite-plugin/src/hono.ts`                    | Honoへmount済みのirisout経路をSSOTとして選び、Viteのpage入口生成と開発時のHTML応答へ接続                                                                                                            |
@@ -208,7 +208,9 @@ triage手続きで捌く — コンパイラの受理条件自体を場当たり
   導入しない。
 - **DOM更新取引**: 生成された更新関数は、入れ子を最外周へまとめる`beginDomUpdate()`と
   `endDomUpdate()`で同期DOM書込みを囲む。`observeDomUpdates()`は用途を知らない汎用境界であり、
-  Motion拡張は更新前測定と更新後投影に使う。通常のirisoutコンパイラはMotionへ依存しない。
+  Motion拡張は更新前測定と更新後投影に使う。`AnimatePresence`はコンパイル前に要素を増やさず
+  取り除き、対象のmotion要素に退場設定を渡す。構造更新中にactionが破棄された場合だけ、削除後の
+  microtaskで対象要素を戻し、公式Motionの`animate()`完了後に除去する。通常のirisoutコンパイラはMotionへ依存しない。
 - **依存グラフが単一の真実の源**: marker→decl の直接依存(`ctx.markerDeps`)を
   `resolveToSignals()` で root signal まで推移解決し、signal→markers の逆引き
   から `update_<name>()` を生成する。ハンドラの書き込み先も同じ経路で解決する。

@@ -1,5 +1,5 @@
 import { render } from 'irisout'
-import { motion } from 'irisout/motion'
+import { AnimatePresence, motion } from 'irisout/motion'
 
 export function MotionExample() {
   render(
@@ -8,6 +8,16 @@ export function MotionExample() {
     </motion.div>,
   )
   render(<motion.div layoutId="selected-item" />)
+  render(
+    <div>
+      <AnimatePresence>
+        <motion.div exit={{ opacity: 0 }} />
+      </AnimatePresence>
+    </div>,
+  )
+
+  // @ts-expect-error sync以外の退場順序は未対応。
+  render(<AnimatePresence mode="wait" />)
 
   // @ts-expect-error 未対応のMotion属性は通常属性へ降格させない。
   render(<motion.div whileHover={{ scale: 1.1 }} />)

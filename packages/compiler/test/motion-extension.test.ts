@@ -86,6 +86,40 @@ export function App() {
     expect(result.code).toMatch(/from ["']irisout\/motion["']/)
   })
 
+  it('lowers AnimatePresence without adding a DOM wrapper', () => {
+    const source = `import { render, signal } from 'irisout'
+import { motion, AnimatePresence } from 'irisout/motion'
+export function App() {
+  const visible = signal(true)
+  render(<main><AnimatePresence mode={'sync'}>{visible() && <motion.div exit={{ opacity: 0 }}>bye</motion.div>}</AnimatePresence></main>)
+}`
+    const transformed = transformMotionSource(source)
+    expect(transformed).not.toContain('<AnimatePresence')
+    expect(transformed).toContain('presence: true')
+    expect(transformed).toContain('exit:')
+    const directory = mkdtempSync(path.join(tmpdir(), 'irisout-motion-presence-'))
+    const entry = path.join(directory, 'main.jsx')
+    writeFileSync(entry, source)
+    const result = compileProject(entry, { transformSource: transformMotionSource })
+    expect(result.initialHtml).toContain('<main>')
+    expect(result.initialHtml).not.toContain('AnimatePresence')
+  })
+
+  it('rejects exit outside AnimatePresence and unsupported presence modes', () => {
+    expect(() =>
+      transformMotionSource(`import { motion } from 'irisout/motion'
+const view = <motion.div exit={{ opacity: 0 }} />`),
+    ).toThrow(/exit requires AnimatePresence/)
+    expect(() =>
+      transformMotionSource(`import { AnimatePresence } from 'irisout/motion'
+const view = <main><AnimatePresence mode="wait" /></main>`),
+    ).toThrow(/mode="sync"/)
+    expect(() =>
+      transformMotionSource(`import { AnimatePresence } from 'irisout/motion'
+const view = <AnimatePresence />`),
+    ).toThrow(/inside an HTML element/)
+  })
+
   it('uses official Motion controls and stops them on destroy', () => {
     const container = createContainer()
     const element = container.ownerDocument.createElement('div')

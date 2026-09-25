@@ -1,10 +1,12 @@
 import { render, signal } from 'irisout'
-import { motion } from 'irisout/motion'
+import { AnimatePresence, motion } from 'irisout/motion'
 
 export function MotionLayout() {
   const expanded = signal(false)
   const reversed = signal(false)
   const detail = signal(false)
+  const visible = signal(true)
+  const presenceItems = signal(['x', 'y'])
 
   render(
     <main>
@@ -17,6 +19,34 @@ export function MotionLayout() {
       <button id="shared" onClick={() => detail(!detail())}>
         共有要素
       </button>
+      <button id="exit-conditional" onClick={() => visible(false)}>
+        条件分岐から削除
+      </button>
+      <button id="presence-reorder" onClick={() => presenceItems(['y', 'x'])}>
+        退場対象の並べ替え
+      </button>
+      <button id="exit-list" onClick={() => presenceItems(['z', 'y'])}>
+        一覧から削除
+      </button>
+      <AnimatePresence>
+        {visible() && (
+          <motion.div id="exit-card" exit={{ opacity: 0 }} transition={{ duration: 0.5 }}>
+            退場する要素
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {presenceItems().map((item) => (
+          <motion.div
+            key={item}
+            data-presence-item={item}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.5 }}
+          >
+            {item}
+          </motion.div>
+        ))}
+      </AnimatePresence>
       <motion.section
         id="parent"
         layout
