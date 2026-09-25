@@ -1,14 +1,16 @@
 # 変更履歴
 
-## 次回公開
+## 0.3.0 - 2026-09-25
 
-- authored JSXの記述APIを大域関数から`irisout`の名前付きimportへ移行した。
-- コンパイラは記述APIのimportを生成物から取り除く。
+- 利用者が記述するJSXでは、記述APIを`irisout`から名前付きimportする形式に変更した。`irisout/jsx`の大域宣言を削除し、記述APIのimportは生成物から取り除く。
+- ブラウザ内コンパイラ`irisout/browser`、要求ごとのサーバー描画入口`irisout/ssr`、ファイル経路とHono連携の`irisout/routes`・`irisout/hono`・`irisout/hono/vite`を追加した。
+- 任意のMotion連携`irisout/motion`・`irisout/motion/vite`に、条件分岐とキー付き一覧から要素を外すときの`AnimatePresence`と`exit`を追加した。退場モードは`sync`に限る。
 
 ### 移行
 
 `signal`、`derived`、`render`などを使うauthored JSXへ、
 `import { signal, derived, render } from 'irisout'`のような名前付きimportを追加する。
+`irisout`と`irisout/browser`の`compile(source)`へ渡す単一ソース内の裸の記述API呼び出しは引き続き受理する。
 
 ## 0.2.2 - 2026-09-12
 

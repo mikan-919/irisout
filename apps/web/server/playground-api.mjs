@@ -26,7 +26,7 @@ const allowedInputKeys = new Set([
 export function createPlaygroundApi({
   store,
   officialOrigin,
-  compilerVersions = ['0.2.2'],
+  compilerVersions = ['0.2.2', '0.3.0'],
   limits = {},
   now = () => Date.now(),
 } = {}) {
@@ -128,7 +128,7 @@ async function handleDelete(request, id, context) {
   }
 }
 
-export function validateInput(value, supportedVersions = new Set(['0.2.2'])) {
+export function validateInput(value, supportedVersions = new Set(['0.2.2', '0.3.0'])) {
   if (!isRecord(value)) return invalid(400, 'JSONオブジェクトが必要です')
   for (const key of Object.keys(value)) {
     if (!allowedInputKeys.has(key)) return invalid(422, `未知の項目: ${key}`)

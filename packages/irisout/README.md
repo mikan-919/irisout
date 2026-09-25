@@ -33,16 +33,36 @@ export default { plugins: [irisoutMotion({ entry: './src/App.jsx' })] }
 JSXでは`irisout/motion`の`motion`を使います。`layout`、`layoutId`、`initial`、`animate`、`transition`を
 Motionへ接続します。`layout="position"`、`layout="size"`、`layoutScroll`、`layoutRoot`、
 `layoutCrossfade`も指定できます。配置測定、親子補正、共有要素、スクロール補正、割り込み、
-角丸と影の拡縮補正はMotionの配置投影エンジンを使います。`variants`、`exit`、gesture属性は未対応で、
-通常のDOM属性として残さずコンパイル前にエラーにします。
+角丸と影の拡縮補正はMotionの配置投影エンジンを使います。`AnimatePresence`内の条件分岐または
+キー付き一覧から要素を外すときは`exit`を使えます。退場は`mode="sync"`に限ります。
+`variants`とgesture属性は未対応で、通常のDOM属性として残さずコンパイル前にエラーにします。
 
 ```jsx
 import { motion } from 'irisout/motion'
+import { render } from 'irisout'
 
-render(<motion.div layout layoutId="card" animate={{ opacity: 1 }} />)
+export function Card() {
+  render(<motion.div layout layoutId="card" animate={{ opacity: 1 }} />)
+}
 ```
 
-authored JSXの記述APIは`irisout`から名前付きでimportします。このimportはコンパイル時に
+```jsx
+import { AnimatePresence, motion } from 'irisout/motion'
+import { render, signal } from 'irisout'
+
+export function Toggle() {
+  const visible = signal(true)
+  render(
+    <main>
+      <AnimatePresence mode="sync">
+        {visible() && <motion.div exit={{ opacity: 0 }} />}
+      </AnimatePresence>
+    </main>,
+  )
+}
+```
+
+JSXの記述APIは`irisout`から名前付きでimportします。このimportはコンパイル時に
 取り除かれ、生成物の実行時依存にはなりません。
 
 ```jsx

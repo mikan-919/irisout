@@ -8,7 +8,7 @@ export function SiteHeader({ current, search, onSearch }) {
     <header class="site-header" id="siteHeader">
       <a class="site-brand" href="/" aria-label="irisout ホーム">
         <span>irisout</span>
-        <small>0.2.2</small>
+        <small>0.3.0</small>
       </a>
       <nav aria-label="主な項目">
         <a href="/" aria-current={current === 'home' ? 'page' : null}>

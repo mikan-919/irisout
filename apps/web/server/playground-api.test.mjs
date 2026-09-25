@@ -215,7 +215,7 @@ function makeInput(overrides = {}) {
     title: 'Counter',
     description: '例',
     source: 'export function App() { render(<p>ok</p>) }',
-    compilerVersion: '0.2.2',
+    compilerVersion: '0.3.0',
     visibility: 'unlisted',
     requestId: createRequestId(),
     ...overrides,

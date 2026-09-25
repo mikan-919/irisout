@@ -36,7 +36,7 @@ const DOCS_HEADER_HTML = (() => {
   }
 })()
 const SITE_ORIGIN = process.env.IRISOUT_SITE_ORIGIN ?? 'https://irisout.dev'
-const SITE_VERSION = '0.2.2'
+const SITE_VERSION = '0.3.0'
 
 export const DOCUMENT_SECTIONS = Object.freeze([
   '導入',

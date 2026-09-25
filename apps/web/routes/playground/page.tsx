@@ -362,7 +362,7 @@ export function Playground() {
         version: PLAYGROUND_PROTOCOL_VERSION,
         runId: activeRunId(),
         source: source(),
-        compilerVersion: '0.2.2',
+        compilerVersion: '0.3.0',
       })
       setStatus('変換中です')
     }

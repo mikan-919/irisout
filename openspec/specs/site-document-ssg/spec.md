@@ -16,7 +16,7 @@
 #### Scenario: 公式例の入力共有
 
 - **WHEN** Counter、List、SVGの公式例を生成する
-- **THEN** 登録済みの一つの`.jsx`入力から文書表示用コードと後続Playground接続用`examples.json`が生成され、サイト対象版`irisout@0.2.2`でコンパイル検査される
+- **THEN** 登録済みの一つの`.jsx`入力から文書表示用コードと後続Playground接続用`examples.json`が生成され、サイト対象版`irisout@0.3.0`でコンパイル検査される
 
 ### Requirement: 静的文書の直接閲覧
 

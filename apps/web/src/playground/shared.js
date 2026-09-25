@@ -195,7 +195,7 @@ export function createControllerCsp(siteOrigin) {
 }
 
 export const PLAYGROUND_SAVE_SCHEMA_VERSION = 1
-export const PLAYGROUND_COMPILER_VERSION = '0.2.2'
+export const PLAYGROUND_COMPILER_VERSION = '0.3.0'
 export const PLAYGROUND_SAVE_DRAFT_KEY = 'irisout.playground.pending-save'
 
 let memoryDraft = null

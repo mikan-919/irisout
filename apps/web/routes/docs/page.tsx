@@ -122,7 +122,7 @@ export default function DocsIndex() {
       </main>
       <footer class="site-footer">
         <a href="/">irisout</a>
-        <span>irisout@0.2.2</span>
+        <span>irisout@0.3.0</span>
       </footer>
     </div>,
   )
