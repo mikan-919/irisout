@@ -281,13 +281,18 @@ export default {
 
 ## AI向けSkill
 
-`skills/irisout-development`に、AIがirisoutアプリを作成、診断、検証するためのSkillを
+`skills/irisout`に、AIがirisoutアプリを作成、診断、検証するためのSkillを
 置いています。公開入口、記述範囲、Vite+アプリの雛形を含みます。GitHub上のこの
 リポジトリから次のコマンドで導入できます。
 
 ```sh
-npx skills add mikan-919/irisout --skill irisout-development
+npx skills add mikan-919/irisout --skill irisout
 ```
+
+`skills/irisout-development`はirisout本体の開発用です。コンパイラ、ランタイム、
+このリポジトリ内の例や文書を変更するときに使います。利用側アプリには`irisout`を使います。
+旧名`irisout-development`を利用側アプリ向けに導入済みの場合は、新名`irisout`へ
+切り替えてください。
 
 注: `skills`はリポジトリ内の`skills/<名前>/SKILL.md`を検出し、対応するAI実行環境へ
 Skillを導入するコマンドです。利用可能なSkillだけを確認する場合は

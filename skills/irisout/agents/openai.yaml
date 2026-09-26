@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Build with irisout'
+  short_description: 'Build applications that use the public irisout package'
+  default_prompt: 'Use $irisout to build or update an application that depends on irisout.'
