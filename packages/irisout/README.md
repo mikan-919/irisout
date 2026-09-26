@@ -105,9 +105,13 @@ import { Hono } from 'hono'
 import { createFileRouter } from 'irisout/hono'
 
 export const app = new Hono()
-app.route('/apps', createFileRouter('./routes', {
-  document: ({ html, stateScript }) => `<!doctype html><html><body><div id="app">${html}</div>${stateScript}<script type="module" src="/irisout-client.js"></script></body></html>`,
-}))
+app.route(
+  '/apps',
+  createFileRouter('./routes', {
+    document: ({ html, stateScript }) =>
+      `<!doctype html><html><body><div id="app">${html}</div>${stateScript}<script type="module" src="/irisout-client.js"></script></body></html>`,
+  }),
+)
 ```
 
 ```ts

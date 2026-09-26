@@ -22,7 +22,7 @@ export default function HonoDocs() {
       <pre>
         <code>
           {
-            "import { createFileRouter } from 'irisout/hono'\n\napp.route('/', createFileRouter('./routes', {\n  document: ({ html, stateScript }) =>\n    `<!doctype html><html><body><div id=\"app\">${html}</div>${stateScript}<script type=\"module\" src=\"/irisout-client.js\"></script></body></html>`,\n}))"
+            'import { createFileRouter } from \'irisout/hono\'\n\napp.route(\'/\', createFileRouter(\'./routes\', {\n  document: ({ html, stateScript }) =>\n    `<!doctype html><html><body><div id="app">${html}</div>${stateScript}<script type="module" src="/irisout-client.js"></script></body></html>`,\n}))'
           }
         </code>
       </pre>
