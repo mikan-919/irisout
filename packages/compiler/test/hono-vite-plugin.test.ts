@@ -15,6 +15,42 @@ function writePage(root: string, relative: string, source: string): string {
 }
 
 describe('irisoutHono Vite連携', () => {
+  it('ブラウザー入口のないSSRページは編集時に文書を再読み込みする', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'irisout-hono-ssr-hmr-'))
+    try {
+      const page = writePage(root, '', 'export function Page() { render(<p>before</p>); }')
+      const app = new Hono().route('/', createFileRouter(root))
+      const plugin = irisoutHono(app)
+      const configResolved = plugin.configResolved as unknown as (config: {
+        root: string
+        command: 'serve'
+      }) => void
+      configResolved({ root, command: 'serve' })
+      const buildStart = plugin.buildStart as unknown as (this: {
+        addWatchFile(filePath: string): void
+      }) => void
+      buildStart.call({ addWatchFile: () => {} })
+      expect(await (await app.request('/')).text()).toContain('before')
+
+      writeFileSync(page, 'export function Page() { render(<p>after</p>); }')
+      const messages: unknown[] = []
+      const server = {
+        watcher: { add: () => {} },
+        moduleGraph: { getModuleById: () => undefined },
+        ws: { send: (message: unknown) => messages.push(message) },
+      }
+      const handleHotUpdate = plugin.handleHotUpdate as unknown as (context: {
+        file: string
+        server: typeof server
+      }) => Promise<unknown>
+      expect(await handleHotUpdate({ file: page, server })).toEqual([])
+      expect(messages).toEqual([{ type: 'full-reload', path: '*' }])
+      expect(await (await app.request('/')).text()).toContain('after')
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
   it('mount後のHono経路をSSOTとして動的page入口を生成する', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'irisout-hono-vite-'))
     try {

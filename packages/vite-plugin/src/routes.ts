@@ -320,9 +320,7 @@ function createRoutesPlugin(
         const next = compile()
         for (const route of explicitRoutes ?? []) route.refreshSsr?.(changedPath)
         context.server.watcher.add(
-          explicitRoutes
-            ? [...next.dependencies]
-            : [directoryPath, ...next.dependencies],
+          explicitRoutes ? [...next.dependencies] : [directoryPath, ...next.dependencies],
         )
         const routesChanged =
           JSON.stringify(previous?.clientTable.routes) !== JSON.stringify(next.clientTable.routes)
@@ -343,6 +341,14 @@ function createRoutesPlugin(
           )
           .map((page) => context.server.moduleGraph.getModuleById(page.resolvedId))
           .filter((module) => module != null)
+        if (
+          explicitRoutes &&
+          updatedModules.length === 0 &&
+          !context.server.moduleGraph.getModuleById(resolvedVirtualModuleId)
+        ) {
+          // SSRだけの文書にはページmoduleのHMR境界がないため、更新後のHTMLを再取得する。
+          context.server.ws.send({ type: 'full-reload', path: '*' })
+        }
         return updatedModules
       } catch (error) {
         result = previous

@@ -53,7 +53,8 @@ app.route(
         return user ? { name: user.name } : notFound()
       },
     },
-    document: ({ html, stateScript }) => `<!doctype html><html><body><div id="app">${html}</div>${stateScript}<script type="module" src="/irisout-client.js"></script></body></html>`,
+    document: ({ html, stateScript }) =>
+      `<!doctype html><html><body><div id="app">${html}</div>${stateScript}<script type="module" src="/irisout-client.js"></script></body></html>`,
   }),
 )
 ```
@@ -81,4 +82,4 @@ export default defineConfig({
 
 `irisoutHono(app)`はブラウザー入口を`irisout-client.js`として自動的に発行する。利用側のJavaScriptから`virtual:*`をimportする必要はない。利用側は`document`へ`<script type="module" src="/irisout-client.js"></script>`を含める。プラグインは入口ファイルを生成するが、HTML文書へscript要素は挿入しない。Honoの`document`は差し込みコメントを持つHTMLテンプレートではなく、`html`、`stateScript`とVite生成資産を使って完成したHTML文書を返せる。
 
-開発時はViteのHMR clientをHTMLへ挿入する。既存ページの変更はViteのmodule更新として受け取り、現在表示中のページをHonoのSSR結果から再hydrateする。ページ内の`signal`状態はSSR初期値へ戻る。ページの追加・削除は経路表を作り直すため、開発サーバーを再起動して文書全体を再読み込みする。
+開発時はViteのHMR clientをHTMLへ挿入する。`irisout-client.js`を読み込む文書では、既存ページの変更をViteのmodule更新として受け取り、現在表示中のページをHonoのSSR結果から再hydrateする。ページ内の`signal`状態はSSR初期値へ戻る。`irisout-client.js`を読み込まないSSR専用文書では、ページの変更時に文書全体を再読み込みする。ページの追加・削除は経路表を作り直すため、開発サーバーを再起動して文書全体を再読み込みする。
