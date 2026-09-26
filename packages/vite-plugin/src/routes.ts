@@ -40,6 +40,7 @@ export interface IrisoutExplicitRouteDefinition {
   readonly rootDirectory?: string
   readonly dependencies?: readonly string[]
   readonly transformSource?: (source: string, filePath: string) => string
+  readonly refreshSsr?: (filePath: string) => void
 }
 
 export interface IrisoutExplicitRoutesPluginOptions {
@@ -302,6 +303,7 @@ function createRoutesPlugin(
       const previous = result
       try {
         compile()
+        for (const route of explicitRoutes ?? []) route.refreshSsr?.(changedPath)
         context.server.watcher.add(
           explicitRoutes
             ? [...ensureCompiled().dependencies]

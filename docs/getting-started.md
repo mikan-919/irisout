@@ -1,6 +1,6 @@
 ---
 title: npm公開版から始める
-description: irisout 0.3.0を空のディレクトリへ導入し、JSXの型検査と本番ビルドを確認する手順
+description: irisout 0.3.1を空のディレクトリへ導入し、JSXの型検査と本番ビルドを確認する手順
 slug: getting-started
 section: 導入
 order: 1
@@ -8,7 +8,7 @@ order: 1
 
 # npm公開版から始める
 
-この手順は、空のディレクトリへ`irisout` 0.3.0を導入し、JSXの型検査、開発サーバー、
+この手順は、空のディレクトリへ`irisout` 0.3.1を導入し、JSXの型検査、開発サーバー、
 本番ビルドを確認するまでを扱う。irisoutのソースリポジトリやworkspaceは使用しない。
 
 必要なものはNode.js、npm、Gitである。Bunを使う場合は、以下の`npm`を`bun`、
@@ -20,7 +20,7 @@ order: 1
 mkdir irisout-app
 cd irisout-app
 npm init -y
-npm install irisout@0.3.0 vite-plus@0.3.0
+npm install irisout@0.3.1 vite-plus@0.3.0
 npm install --save-dev typescript@5.9
 ```
 

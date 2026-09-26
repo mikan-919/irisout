@@ -16,6 +16,7 @@ interface HonoPageMetadata {
   readonly dependencies: readonly string[]
   readonly rootDirectory: string
   readonly transformSource?: (source: string, filePath: string) => string
+  readonly refreshPage?: (filePath: string) => void
 }
 
 export interface IrisoutHonoOptions {
@@ -52,6 +53,7 @@ function collectRoutes(app: Hono): IrisoutExplicitRouteDefinition[] {
       rootDirectory: metadata.rootDirectory,
       dependencies: metadata.dependencies,
       transformSource: metadata.transformSource,
+      refreshSsr: metadata.refreshPage,
     })
   }
   return routes

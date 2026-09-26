@@ -171,6 +171,8 @@ export interface IrisoutHonoPageMetadata {
   readonly rootDirectory: string
   readonly dependencies: readonly string[]
   readonly transformSource?: (source: string, filePath: string) => string
+  /** Vite開発時、依存元の変更後にSSR用pageを再コンパイルする。 */
+  readonly refreshPage?: (filePath: string) => void
 }
 
 /** Honoがmount後も保持するhandlerへ、Vite連携が読む明示情報を付ける鍵。 */
@@ -182,7 +184,17 @@ export type IrisoutHonoPageHandler = ((context: Context) => Response | Promise<R
 
 interface CompiledPage {
   readonly route: FileRouteDefinition
+  readonly dependencies: readonly string[]
   readonly render: (input?: unknown) => { html: string; state: unknown }
+}
+
+function compilePage(
+  route: FileRouteDefinition,
+  transformSource: IrisoutFileRouterOptions['transformSource'],
+): CompiledPage {
+  const result = compileProject(route.filePath, { target: 'ssr', transformSource })
+  if (!result.ssrCode) throw new Error(`compile: missing SSR module for "${route.filePath}"`)
+  return { route, dependencies: result.dependencies, render: compileRender(result.ssrCode) }
 }
 
 function compileRender(ssrCode: string): CompiledPage['render'] {
@@ -299,14 +311,8 @@ export function createFileRouter(
   })
   const clientRoutes = toClientRouteTable(routeTable)
   const pages = new Map<string, CompiledPage>()
-  for (const route of routeTable.routes) {
-    const result = compileProject(route.filePath, {
-      target: 'ssr',
-      transformSource: options.transformSource,
-    })
-    if (!result.ssrCode) throw new Error(`compile: missing SSR module for "${route.filePath}"`)
-    pages.set(route.id, { route, render: compileRender(result.ssrCode) })
-  }
+  for (const route of routeTable.routes)
+    pages.set(route.id, compilePage(route, options.transformSource))
 
   const loaderSource = options.loaders ?? options.loader
   const documentRenderer = options.document ?? options.renderDocument
@@ -395,6 +401,11 @@ export function createFileRouter(
         rootDirectory: manifest.rootDirectory,
         dependencies: manifest.dependencies,
         transformSource: options.transformSource,
+        refreshPage: (filePath: string) => {
+          if (pages.get(route.id)?.dependencies.includes(filePath)) {
+            pages.set(route.id, compilePage(route, options.transformSource))
+          }
+        },
       } satisfies IrisoutHonoPageMetadata,
     })
     router.all(joinRoutePath(routeTable.basePath, route.path), handler)

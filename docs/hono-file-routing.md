@@ -53,7 +53,7 @@ app.route(
         return user ? { name: user.name } : notFound()
       },
     },
-    document: ({ html, stateScript }) => `<!doctype html><div id="app">${html}</div>${stateScript}`,
+    document: ({ html, stateScript }) => `<!doctype html><html><body><div id="app">${html}</div>${stateScript}<script type="module" src="/irisout-client.js"></script></body></html>`,
   }),
 )
 ```
@@ -79,4 +79,4 @@ export default defineConfig({
 
 各ページは動的`import()`になる。irisoutは経路表とページ入口だけを生成し、チャンク分割、共有チャンク、圧縮、ファイル名のハッシュはViteが処理する。通常の同一配信元リンクはクライアント遷移の対象になり、外部リンク、別タブ、download、fragmentだけの移動はブラウザー標準の動作へ任せる。
 
-`irisoutHono(app)`はブラウザー入口を`irisout-client.js`として自動的に発行する。利用側のJavaScriptから`virtual:*`をimportする必要はない。Honoの`document`は差し込みコメントを持つHTMLテンプレートではなく、`html`、`stateScript`とVite生成資産を使って完成したHTML文書を返せる。
+`irisoutHono(app)`はブラウザー入口を`irisout-client.js`として自動的に発行する。利用側のJavaScriptから`virtual:*`をimportする必要はない。利用側は`document`へ`<script type="module" src="/irisout-client.js"></script>`を含める。プラグインは入口ファイルを生成するが、HTML文書へscript要素は挿入しない。Honoの`document`は差し込みコメントを持つHTMLテンプレートではなく、`html`、`stateScript`とVite生成資産を使って完成したHTML文書を返せる。

@@ -105,7 +105,9 @@ import { Hono } from 'hono'
 import { createFileRouter } from 'irisout/hono'
 
 export const app = new Hono()
-app.route('/apps', createFileRouter('./routes'))
+app.route('/apps', createFileRouter('./routes', {
+  document: ({ html, stateScript }) => `<!doctype html><html><body><div id="app">${html}</div>${stateScript}<script type="module" src="/irisout-client.js"></script></body></html>`,
+}))
 ```
 
 ```ts
@@ -115,6 +117,8 @@ import { app } from './server/app.ts'
 
 export default { plugins: [irisoutHono(app)] }
 ```
+
+`irisoutHono(app)`は`irisout-client.js`を生成します。初回hydrateとブラウザー遷移を有効にするには、Honoの`document`がこのファイルを読み込むscript要素を含めてください。
 
 loaderは`loaders`へ経路をキーとして登録できます。HTML文書の外枠は利用側が組み立て、
 初期stateはdocument関数の`stateScript`を使います。`notFound()`と`redirect()`はloaderから返せます。
