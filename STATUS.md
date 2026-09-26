@@ -5,7 +5,9 @@
 
 ## 現在地（2026-09-26）
 
-ソース版とnpm公開版のlatestは0.3.4である。0.3.4は2026-09-26にnpmへ公開した。開発時のpage moduleをViteの仮想moduleとして解決し、Hono構成で編集内容が読み込まれずHMRが動かない問題を修正した。Vite開発サーバーでpage moduleのHTTP 200応答と、ページ編集時のHMR WebSocket通知を確認した。Playwright用Chromiumが環境になく、ブラウザー上のDOM差し替えは未確認である。更新時は現在のpageだけをSSR結果から再hydrateし、page内signal状態は初期値へ戻る。経路の追加・削除では開発サーバーを再起動する。TypeScript検査、package build、公式site buildは通過した。0.3.3は2026-09-26にnpmへ公開した。0.3.0は記述APIの名前付きimport、ブラウザ用コンパイラ、要求ごとのサーバー描画、Honoファイル経路、Motionの退場処理を含む。梱包検査、文書生成検査、npm公開版を使う別アプリ導入検査を通過した。0.2.2は文書とアプリ開発用スキルを更新し、公開入口と生成コードは変更していない。0.2.1では状態更新を
+ソース版とnpm公開版のlatestは0.3.5である。0.3.5は2026-09-26にnpmへ公開した。HonoのSSR専用文書でブラウザー入口を読み込まない場合も、ページ変更時に文書を再読み込みして編集内容を反映する。別アプリ構成でVite+ 1.0.0-rc.0とChromiumを使い、依存ファイルの変更がブラウザーへ反映されることを確認した。型検査、全試験、公式サイト構築、梱包物とnpm公開版の隔離導入検査を通過した。
+
+0.3.4は2026-09-26にnpmへ公開した。開発時のpage moduleをViteの仮想moduleとして解決し、Hono構成で編集内容が読み込まれずHMRが動かない問題を修正した。ブラウザー入口を読み込む文書では現在のpageだけをSSR結果から再hydrateし、page内signal状態は初期値へ戻る。経路の追加・削除では開発サーバーを再起動する。0.3.3は2026-09-26にnpmへ公開した。0.3.0は記述APIの名前付きimport、ブラウザ用コンパイラ、要求ごとのサーバー描画、Honoファイル経路、Motionの退場処理を含む。0.2.2は文書とアプリ開発用スキルを更新し、公開入口と生成コードは変更していない。0.2.1では状態更新を
 `signal((previous) => next)`へ統一し、`signal(initial, keyOf)`と`.update()`を削除した。
 配列更新は一覧全体を再調整し、要素の識別とDOM再利用にはJSXの`key`を使う。
 
@@ -240,7 +242,7 @@ Motion変換を適用した。Markdown文書と保存済みPlaygroundの動的�
 - `bun run build:packages`: `irisout`のJavaScriptと型定義を生成。
 - `bun run pack:smoke`: 一時ディレクトリへ梱包物を導入して公開4入口を`skipLibCheck:false`で型検査し、
   本番ビルド、初期HTML、イベント生成、ソースマップ、workspace依存の不存在を確認。
-- `bun run registry:smoke`: npm公開版0.3.4に同じ隔離検査を適用。
+- `bun run registry:smoke`: npm公開版0.3.5に同じ隔離検査を適用。
 
 時間とメモリの測定は環境差を含むため、同じ生成物、Chromium、入力、反復数の比較だけを
 採否に使う。R3の最終値と判断理由はADR-0044〜0046、ヒートマップの測定条件は
