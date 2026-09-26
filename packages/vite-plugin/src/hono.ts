@@ -101,8 +101,19 @@ function developmentPages(app: Hono, routes: readonly IrisoutExplicitRouteDefini
 
         const result = await app.fetch(createRequest(request, server))
         response.statusCode = result.status
-        result.headers.forEach((value, name) => response.setHeader(name, value))
-        response.end(Buffer.from(await result.arrayBuffer()))
+        let body = Buffer.from(await result.arrayBuffer())
+        const contentType = result.headers.get('content-type')
+        const isHtml = contentType?.toLowerCase().startsWith('text/html') ?? false
+        if (isHtml) {
+          // Honoで返すHTMLはViteのHTML配信を通らないため、開発用scriptを変換で注入する。
+          const html = await server.transformIndexHtml(pathname, body.toString('utf8'), request.url)
+          body = Buffer.from(html)
+        }
+        result.headers.forEach((value, name) => {
+          if (isHtml && (name === 'content-length' || name === 'etag')) return
+          response.setHeader(name, value)
+        })
+        response.end(body)
       })
     },
   }

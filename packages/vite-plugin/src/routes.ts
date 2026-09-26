@@ -96,11 +96,22 @@ function pageModuleSource(
       return `${JSON.stringify(route.id)}: () => import(${JSON.stringify(pages[index]!.rawId)}),`
     })
     .filter((entry): entry is string => entry != null)
+  const hotAccepts = pages
+    .map(
+      (page) =>
+        `  import.meta.hot.accept(${JSON.stringify(page.rawId)}, async () => {\n` +
+        `    const __irisout_match__ = matchRoute(__irisout_route_table__, window.location.href);\n` +
+        `    if (__irisout_match__?.route.id !== ${JSON.stringify(page.route.id)}) return;\n` +
+        `    await __irisout_started__;\n` +
+        `    await routeNavigator.navigate(window.location.href, { replace: true });\n` +
+        `  });`,
+    )
+    .join('\n')
   const container = JSON.stringify(containerSelector)
   const missingContainer = JSON.stringify(`irisout route container not found: ${containerSelector}`)
 
   return [
-    "import { createRouteNavigator } from 'irisout/routes';",
+    "import { createRouteNavigator, matchRoute } from 'irisout/routes';",
     '',
     `const __irisout_route_table__ = ${JSON.stringify(clientTable)};`,
     `const __irisout_pages__ = { ${pagesByRoute.join(' ')} };`,
@@ -143,7 +154,11 @@ function pageModuleSource(
     `  hydrateInitial: __irisout_hydrate_initial__,`,
     `  fallback: __irisout_fallback__,`,
     `});`,
-    `void routeNavigator.start();`,
+    `const __irisout_started__ = routeNavigator.start();`,
+    `void __irisout_started__;`,
+    `if (import.meta.hot) {`,
+    hotAccepts,
+    `}`,
     '',
   ].join('\n')
 }
@@ -302,19 +317,37 @@ function createRoutesPlugin(
         return
       const previous = result
       try {
-        compile()
+        const next = compile()
         for (const route of explicitRoutes ?? []) route.refreshSsr?.(changedPath)
         context.server.watcher.add(
           explicitRoutes
-            ? [...ensureCompiled().dependencies]
-            : [directoryPath, ...ensureCompiled().dependencies],
+            ? [...next.dependencies]
+            : [directoryPath, ...next.dependencies],
         )
+        const routesChanged =
+          JSON.stringify(previous?.clientTable.routes) !== JSON.stringify(next.clientTable.routes)
+        if (routesChanged) {
+          const moduleGraph = context.server.moduleGraph
+          for (const id of [resolvedVirtualModuleId, ...pageIds.keys()]) {
+            const module = moduleGraph?.getModuleById(id)
+            if (module && moduleGraph) {
+              moduleGraph.invalidateModule(module, undefined, context.timestamp)
+            }
+          }
+          context.server.ws.send({ type: 'full-reload', path: '*' })
+          return []
+        }
+        const updatedModules = next.pages
+          .filter((page) =>
+            page.result.dependencies.some((filePath) => normalizePath(filePath) === changedPath),
+          )
+          .map((page) => context.server.moduleGraph.getModuleById(page.resolvedId))
+          .filter((module) => module != null)
+        return updatedModules
       } catch (error) {
         result = previous
         throw error
       }
-      context.server.ws.send({ type: 'full-reload', path: '*' })
-      return []
     },
   }
 }

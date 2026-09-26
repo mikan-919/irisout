@@ -80,3 +80,5 @@ export default defineConfig({
 各ページは動的`import()`になる。irisoutは経路表とページ入口だけを生成し、チャンク分割、共有チャンク、圧縮、ファイル名のハッシュはViteが処理する。通常の同一配信元リンクはクライアント遷移の対象になり、外部リンク、別タブ、download、fragmentだけの移動はブラウザー標準の動作へ任せる。
 
 `irisoutHono(app)`はブラウザー入口を`irisout-client.js`として自動的に発行する。利用側のJavaScriptから`virtual:*`をimportする必要はない。利用側は`document`へ`<script type="module" src="/irisout-client.js"></script>`を含める。プラグインは入口ファイルを生成するが、HTML文書へscript要素は挿入しない。Honoの`document`は差し込みコメントを持つHTMLテンプレートではなく、`html`、`stateScript`とVite生成資産を使って完成したHTML文書を返せる。
+
+開発時はViteのHMR clientをHTMLへ挿入する。既存ページの変更はViteのmodule更新として受け取り、現在表示中のページをHonoのSSR結果から再hydrateする。ページ内の`signal`状態はSSR初期値へ戻る。ページの追加・削除は経路表を作り直すため、開発サーバーを再起動して文書全体を再読み込みする。

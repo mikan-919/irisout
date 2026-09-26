@@ -14,7 +14,7 @@ irisoutは、JSXの記述方法を保ちながら、ブラウザで動く処理�
 更新するコードへ変換します。
 
 > [!WARNING]
-> `irisout` 0.3.0をnpmで公開しています。試用版のため、対応範囲を確認してください。
+> `irisout` 0.3.3をnpmで公開しています。試用版のため、対応範囲を確認してください。
 > 実製品へ導入する場合は、対応範囲と依存パッケージのライセンスを確認してください。
 
 ## 30秒で把握する
@@ -241,7 +241,7 @@ bun run dev playground
 | `bun run build:web`      | 文書、公式サイト、Playgroundの本番生成物を作る       |
 | `bun run build:packages` | 公開パッケージのJavaScriptと型定義を生成する         |
 | `bun run pack:smoke`     | ローカル梱包物を別アプリへ導入して検査する           |
-| `bun run registry:smoke` | npm公開版`irisout@0.3.0`を別アプリへ導入して検査する |
+| `bun run registry:smoke` | npm公開版`irisout@0.3.3`を別アプリへ導入して検査する |
 
 #### ベンチマーク
 
@@ -275,7 +275,7 @@ export default {
 開発中はworkspaceで導入します。配布入口のJavaScriptと型定義は`bun run build:packages`で
 生成し、`bun run pack:smoke`で一時ディレクトリへ梱包物を導入してVite buildを確認できます。
 公開単位は一つの`irisout`パッケージです。`bun run registry:smoke`はnpmで公開した
-`irisout@0.3.0`を別ディレクトリへ導入し、型検査とVite buildを確認します。
+`irisout@0.3.3`を別ディレクトリへ導入し、型検査とVite buildを確認します。
 作者以外による手動試用は未実施です。
 梱包方針は[ADR-0047](./docs/adr/0047-single-public-package.md)に記載しています。
 

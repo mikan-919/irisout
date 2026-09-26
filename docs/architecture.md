@@ -73,8 +73,10 @@ linked source + module-scope補助宣言
 `irisout/vite`はこの一覧だけを監視対象にし、変更時に同じ入口を再コンパイルする。
 初期HTMLはビルド時に一度生成してindex.htmlのmarkerへ埋め込み、仮想moduleへhydrate処理を
 出力する。これは要求ごとのSSR HTMLではなく、静的HTMLをブラウザで引き継ぐclient buildの
-契約である。request SSRの入口と要求ごとのstate所有はADR-0038で別契約に分ける。開発時の
-変更反映はページ全体の再読み込みであり、状態保持やDOM差分HMRは対象外である。
+契約である。request SSRの入口と要求ごとのstate所有はADR-0038で別契約に分ける。`irisout/vite`の開発時の
+変更反映はページ全体の再読み込みであり、状態保持やDOM差分HMRは対象外である。`irisout/hono/vite`は
+更新されたページmoduleをViteのHMR境界で差し替え、現在のページだけをSSR結果から再hydrateする。
+ページ内signal状態は初期値へ戻り、経路の追加・削除では開発サーバーを再起動して全体を再読み込みする。
 
 `compileProject(entryPath, { target: 'ssr' })`は同じ解析結果から`ssrCode`を追加生成する。
 公開側は`irisout/ssr`の`irisoutSsr()`でこのtargetを選び、仮想moduleの`render(input)`から

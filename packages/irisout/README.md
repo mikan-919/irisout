@@ -120,6 +120,8 @@ export default { plugins: [irisoutHono(app)] }
 
 `irisoutHono(app)`は`irisout-client.js`を生成します。初回hydrateとブラウザー遷移を有効にするには、Honoの`document`がこのファイルを読み込むscript要素を含めてください。
 
+開発時はViteのHMR clientがHTMLへ挿入されます。ページを編集すると、表示中のページだけを更新されたSSR結果から再hydrateします。ページ内の`signal`状態は初期値へ戻ります。経路の追加・削除では開発サーバーを再起動します。
+
 loaderは`loaders`へ経路をキーとして登録できます。HTML文書の外枠は利用側が組み立て、
 初期stateはdocument関数の`stateScript`を使います。`notFound()`と`redirect()`はloaderから返せます。
 
