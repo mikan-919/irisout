@@ -1,6 +1,6 @@
 # 変更履歴
 
-## 0.3.0 - 2026-09-25
+## 0.3.0 - 2026-09-26
 
 - 利用者が記述するJSXでは、記述APIを`irisout`から名前付きimportする形式に変更した。`irisout/jsx`の大域宣言を削除し、記述APIのimportは生成物から取り除く。
 - ブラウザ内コンパイラ`irisout/browser`、要求ごとのサーバー描画入口`irisout/ssr`、ファイル経路とHono連携の`irisout/routes`・`irisout/hono`・`irisout/hono/vite`を追加した。

@@ -101,10 +101,8 @@ packageJson.dependencies.irisout = packageSpec
 packageJson.overrides = { irisout: packageSpec }
 packageJson.devDependencies.typescript = '^5.9.0'
 packageJson.devDependencies['@types/node'] = '^24.0.0'
-if (!registryPackage) {
-  packageJson.dependencies.hono = '^4.13.8'
-  packageJson.dependencies.motion = '^13.4.0'
-}
+packageJson.dependencies.hono = '^4.13.8'
+packageJson.dependencies.motion = '^13.4.0'
 writeFileSync(path.join(fixtureDir, 'package.json'), `${JSON.stringify(packageJson, null, 2)}\n`)
 
 if (!registryPackage) {
