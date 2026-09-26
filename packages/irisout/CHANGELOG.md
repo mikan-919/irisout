@@ -1,5 +1,9 @@
 # 変更履歴
 
+## 0.3.4 - 2026-09-26
+
+- 開発時のpage moduleをViteの仮想moduleとして解決し、Hono構成でページ編集がHMRへ届かない問題を修正する。
+
 ## 0.3.3 - 2026-09-26
 
 - `irisout/hono/vite`の開発時にViteのHMR clientをHTMLへ挿入し、編集中のページmoduleを差し替える。

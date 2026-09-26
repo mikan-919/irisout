@@ -7,7 +7,7 @@ export default function GettingStarted() {
     <DocsPage
       section="導入"
       title="npm公開版から始める"
-      description="irisout 0.3.3を導入し、型検査と本番ビルドまで確認します。"
+      description="irisout 0.3.4を導入し、型検査と本番ビルドまで確認します。"
       previousHref={null}
       previousTitle=""
       nextHref="/docs/state"
@@ -15,7 +15,7 @@ export default function GettingStarted() {
     >
       <h2>1. パッケージを導入する</h2>
       <pre>
-        <code>{'bun add irisout@0.3.3 vite-plus@0.3.0\nbun add --dev typescript@5.9'}</code>
+        <code>{'bun add irisout@0.3.4 vite-plus@0.3.0\nbun add --dev typescript@5.9'}</code>
       </pre>
       <p>package.jsonへdev、build、typecheckの実行コマンドを追加します。</p>
       <pre>

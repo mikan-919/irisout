@@ -189,7 +189,7 @@ function createRoutesPlugin(
   const pageRawId = (routeId: string): string =>
     `${virtualModuleId}${PAGE_MODULE_MARKER}${encodeURIComponent(routeId)}`
   const pageResolvedId = (rawId: string): string =>
-    path.join(root, `.irisout-${encodeURIComponent(rawId)}.js`)
+    build ? path.join(root, `.irisout-${encodeURIComponent(rawId)}.js`) : `\0${rawId}`
 
   const compile = (): RouteBuild => {
     const manifest = explicitRoutes
