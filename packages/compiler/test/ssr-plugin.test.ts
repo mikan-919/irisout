@@ -47,6 +47,42 @@ describe('irisoutSsr Vite+連携', () => {
     expect(resolveId('virtual:irisout-ssr')).toBe('\0virtual:irisout-ssr')
   })
 
+  it('SSRの更新時に仮想moduleを無効化してから文書を再読み込みする', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'irisout-ssr-plugin-reload-'))
+    const entry = path.join(root, 'Page.jsx')
+    writeFileSync(entry, 'export function Page() { render(<h1>before</h1>); }')
+    const plugin = irisoutSsr({ entry })
+    const configResolved = plugin.configResolved as unknown as (config: {
+      root: string
+      command: 'serve'
+    }) => void
+    configResolved({ root, command: 'serve' })
+    const buildStart = plugin.buildStart as unknown as (this: {
+      addWatchFile(filePath: string): void
+    }) => void
+    buildStart.call({ addWatchFile: () => {} })
+    const events: string[] = []
+    const module = {}
+    const server = {
+      watcher: { add: (_files: string[]) => {} },
+      moduleGraph: {
+        getModuleById: (id: string) => (id === '\0virtual:irisout-ssr' ? module : undefined),
+        invalidateModule: (_module: object) => events.push('invalidate'),
+      },
+      ws: { send: (_payload: unknown) => events.push('reload') },
+    }
+    writeFileSync(entry, 'export function Page() { render(<h1>after</h1>); }')
+    const handleHotUpdate = plugin.handleHotUpdate as unknown as (context: {
+      file: string
+      server: typeof server
+      timestamp: number
+    }) => Promise<unknown>
+    expect(await handleHotUpdate({ file: entry, server, timestamp: 1 })).toEqual([])
+    expect(events).toEqual(['invalidate', 'reload'])
+    const load = plugin.load as unknown as (id: string) => { code: string } | null
+    expect(load('\0virtual:irisout-ssr')?.code).toContain('after')
+  })
+
   it('相対moduleの補助値を要求ごとに作る', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'irisout-ssr-module-state-'))
     const entry = path.join(root, 'Page.jsx')

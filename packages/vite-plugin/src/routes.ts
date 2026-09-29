@@ -99,7 +99,9 @@ function pageModuleSource(
   const hotAccepts = pages
     .map(
       (page) =>
-        `  import.meta.hot.accept(${JSON.stringify(page.rawId)}, async () => {\n` +
+        `  import.meta.hot.accept(${JSON.stringify(page.rawId)}, async (__irisout_page__) => {\n` +
+        `    if (!__irisout_page__) return;\n` +
+        `    __irisout_pages__[${JSON.stringify(page.route.id)}] = () => Promise.resolve(__irisout_page__);\n` +
         `    const __irisout_match__ = matchRoute(__irisout_route_table__, window.location.href);\n` +
         `    if (__irisout_match__?.route.id !== ${JSON.stringify(page.route.id)}) return;\n` +
         `    await __irisout_started__;\n` +

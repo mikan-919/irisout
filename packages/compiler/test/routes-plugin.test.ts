@@ -49,6 +49,7 @@ describe('irisoutRoutes Vite連携', () => {
       expect(main?.code).toContain('data-irisout-route-state')
       expect(main?.code).not.toContain('node:fs')
       expect(main?.code).not.toContain("from 'hono'")
+      expect(main?.code).toContain('= () => Promise.resolve(__irisout_page__)')
 
       const pageRawId = 'virtual:irisout-routes:page:' + encodeURIComponent('/')
       const pageId = resolveId(pageRawId)

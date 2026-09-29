@@ -7,6 +7,10 @@ import { irisout } from '../../vite-plugin/src/index.ts'
 interface FakeServer {
   watcher: { add(files: string[]): void }
   ws: { send(payload: unknown): void }
+  moduleGraph: {
+    getModuleById(id: string): object | undefined
+    invalidateModule(module: object): void
+  }
 }
 
 function writeProject(files: Record<string, string>): { root: string; entry: string } {
@@ -48,9 +52,15 @@ describe('irisout Vite連携', () => {
 
     const addedByServer: string[] = []
     const sent: unknown[] = []
+    const invalidated: object[] = []
+    const virtualModule = {}
     const server: FakeServer = {
       watcher: { add: (files) => addedByServer.push(...files) },
       ws: { send: (payload) => sent.push(payload) },
+      moduleGraph: {
+        getModuleById: (id) => (id === resolvedId ? virtualModule : undefined),
+        invalidateModule: (module) => invalidated.push(module),
+      },
     }
     const configureServer = plugin.configureServer as unknown as (server: FakeServer) => void
     configureServer(server)
@@ -79,6 +89,7 @@ describe('irisout Vite連携', () => {
     }) => Promise<unknown>
     expect(await handleHotUpdate({ file: helperPath, server })).toEqual([])
     expect(sent).toEqual([{ type: 'full-reload', path: '*' }])
+    expect(invalidated).toEqual([virtualModule])
     expect(transformIndexHtml('<!--irisout-html-->')).toContain(
       '<span data-iris-id="m0">after</span>',
     )
@@ -98,6 +109,7 @@ describe('irisout Vite連携', () => {
       { type: 'full-reload', path: '*' },
       { type: 'full-reload', path: '*' },
     ])
+    expect(invalidated).toEqual([virtualModule, virtualModule])
     expect(transformIndexHtml('<!--irisout-html-->')).toContain('>fixed</span>')
   })
 
@@ -135,6 +147,7 @@ describe('irisout Vite連携', () => {
     const server: FakeServer = {
       watcher: { add: () => {} },
       ws: { send: (payload) => sent.push(payload) },
+      moduleGraph: { getModuleById: () => undefined, invalidateModule: () => {} },
     }
     const handleHotUpdate = plugin.handleHotUpdate as unknown as (context: {
       file: string

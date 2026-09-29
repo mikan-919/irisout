@@ -134,6 +134,8 @@ export function irisout(options: IrisoutPluginOptions): Plugin {
         result = previous
         throw error
       }
+      const module = context.server.moduleGraph.getModuleById(resolvedVirtualModuleId)
+      if (module) context.server.moduleGraph.invalidateModule(module, undefined, context.timestamp)
       context.server.ws.send({ type: 'full-reload', path: '*' })
       return []
     },
@@ -212,6 +214,8 @@ export function irisoutSsr(options: IrisoutSsrPluginOptions): Plugin {
         result = previous
         throw error
       }
+      const module = context.server.moduleGraph.getModuleById(resolvedVirtualModuleId)
+      if (module) context.server.moduleGraph.invalidateModule(module, undefined, context.timestamp)
       context.server.ws.send({ type: 'full-reload', path: '*' })
       return []
     },
