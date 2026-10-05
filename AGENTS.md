@@ -3,6 +3,16 @@ COMMENT in Japanese
 
 The session directory contains a history of your previous actions; if necessary, use grep or a similar tool to narrow down your search.
 
+## jj の作業保存・変更確定・送信
+
+- Gitリポジトリがjj管理下にない場合は、`jj git init --colocate`で初期化する。
+- 初回は`bun run jj:install`で、このリポジトリに検査付きの別名を登録する。
+- 作業途中とユーザーへ応答する前は`jj status`で作業コピーを保存する。この操作では検査を実行しない。
+- 変更確定には`jj ci -m "<英語命令形の要約>"`または`jj finish -m "<英語命令形の要約>"`を使う。静的検査・型検査・試験を通してから、変更を確定して次の作業コピーを作成する。
+- 送信には`jj push`を使う。送信対象は`--bookmark`などで指定する。
+- 検査失敗時は原因を修正する。検査を回避する目的で`jj commit`、`jj describe`と`jj new`の組み合わせ、`jj git push`を直接使わない。jj本体はGitフックを実行しないため、これらの操作では検査が走らない。
+- 検査対象は現在の作業コピー全体である。別の履歴を送信するときは、その変更を作業コピーに開いて検査する。詳細は`docs/jj-hooks.md`を参照する。
+
 ## ドキュメントの役割分担
 
 - `CONCEPT.v3.md` — プロジェクトの目的と哲学。迷ったらここに立ち返る。
