@@ -105,13 +105,29 @@ import { Hono } from 'hono'
 import { createFileRouter } from 'irisout/hono'
 
 export const app = new Hono()
-app.route(
-  '/apps',
-  createFileRouter('./routes', {
-    document: ({ html, stateScript }) =>
-      `<!doctype html><html><body><div id="app">${html}</div>${stateScript}<script type="module" src="/irisout-client.js"></script></body></html>`,
-  }),
-)
+app.route('/apps', createFileRouter('./routes'))
+```
+
+```jsx
+// routes/page.jsx
+function Layout({ children }) {
+  return (
+    <html lang="ja">
+      <head>
+        <title>Counter</title>
+      </head>
+      <body>{children}</body>
+    </html>
+  )
+}
+
+export function Page() {
+  return (
+    <Layout>
+      <main>Counter</main>
+    </Layout>
+  )
+}
 ```
 
 ```ts
@@ -122,12 +138,11 @@ import { app } from './server/app.ts'
 export default { plugins: [irisoutHono(app)] }
 ```
 
-`irisoutHono(app)`は`irisout-client.js`を生成します。初回hydrateとブラウザー遷移を有効にするには、Honoの`document`がこのファイルを読み込むscript要素を含めてください。
+`irisoutHono(app)`は`irisout-client.js`を生成します。htmlをルートとするページでは、Honoが状態と起動用のJavaScriptをbody末尾へ注入します。head、bodyの順で記述し、タイトルと文書属性はLayoutで指定してください。既存の`document`指定も使えます。その場合は状態と起動scriptを利用側で挿入します。
 
 開発時はViteのHMR clientがHTMLへ挿入されます。ページを編集すると、表示中のページだけを更新されたSSR結果から再hydrateします。ページ内の`signal`状態は初期値へ戻ります。経路の追加・削除では開発サーバーを再起動します。
 
-loaderは`loaders`へ経路をキーとして登録できます。HTML文書の外枠は利用側が組み立て、
-初期stateはdocument関数の`stateScript`を使います。`notFound()`と`redirect()`はloaderから返せます。
+loaderは`loaders`へ経路をキーとして登録できます。`notFound()`と`redirect()`はloaderから返せます。
 
 ```ts
 createFileRouter('./routes', {
@@ -136,7 +151,6 @@ createFileRouter('./routes', {
       name: await loadUser(params.id!, search, request),
     }),
   },
-  document: ({ html, stateScript }) => `<!doctype html><div id="app">${html}</div>${stateScript}`,
 })
 ```
 
