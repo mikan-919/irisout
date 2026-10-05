@@ -7,6 +7,31 @@
 
 ## Requirements
 
+### Requirement: タグからの自動公開
+
+公開タグはパッケージの版、変更履歴、公開版の導入検査の版と一致しなければならない(SHALL)。タグのpushから既存CI、npm公開、公開版の導入検査、GitHubリリース作成を順に実行しなければならない(SHALL)。npm公開はGitHub ActionsのOIDC認証を使い、保存した公開トークンを要求してはならない(SHALL NOT)。
+
+#### Scenario: 版と変更履歴を準備する
+
+- **WHEN** 現在より新しい版でrelease:prepareを実行する
+- **THEN** 公開パッケージ、ロックファイル、導入文書、公開版の導入検査の版を更新する
+- **AND** 過去の公開記録を保持し、変更内容の記入前はrelease:checkで拒否する
+
+#### Scenario: タグから公開する
+
+- **WHEN** 版が一致するタグをpushする
+- **THEN** CI通過後に公開し、公開版の導入検査を通してGitHubリリースを作る
+
+#### Scenario: 公開後に再試行する
+
+- **WHEN** 同じ公開処理を再試行する
+- **THEN** 公開済みのnpm版とGitHubリリースは再作成せず、未完了の検査と記録を続ける
+
+#### Scenario: 公開の予行を行う
+
+- **WHEN** Releaseワークフローを手動実行する
+- **THEN** CI、梱包、公開の予行だけを行い、npmとGitHubへ公開しない
+
 ### Requirement: 単一の公開導入単位
 
 配布物は`irisout`という一つの公開npmパッケージに、コンパイラ、実行時処理、Vite連携、

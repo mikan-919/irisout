@@ -1,0 +1,76 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  # 手動実行は公開せず、現在のソースで公開前の検証だけを行う。
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: npm-release
+  cancel-in-progress: false
+
+jobs:
+  check:
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.13
+      - run: bun install --frozen-lockfile
+      - name: Check release version and notes
+        id: release
+        env:
+          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+        run: bun run release:check "$RELEASE_TAG"
+      - run: bun run build:packages
+      - name: Pack release
+        working-directory: packages/irisout
+        run: bun pm pack --destination "$RUNNER_TEMP" --quiet
+      - name: Check published version
+        id: registry
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          bun -e 'import { appendFileSync } from "node:fs";
+          const response = await fetch("https://registry.npmjs.org/irisout/" + process.env.RELEASE_VERSION);
+          if (response.status !== 200 && response.status !== 404) throw new Error("npm registry: " + response.status);
+          appendFileSync(process.env.GITHUB_OUTPUT, "published=" + response.ok + "\n");'
+      # npmのOIDC認証を使う公開だけは、Bunからnpm CLIを起動する。
+      - name: Publish to npm
+        if: github.event_name == 'push' && steps.registry.outputs.published == 'false'
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        run: bunx npm@11.19.0 publish "$RUNNER_TEMP/irisout-$RELEASE_VERSION.tgz" --access public --tag latest --provenance
+      - name: Dry run publication
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        run: bunx npm@11.19.0 publish "$RUNNER_TEMP/irisout-$RELEASE_VERSION.tgz" --access public --dry-run
+      - name: Verify public package
+        if: github.event_name == 'push'
+        run: bun run registry:smoke
+      - name: Create GitHub release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          RELEASE_NOTES: ${{ steps.release.outputs.notes }}
+        run: |
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" --verify-tag --title "irisout ${RELEASE_TAG#v}" --notes-file "$RELEASE_NOTES"
+          fi

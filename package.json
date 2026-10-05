@@ -41,7 +41,9 @@
     "pack:smoke": "node scripts/pack-smoke.mjs",
     "registry:smoke": "IRISOUT_PACKAGE_SPEC=0.3.6 node scripts/pack-smoke.mjs",
     "prepare": "node scripts/build-packages.mjs && husky",
-    "bench:rshono": "bun run --cwd packages/bench bench:rshono"
+    "bench:rshono": "bun run --cwd packages/bench bench:rshono",
+    "release:prepare": "bun scripts/release.mjs prepare",
+    "release:check": "bun scripts/release.mjs check"
   },
   "devDependencies": {
     "@babel/generator": "^8.0.0",
