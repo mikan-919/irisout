@@ -55,12 +55,13 @@ jobs:
         if: github.event_name == 'push' && steps.registry.outputs.published == 'false'
         env:
           RELEASE_VERSION: ${{ steps.release.outputs.version }}
-        run: bunx npm@11.19.0 publish "$RUNNER_TEMP/irisout-$RELEASE_VERSION.tgz" --access public --tag latest --provenance
+        run: bunx npm@11.19.0 publish "$RUNNER_TEMP/irisout-$RELEASE_VERSION.tgz" --access public --provenance
       - name: Dry run publication
         if: github.event_name == 'workflow_dispatch'
         env:
           RELEASE_VERSION: ${{ steps.release.outputs.version }}
-        run: bunx npm@11.19.0 publish "$RUNNER_TEMP/irisout-$RELEASE_VERSION.tgz" --access public --dry-run
+        # 公開済みの版でも予行する。dry-runがアップロードを止める。
+        run: bunx npm@11.19.0 publish "$RUNNER_TEMP/irisout-$RELEASE_VERSION.tgz" --access public --dry-run --force
       - name: Verify public package
         if: github.event_name == 'push'
         run: bun run registry:smoke
