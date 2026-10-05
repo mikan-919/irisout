@@ -201,6 +201,8 @@ export interface GenerateModuleInput {
   signalState: { id: DeclId; outputName: string }[]
   /** SSR HTMLの構造unitをhydrate前に差し替えるclient生成物か。 */
   ssrHydration: boolean
+  /** 文書のmountではhtml属性とhead/bodyも復元する。 */
+  isDocument: boolean
 }
 
 // クローンしたテンプレート内から data-iris-id を持つ要素を探す。ルート
@@ -1475,6 +1477,7 @@ export function generateModule({
   inputPattern,
   signalState,
   ssrHydration,
+  isDocument,
 }: GenerateModuleInput): string {
   const moduleLines: string[] = []
   const instanceLines: string[] = []
@@ -1482,9 +1485,10 @@ export function generateModule({
     (marker) => marker.kind === 'list' || marker.kind === 'conditional',
   )
   const hasStructuralEffects = markersHaveStructuralEffects(markers)
+  const mountName = isDocument ? 'mountDocument' : 'mount'
   const runtimeImports = hasStructuralUnits
-    ? ['mountWithRanges as __mount__', 'hydrateWithRanges as __hydrate__']
-    : ['mount as __mount__', 'hydrate as __hydrate__']
+    ? [`${mountName}WithRanges as __mount__`, 'hydrateWithRanges as __hydrate__']
+    : [`${mountName} as __mount__`, 'hydrate as __hydrate__']
   runtimeImports.push('beginDomUpdate as __beginDomUpdate__', 'endDomUpdate as __endDomUpdate__')
   if (actions.some((a) => a.resultRendered) || markersHaveResultActions(markers)) {
     runtimeImports.push('normalizeUseActionResult as __normalizeUseActionResult__')

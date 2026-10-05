@@ -110,14 +110,23 @@ function pageModuleSource(
     )
     .join('\n')
   const container = JSON.stringify(containerSelector)
+  const documentPages = pages.filter((page) => page.result.isDocument).map((page) => page.route.id)
   const missingContainer = JSON.stringify(`irisout route container not found: ${containerSelector}`)
 
   return [
     "import { createRouteNavigator, matchRoute } from 'irisout/routes';",
+    ...(documentPages.length > 0 ? ["import { replaceDocument } from 'irisout/runtime';"] : []),
     '',
     `const __irisout_route_table__ = ${JSON.stringify(clientTable)};`,
     `const __irisout_pages__ = { ${pagesByRoute.join(' ')} };`,
+    ...(documentPages.length > 0
+      ? [`const __irisout_document_pages__ = new Set(${JSON.stringify(documentPages)});`]
+      : []),
     `const __irisout_container__ = () => ${
+      documentPages.length > 0
+        ? `__irisout_document_pages__.has(matchRoute(__irisout_route_table__, window.location.href)?.route.id) ? document.documentElement : `
+        : ''
+    }${
       containerSelector === '#app'
         ? "document.getElementById('app')"
         : `document.querySelector(${container})`
@@ -138,6 +147,15 @@ function pageModuleSource(
     `};`,
     `const __irisout_render__ = async (response, match, containerElement) => {`,
     `  const __page__ = await __irisout_page_for__(response.routeId);`,
+    ...(documentPages.length > 0
+      ? [
+          `  if (__irisout_document_pages__.has(response.routeId)) {`,
+          `    replaceDocument(document.documentElement, response.html);`,
+          `    return __page__.hydrateComponent(document.documentElement, response.state);`,
+          `  }`,
+          `  if (containerElement === document.documentElement) throw new Error('irisout fragment page requires document navigation');`,
+        ]
+      : []),
     `  containerElement.innerHTML = response.html;`,
     `  return __page__.hydrateComponent(containerElement, response.state);`,
     `};`,
@@ -326,7 +344,12 @@ function createRoutesPlugin(
         )
         const routesChanged =
           JSON.stringify(previous?.clientTable.routes) !== JSON.stringify(next.clientTable.routes)
-        if (routesChanged) {
+        const documentModeChanged = previous?.pages.some(
+          (page) =>
+            next.pages.find((candidate) => candidate.route.id === page.route.id)?.result
+              .isDocument !== page.result.isDocument,
+        )
+        if (routesChanged || documentModeChanged) {
           const moduleGraph = context.server.moduleGraph
           for (const id of [resolvedVirtualModuleId, ...pageIds.keys()]) {
             const module = moduleGraph?.getModuleById(id)

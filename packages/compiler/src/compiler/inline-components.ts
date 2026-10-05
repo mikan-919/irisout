@@ -67,10 +67,11 @@ export function collectTopLevelComponents(
         (!renderOnly ||
           path.node.body.body.some(
             (statement) =>
-              statement.type === 'ExpressionStatement' &&
-              statement.expression.type === 'CallExpression' &&
-              statement.expression.callee.type === 'Identifier' &&
-              statement.expression.callee.name === 'render',
+              (statement.type === 'ReturnStatement' && statement.argument?.type === 'JSXElement') ||
+              (statement.type === 'ExpressionStatement' &&
+                statement.expression.type === 'CallExpression' &&
+                statement.expression.callee.type === 'Identifier' &&
+                statement.expression.callee.name === 'render'),
           ))
       ) {
         componentsByName.set(path.node.id.name, path)
@@ -338,7 +339,9 @@ function findRenderStmt(componentPath: NodePath<t.FunctionDeclaration>): NodePat
   for (const stmt of stmts) {
     if (renderCallJsx(stmt)) return stmt
   }
-  throw new Error('compile: a component must contain a render(<JSX>) call (scope limit)')
+  throw new Error(
+    'compile: a component must contain a render(<JSX>) call or return JSX (scope limit)',
+  )
 }
 
 // jsxPathの祖先を遡り、`.map((item) => ...)`または条件分岐用に生成した
@@ -658,10 +661,14 @@ function expandComponentRef(
         componentPath.get('body').pushContainer('body', movementFnNodes)
       }
       if (mountHookNodes.length > 0 && !conditionalBranch) {
-        componentPath.get('body').pushContainer('body', mountHookNodes)
+        const ui = findRenderStmt(componentPath)
+        if (ui.isReturnStatement()) ui.insertBefore(mountHookNodes)
+        else componentPath.get('body').pushContainer('body', mountHookNodes)
       }
       if (effectHookNodes.length > 0 && !conditionalBranch) {
-        componentPath.get('body').pushContainer('body', effectHookNodes)
+        const ui = findRenderStmt(componentPath)
+        if (ui.isReturnStatement()) ui.insertBefore(effectHookNodes)
+        else componentPath.get('body').pushContainer('body', effectHookNodes)
       }
       finalJsxPath = jsxPath
       finalJsxPath.replaceWith(renderJsxNode)

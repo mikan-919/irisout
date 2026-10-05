@@ -110,8 +110,11 @@ routes/
 
 `packages/hono/src/index.ts`はrouter作成時にpageへ任意の`transformSource`を適用してSSR targetへコンパイルし、handler呼び出しごとに
 loaderとrenderを実行する。loaderの結果は既存SSRのJSON入力境界を通過し、要求・接続情報はstateへ
-入らない。直接要求は利用側のdocument rendererへHTML、state、`stateScript`を渡し、遷移要求は
-`type`、`routeId`、`html`、`state`だけのJSONを返す。HTMLの外枠はHono入口で固定しない。
+入らない。展開後のUIが`<html><head>…</head><body>…</body></html>`ならコンパイル結果に
+`isDocument`を記録する。直接要求では文書型宣言と状態、起動scriptを加え、遷移要求は
+`type`、`routeId`、`html`、`state`だけのJSONを返す。既存のdocument renderer指定は優先する。
+文書ページは`document.documentElement`をhydrateし、遷移時はDOMParserで文書属性とhead/bodyを
+置換する。実行可能scriptを含む文書はブラウザー標準の文書遷移へ委ねる(ADR-0063)。
 
 `packages/vite-plugin/src/hono.ts`はHonoへmountされた処理関数の明示情報を読み、最終的な経路を
 `packages/vite-plugin/src/routes.ts`へ渡す。利用側は経路ディレクトリと接頭辞をVite設定へ再記述しない。

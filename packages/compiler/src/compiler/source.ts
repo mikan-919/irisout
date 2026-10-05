@@ -40,7 +40,7 @@ import { generateModule } from '../codegen.ts'
 import { analyzeExpr } from './analyze.ts'
 import { assertAcyclicDerivedGraph, resolveToSignals } from './decl-graph.ts'
 import { collectTopLevelComponents, inlineComponents } from './inline-components.ts'
-import { compileComponent } from './render.ts'
+import { compileComponent, splitComponentZones } from './render.ts'
 import { stripAuthoringImports } from './authoring-import.ts'
 import type {
   ConditionalMarker,
@@ -67,6 +67,8 @@ export interface CompileResult {
   code: string
   map: IrisoutSourceMap
   initialHtml: string
+  /** Layout展開後のUIがhtml要素を根とする文書か。 */
+  isDocument: boolean
   /** SSR targetで生成した要求単位のrender module。client targetでは未定義。 */
   ssrCode?: string
   /** 公開結果ではコンパイラ内部のBabel ASTを露出させない。 */
@@ -652,6 +654,30 @@ export function compileSource(source: string, options: CompileOptions = {}): Com
   }
   if (options.allowModuleSupport) collectSharedDeclarations(ast, source, ctx)
   const rootPath = findRootComponent(ast, options.allowModuleSupport === true)
+  const rootJsx = splitComponentZones(rootPath).renderJsxPath.node
+  const isDocument =
+    rootJsx.openingElement.name.type === 'JSXIdentifier' &&
+    rootJsx.openingElement.name.name === 'html'
+  if (isDocument) {
+    const children = rootJsx.children.filter(
+      (child) =>
+        !(child.type === 'JSXText' && child.value.trim() === '') &&
+        !(
+          child.type === 'JSXExpressionContainer' && child.expression.type === 'JSXEmptyExpression'
+        ),
+    )
+    if (
+      children.length !== 2 ||
+      children.some(
+        (child, index) =>
+          child.type !== 'JSXElement' ||
+          child.openingElement.name.type !== 'JSXIdentifier' ||
+          child.openingElement.name.name !== (index === 0 ? 'head' : 'body'),
+      )
+    ) {
+      throw new Error('compile: html document requires head followed by body (scope limit)')
+    }
+  }
   const inputPattern = options.target === 'ssr' ? rootInputPattern(rootPath, source) : null
   if (options.target === 'ssr' && ctx.sharedDeclIds.size > 0) {
     throw new Error('compile: module shared state is not supported in SSR (scope limit)')
@@ -1174,6 +1200,7 @@ export function compileSource(source: string, options: CompileOptions = {}): Com
     inputPattern: options.target === 'ssr' ? inputPattern : null,
     signalState,
     ssrHydration: options.target === 'ssr',
+    isDocument,
   })
   const { code, map } = finalizeSourceMap(markedCode, {
     filePath: options.sourceMapFilePath ?? '<source>',
@@ -1203,6 +1230,7 @@ export function compileSource(source: string, options: CompileOptions = {}): Com
     map,
     initialHtml,
     ssrCode,
+    isDocument,
     markers: ctx.markers,
     signalToMarkers,
     declName: ctx.declOutputName,

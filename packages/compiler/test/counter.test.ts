@@ -59,9 +59,9 @@ describe('milestone 1: expression dependency analysis -> update_* codegen', () =
     expect(container.querySelector('[data-iris-id="m0"]')?.textContent).toBe('0')
   })
 
-  it('throws if the component declares UI with return instead of render() (ADR-0008)', () => {
+  it('JSX以外の値を返す部品を拒否する', () => {
     expect(() => compile('export function Bad() { return null; }')).toThrow(
-      /render\(<JSX>\), not return/,
+      /render\(<JSX>\) or return <JSX>/,
     )
   })
 })

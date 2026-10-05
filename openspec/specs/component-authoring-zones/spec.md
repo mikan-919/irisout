@@ -3,18 +3,18 @@
 ## Purpose
 
 コンポーネントを「変数ゾーン(const)→ UIゾーン(`render()`)→ 動きゾーン
-(function宣言)」の3構造で解釈する(ADR-0008)。UI宣言は `return` ではなく
-値を返さない `render(<JSX>)` マーカーで行い、ハンドラは `render()` 後方の
-function宣言への識別子参照(または UIゾーン内の inline arrow)で書く。
+(function宣言)」の3構造で解釈する(ADR-0008)。UI宣言は値を返さない`render(<JSX>)`マーカーか`return <JSX>`で行う。
+返却記法ではfunction宣言と`onMount()`、`effect()`を返却前へ置ける(ADR-0063)。
 ゾーン配置違反は明示的な compile error で拒否する。
 
 ## Requirements
 
-### Requirement: render() マーカーによるUI宣言
+### Requirement: render()またはreturnによるUI宣言
 コンパイラは、コンポーネントのUI宣言を、値を返さないマーカー呼び出し
-`render(<JSX>)` として解釈しなければならない(SHALL)。`render()` は
+`render(<JSX>)`または`return <JSX>`として解釈しなければならない(SHALL)。`render()` は
 `signal()`/`derived()` と同列のビルド時に消える宣言イディオム(ADR-0006)で
-あり、生成コードには残らない。コンポーネントはJSXを `return` しない。
+あり、生成コードには残らない。単一のJSX要素を返す記法も同じ生成処理を使う。
+UI宣言は各部品に一つだけ許可し、両記法の併用、JSX以外の返却、条件付きの早期返却を拒否しなければならない(SHALL)。
 
 #### Scenario: render() でUIを宣言する
 - **WHEN** authored コンポーネントが `render(<div>{count()}</div>)` のように
@@ -22,19 +22,26 @@ function宣言への識別子参照(または UIゾーン内の inline arrow)で
 - **THEN** コンパイラは compile error を出さずに完了し、その引数JSXから初期
   HTMLテンプレートとマーカーを生成する
 
-#### Scenario: render() を持たないコンポーネント
-- **WHEN** authored コンポーネントに `render()` 呼び出しが1つも無い
+#### Scenario: UI宣言を持たないコンポーネント
+- **WHEN** authored コンポーネントに`render()`もJSXの返却もない
 - **THEN** コンパイラは `compile:` で始まり `(scope limit)` を末尾に含む
   エラーを投げる
 
-#### Scenario: JSX を return するコンポーネントの拒否
-- **WHEN** authored コンポーネントが `return <div/>` のようにJSXを返す
-- **THEN** コンパイラは `compile:` で始まり `(scope limit)` を末尾に含む
-  エラーを投げ、生成を継続しない
+#### Scenario: JSXをreturnするコンポーネント
+- **WHEN** authored コンポーネントが`return <div/>`でUIを宣言する
+- **THEN** コンパイラはHTMLとDOM更新コードを生成する
+
+#### Scenario: 返却前のハンドラとライフサイクル
+- **WHEN** JSXを返す部品が返却前にハンドラのfunction宣言と`onMount()`、`effect()`を含む
+- **THEN** ハンドラの参照とライフサイクル処理を生成する
+
+#### Scenario: 到達しないライフサイクル
+- **WHEN** JSXを返した後に`onMount()`または`effect()`を呼ぶ
+- **THEN** コンパイラは`compile: ... (scope limit)`で拒否する
 
 ### Requirement: 識別子参照ハンドラの巻き上げfunction宣言への解決
 コンパイラは、ハンドラ属性の値が識別子参照(`onClick={handleCountUp}`)である
-場合、その参照を `render()` 文より後ろに置かれた同名のfunction宣言へ解決し、
+場合、その参照を同名のfunction宣言へ解決し、`render()`記法では後方、返却記法では返却前または後方の宣言を扱い、
 その本体をハンドラ本体として配線しなければならない(SHALL)。参照先
 function宣言の本体は、単一の式文、または対応文種のみからなるブロック本体
 (`handler-statement-bodies` が規定する4文種)を受理する。対応文種の外は
@@ -77,7 +84,8 @@ function宣言の本体は、単一の式文、または対応文種のみから
 コンパイラは、コンポーネント本体の文をゾーンごとに検証し、配置違反を
 compile error で拒否しなければならない(SHALL)。`render()` より前に許されるのは
 `signal()`/`derived()` の const 宣言のみ、`render()` より後ろに許されるのは
-function 宣言のみとする。違反は黙って通さず `compile: ... (scope limit)` で
+function宣言と`onMount()`、`effect()`とする。返却記法では返却前にもfunction宣言と
+`onMount()`、`effect()`を許可し、返却後はfunction宣言だけを許可する。違反は黙って通さず `compile: ... (scope limit)` で
 throw する。
 
 #### Scenario: 変数ゾーンに function 宣言を置く

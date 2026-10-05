@@ -459,10 +459,11 @@ function loadModule(
 function hasRenderCall(fn: t.FunctionDeclaration): boolean {
   return fn.body.body.some(
     (statement) =>
-      statement.type === 'ExpressionStatement' &&
-      statement.expression.type === 'CallExpression' &&
-      statement.expression.callee.type === 'Identifier' &&
-      statement.expression.callee.name === 'render',
+      (statement.type === 'ReturnStatement' && statement.argument?.type === 'JSXElement') ||
+      (statement.type === 'ExpressionStatement' &&
+        statement.expression.type === 'CallExpression' &&
+        statement.expression.callee.type === 'Identifier' &&
+        statement.expression.callee.name === 'render'),
   )
 }
 

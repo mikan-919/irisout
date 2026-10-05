@@ -186,6 +186,7 @@ interface CompiledPage {
   readonly route: FileRouteDefinition
   readonly dependencies: readonly string[]
   readonly render: (input?: unknown) => { html: string; state: unknown }
+  readonly isDocument: boolean
 }
 
 function compilePage(
@@ -194,7 +195,12 @@ function compilePage(
 ): CompiledPage {
   const result = compileProject(route.filePath, { target: 'ssr', transformSource })
   if (!result.ssrCode) throw new Error(`compile: missing SSR module for "${route.filePath}"`)
-  return { route, dependencies: result.dependencies, render: compileRender(result.ssrCode) }
+  return {
+    route,
+    dependencies: result.dependencies,
+    render: compileRender(result.ssrCode),
+    isDocument: result.isDocument,
+  }
 }
 
 function compileRender(ssrCode: string): CompiledPage['render'] {
@@ -387,6 +393,17 @@ export function createFileRouter(
         if (document instanceof Response) return document
         if (typeof document !== 'string') throw new Error('document renderer must return HTML')
         return htmlResponse(document)
+      }
+      if (page.isDocument) {
+        // ADR-0063: 文書の構造はJSXが所有し、状態とブラウザー入口だけを後から置く。
+        const bodyEnd = rendered.html.lastIndexOf('</body>')
+        return htmlResponse(
+          '<!doctype html>' +
+            rendered.html.slice(0, bodyEnd) +
+            createRouteStateScript(match.route.id, rendered.state) +
+            '<script type="module" src="/irisout-client.js"></script>' +
+            rendered.html.slice(bodyEnd),
+        )
       }
       return htmlResponse(rendered.html)
     } catch {

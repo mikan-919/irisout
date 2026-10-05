@@ -106,3 +106,29 @@ Honoのファイル経路は、各pageをSSRする前に任意のファイル単
 
 - **WHEN** Vite設定のプラグイン配列へ`irisoutHono(app)`を登録する
 - **THEN** `irisout-client.js`が構築され、利用側のJavaScriptに`virtual:*`のimportを書かない
+
+
+### Requirement: JSXによる文書Layout
+
+部品合成後のUIがhtml要素なら文書ページとして扱わなければならない(SHALL)。その直接の子は空白とJSXコメントを除いてhead、bodyの順でなければならず、違反はコンパイル時に拒否しなければならない(SHALL)。document指定がない直接要求では文書型宣言を先頭へ加え、状態JSONとirisout-client.jsのmodule scriptをbody末尾へ挿入しなければならない(SHALL)。利用側にdocument関数を要求してはならない(SHALL NOT)。既存のdocument指定は優先しなければならない(SHALL)。
+
+#### Scenario: Layoutを返すページ
+
+- **WHEN** ページが相対importしたLayoutを使い、Layoutがhtml、head、bodyを返す
+- **THEN** document指定なしで文書が描画され、状態と起動scriptがbody末尾へ入る
+
+#### Scenario: 初回の文書再利用
+
+- **WHEN** 文書ページのブラウザー入口が起動する
+- **THEN** document.documentElementをhydrateし、サーバーが描画した要素を再利用する
+
+#### Scenario: 文書間の遷移
+
+- **WHEN** 文書ページから別の文書ページへ遷移する
+- **THEN** 旧イベント処理を解除し、html属性とhead/bodyを更新して新しい状態を接続する
+- **AND** 遷移応答には自動注入する状態scriptと起動scriptを含めない
+
+#### Scenario: 実行可能scriptを持つ文書への遷移
+
+- **WHEN** 遷移先の文書Layoutが実行可能scriptを持つ
+- **THEN** ブラウザー標準の文書読み込みへ委ねる

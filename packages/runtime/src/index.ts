@@ -569,6 +569,49 @@ export function mountWithRanges(
   return hydrateWithRanges(container, expectedIds, expectedRangeIds)
 }
 
+// ADR-0063: 文書ページだけがhtml属性とhead/bodyの置換を使う。
+// DOMParserのscriptは実行されないため、追加の実行可能scriptを持つページは
+// ブラウザー標準の文書遷移へ委ね、実行順を再実装しない。
+export function replaceDocument(container: Element, html: string): void {
+  const document = container.ownerDocument
+  if (container !== document.documentElement || !document.defaultView) {
+    throw new Error('replaceDocument: container must be document.documentElement')
+  }
+  const parsed = new document.defaultView.DOMParser().parseFromString(html, 'text/html')
+  if (Array.from(parsed.scripts).some((script) => script.type !== 'application/json')) {
+    throw new Error('replaceDocument: executable scripts require document navigation')
+  }
+  for (const attribute of Array.from(container.attributes))
+    container.removeAttribute(attribute.name)
+  for (const attribute of Array.from(parsed.documentElement.attributes)) {
+    container.setAttribute(attribute.name, attribute.value)
+  }
+  container.replaceChildren(
+    ...Array.from(parsed.documentElement.childNodes, (node) => document.importNode(node, true)),
+  )
+}
+
+/** 文書属性を復元してから、通常のマーカー収集へ合流する。 */
+export function mountDocument(
+  container: Element,
+  html: string,
+  expectedIds?: readonly string[],
+): { markers: Map<string, Element> } {
+  replaceDocument(container, html)
+  return hydrate(container, expectedIds)
+}
+
+/** 構造単位を持つ文書だけが範囲アンカーの収集を使う。 */
+export function mountDocumentWithRanges(
+  container: Element,
+  html: string,
+  expectedIds?: readonly string[],
+  expectedRangeIds?: readonly string[],
+): { markers: Map<string, Element>; ranges: Map<string, DomRange> } {
+  replaceDocument(container, html)
+  return hydrateWithRanges(container, expectedIds, expectedRangeIds)
+}
+
 function collectMarkers(root: Element, markers: Map<string, Element>): void {
   const id = root.getAttribute('data-iris-id')
   if (id) markers.set(id, root)

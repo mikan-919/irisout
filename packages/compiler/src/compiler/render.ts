@@ -6,9 +6,9 @@
 // リストは M2/M4/M5 で追加する。
 //
 // ADR-0008: コンポーネントは「変数ゾーン(const)→ UIゾーン(render())→
-// 動きゾーン(function宣言)」の3構造で書く。UI宣言は return ではなく
-// render(<JSX>) マーカー、ハンドラは render 後方の function宣言への識別子参照
-// (または UIゾーン内の inline arrow)で書く。配置違反は compile error。
+// 動きゾーン(function宣言)」の3構造で書く。ADR-0063でreturn JSXも受理する。
+// 返却記法ではfunction宣言とライフサイクル処理を返却前へ置ける。
+// ハンドラはfunction宣言への識別子参照かUI内のinline arrowで書く。
 
 import type { NodePath } from '@babel/traverse'
 import type * as t from '@babel/types'
@@ -1488,9 +1488,13 @@ function renderConditionalUnit(
   return markerId
 }
 
-// 文が render(<JSX>) マーカー呼び出しなら、その JSX 引数 path を返す。
-// render() 以外の呼び出し・非 ExpressionStatement は null(判定のみ)。
+// ADR-0063: render(<JSX>)とreturn <JSX>を同じUI位置として扱う。
+// JSX以外のreturnや、条件付きの早期returnは既存の拒否境界へ残す。
 export function renderCallJsx(stmt: NodePath<t.Statement>): NodePath<t.JSXElement> | null {
+  if (stmt.isReturnStatement()) {
+    const argument = stmt.get('argument')
+    return argument.isJSXElement() ? argument : null
+  }
   if (!stmt.isExpressionStatement()) return null
   const expr = stmt.get('expression')
   if (!expr.isCallExpression()) return null
@@ -1600,30 +1604,59 @@ export function splitComponentZones(
   let renderJsxPath: NodePath<t.JSXElement> | null = null
   for (let i = 0; i < stmts.length; i++) {
     const stmt = stmts[i]!
-    if (stmt.isReturnStatement()) {
-      throw new Error('compile: components declare UI with render(<JSX>), not return (scope limit)')
+    if (stmt.isReturnStatement() && !stmt.get('argument').isJSXElement()) {
+      throw new Error(
+        'compile: components declare UI with render(<JSX>) or return <JSX> (scope limit)',
+      )
     }
     const jsx = renderCallJsx(stmt)
     if (jsx) {
       if (renderIndex !== -1) {
-        throw new Error('compile: a component must contain exactly one render() call (scope limit)')
+        throw new Error(
+          'compile: a component must contain exactly one render() call or return JSX (scope limit)',
+        )
       }
       renderIndex = i
       renderJsxPath = jsx
     }
   }
   if (renderIndex === -1 || !renderJsxPath) {
-    throw new Error('compile: a component must contain a render(<JSX>) call (scope limit)')
+    throw new Error(
+      'compile: a component must contain a render(<JSX>) call or return JSX (scope limit)',
+    )
   }
 
-  const varZoneStmts = stmts.slice(0, renderIndex)
+  const returnsUi = stmts[renderIndex]!.isReturnStatement()
 
   // 動きゾーン(render後): function宣言のみ。ハンドラ識別子参照の解決表に積む。
   const movementZoneFns: HandlerFns = new Map()
   const mountHooks: MountHooks = []
   const effectHooks: EffectHooks = []
+  const varZoneStmts = stmts.slice(0, renderIndex).filter((stmt) => {
+    if (!returnsUi) return true
+    const mountHook = resolveOnMountHook(stmt)
+    if (mountHook) {
+      mountHooks.push(mountHook)
+      return false
+    }
+    const effectHook = resolveEffectHook(stmt)
+    if (effectHook) {
+      effectHooks.push(effectHook)
+      return false
+    }
+    if (stmt.isFunctionDeclaration() && stmt.node.id) {
+      movementZoneFns.set(stmt.node.id.name, stmt)
+      return false
+    }
+    return true
+  })
   for (let i = renderIndex + 1; i < stmts.length; i++) {
     const stmt = stmts[i]!
+    if (returnsUi && !stmt.isFunctionDeclaration()) {
+      throw new Error(
+        'compile: only function declarations are allowed after return JSX (scope limit)',
+      )
+    }
     const mountHook = resolveOnMountHook(stmt)
     if (mountHook) {
       mountHooks.push(mountHook)
@@ -1646,9 +1679,8 @@ export function splitComponentZones(
 }
 
 // ADR-0008: コンポーネント本体を「変数ゾーン → render() → 動きゾーン」の3構造で
-// 走査する。UI は return ではなく render(<JSX>) マーカーで宣言する。配置違反
-// (return / render 欠如・複数 / 変数ゾーンの function 宣言 / 動きゾーンの
-// const 宣言)は compile error で拒否する。
+// 走査する。ADR-0063のreturn JSXも同じUIゾーンへ変換する。
+// UI宣言の欠如・複数、ゾーン配置違反はcompile errorで拒否する。
 export function compileComponent(
   ctx: CompilerState,
   componentPath: NodePath<t.FunctionDeclaration>,
