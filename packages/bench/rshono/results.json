@@ -1,0 +1,1106 @@
+{
+  "date": "2026-10-05T07:04:13.371Z",
+  "environment": {
+    "node": "v24.21.0",
+    "bun": "1.3.13",
+    "platform": "linux",
+    "hono": "4.13.8",
+    "rshono": "1.0.0-rc.24",
+    "nodeServer": "2.1.1",
+    "cpu": "AMD Ryzen 7 7700 8-Core Processor",
+    "cpus": 16,
+    "memory": 16281919488,
+    "irisoutCommit": "9210a986345093fcd5e8a9996b940b8c292357e5",
+    "rshonoCommit": "532edf8e53b70f78c05a4385d4938c06de79965b",
+    "chromium": "154.0.8037.57"
+  },
+  "settings": {
+    "samples": 3,
+    "connections": 16,
+    "workers": 4,
+    "durationMs": 2000,
+    "warmupMs": 1000,
+    "heapMb": 256
+  },
+  "targets": {
+    "irisout": {
+      "buildColdMs": [350.345216, 363.145504, 296.615619],
+      "buildWarmMs": [334.880919, 310.308273, 321.129957],
+      "startupMs": [219.405083, 211.379299, 211.252449],
+      "payload": {
+        "/": {
+          "responses": [
+            {
+              "url": "http://127.0.0.1:4104/",
+              "type": "document",
+              "status": 200,
+              "sizes": {
+                "raw": 1022,
+                "gzip": 552,
+                "brotli": 355
+              }
+            },
+            {
+              "url": "http://127.0.0.1:4104/styles.css",
+              "type": "stylesheet",
+              "status": 200,
+              "sizes": {
+                "raw": 2531,
+                "gzip": 866,
+                "brotli": 710
+              }
+            }
+          ],
+          "totals": {
+            "raw": 3553,
+            "gzip": 1418,
+            "brotli": 1065
+          }
+        },
+        "/ssr": {
+          "responses": [
+            {
+              "url": "http://127.0.0.1:4104/ssr",
+              "type": "document",
+              "status": 200,
+              "sizes": {
+                "raw": 32816,
+                "gzip": 4229,
+                "brotli": 3324
+              }
+            },
+            {
+              "url": "http://127.0.0.1:4104/styles.css",
+              "type": "stylesheet",
+              "status": 200,
+              "sizes": {
+                "raw": 2531,
+                "gzip": 866,
+                "brotli": 710
+              }
+            },
+            {
+              "url": "http://127.0.0.1:4104/irisout-client.js",
+              "type": "script",
+              "status": 200,
+              "sizes": {
+                "raw": 63,
+                "gzip": 77,
+                "brotli": 57
+              }
+            },
+            {
+              "url": "http://127.0.0.1:4104/assets/.irisout-virtual_3Airisout-routes-CYrMChGs.js",
+              "type": "script",
+              "status": 200,
+              "sizes": {
+                "raw": 7464,
+                "gzip": 2899,
+                "brotli": 2577
+              }
+            },
+            {
+              "url": "http://127.0.0.1:4104/assets/.irisout-virtual_3Airisout-routes_3Apage_3A_252Fssr-DUvn2Kp4.js",
+              "type": "script",
+              "status": 200,
+              "sizes": {
+                "raw": 2715,
+                "gzip": 1077,
+                "brotli": 912
+              }
+            },
+            {
+              "url": "http://127.0.0.1:4104/assets/runtime-Cr5xe0b8.js",
+              "type": "script",
+              "status": 200,
+              "sizes": {
+                "raw": 2617,
+                "gzip": 1139,
+                "brotli": 996
+              }
+            }
+          ],
+          "totals": {
+            "raw": 48206,
+            "gzip": 10287,
+            "brotli": 8576
+          }
+        },
+        "/interactive": {
+          "responses": [
+            {
+              "url": "http://127.0.0.1:4104/interactive",
+              "type": "document",
+              "status": 200,
+              "sizes": {
+                "raw": 23391,
+                "gzip": 3115,
+                "brotli": 2371
+              }
+            },
+            {
+              "url": "http://127.0.0.1:4104/styles.css",
+              "type": "stylesheet",
+              "status": 200,
+              "sizes": {
+                "raw": 2531,
+                "gzip": 866,
+                "brotli": 710
+              }
+            },
+            {
+              "url": "http://127.0.0.1:4104/irisout-client.js",
+              "type": "script",
+              "status": 200,
+              "sizes": {
+                "raw": 63,
+                "gzip": 77,
+                "brotli": 57
+              }
+            },
+            {
+              "url": "http://127.0.0.1:4104/assets/.irisout-virtual_3Airisout-routes-CYrMChGs.js",
+              "type": "script",
+              "status": 200,
+              "sizes": {
+                "raw": 7464,
+                "gzip": 2899,
+                "brotli": 2577
+              }
+            },
+            {
+              "url": "http://127.0.0.1:4104/assets/runtime-Cr5xe0b8.js",
+              "type": "script",
+              "status": 200,
+              "sizes": {
+                "raw": 2617,
+                "gzip": 1139,
+                "brotli": 996
+              }
+            },
+            {
+              "url": "http://127.0.0.1:4104/assets/.irisout-virtual_3Airisout-routes_3Apage_3A_252Finteractive-CLwOrHmZ.js",
+              "type": "script",
+              "status": 200,
+              "sizes": {
+                "raw": 5286,
+                "gzip": 1877,
+                "brotli": 1612
+              }
+            }
+          ],
+          "totals": {
+            "raw": 41352,
+            "gzip": 9973,
+            "brotli": 8323
+          }
+        }
+      },
+      "load": {
+        "/": [
+          {
+            "driver": "node/4w",
+            "connections": 16,
+            "durationMs": 2000,
+            "requests": 32849,
+            "errors": 0,
+            "rps": 16413.851571241637,
+            "throughputBytesPerSec": 16774956.305808952,
+            "latencyMs": {
+              "n": 32849,
+              "min": 0.33128299999953015,
+              "p50": 0.8700709999993705,
+              "p90": 1.538448800000879,
+              "p99": 1.9345771199998856,
+              "max": 2.6408269999992626,
+              "mean": 0.9629227585010205,
+              "stdev": 0.2916690261870271,
+              "rsdPct": 30.28997119572369
+            },
+            "statuses": {
+              "200": 32849
+            },
+            "ok": true,
+            "problem": null
+          },
+          {
+            "driver": "node/4w",
+            "connections": 16,
+            "durationMs": 2000,
+            "requests": 30872,
+            "errors": 0,
+            "rps": 15424.01841427155,
+            "throughputBytesPerSec": 15763346.819385525,
+            "latencyMs": {
+              "n": 30872,
+              "min": 0.4062610000000859,
+              "p50": 0.9173174999996263,
+              "p90": 1.634844399998656,
+              "p99": 2.073964199999573,
+              "max": 3.1576420000001235,
+              "mean": 1.0246552579683834,
+              "stdev": 0.31246534098774104,
+              "rsdPct": 30.494679899196147
+            },
+            "statuses": {
+              "200": 30872
+            },
+            "ok": true,
+            "problem": null
+          },
+          {
+            "driver": "node/4w",
+            "connections": 16,
+            "durationMs": 2000,
+            "requests": 32257,
+            "errors": 0,
+            "rps": 16121.370541516515,
+            "throughputBytesPerSec": 16476040.69342988,
+            "latencyMs": {
+              "n": 32257,
+              "min": 0.16186700000071141,
+              "p50": 0.8776790000010806,
+              "p90": 1.5715613999997007,
+              "p99": 1.9658751600003586,
+              "max": 2.6529150000005757,
+              "mean": 0.9804565061537036,
+              "stdev": 0.3011738757415107,
+              "rsdPct": 30.71771912891937
+            },
+            "statuses": {
+              "200": 32257
+            },
+            "ok": true,
+            "problem": null
+          }
+        ],
+        "/ssr": [
+          {
+            "driver": "node/4w",
+            "connections": 16,
+            "durationMs": 2000,
+            "requests": 4964,
+            "errors": 0,
+            "rps": 2472.685702046105,
+            "throughputBytesPerSec": 80980456.74200992,
+            "latencyMs": {
+              "n": 4964,
+              "min": 5.407649999997375,
+              "p50": 6.125553999999283,
+              "p90": 6.847126399997796,
+              "p99": 12.863951979998342,
+              "max": 14.144494000000122,
+              "mean": 6.450897818291666,
+              "stdev": 1.432296448037932,
+              "rsdPct": 22.203055890555625
+            },
+            "statuses": {
+              "200": 4964
+            },
+            "ok": true,
+            "problem": null
+          },
+          {
+            "driver": "node/4w",
+            "connections": 16,
+            "durationMs": 2000,
+            "requests": 4738,
+            "errors": 0,
+            "rps": 2361.2530522273105,
+            "throughputBytesPerSec": 77331037.46044442,
+            "latencyMs": {
+              "n": 4738,
+              "min": 5.365542999999889,
+              "p50": 6.222979000001942,
+              "p90": 7.810848700002681,
+              "p99": 14.060364629997713,
+              "max": 26.857646000000386,
+              "mean": 6.757738486492159,
+              "stdev": 1.8375834321139592,
+              "rsdPct": 27.19228386518729
+            },
+            "statuses": {
+              "200": 4738
+            },
+            "ok": true,
+            "problem": null
+          },
+          {
+            "driver": "node/4w",
+            "connections": 16,
+            "durationMs": 2000,
+            "requests": 5131,
+            "errors": 0,
+            "rps": 2559.769943462592,
+            "throughputBytesPerSec": 83832465.64839989,
+            "latencyMs": {
+              "n": 5131,
+              "min": 5.269964999999502,
+              "p50": 5.794760999997379,
+              "p90": 6.5247159999998985,
+              "p99": 12.297013399998468,
+              "max": 12.866609000000608,
+              "mean": 6.234298455661685,
+              "stdev": 1.4982265510399362,
+              "rsdPct": 24.031999136636138
+            },
+            "statuses": {
+              "200": 5131
+            },
+            "ok": true,
+            "problem": null
+          }
+        ],
+        "/interactive": [
+          {
+            "driver": "node/4w",
+            "connections": 16,
+            "durationMs": 2000,
+            "requests": 3536,
+            "errors": 0,
+            "rps": 1760.4971370679532,
+            "throughputBytesPerSec": 41179788.53315649,
+            "latencyMs": {
+              "n": 3536,
+              "min": 7.336816000002727,
+              "p50": 8.434355499999583,
+              "p90": 9.732403500001965,
+              "p99": 17.72144699999899,
+              "max": 26.896805000000313,
+              "mean": 9.074430133201364,
+              "stdev": 2.274265935036537,
+              "rsdPct": 25.062355449908562
+            },
+            "statuses": {
+              "200": 3536
+            },
+            "ok": true,
+            "problem": null
+          },
+          {
+            "driver": "node/4w",
+            "connections": 16,
+            "durationMs": 2000,
+            "requests": 3560,
+            "errors": 0,
+            "rps": 1772.1265436637784,
+            "throughputBytesPerSec": 41451811.98283944,
+            "latencyMs": {
+              "n": 3560,
+              "min": 7.544504999998026,
+              "p50": 8.406698000000688,
+              "p90": 9.384778599999844,
+              "p99": 17.537832320000632,
+              "max": 21.288604000001214,
+              "mean": 9.00141364241574,
+              "stdev": 2.1759921708549443,
+              "rsdPct": 24.17389376043568
+            },
+            "statuses": {
+              "200": 3560
+            },
+            "ok": true,
+            "problem": null
+          },
+          {
+            "driver": "node/4w",
+            "connections": 16,
+            "durationMs": 2000,
+            "requests": 3536,
+            "errors": 0,
+            "rps": 1761.39265594276,
+            "throughputBytesPerSec": 41200735.6151571,
+            "latencyMs": {
+              "n": 3536,
+              "min": 6.970299000000523,
+              "p50": 8.210255499998311,
+              "p90": 10.616892500000176,
+              "p99": 18.809913449999478,
+              "max": 36.47462100000121,
+              "mean": 9.071766274321252,
+              "stdev": 2.629265409561557,
+              "rsdPct": 28.982949186025824
+            },
+            "statuses": {
+              "200": 3536
+            },
+            "ok": true,
+            "problem": null
+          }
+        ],
+        "/api/health": [
+          {
+            "driver": "node/4w",
+            "connections": 16,
+            "durationMs": 2000,
+            "requests": 46865,
+            "errors": 0,
+            "rps": 23424.252765662077,
+            "throughputBytesPerSec": 655879.0774385382,
+            "latencyMs": {
+              "n": 46865,
+              "min": 0.0562869999994291,
+              "p50": 0.6050319999994827,
+              "p90": 1.093114600003173,
+              "p99": 1.4137576000005356,
+              "max": 2.3207800000018324,
+              "mean": 0.6718450046729734,
+              "stdev": 0.243520524523048,
+              "rsdPct": 36.24653347561672
+            },
+            "statuses": {
+              "200": 46865
+            },
+            "ok": true,
+            "problem": null
+          },
+          {
+            "driver": "node/4w",
+            "connections": 16,
+            "durationMs": 2000,
+            "requests": 47330,
+            "errors": 0,
+            "rps": 23658.1613245712,
+            "throughputBytesPerSec": 662428.5170879937,
+            "latencyMs": {
+              "n": 47330,
+              "min": 0.05960300000151619,
+              "p50": 0.6014329999961774,
+              "p90": 1.1034590999981446,
+              "p99": 1.387980160004008,
+              "max": 2.0106610000002547,
+              "mean": 0.6652285834143196,
+              "stdev": 0.24261099896019978,
+              "rsdPct": 36.47032088052899
+            },
+            "statuses": {
+              "200": 47330
+            },
+            "ok": true,
+            "problem": null
+          },
+          {
+            "driver": "node/4w",
+            "connections": 16,
+            "durationMs": 2000,
+            "requests": 47894,
+            "errors": 0,
+            "rps": 23937.281774784053,
+            "throughputBytesPerSec": 670243.8896939536,
+            "latencyMs": {
+              "n": 47894,
+              "min": 0.11992699999973411,
+              "p50": 0.5882549999951152,
+              "p90": 1.0568360000033863,
+              "p99": 1.385799390006141,
+              "max": 1.9868629999982659,
+              "mean": 0.6572385345345967,
+              "stdev": 0.23847080003950769,
+              "rsdPct": 36.283752018340415
+            },
+            "statuses": {
+              "200": 47894
+            },
+            "ok": true,
+            "problem": null
+          }
+        ]
+      },
+      "rss": {
+        "idle": {
+          "bytes": 113733632,
+          "processes": 1,
+          "largest": 113733632,
+          "breakdown": [
+            {
+              "pid": 298530,
+              "bytes": 113733632,
+              "comm": "MainThread"
+            }
+          ]
+        },
+        "/": {
+          "bytes": 142610432,
+          "processes": 1,
+          "largest": 142610432,
+          "breakdown": [
+            {
+              "pid": 298530,
+              "bytes": 142610432,
+              "comm": "MainThread"
+            }
+          ]
+        },
+        "/ssr": {
+          "bytes": 186208256,
+          "processes": 1,
+          "largest": 186208256,
+          "breakdown": [
+            {
+              "pid": 298530,
+              "bytes": 186208256,
+              "comm": "MainThread"
+            }
+          ]
+        },
+        "/interactive": {
+          "bytes": 254509056,
+          "processes": 1,
+          "largest": 254509056,
+          "breakdown": [
+            {
+              "pid": 298530,
+              "bytes": 254509056,
+              "comm": "MainThread"
+            }
+          ]
+        },
+        "/api/health": {
+          "bytes": 254509056,
+          "processes": 1,
+          "largest": 254509056,
+          "breakdown": [
+            {
+              "pid": 298530,
+              "bytes": 254509056,
+              "comm": "MainThread"
+            }
+          ]
+        }
+      },
+      "functional": ["/", "/ssr", "/interactive"],
+      "distBytes": 21698,
+      "browserHeapUsedBytes": 1840192
+    },
+    "rshono": {
+      "buildColdMs": [632.084914, 651.92519, 652.038654],
+      "buildWarmMs": [603.082335, 629.28288, 648.384805],
+      "startupMs": [114.888835, 115.188691, 115.791004],
+      "payload": {
+        "/": {
+          "responses": [
+            {
+              "url": "http://127.0.0.1:4101/",
+              "type": "document",
+              "status": 200,
+              "sizes": {
+                "raw": 3588,
+                "gzip": 1131,
+                "brotli": 874
+              }
+            },
+            {
+              "url": "http://127.0.0.1:4101/_static/chunks/972.755f5f8ad45dea0f.css",
+              "type": "stylesheet",
+              "status": 200,
+              "sizes": {
+                "raw": 1987,
+                "gzip": 799,
+                "brotli": 657
+              }
+            },
+            {
+              "url": "http://127.0.0.1:4101/_static/chunks/main.e8aa84070d0c54a6.js",
+              "type": "script",
+              "status": 200,
+              "sizes": {
+                "raw": 225522,
+                "gzip": 71326,
+                "brotli": 60978
+              }
+            }
+          ],
+          "totals": {
+            "raw": 231097,
+            "gzip": 73256,
+            "brotli": 62509
+          }
+        },
+        "/ssr": {
+          "responses": [
+            {
+              "url": "http://127.0.0.1:4101/ssr",
+              "type": "document",
+              "status": 200,
+              "sizes": {
+                "raw": 49930,
+                "gzip": 5818,
+                "brotli": 4395
+              }
+            },
+            {
+              "url": "http://127.0.0.1:4101/_static/chunks/972.755f5f8ad45dea0f.css",
+              "type": "stylesheet",
+              "status": 200,
+              "sizes": {
+                "raw": 1987,
+                "gzip": 799,
+                "brotli": 657
+              }
+            },
+            {
+              "url": "http://127.0.0.1:4101/_static/chunks/main.e8aa84070d0c54a6.js",
+              "type": "script",
+              "status": 200,
+              "sizes": {
+                "raw": 225522,
+                "gzip": 71326,
+                "brotli": 60978
+              }
+            }
+          ],
+          "totals": {
+            "raw": 277439,
+            "gzip": 77943,
+            "brotli": 66030
+          }
+        },
+        "/interactive": {
+          "responses": [
+            {
+              "url": "http://127.0.0.1:4101/interactive",
+              "type": "document",
+              "status": 200,
+              "sizes": {
+                "raw": 17978,
+                "gzip": 3604,
+                "brotli": 2911
+              }
+            },
+            {
+              "url": "http://127.0.0.1:4101/_static/chunks/972.755f5f8ad45dea0f.css",
+              "type": "stylesheet",
+              "status": 200,
+              "sizes": {
+                "raw": 1987,
+                "gzip": 799,
+                "brotli": 657
+              }
+            },
+            {
+              "url": "http://127.0.0.1:4101/_static/chunks/266.d9ab6c686acd09e3.js",
+              "type": "script",
+              "status": 200,
+              "sizes": {
+                "raw": 383,
+                "gzip": 281,
+                "brotli": 251
+              }
+            },
+            {
+              "url": "http://127.0.0.1:4101/_static/chunks/404.bf504f94521f4be2.js",
+              "type": "script",
+              "status": 200,
+              "sizes": {
+                "raw": 722,
+                "gzip": 444,
+                "brotli": 377
+              }
+            },
+            {
+              "url": "http://127.0.0.1:4101/_static/chunks/626.7087553d7cea012a.js",
+              "type": "script",
+              "status": 200,
+              "sizes": {
+                "raw": 954,
+                "gzip": 579,
+                "brotli": 507
+              }
+            },
+            {
+              "url": "http://127.0.0.1:4101/_static/chunks/main.e8aa84070d0c54a6.js",
+              "type": "script",
+              "status": 200,
+              "sizes": {
+                "raw": 225522,
+                "gzip": 71326,
+                "brotli": 60978
+              }
+            }
+          ],
+          "totals": {
+            "raw": 247546,
+            "gzip": 77033,
+            "brotli": 65681
+          }
+        }
+      },
+      "load": {
+        "/": [
+          {
+            "driver": "node/4w",
+            "connections": 16,
+            "durationMs": 2000,
+            "requests": 23238,
+            "errors": 0,
+            "rps": 11607.03985078288,
+            "throughputBytesPerSec": 41646058.98460897,
+            "latencyMs": {
+              "n": 23238,
+              "min": 0.07105500000034226,
+              "p50": 1.2548119999992196,
+              "p90": 1.695363800003542,
+              "p99": 2.8267838100007077,
+              "max": 4.081419999994978,
+              "mean": 1.3632673020913941,
+              "stdev": 0.3911241075832324,
+              "rsdPct": 28.690199418940605
+            },
+            "statuses": {
+              "200": 23238
+            },
+            "ok": true,
+            "problem": null
+          },
+          {
+            "driver": "node/4w",
+            "connections": 16,
+            "durationMs": 2000,
+            "requests": 23843,
+            "errors": 0,
+            "rps": 11915.030847194315,
+            "throughputBytesPerSec": 42751130.6797332,
+            "latencyMs": {
+              "n": 23843,
+              "min": 0.29062100000010105,
+              "p50": 1.21574099999998,
+              "p90": 1.6527206000013392,
+              "p99": 2.630152039999665,
+              "max": 3.7964980000033393,
+              "mean": 1.3280727832487345,
+              "stdev": 0.3671476335804431,
+              "rsdPct": 27.645144017056488
+            },
+            "statuses": {
+              "200": 23843
+            },
+            "ok": true,
+            "problem": null
+          },
+          {
+            "driver": "node/4w",
+            "connections": 16,
+            "durationMs": 2000,
+            "requests": 22891,
+            "errors": 0,
+            "rps": 11437.943711213262,
+            "throughputBytesPerSec": 41039342.03583319,
+            "latencyMs": {
+              "n": 22891,
+              "min": 0.5450940000009723,
+              "p50": 1.2686380000013742,
+              "p90": 1.5929790000009234,
+              "p99": 2.746236799998587,
+              "max": 3.9204400000016904,
+              "mean": 1.3830925959984206,
+              "stdev": 0.3644030843505082,
+              "rsdPct": 26.346976724826916
+            },
+            "statuses": {
+              "200": 22891
+            },
+            "ok": true,
+            "problem": null
+          }
+        ],
+        "/ssr": [
+          {
+            "driver": "node/4w",
+            "connections": 16,
+            "durationMs": 2000,
+            "requests": 1307,
+            "errors": 0,
+            "rps": 645.8214681962342,
+            "throughputBytesPerSec": 32203241.690137018,
+            "latencyMs": {
+              "n": 1307,
+              "min": 20.281055999999808,
+              "p50": 22.660658000000694,
+              "p90": 28.128195599999167,
+              "p99": 49.628430939999234,
+              "max": 72.6124290000007,
+              "mean": 24.80098555776579,
+              "stdev": 6.973274107316404,
+              "rsdPct": 28.11692338223592
+            },
+            "statuses": {
+              "200": 1307
+            },
+            "ok": true,
+            "problem": null
+          },
+          {
+            "driver": "node/4w",
+            "connections": 16,
+            "durationMs": 2000,
+            "requests": 1304,
+            "errors": 0,
+            "rps": 644.3686180927858,
+            "throughputBytesPerSec": 32130796.772578668,
+            "latencyMs": {
+              "n": 1304,
+              "min": 20.085354000002553,
+              "p50": 22.738961999999447,
+              "p90": 28.197790600000015,
+              "p99": 48.32728254000242,
+              "max": 71.13884900000266,
+              "mean": 24.803070024539927,
+              "stdev": 6.856347263412657,
+              "rsdPct": 27.643139565501574
+            },
+            "statuses": {
+              "200": 1304
+            },
+            "ok": true,
+            "problem": null
+          },
+          {
+            "driver": "node/4w",
+            "connections": 16,
+            "durationMs": 2000,
+            "requests": 1266,
+            "errors": 0,
+            "rps": 625.862368267649,
+            "throughputBytesPerSec": 31208001.131298047,
+            "latencyMs": {
+              "n": 1266,
+              "min": 20.405400000003283,
+              "p50": 22.830746999999974,
+              "p90": 32.58594699999958,
+              "p99": 68.85609660000037,
+              "max": 111.85476099999505,
+              "mean": 25.582037578989052,
+              "stdev": 9.010705708039561,
+              "rsdPct": 35.22278348711442
+            },
+            "statuses": {
+              "200": 1266
+            },
+            "ok": true,
+            "problem": null
+          }
+        ],
+        "/interactive": [
+          {
+            "driver": "node/4w",
+            "connections": 16,
+            "durationMs": 2000,
+            "requests": 3390,
+            "errors": 0,
+            "rps": 1688.4316454842026,
+            "throughputBytesPerSec": 30354624.122514993,
+            "latencyMs": {
+              "n": 3390,
+              "min": 7.449470000006841,
+              "p50": 8.362664000000223,
+              "p90": 13.951793399995948,
+              "p99": 18.163583819995402,
+              "max": 27.173067999989144,
+              "mean": 9.462105340707916,
+              "stdev": 2.6642376529823264,
+              "rsdPct": 28.15692234496936
+            },
+            "statuses": {
+              "200": 3390
+            },
+            "ok": true,
+            "problem": null
+          },
+          {
+            "driver": "node/4w",
+            "connections": 16,
+            "durationMs": 2000,
+            "requests": 3437,
+            "errors": 0,
+            "rps": 1711.3468116272923,
+            "throughputBytesPerSec": 30766592.979435463,
+            "latencyMs": {
+              "n": 3437,
+              "min": 7.14214599999832,
+              "p50": 8.281998000005842,
+              "p90": 13.879932600000757,
+              "p99": 18.212788599998454,
+              "max": 26.03156200000376,
+              "mean": 9.333093972941535,
+              "stdev": 2.6226240557069898,
+              "rsdPct": 28.100264106527696
+            },
+            "statuses": {
+              "200": 3437
+            },
+            "ok": true,
+            "problem": null
+          },
+          {
+            "driver": "node/4w",
+            "connections": 16,
+            "durationMs": 2000,
+            "requests": 3396,
+            "errors": 0,
+            "rps": 1692.173062975879,
+            "throughputBytesPerSec": 30421887.326180354,
+            "latencyMs": {
+              "n": 3396,
+              "min": 7.0018960000015795,
+              "p50": 8.40458850000141,
+              "p90": 14.162361499998951,
+              "p99": 18.509133149994184,
+              "max": 27.094418000007863,
+              "mean": 9.438068810365001,
+              "stdev": 2.7436556898104008,
+              "rsdPct": 29.070096276446776
+            },
+            "statuses": {
+              "200": 3396
+            },
+            "ok": true,
+            "problem": null
+          }
+        ],
+        "/api/health": [
+          {
+            "driver": "node/4w",
+            "connections": 16,
+            "durationMs": 2000,
+            "requests": 24353,
+            "errors": 0,
+            "rps": 12169.326194377723,
+            "throughputBytesPerSec": 340741.1334425762,
+            "latencyMs": {
+              "n": 24353,
+              "min": 0.4793490000010934,
+              "p50": 1.1954830000031507,
+              "p90": 1.530804400006309,
+              "p99": 2.5200785199971865,
+              "max": 3.8982449999894015,
+              "mean": 1.2995760642220793,
+              "stdev": 0.35271992921975537,
+              "rsdPct": 27.141153098329184
+            },
+            "statuses": {
+              "200": 24353
+            },
+            "ok": true,
+            "problem": null
+          },
+          {
+            "driver": "node/4w",
+            "connections": 16,
+            "durationMs": 2000,
+            "requests": 26304,
+            "errors": 0,
+            "rps": 13144.881632532224,
+            "throughputBytesPerSec": 368056.68571090227,
+            "latencyMs": {
+              "n": 26304,
+              "min": 0.14796100000967272,
+              "p50": 1.077812499999709,
+              "p90": 1.9494348999927753,
+              "p99": 2.39649063000732,
+              "max": 3.239902000001166,
+              "mean": 1.2034293411648271,
+              "stdev": 0.34934341953865017,
+              "rsdPct": 29.02899302758503
+            },
+            "statuses": {
+              "200": 26304
+            },
+            "ok": true,
+            "problem": null
+          },
+          {
+            "driver": "node/4w",
+            "connections": 16,
+            "durationMs": 2000,
+            "requests": 24408,
+            "errors": 0,
+            "rps": 12196.110653117397,
+            "throughputBytesPerSec": 341491.0982872871,
+            "latencyMs": {
+              "n": 24408,
+              "min": 0.08541200000036042,
+              "p50": 1.1765425000048708,
+              "p90": 1.782130900003539,
+              "p99": 2.5871859800103993,
+              "max": 3.313813000000664,
+              "mean": 1.297006292158314,
+              "stdev": 0.3711078003049023,
+              "rsdPct": 28.61264456067916
+            },
+            "statuses": {
+              "200": 24408
+            },
+            "ok": true,
+            "problem": null
+          }
+        ]
+      },
+      "rss": {
+        "idle": {
+          "bytes": 95260672,
+          "processes": 1,
+          "largest": 95260672,
+          "breakdown": [
+            {
+              "pid": 299190,
+              "bytes": 95260672,
+              "comm": "MainThread"
+            }
+          ]
+        },
+        "/": {
+          "bytes": 133963776,
+          "processes": 1,
+          "largest": 133963776,
+          "breakdown": [
+            {
+              "pid": 299190,
+              "bytes": 133963776,
+              "comm": "MainThread"
+            }
+          ]
+        },
+        "/ssr": {
+          "bytes": 318976000,
+          "processes": 1,
+          "largest": 318976000,
+          "breakdown": [
+            {
+              "pid": 299190,
+              "bytes": 318976000,
+              "comm": "MainThread"
+            }
+          ]
+        },
+        "/interactive": {
+          "bytes": 319406080,
+          "processes": 1,
+          "largest": 319406080,
+          "breakdown": [
+            {
+              "pid": 299190,
+              "bytes": 319406080,
+              "comm": "MainThread"
+            }
+          ]
+        },
+        "/api/health": {
+          "bytes": 319467520,
+          "processes": 1,
+          "largest": 319467520,
+          "breakdown": [
+            {
+              "pid": 299190,
+              "bytes": 319467520,
+              "comm": "MainThread"
+            }
+          ]
+        }
+      },
+      "functional": ["/", "/ssr", "/interactive"],
+      "distBytes": 2441157,
+      "browserHeapUsedBytes": 2905020
+    }
+  },
+  "visibleContentEqual": true
+}

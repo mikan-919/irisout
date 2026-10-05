@@ -9,7 +9,8 @@
     "bench:heatmap": "bun heatmap.playwright.ts",
     "bench:todomvc-compiler": "bun todomvc-compiler.playwright.ts",
     "bench:list-runtime": "bun list-runtime.playwright.ts",
-    "bench:listener-strategy": "bun listener-strategy.playwright.ts"
+    "bench:listener-strategy": "bun listener-strategy.playwright.ts",
+    "bench:rshono": "node rshono/compare.mjs && node rshono/report.mjs && vp fmt rshono/results.json rshono/results.md"
   },
   "dependencies": {
     "@irisout/demos": "workspace:*",
