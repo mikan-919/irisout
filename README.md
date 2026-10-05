@@ -190,6 +190,9 @@ bun run pack:smoke
 
 ### ルートコマンド
 
+jj では `bun run jj:install` で検査付きの `jj ci`・`jj finish`・`jj push` を登録します。
+検査対象と使い方は[jj の検査](./docs/jj-hooks.md)を参照してください。
+
 以下はすべてリポジトリのルートで実行します。開発サーバーやプレビューを終了するときは
 `Ctrl+C`を押してください。
 開発入口は`dev`一つで、対象は引数で選びます。

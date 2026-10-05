@@ -43,7 +43,8 @@
     "prepare": "node scripts/build-packages.mjs && husky",
     "bench:rshono": "bun run --cwd packages/bench bench:rshono",
     "release:prepare": "bun scripts/release.mjs prepare",
-    "release:check": "bun scripts/release.mjs check"
+    "release:check": "bun scripts/release.mjs check",
+    "jj:install": "bun scripts/jj-hooks.mjs install"
   },
   "devDependencies": {
     "@babel/generator": "^8.0.0",
