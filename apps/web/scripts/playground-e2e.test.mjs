@@ -110,7 +110,7 @@ function assertSyntaxHighlight(tokens, { plain = 'Counter' } = {}) {
   assert.ok(token('main'), 'JSXタグが構文トークンになっていません')
   assert.ok(token('type'), 'JSX属性が構文トークンになっていません')
   assert.ok(token('"button"'), '文字列が構文トークンになっていません')
-  assert.ok(plainToken, '通常のJSXテキストがありません')
+  assert.ok(plainToken, `通常のJSXテキストがありません: ${JSON.stringify(tokens)}`)
   for (const syntax of ['export', comment, 'main', 'type', '"button"']) {
     assert.notEqual(token(syntax)?.color, plainToken.color, `${syntax}が通常テキストと同じ色です`)
   }
@@ -201,6 +201,7 @@ try {
     await Promise.all([examplesRequest.promise, controllerRequest.promise])
     assert.equal(await source.evaluate((element) => element.readOnly), true)
     assert.equal(await run.isDisabled(), true)
+    // Monacoは可視行だけを描画するため、比較用テキストをタグの直後へ置く。
     const initialTsxSource = `// 公式文書とPlaygroundが共有するCounter入力。
 type CounterLabel = string
 interface CounterProps {
@@ -212,9 +213,8 @@ function identity<T>(value: T): T {
 export function Preserved(props: CounterProps) {
   const count: number = 0
   render(
-    <main>
+    <main><p>plain</p>
       <button type="button">{identity<string>(props.label)}</button>
-      <p>plain</p>
     </main>,
   )
 }`
@@ -233,6 +233,7 @@ export function Preserved(props: CounterProps) {
     assert.equal(await source.inputValue(), initialTsxSource)
     await waitForEditorToken(page, 'interface')
     await waitForEditorToken(page, 'export')
+    await waitForEditorToken(page, 'plain')
     assertTypeScriptHighlight(await readEditorTokens(page))
     assert.equal(await source.evaluate((element) => element.readOnly), false)
     await editor.click()
@@ -258,15 +259,15 @@ function identity<T>(value: T): T {
 export function Edited(props: ButtonProps) {
   const count: number = 0
   render(
-    <main type="button">
+    <main type="button"><p>plain</p>
       <button>{identity<string>(props.label)}</button>
-      <p>plain</p>
       <p>置換後</p>
     </main>,
   )
     }`
     await fillSource(source, replacedSource)
     await waitForEditorToken(page, 'interface')
+    await waitForEditorToken(page, 'plain')
     assertTypeScriptHighlight(await readEditorTokens(page))
 
     const syntaxPage = await context.newPage()
@@ -274,6 +275,8 @@ export function Edited(props: ButtonProps) {
     await waitForText(syntaxPage.locator('[data-playground-status]'), '実行できます')
     await syntaxPage.locator('[data-playground-monaco] .monaco-editor').waitFor()
     await syntaxPage.locator('[data-playground-source]').waitFor({ state: 'hidden' })
+    await waitForEditorToken(syntaxPage, 'export')
+    await waitForEditorToken(syntaxPage, 'Counter')
     const syntaxTokens = await readEditorTokens(syntaxPage)
     console.log(JSON.stringify(syntaxTokens))
     assertSyntaxHighlight(syntaxTokens)
