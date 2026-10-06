@@ -222,7 +222,7 @@ export function Counter() {
             <div class="footer-brand">irisout</div>
             <div class="footer-meta">
               <span>v0.1.1</span>
-              <span>Apache-2.0</span>
+              <span>MIT</span>
               <span>UI compiler for JSX</span>
             </div>
           </div>

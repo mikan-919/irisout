@@ -1,8 +1,0 @@
-{
-  "date": "2026-09-22",
-  "font": "CSS custom properties in tokens.css",
-  "palette": "CSS custom properties overridden by apps/web/src/line-seed.css",
-  "motion": "motion package installed; shared theme limits transitions to focus and blur disclosure",
-  "spacing": "4-point scale in tokens.css",
-  "framework": "irisout JSX with Hono and Vite+"
-}

@@ -2,7 +2,7 @@
   "name": "@irisout/web",
   "version": "0.0.0",
   "private": true,
-  "license": "Apache-2.0",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "build": "node scripts/build-docs.mjs && vp build && node scripts/prerender-site.mjs && bun run build:ssr",

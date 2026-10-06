@@ -7,6 +7,7 @@ dist
 apps/web/public
 plans
 .plans/
+.hallmark/
 session/
 plugins/
 .cursor

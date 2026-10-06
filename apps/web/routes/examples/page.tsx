@@ -60,7 +60,7 @@ export function Examples() {
       </main>
       <footer>
         <a href="/">irisout</a>
-        <span>Apache License 2.0 · 2026</span>
+        <span>MIT License · 2026</span>
       </footer>
     </div>,
   )

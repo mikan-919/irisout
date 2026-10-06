@@ -280,7 +280,7 @@ export function Playground() {
             <a href="/docs">ドキュメント</a>
             <a href="https://github.com/mikan-919/irisout">GitHub ↗</a>
           </div>
-          <span class="footer-copy">Apache License 2.0 · 2026</span>
+          <span class="footer-copy">MIT License · 2026</span>
         </div>
       </footer>
     </div>,

@@ -1,7 +1,7 @@
 {
   "name": "irisout",
   "version": "0.3.6",
-  "license": "Apache-2.0",
+  "license": "MIT",
   "author": "mikan-919 <mikan919.dev@gmail.com>",
   "repository": {
     "type": "git",
