@@ -26,10 +26,10 @@ Do not present this client-build contract as per-request server rendering.
 
 ## Component shape
 
-- Export one unreferenced root component whose body calls `render(<JSX />)`.
+- Export one unreferenced root component whose body calls `render(<JSX />)` or returns JSX. Do not combine both forms in one component. With returned JSX, place handlers and lifecycle calls before the return.
 - Declare local `signal` and `derived` state before `render()`.
 - Put event handlers and lifecycle calls in the component's behavior zone after `render()`.
-- Same-file and relative `.js`/`.jsx` components are compile-time composition, not runtime component objects.
+- Same-file and relative `.js`/`.jsx`/`.ts`/`.tsx` components are compile-time composition, not runtime component objects.
 - Component props use shorthand object destructuring. Spread props, aliased destructuring, recursive components, and arbitrary component values are outside the supported boundary.
 
 ```jsx
@@ -64,10 +64,12 @@ export function Counter() {
 ## Boundaries that affect design
 
 - This is not React. Do not import React, hooks, or a JSX runtime.
-- `compileProject()` follows relative `.js` and `.jsx` modules. External libraries and Vite resource imports pass through to Vite; irisout does not compile their internals.
+- `compileProject()` follows relative `.js`, `.jsx`, `.ts`, and `.tsx` modules. External libraries and Vite resource imports pass through to Vite; irisout does not compile their internals.
 - Handler control flow such as unsupported `try/catch/finally`, loops, or switches may be rejected when update placement cannot be determined statically.
+- Inside a handler or action, use a `const` arrow function for an event listener. Nested function declarations are rejected as `handler statement "FunctionDeclaration" ... (scope limit)`. Remove the same listener in the action's `destroy` callback.
 - Request cancellation, stale-result selection, Worker protocols, persistence, routing, and external-service behavior belong to application code.
-- Server rendering per request, portals, animation systems, and component-level error recovery are not part of the current contract.
+- Per-request server rendering is available through `irisout/ssr` and `irisout/hono`; `irisout/hono/vite` connects file routes to browser navigation. These are separate from the standard `irisout/vite` client-build entry. For Hono document pages without `index.html`, set `build.rollupOptions.input` to `{}`. The Hono plugin serves page GET requests during development; application API routes need a separate development adapter or proxy.
+- Portals and component-level error recovery are outside the supported boundary. Motion is an optional extension through `irisout/motion` and `irisout/motion/vite`.
 - The generated component supports `unmount()`, but the Vite virtual entry hydrates it
   automatically and does not expose that handle to application code. Exercise action cleanup by
   removing a conditional branch or keyed list item; do not claim that root unmount is available

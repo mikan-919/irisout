@@ -30,7 +30,7 @@ function derived<T>(compute: () => T): () => T
 
 ### `render(element)`
 
-部品が所有するJSXのルートを宣言する。部品はJSXを返さず、内部で`render()`を呼ぶ。
+部品が所有するJSXのルートを宣言する。部品は内部で`render()`を呼ぶか、`return <JSX>`で宣言する。一つの部品内では併用しない。配置規則は[部品とファイル分割](./components-and-modules.md)を参照する。
 
 ### `onMount(callback)`と`effect(callback)`
 
