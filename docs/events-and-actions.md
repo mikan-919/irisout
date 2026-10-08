@@ -56,3 +56,19 @@ export function FocusedField() {
 ```
 
 `destroy`は条件分岐や一覧から要素が外れたとき、または部品が破棄されたときに呼ばれる。外部イベント監視、観測器、タイマーなどの解除に使う。
+
+アクションやイベント処理の内部で監視関数を作る場合は、`const`へアロー関数を代入する。内部の`function receive() { ... }`という関数宣言は`handler statement "FunctionDeclaration" ... (scope limit)`として拒否される。
+
+```jsx
+function observe(element) {
+  const receive = () => element.setAttribute('data-received', 'true')
+  window.addEventListener('incident-ping', receive)
+  return {
+    destroy() {
+      window.removeEventListener('incident-ping', receive)
+    },
+  }
+}
+```
+
+注: 解除には登録時と同じ関数を渡す。アロー関数を登録と解除の箇所で別々に作ると、監視が残る。Honoのページ遷移でも旧ページの破棄時に`destroy`が呼ばれる。
