@@ -91,6 +91,7 @@ export default defineConfig({
     irisoutHono(app),
     // 通常のViteプラグインを続けて登録できる。
   ],
+  build: { rollupOptions: { input: {} } },
 })
 ```
 
@@ -100,8 +101,41 @@ export default defineConfig({
 
 `irisoutHono(app)`はブラウザー入口を`irisout-client.js`として発行する。文書ページではHonoが状態のJSONと`<script type="module" src="/irisout-client.js"></script>`を`</body>`直前へ挿入する。利用側で仮想モジュールをimportしたり、起動scriptを書いたりする必要はない。
 
+注: `input: {}`はViteの既定入口`index.html`を使わない指定である。HTMLはHonoが要求ごとに返し、プラグインがブラウザー入口を発行する。この指定を省くと、`index.html`のない構成では本番構築が`Cannot resolve entry module index.html`で止まる。構築されたJavaScriptの配信は、利用側のHTTPサーバーへ接続する。
+
 初回はサーバーが描画した`<html>`を再利用してイベント処理と状態更新を接続する。文書間の遷移では`head`、`body`、`html`属性を更新する。独自の実行可能な`script`を含む文書への遷移はブラウザーの文書読み込みへ委ねる。
 
 既存の`document: ({ html, stateScript }) => ...`指定も使える。この指定でHTMLを組み立てる場合は、状態と起動scriptを利用側で挿入する。文書ページと`#app`内の部分ページを混在させ、文書ページから部分ページへ移る場合も文書を読み込む。
 
 開発時はViteのHMR clientをHTMLへ挿入する。`irisout-client.js`を読み込む文書では、既存ページの変更をViteのmodule更新として受け取り、現在表示中のページをHonoのSSR結果から再hydrateする。ページ内の`signal`状態はSSR初期値へ戻る。`irisout-client.js`を読み込まないSSR専用文書では、ページの変更時に文書全体を再読み込みする。ページの追加・削除は経路表を作り直すため、開発サーバーを再起動して文書全体を再読み込みする。
+
+## 開発時のAPIを接続する
+
+`irisoutHono(app)`が開発時に配信するのは、登録済みのページへのGET要求だけである。同じHonoアプリに定義したAPIも、別に接続しない限りViteのURLでは404になる。
+
+次は、本文を使わない検索GETと状態変更POSTを`/api/`以下に置く場合の接続例である。Vite設定の`plugins`へ、`irisoutHono(app)`とともに追加する。
+
+```ts
+const apiDevelopment = {
+  name: 'hono-api-development',
+  configureServer(server) {
+    server.middlewares.use(async (request, response, next) => {
+      if (!request.url?.startsWith('/api/')) return next()
+      try {
+        const result = await app.fetch(
+          new Request(new URL(request.url, 'http://localhost'), {
+            method: request.method,
+          }),
+        )
+        response.statusCode = result.status
+        result.headers.forEach((value, name) => response.setHeader(name, value))
+        response.end(await result.text())
+      } catch (error) {
+        next(error)
+      }
+    })
+  },
+}
+```
+
+注: この例は本文、認証用の要求ヘッダー、バイナリー応答を転送しない。それらが必要なAPIではHTTPアダプターを使うか、別のAPIサーバーへのViteの`server.proxy`を設定する。メモリ上のデータをloaderとAPIで共有する場合、この例のように同じ`app`を使う。別プロセスへ中継すると、メモリは共有されない。
