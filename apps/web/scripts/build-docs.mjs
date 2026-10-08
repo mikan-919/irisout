@@ -884,6 +884,11 @@ body .site-header .site-cta { background: transparent; color: var(--docs-muted);
 .doc-body blockquote { border-color: var(--docs-ink); color: var(--docs-muted); }
 .site-footer { color: var(--docs-muted); }
 @media (max-width: 48rem) { body .site-header { padding-inline: 16px; } .docs-page { width: calc(100% - 2rem); } }
+@media (prefers-color-scheme: dark) {
+  :root { --docs-paper: #111214; --docs-ink: #f1f2f4; --docs-muted: #b0b2b8; --docs-rule: #3b3d43; --docs-panel: #202126; --docs-header-bg: rgb(17 18 20 / 88%); color-scheme: dark; }
+  .doc-body code { background: #292b31; }
+  .doc-search button { background: #c6a9ff; color: #17131f; }
+}
 `
 }
 

@@ -874,3 +874,58 @@ body:has(.reference-site) > #app {
     transform: none;
   }
 }
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --line-paper: #111214;
+    --line-ink: #f1f2f4;
+    --line-panel: #191a1d;
+    --line-panel-alt: #202126;
+    --line-on-dark: #f1f2f4;
+    --line-muted: #b0b2b8;
+    --line-faint: #92949c;
+    --line-rule: #3b3d43;
+    --line-rule-dark: #555861;
+    --line-focus: #c6a9ff;
+    --line-header-bg: rgb(17 18 20 / 88%);
+  }
+  body:has(.reference-site) {
+    background: var(--line-paper);
+  }
+  .reference-site {
+    --bg: #111214;
+    --ink: #f1f2f4;
+    --muted: #b0b2b8;
+    --panel: #191a1d;
+    --panel-2: #202126;
+    --panel-ink: #f1f2f4;
+    --panel-muted: #b0b2b8;
+    --semantic: #63d995;
+  }
+  .reference-site .intro p,
+  .reference-site .explain p,
+  .reference-site .positioning p,
+  .reference-site .detail p {
+    color: var(--muted);
+  }
+  .install,
+  .codebox,
+  .vite-code,
+  .measure code,
+  .reference-site footer {
+    background: #24262a;
+  }
+  .install button:hover {
+    background: #383a40;
+  }
+  .reference-site .footer-links a {
+    color: var(--ink);
+  }
+  .reference-site .playground {
+    background: var(--panel);
+  }
+  .reference-site .result {
+    background: var(--panel-2);
+  }
+}

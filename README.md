@@ -1,6 +1,6 @@
 # irisout
 
-![irisout](./docs/assets/logo.webp)
+![irisout](./docs/assets/logo.png)
 
 JSXから静的HTMLと、状態に応じてDOMを更新するJavaScriptを生成するコンパイラです。初期HTMLはビルド時に作り、ブラウザーでは必要な更新処理だけを動かします。
 
