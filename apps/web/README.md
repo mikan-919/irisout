@@ -54,9 +54,9 @@ bun run build:web
 `/playground/:id`を再ビルドなしでSQLiteから読み、運営側部品だけをSSRします。保存されたJSXは
 表示用の文字列として扱い、サーバーではコンパイルまたは実行しません。
 
-保存先が未確定のため、削除記録の復元手順はローカルSQLite用だけを用意しています。復元前に
+ローカルSQLiteでの削除記録の復元手順は以下の通りです。復元前に
 `playground-backup.mjs export`で削除記録を書き出し、SQLiteファイルを復元した後に同じスクリプトの
-`apply`を実行します。これは公開済みの復旧機能ではありません。
+`apply`を実行します。これはCloudflare D1には使いません。
 
 ```bash
 IRISOUT_PLAYGROUND_DATABASE=playgrounds.sqlite \
@@ -66,6 +66,9 @@ IRISOUT_PLAYGROUND_DATABASE=restored.sqlite \
 IRISOUT_PLAYGROUND_DELETION_LOG=deletions.json \
 bun server/playground-backup.mjs apply
 ```
+
+Cloudflare D1のバックアップ、別データベースへの復元、切替手順は
+[`docs/cloudflare-d1-recovery.md`](../../docs/cloudflare-d1-recovery.md)を参照してください。
 
 保存APIの頻度制限は、Bunが取得した実接続元をキーにします。プロキシを使う場合だけ、
 `IRISOUT_TRUSTED_PROXY`へ信頼するプロキシのIPを指定し、検証した`X-Forwarded-For`を使います。

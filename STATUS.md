@@ -11,6 +11,8 @@
 
 2026-10-08のv0.3.7公開では、npmへの公開直後にレジストリ反映が遅れ、公開版の導入検査が失敗した。公開版検査を最大2分間再試行する。
 
+2026-10-08にCloudflare D1の運用復旧手順を追加した。WranglerによるSQL退避、別D1への復元と確認、Workerの接続先切替、Time Travelによる直近の時点復元を記載した。Cloudflare上での実復元と定期運用は未確認である。
+
 2026-10-05にタグpushからの公開手順を追加した。版更新と照合、既存CI、npm公開、公開版の隔離導入検査、GitHubリリース作成を接続した。手動実行は公開の予行だけを行う。npmの信頼された公開元として`mikan-919/irisout`の`release.yml`を登録した。全341試験、型検査、Actionsの構文検査を通過し、GitHub上の[予行](https://github.com/mikan-919/irisout/actions/runs/37298050619)も成功した。予行中に既存のPlayground色分け試験の失敗を確認し、比較用テキストを可視範囲へ置いて描画を待つよう修正した。OIDCによる実公開は次回の公開タグから実行する。手順は`docs/releasing.md`にある。
 
 2026-10-05に`return <JSX>`による部品宣言と文書Layoutを追加した。`<html>`を返すLayoutでhead/bodyを指定し、`createFileRouter()`の`document`指定なしで状態と起動scriptを注入する。初回の文書再利用、文書間遷移、html属性の更新、旧イベント処理の解除を自動試験で確認した。独自の実行可能scriptを含む文書への遷移はブラウザー標準の読み込みへ委ねる。
