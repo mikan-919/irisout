@@ -30,6 +30,8 @@ bunx wrangler d1 execute irisout-playground --remote \
 
 Cloudflare D1はTime Travelも提供する。利用可能な期間は契約プランで異なるため、月次退避の代わりにはしない。直近の誤操作からの復旧ではTime Travelを優先できる。
 
+WranglerのSQL exportは完了までD1が要求を処理できない場合がある。取得は利用の少ない時間に行い、終了後に保存APIと共有ページの応答を確認する。
+
 ## 別データベースへの復元と切替
 
 本番DBを残したまま新しいD1へ復元し、内容を確認してからWorkerの接続先を切り替える。復元前に対象SQLのSHA-256と取得記録を照合する。
