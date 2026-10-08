@@ -7,7 +7,7 @@
 // 合成・ローカルsignal(ADR-0014、change `same-file-component-composition`)。
 //
 // 構造ユニットは親要素の兄弟と共存できるコメント範囲として生成される。
-// TodoAppの条件分岐→リストとTodoItemのローカル編集条件はこの範囲を使う。
+// TodoAppの条件分岐→リストはこの範囲を使う。TodoItemは単純な行として生成する。
 
 import { derived, render, signal } from 'irisout'
 
@@ -21,10 +21,9 @@ import { derived, render, signal } from 'irisout'
 /**
  * @typedef {object} TodoItemProps
  * @property {Todo} todo
- * @property {() => void} onToggle
- * @property {(event: IrisElementEvent<KeyboardEvent, HTMLInputElement>) => void} onCommitEdit
- * @property {() => void} onRemove
  */
+
+/** @typedef {HTMLInputElement & { __todoSpan?: HTMLSpanElement }} TodoEditInput */
 
 export function TodoApp() {
   // ── 変数ゾーン: const のみ(signal/derived) ──
@@ -55,15 +54,16 @@ export function TodoApp() {
       />
 
       {visibleTodos().length > 0 && (
-        <ul class="todo-list">
+        <ul
+          class="todo-list"
+          onChange={handleTodoChange}
+          onClick={handleTodoClick}
+          onDblClick={handleTodoDoubleClick}
+          onKeyDown={handleTodoKeyDown}
+          onFocusOut={handleTodoFocusOut}
+        >
           {visibleTodos().map((todo) => (
-            <TodoItem
-              key={todo.id}
-              todo={todo}
-              onToggle={() => toggleTodo(todo.id)}
-              onCommitEdit={(e) => e.key === 'Enter' && commitEdit(todo.id, e.currentTarget.value)}
-              onRemove={() => removeTodo(todo.id)}
-            />
+            <TodoItem key={todo.id} todo={todo} />
           ))}
         </ul>
       )}
@@ -109,41 +109,93 @@ export function TodoApp() {
     todos(todos().filter((t) => t.id !== id))
   }
 
+  /** @param {IrisElementEvent<Event, HTMLUListElement>} e */
+  function handleTodoChange(e) {
+    const target = /** @type {HTMLInputElement | null} */ (e.target)
+    if (!target || target.tagName !== 'INPUT' || target.type !== 'checkbox') return
+    const item = target.closest('[data-todo-id]')
+    const id = item ? Number(item.getAttribute('data-todo-id')) : null
+    if (id != null) toggleTodo(id)
+  }
+
+  /** @param {IrisElementEvent<MouseEvent, HTMLUListElement>} e */
+  function handleTodoClick(e) {
+    const target = /** @type {Element | null} */ (e.target)
+    if (!target || typeof target.closest !== 'function') return
+    if (!target.closest('button[data-todo-action="remove"]')) return
+    const item = target.closest('[data-todo-id]')
+    const id = item ? Number(item.getAttribute('data-todo-id')) : null
+    if (id != null) removeTodo(id)
+  }
+
+  /** @param {IrisElementEvent<MouseEvent, HTMLUListElement>} e */
+  function handleTodoDoubleClick(e) {
+    const target = /** @type {Element | null} */ (e.target)
+    if (
+      !target ||
+      typeof target.closest !== 'function' ||
+      !target.closest('[data-todo-action="edit"]')
+    )
+      return
+    const span = /** @type {HTMLSpanElement | null} */ (
+      target.closest('span[data-todo-action="edit"]')
+    )
+    if (!span) return
+    /** @type {TodoEditInput} */
+    const input = span.ownerDocument.createElement('input')
+    input.value = span.textContent ?? ''
+    // compilerが更新するspanを退避し、確定後に同じノードを戻す。
+    input.__todoSpan = span
+    span.closest('[data-todo-id]')?.classList.add('editing')
+    span.replaceWith(input)
+  }
+
+  /** @param {IrisElementEvent<KeyboardEvent, HTMLUListElement>} e */
+  function handleTodoKeyDown(e) {
+    const input = /** @type {TodoEditInput | null} */ (e.target)
+    if (!input || input.tagName !== 'INPUT') return
+    if (e.key === 'Enter' && input.__todoSpan) {
+      finishTodoEdit(input)
+    }
+  }
+
+  /** @param {IrisElementEvent<FocusEvent, HTMLUListElement>} e */
+  function handleTodoFocusOut(e) {
+    const input = /** @type {TodoEditInput | null} */ (e.target)
+    if (!input || input.tagName !== 'INPUT') return
+    if (!input.__todoSpan) return
+    finishTodoEdit(input)
+  }
+
+  function finishTodoEdit(input) {
+    const span = input.__todoSpan
+    if (!span) return
+    delete input.__todoSpan
+    const item = input.closest('[data-todo-id]')
+    const id = item ? Number(item.getAttribute('data-todo-id')) : null
+    if (id != null) commitEdit(id, input.value)
+    input.replaceWith(span)
+    item?.classList.remove('editing')
+  }
+
   function setFilter(next) {
     filter(next)
   }
 
   function commitEdit(id, text) {
     const t = text.trim()
-    if (t !== '') {
-      todos(todos().map((x) => (x.id === id ? { ...x, text: t } : x)))
-    }
+    if (t !== '') todos(todos().map((x) => (x.id === id ? { ...x, text: t } : x)))
   }
 }
 
 // same-file-component-composition(ADR-0014)で切り出したリストアイテム。
-// `editing`はfactoryクロージャ専有の局所状態になり、アイテムごとに独立する。
 /** @param {TodoItemProps} props */
-function TodoItem({ todo, onToggle, onCommitEdit, onRemove }) {
-  const editing = signal(false)
-
+function TodoItem({ todo }) {
   render(
-    <li key={todo.id} class={`${todo.completed ? 'completed' : ''} ${editing() ? 'editing' : ''}`}>
-      <input type="checkbox" checked={todo.completed} onChange={onToggle} />
-      {/* biome-ignore lint/a11y/noStaticElementInteractions: フィクスチャなのでa11y対応はスコープ外 */}
-      {editing() ? (
-        <input
-          value={todo.text}
-          onKeyDown={(e) => {
-            onCommitEdit(e)
-            if ('key' in e && typeof e.key === 'string' && e.key === 'Enter') editing(false)
-          }}
-          onBlur={() => editing(false)}
-        />
-      ) : (
-        <span onDblClick={() => editing(true)}>{todo.text}</span>
-      )}
-      <button type="button" onClick={onRemove}>
+    <li key={todo.id} data-todo-id={todo.id} class={todo.completed ? 'completed' : ''}>
+      <input type="checkbox" checked={todo.completed} />
+      <span data-todo-action="edit">{todo.text}</span>
+      <button type="button" data-todo-action="remove">
         x
       </button>
     </li>,

@@ -27,6 +27,7 @@ interface GeneratedInstance {
 }
 
 type GeneratedHydrate = (container: Element) => GeneratedInstance
+type GeneratedMount = (container: Element) => GeneratedInstance
 
 interface Mounted {
   implementation: Implementation
@@ -98,6 +99,8 @@ declare global {
 
 const generatedActualInitialHtml = generatedActualModule.generatedInitialHtml
 const generatedBenchInitialHtml = generatedBenchModule.generatedInitialHtml
+const actualMount = generatedActualModule.mountComponent as unknown as GeneratedMount
+const benchMount = generatedBenchModule.mountComponent as unknown as GeneratedMount
 const actualHydrate = generatedActualModule.hydrateComponent as unknown as GeneratedHydrate
 const benchHydrate = generatedBenchModule.hydrateComponent as unknown as GeneratedHydrate
 
@@ -127,15 +130,18 @@ function prepareContainer(
   implementation: Implementation,
   todos: Todo[],
   useActualGeneratedHtml = false,
+  emptyGeneratedRoot = false,
 ): HTMLElement {
   const container = freshContainer()
   if (implementation === 'generated') {
     // 生成版のrootは外部から初期配列を受け取るAPIをまだ持たない。元の
     // authoringファイルは変更せず、計測用コンパイル出力だけがこの値を読む。
     globalThis.__IRISOUT_BENCH_INITIAL_TODOS__ = todos
-    container.innerHTML = String(
-      useActualGeneratedHtml ? generatedActualInitialHtml : generatedBenchInitialHtml,
-    )
+    if (!emptyGeneratedRoot) {
+      container.innerHTML = String(
+        useActualGeneratedHtml ? generatedActualInitialHtml : generatedBenchInitialHtml,
+      )
+    }
   }
   return container
 }
@@ -145,9 +151,12 @@ function mountPrepared(
   container: HTMLElement,
   todos: Todo[],
   useActualGenerated = false,
+  generatedFromEmptyRoot = false,
 ): Mounted {
   if (implementation === 'generated') {
-    const generated = (useActualGenerated ? actualHydrate : benchHydrate)(container)
+    const generated = generatedFromEmptyRoot
+      ? (useActualGenerated ? actualMount : benchMount)(container)
+      : (useActualGenerated ? actualHydrate : benchHydrate)(container)
     // 計測用の外部初期配列はcomponentがstateとして保持しているため、
     // component外の参照を残さない。残すと更新後の古い配列までヒープに残る。
     globalThis.__IRISOUT_BENCH_INITIAL_TODOS__ = undefined
@@ -404,11 +413,12 @@ export function runScenario(
   scenario: Scenario,
 ): ScenarioResult {
   const todos = makeTodos(n, scenario === 'filter')
-  const container = prepareContainer(implementation, todos)
+  const generatedFromEmptyRoot = implementation === 'generated' && scenario === 'mount'
+  const container = prepareContainer(implementation, todos, false, generatedFromEmptyRoot)
 
   if (scenario === 'mount') {
     const start = performance.now()
-    const mounted = mountPrepared(implementation, container, todos)
+    const mounted = mountPrepared(implementation, container, todos, false, generatedFromEmptyRoot)
     const elapsedMs = performance.now() - start
     const result = toScenarioResult(
       implementation,
