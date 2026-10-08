@@ -1,0 +1,132 @@
+{
+  "startedAt": "2026-10-08T13:25:35.282Z",
+  "completedAt": "2026-10-08T13:26:14.538Z",
+  "base": "http://127.0.0.1:4311/",
+  "passed": false,
+  "results": [
+    {
+      "number": 1,
+      "name": "JavaScript無効の初期HTMLと詳細件名",
+      "passed": true,
+      "observations": [
+        {
+          "path": "/",
+          "status": 200,
+          "titles": ["決済API停止", "通知遅延", "検索障害"]
+        },
+        {
+          "path": "/incidents/i1",
+          "status": 200,
+          "titles": ["決済API停止"]
+        }
+      ]
+    },
+    {
+      "number": 2,
+      "name": "初期API・検索遅延・未知ID404",
+      "passed": false,
+      "observations": [],
+      "failure": "初期API HTTP 404",
+      "limitations": ["初期API404でこの検査が停止したため未知ID404は初回未確認"]
+    },
+    {
+      "number": 3,
+      "name": "検索応答の競合",
+      "passed": false,
+      "observations": [
+        {
+          "body": "障害対応ボード\n障害一覧\n検索\n\n検索失敗: 404\n\n決済API停止\n\n対応中\n\n詳細\n通知遅延\n\n対応中\n\n詳細\n検索障害\n\n対応中\n\n詳細"
+        },
+        {
+          "url": "http://127.0.0.1:4311/",
+          "body": "障害対応ボード\n障害一覧\n検索\n\n検索失敗: 404\n\n決済API停止\n\n対応中\n\n詳細\n通知遅延\n\n対応中\n\n詳細\n検索障害\n\n対応中\n\n詳細"
+        },
+        {
+          "screenshot": "/tmp/irisout-incident-dogfood/failure-3-0.png"
+        }
+      ],
+      "failure": "競合後に通知以外の障害が表示されています"
+    },
+    {
+      "number": 4,
+      "name": "HTTP503の表示と次の検索による回復",
+      "passed": false,
+      "observations": [],
+      "failure": "失敗検索APIがHTTP 404です"
+    },
+    {
+      "number": 5,
+      "name": "解決APIと一覧・再読み込みへの反映",
+      "passed": false,
+      "observations": [
+        {
+          "url": "http://127.0.0.1:4311/incidents/i1",
+          "body": "障害対応ボード\n決済API停止\n\n対応中\n\n解決する\n\n作業メモ\n\n監視中\n\n受信数: 0\n\n一覧へ戻る"
+        },
+        {
+          "screenshot": "/tmp/irisout-incident-dogfood/failure-5-0.png"
+        }
+      ],
+      "failure": "waitFor: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByText('解決済み', { exact: true }).first() to be visible\u001b[22m\n"
+    },
+    {
+      "number": 6,
+      "name": "ID別メモの分離と遷移・再読み込み保持",
+      "passed": true,
+      "observations": [
+        {
+          "memoA": "検査i1：決済担当への連絡",
+          "memoB": "検査i2：通知の再送",
+          "storedKeys": ["incident-memo:i1", "incident-memo:i2"]
+        }
+      ]
+    },
+    {
+      "number": 7,
+      "name": "同一文書で監視登録1→0→1と受信表示",
+      "passed": true,
+      "observations": [
+        {
+          "counts": [0, 1, 0, 1, 0, 1],
+          "before": "障害対応ボード\n決済API停止\n\n対応中\n\n解決する\n\n作業メモ\n\n監視中\n\n受信数: 0\n\n一覧へ戻る",
+          "after": "障害対応ボード\n決済API停止\n\n対応中\n\n解決する\n\n作業メモ\n\n監視中\n\n受信数: 1\n\n一覧へ戻る",
+          "events": [
+            {
+              "action": "add",
+              "count": 1
+            },
+            {
+              "action": "remove",
+              "count": 0
+            },
+            {
+              "action": "add",
+              "count": 1
+            },
+            {
+              "action": "remove",
+              "count": 0
+            },
+            {
+              "action": "add",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "number": 8,
+      "name": "検索要求中の詳細遷移とキーボード操作",
+      "passed": false,
+      "observations": [
+        {
+          "body": "障害対応ボード\n決済API停止\n\n対応中\n\n解決する\n\n作業メモ\n\n監視中\n\n受信数: 0\n\n一覧へ戻る",
+          "url": "http://127.0.0.1:4311/incidents/i1"
+        }
+      ],
+      "failure": "APIが404のため600msの検索応答中に詳細へ遷移する条件は未確認です。キーボード操作と文書維持は確認しました。"
+    }
+  ],
+  "observations": []
+}

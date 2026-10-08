@@ -1,0 +1,19 @@
+{
+  "name": "irisout-incident-dogfood",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "vp build",
+    "dev": "vp dev --host 127.0.0.1 --port 4313",
+    "serve": "bun server/start.ts"
+  },
+  "dependencies": {
+    "hono": "4.13.13",
+    "irisout": "0.3.7",
+    "vite-plus": "0.3.0"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.0"
+  }
+}
