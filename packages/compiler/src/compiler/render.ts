@@ -226,8 +226,11 @@ interface ParsedSignalDecl {
 // ctx を触らない ― root/local どちらの宣言ゾーンからも共有する
 // (same-file-component-composition: 構造ユニットのローカル宣言も同じ形)。
 function parseSignalDeclStatement(stmt: NodePath<t.Statement>): ParsedSignalDecl {
-  const scopeLimit = new Error(
-    'compile: only top-level `signal()`/`derived()` declarations are supported in this milestone (scope limit)',
+  const scopeLimit = Object.assign(
+    new Error(
+      'compile: only top-level `signal()`/`derived()` declarations are supported in this milestone (scope limit)',
+    ),
+    { loc: stmt.node.loc },
   )
   if (!stmt.isVariableDeclaration() || stmt.node.declarations.length !== 1) {
     throw scopeLimit

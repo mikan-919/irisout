@@ -63,14 +63,13 @@ function mapOrigin(
       generatedOffset >= candidate.generatedStart && generatedOffset <= candidate.generatedEnd,
   )
   if (!origin) return null
-  const relativeOffset = Math.max(0, generatedOffset - origin.generatedStart)
   const generatedBefore = source.slice(origin.generatedStart, generatedOffset)
   const relativeLine = generatedBefore.split('\n').length
   const originalLines = origin.source.split('\n')
   const originalLine = Math.min(Math.max(1, relativeLine), Math.max(1, originalLines.length))
   const originalLineText = originalLines[originalLine - 1] ?? ''
   const originalColumn = Math.min(
-    Math.max(1, relativeLine === 1 ? relativeOffset : generatedBefore.lastIndexOf('\n') + 1),
+    Math.max(1, generatedBefore.length - generatedBefore.lastIndexOf('\n')),
     Math.max(1, originalLineText.length + 1),
   )
   return { filePath: origin.filePath, line: originalLine, column: originalColumn }

@@ -87,6 +87,43 @@ export function App() {
     expect(diagnostic.message).toContain('host element attributes')
   })
 
+  it('points unsupported child component statements to their linked source location', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'irisout-child-scope-diagnostics-'))
+    const entry = path.join(root, 'main.jsx')
+    const child = path.join(root, 'Counter.jsx')
+    mkdirSync(root, { recursive: true })
+    writeFileSync(
+      entry,
+      `import { Counter } from './Counter.jsx'
+export function App() {
+  render(<Counter />)
+}`,
+    )
+    writeFileSync(
+      child,
+      `import { render, signal } from 'irisout'
+export function Counter() {
+  const count = signal(0)
+  if (count()) { const doubled = count() * 2 }
+  render(<output>{count()}</output>)
+}`,
+    )
+
+    let caught: unknown
+    try {
+      compileProject(entry)
+    } catch (error) {
+      caught = error
+    }
+
+    expect(caught).toBeInstanceOf(CompileDiagnostic)
+    const diagnostic = caught as CompileDiagnostic
+    expect(diagnostic.filePath).toBe(child)
+    expect(diagnostic.line).toBe(4)
+    expect(diagnostic.column).toBe(3)
+    expect(diagnostic.message).toContain('scope limit')
+  })
+
   it.each([
     ['TryStatement', '    try {\n      count(count() + 1)\n    } catch {}'],
     ['ForStatement', '    for (let index = 0; index < 1; index++) {\n      count(index)\n    }'],
