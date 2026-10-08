@@ -11,6 +11,7 @@
   "type": "module",
   "scripts": {
     "dev": "node scripts/dev.mjs",
+    "dev:notes": "bun run dev demo notes",
     "build": "vp -C apps/demos build",
     "build:web": "node apps/web/scripts/build-docs.mjs && vp -C apps/web build && node apps/web/scripts/prerender-site.mjs && bun run --cwd apps/web build:ssr",
     "site:build": "node apps/web/scripts/build-docs.mjs",
