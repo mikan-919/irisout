@@ -347,7 +347,7 @@ export function App() {
     expect(span?.textContent).toBe('1')
   })
 
-  it('rejects a loop inside a handler body', () => {
+  it('executes a loop inside a handler body', async () => {
     const source = `
 export function App() {
   const count = signal(0);
@@ -355,10 +355,15 @@ export function App() {
   function inc() { for (let i = 0; i < 1; i++) { count(1); } }
 }
 `
-    expect(() => compile(source)).toThrow(/scope limit/)
+    const { code } = compile(source)
+    const mod = await loadGenerated(code)
+    const container = createContainer()
+    ;(mod.mountComponent as (c: Element) => void)(container)
+    dispatchClick(container, container.querySelector('button'))
+    expect(container.querySelector('span')?.textContent).toBe('1')
   })
 
-  it('rejects a var declaration inside a handler body', () => {
+  it('executes a var declaration inside a handler body', async () => {
     const source = `
 export function App() {
   const count = signal(0);
@@ -366,10 +371,15 @@ export function App() {
   function inc() { var x = 1; count(x); }
 }
 `
-    expect(() => compile(source)).toThrow(/scope limit/)
+    const { code } = compile(source)
+    const mod = await loadGenerated(code)
+    const container = createContainer()
+    ;(mod.mountComponent as (c: Element) => void)(container)
+    dispatchClick(container, container.querySelector('button'))
+    expect(container.querySelector('span')?.textContent).toBe('1')
   })
 
-  it('rejects a return that returns a value', () => {
+  it('updates before returning a value', async () => {
     const source = `
 export function App() {
   const count = signal(0);
@@ -377,10 +387,15 @@ export function App() {
   function inc() { count(1); return false; }
 }
 `
-    expect(() => compile(source)).toThrow(/scope limit/)
+    const { code } = compile(source)
+    const mod = await loadGenerated(code)
+    const container = createContainer()
+    ;(mod.mountComponent as (c: Element) => void)(container)
+    dispatchClick(container, container.querySelector('button'))
+    expect(container.querySelector('span')?.textContent).toBe('1')
   })
 
-  it('rejects a return after a tracked write (D3: the write would be lost)', () => {
+  it('updates before an early return', async () => {
     const source = `
 export function App() {
   const count = signal(0);
@@ -388,7 +403,12 @@ export function App() {
   function inc() { count(1); if (true) { return; } }
 }
 `
-    expect(() => compile(source)).toThrow(/scope limit/)
+    const { code } = compile(source)
+    const mod = await loadGenerated(code)
+    const container = createContainer()
+    ;(mod.mountComponent as (c: Element) => void)(container)
+    dispatchClick(container, container.querySelector('button'))
+    expect(container.querySelector('span')?.textContent).toBe('1')
   })
 
   it('rejects a destructured handler parameter', () => {

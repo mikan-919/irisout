@@ -59,7 +59,8 @@ export function App() {
   it('呼び出し先関数を authored 名のままモジュールスコープへ emit し、呼び出しは書き換えない', () => {
     const { code } = compile(TODO_SOURCE)
     expect(code).toContain('function toggle(id) {')
-    expect(code).toContain('toggle(todo.id); update_todos();')
+    expect(code).toContain('toggle(todo.id)')
+    expect(code).toMatch(/finally \{ if \([^)]*\) \{ update_todos\(\);/)
     // 書き込みは代入化、signal ラッパーは残らない。
     expect(code).toContain('todos = todos.map(')
     expect(code).not.toContain('signal(')
@@ -74,7 +75,7 @@ export function App() {
     expect(fnBody).not.toContain('update_todos()')
   })
 
-  it('追跡対象呼び出しの後ろの return は拒否(ADR-0009 D3)', () => {
+  it('追跡対象呼び出しの後ろのreturnでも更新する', async () => {
     const source = `
 export function App() {
   const count = signal(0);
@@ -83,7 +84,9 @@ export function App() {
   function bump() { count(count() + 1); }
 }
 `
-    expect(() => compile(source)).toThrow(/scope limit/)
+    const container = await mount(compile(source).code)
+    dispatchClick(container, container.querySelector('button'))
+    expect(container.querySelector('span')?.textContent).toBe('1')
   })
 })
 
@@ -100,7 +103,8 @@ export function App() {
     const { code } = compile(source)
     expect(code).toContain('function save()')
     expect(code).toContain('function toggle()')
-    expect(code).toContain('save(); update_count();')
+    expect(code).toContain('save()')
+    expect(code).toMatch(/finally \{ if \([^)]*\) \{ update_count\(\);/)
     const container = await mount(code)
     const span = container.querySelector('span')
     expect(span?.textContent).toBe('0')
@@ -155,6 +159,15 @@ export function App() {
     expect(code).not.toContain('function unused()')
   })
 
+  it('generator補助関数を通常関数へ変換せず拒否する', () => {
+    const source = `export function App() {
+      const count = signal(0);
+      render(<button onClick={() => run()}>{count()}</button>);
+      function* run() { count(1); yield count(); }
+    }`
+    expect(() => compile(source)).toThrow(/generator.*scope limit/)
+  })
+
   it('生成側予約名(update_ 接頭辞)と衝突する authored 名は拒否', () => {
     const source = `
 export function App() {
@@ -191,7 +204,7 @@ export function App() {
     expect(code).toContain('notify(count)')
   })
 
-  it('ハンドラ内ローカル束縛の呼び出しは拒否', () => {
+  it('解析済みの局所関数を呼出したときに更新する', async () => {
     const source = `
 export function App() {
   const count = signal(0);
@@ -199,7 +212,95 @@ export function App() {
   function run() { const f = () => count(1); f(); }
 }
 `
-    expect(() => compile(source)).toThrow(/scope limit/)
+    const container = await mount(compile(source).code)
+    dispatchClick(container, container.querySelector('button'))
+    expect(container.querySelector('span')?.textContent).toBe('1')
+  })
+
+  it('同名の補助関数を隠す局所関数をその字句束縛で呼ぶ', async () => {
+    const source = `export function App() {
+      const count = signal(0);
+      render(<div><span>{count()}</span><button onClick={run}>go</button></div>);
+      function run() { write(2); function write(next) { count(next); } }
+      function write() { count(99); }
+    }`
+    const container = await mount(compile(source).code)
+    dispatchClick(container, container.querySelector('button'))
+    expect(container.querySelector('span')?.textContent).toBe('2')
+  })
+
+  it.each([
+    'function nested(value = count()) { return value; }',
+    'function nested(value = (() => count())()) { return value; }',
+    'class Writer { next = count(); }',
+    'const methods = { [count()]() { return 1; } };',
+    'const methods = { [(() => count())()]() { return 1; } };',
+  ])('関数本体外の未変換の状態参照を拒否する: %s', (body) => {
+    const source = `export function App() {
+      const count = signal(0);
+      render(<button onClick={run}>{count()}</button>);
+      function run() { ${body} }
+    }`
+    expect(() => compile(source)).toThrow(/outside function bodies.*scope limit/)
+  })
+
+  it('補助関数内の遅延した書込みもeffectの禁止対象に含める', () => {
+    const source = `export function App() {
+      const count = signal(0);
+      render(<div>{count()}</div>);
+      effect(() => { writeLater(); });
+      function writeLater() { Promise.resolve().then(() => count(1)); }
+    }`
+    expect(() => compile(source)).toThrow(/effect.*scope limit/)
+  })
+
+  it('非同期補助関数の書込みもeffectの禁止対象に含める', () => {
+    const source = `export function App() {
+      const count = signal(0);
+      render(<div>{count()}</div>);
+      effect(() => { writeLater(); });
+      async function writeLater() { await Promise.resolve(); count(1); }
+    }`
+    expect(() => compile(source)).toThrow(/effect.*scope limit/)
+  })
+
+  it('内部の兄弟関数の相互再帰を巻き上げて呼び出す', async () => {
+    const source = `export function App() {
+      const count = signal(0);
+      render(<div><span>{count()}</span><button onClick={run}>go</button></div>);
+      function run() {
+        first(2);
+        function first(n) { if (n) return second(n - 1); count(3); }
+        function second(n) { return first(n); }
+      }
+    }`
+    const container = await mount(compile(source).code)
+    dispatchClick(container, container.querySelector('button'))
+    expect(container.querySelector('span')?.textContent).toBe('3')
+  })
+
+  it('先に追跡した補助関数と同名の局所関数へ更新印を混ぜない', async () => {
+    const source = `export function App() {
+      const count = signal(0);
+      render(<div><span>{count()}</span><button class="helper" onClick={() => write()}>helper</button><button class="local" onClick={run}>local</button></div>);
+      function write() { count(1); }
+      function run(event) {
+        function write() { return 42; }
+        event.currentTarget.setAttribute('data-result', String(write()));
+      }
+    }`
+    const container = await mount(compile(source).code)
+    const errors: unknown[] = []
+    container.ownerDocument.defaultView!.addEventListener('error', (event) => {
+      errors.push(event.error)
+      event.preventDefault()
+    })
+    dispatchClick(container, container.querySelector('.local'))
+    expect(errors).toEqual([])
+    expect(container.querySelector('.local')?.getAttribute('data-result')).toBe('42')
+    expect(container.querySelector('span')?.textContent).toBe('0')
+    dispatchClick(container, container.querySelector('.helper'))
+    expect(container.querySelector('span')?.textContent).toBe('1')
   })
 
   it('仮引数の呼び出しは拒否', () => {

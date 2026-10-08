@@ -2,6 +2,8 @@
 
 ## ステータス
 
+局所関数の呼出しと非同期処理の状態反映は[ADR-0065](./0065-function-body-updates.md)で改訂した。以下は当時の判断の記録である。
+
 決定済み(change `cross-function-handler-writes` で実装済み)
 
 ## コンテキスト

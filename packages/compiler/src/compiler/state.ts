@@ -16,11 +16,11 @@ export const toContextId = (s: string): ContextId => s as ContextId
 
 export type DeclKind = 'signal' | 'derived' | 'collection'
 
-// signalToMarkers 確定後に、ハンドラ/action の末尾へ挿入する更新文を
+// signalToMarkers 確定後に、ハンドラ/action の実行境界へ挿入する更新文を
 // 解決するための関数型。通常は個別の update_<name>() を返すが、複数の
 // root signal が同じ marker を共有する場合は codegen が作った同期 batch
 // を1回だけ呼ぶ文を返す。collection.update()を含むbatchでは、既存の
-// 直接通知をスコープ末尾まで抑止する必要があるため、その情報も返す。
+// 直接通知を更新境界まで抑止する必要があるため、その情報も返す。
 export interface ResolvedUpdateCall {
   code: string
   needsCollectionBatch: boolean
@@ -248,14 +248,15 @@ export interface SharedDecl {
 // 動きゾーン関数の解析結果。writeDeclIds は自分の本体が直接書く root signal
 // (推移解決済み)、calleeNames は自分が呼ぶ別の追跡関数。推移的な書き込み
 // 集合は呼び出しグラフを visited-set で辿って求める(自己/相互再帰を安全に
-// 打ち切る)。rendered は update_*() を含まない書き換え済み本体 — update は
-// 呼び出し元ハンドラ末尾のみで発火する(design D3)。
+// 打ち切る)。同期helperは呼出し元の更新を共有し、async helperと内側のcallbackは
+// 自身の関数出口で更新する。全書込みと同期の直接書込みを分けて保持する。
 export interface TrackedFn {
+  finalize: (resolveUpdateCall: ResolveUpdateCall) => string
+  allWriteDeclIds: Set<DeclId>
+  allCollectionWriteDeclIds: Set<DeclId>
   name: string
   /** authored の仮引数テキスト(括弧なし。0引数なら空文字列)。 */
   paramSource: string
-  /** 書き換え済み本体(中括弧の中身、update_*() なし)。 */
-  rendered: string
   /** authored movement-zone functionがasyncか。 */
   async: boolean
   writeDeclIds: Set<DeclId>
@@ -316,6 +317,7 @@ export interface CompilerState {
   // 追跡対象として呼ばれ、モジュールスコープへ emit する関数(名前 → 解析結果)。
   // Map の挿入順にちょうど1回ずつ codegen が emit する。
   trackedFns: Map<string, TrackedFn>
+  analyzedFunctions: Set<t.Function>
 
   // same-file-component-composition: 構造ユニットへインライン化された
   // ローカルsignal/derived の declId 集合(CONTEXT.md「ローカルsignal」)。
@@ -361,6 +363,7 @@ export function createCompilerState(
     instanceCounter: 0,
     movementFns: new Map(),
     trackedFns: new Map(),
+    analyzedFunctions: new Set(),
     localDeclIds: new Set(),
     sharedDecls: [],
     sharedDeclIdByBindingKey: new Map(),

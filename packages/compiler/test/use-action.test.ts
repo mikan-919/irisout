@@ -691,19 +691,41 @@ export function App() {
     expect(() => compile(source)).toThrow(/zero-argument function.*scope limit/)
   })
 
-  it('rejects an unsupported statement kind inside a nested listener body', () => {
+  it('does not rerun effects when an action only registers a writing listener', async () => {
+    const source = `export function App() {
+      const count = signal(0);
+      render(<div><output>{count()}</output><button use={setup}>go</button></div>);
+      effect(() => { globalThis.__irisoutActionEffectCalls.push(count()); });
+      function setup(el) { el.addEventListener('click', () => count(count() + 1)); }
+    }`
+    ;(globalThis as any).__irisoutActionEffectCalls = []
+    const mod = await loadGenerated(compile(source).code)
+    const container = createContainer()
+    ;(mod.mountComponent as (c: Element) => void)(container)
+    expect((globalThis as any).__irisoutActionEffectCalls).toEqual([0])
+    dispatchClick(container, container.querySelector('button'))
+    expect(container.querySelector('output')?.textContent).toBe('1')
+    expect((globalThis as any).__irisoutActionEffectCalls).toEqual([0, 1])
+    delete (globalThis as any).__irisoutActionEffectCalls
+  })
+
+  it('executes a loop inside a nested listener body', async () => {
     const source = `
 export function App() {
   const count = signal(0);
-  render(<canvas use={setup}></canvas>);
+  render(<div><output>{count()}</output><canvas use={setup}></canvas></div>);
   function setup(el) {
-    el.addEventListener('click', () => {
+    el.addEventListener('click', async () => {
       for (let i = 0; i < 1; i++) { count(1); }
     });
   }
 }
 `
-    expect(() => compile(source)).toThrow(/scope limit/)
+    const mod = await loadGenerated(compile(source).code)
+    const container = createContainer()
+    ;(mod.mountComponent as (c: Element) => void)(container)
+    dispatchClick(container, container.querySelector('canvas'))
+    expect(container.querySelector('output')?.textContent).toBe('1')
   })
 })
 

@@ -151,27 +151,35 @@ function statementProgram(stmts: NodePath<t.Statement>[]): t.Program {
 // concise bodyは`return`を付けたBlockStatementへ正規化する。actionの
 // 関数本体では返り値を保ち、ASTコード生成の対象にすることで、ネストした
 // スコープを外側の元ソース位置へ再挿入しない。
-function parseGeneratedFunctionBody(code: string): t.BlockStatement {
+function parseGeneratedFunctionBody(
+  code: string,
+  originalFunction: t.Node | null,
+): t.BlockStatement {
   const trimmed = code.trim()
-  const source = trimmed.startsWith('{')
-    ? `function __generated__() ${trimmed}`
-    : `function __generated__() { return (${trimmed}); }`
+  const body = trimmed.startsWith('{') ? trimmed : `{ return (${trimmed}); }`
+  const privateNames = new Set<string>()
+  if (originalFunction)
+    t.traverseFast(originalFunction, (node) => {
+      if (t.isPrivateName(node)) privateNames.add(node.id.name)
+    })
+  // 再解析は実行しない。元の本体を戻す前に、await・super・private名が
+  // 有効な構文文脈だけを用意し、thisやargumentsの実行時の束縛は変更しない。
+  const constructor = t.isClassMethod(originalFunction) && originalFunction.kind === 'constructor'
+  const source = `class __generated__ extends __base__ { ${[...privateNames].map((name) => `#${name};`).join(' ')} ${constructor ? 'constructor' : 'async __body__'}() ${body} }`
   const file = parse(source, { sourceType: 'module', plugins: ['typescript', 'jsx'] })
-  const fn = file.program.body[0]
-  if (fn?.type !== 'FunctionDeclaration') {
-    throw new Error('compile: failed to parse generated action function body')
-  }
+  const cls = file.program.body[0]
+  const fn =
+    cls?.type === 'ClassDeclaration'
+      ? cls.body.body.find((node) => node.type === 'ClassMethod')
+      : null
+  if (fn?.type !== 'ClassMethod')
+    throw new Error('compile: failed to parse generated function body')
   return fn.body
 }
 
-// cross-function-handler-writes design D1: ハンドラ/action 本体の識別子巡回で
-// 「signal/derived でない識別子の直接呼び出し」を分類する。callee が動きゾーン
-// 関数(render 後の function 宣言)と binding 同一なら追跡対象として記録し、
-// binding 未解決(グローバル等)は素通し、それ以外(仮引数・ローカル束縛)は
-// scope limit で拒否する。追跡した場合、呼び出し式自体は書き換えず callee 名を
-// そのまま残す。追跡呼び出しは ADR-0009 D3 の「追跡書き込み」として数えるため
-// onWrite で位置を通知する(呼び出しより後ろの return を拒否)。
-// 戻り値はこの識別子を callee として処理したか(呼び出し元は編集不要で return)。
+// 動きゾーンの関数は呼出しグラフを追跡し、通常の局所関数は解析済みの
+// ASTノードとの同一性で判別する。未解析の仮引数などへ状態更新を隠す
+// 呼出しは受理しない。名前だけで判別すると局所関数による遮蔽を壊す。
 function tryHandleTrackedCallee(
   ctx: CompilerState,
   idPath: NodePath<t.Identifier>,
@@ -198,6 +206,13 @@ function tryHandleTrackedCallee(
   ) {
     return
   }
+  const localFunction = binding.path.isFunctionDeclaration()
+    ? binding.path.node
+    : binding.path.isVariableDeclarator()
+      ? binding.path.node.init
+      : null
+  if (localFunction && t.isFunction(localFunction) && ctx.analyzedFunctions.has(localFunction))
+    return
   const fn = ctx.movementFns.get(name)
   if (!fn || binding.path.node !== fn.node) {
     throw new Error(
@@ -231,6 +246,7 @@ function ensureTrackedFn(ctx: CompilerState, name: string, instanceId: number): 
     )
   }
   const fnPath = ctx.movementFns.get(name)!
+  validateFunctionBoundary(ctx, fnPath, instanceId)
   const params = fnPath.get('params') as NodePath<t.Node>[]
   const paramSource =
     params.length > 0
@@ -240,17 +256,22 @@ function ensureTrackedFn(ctx: CompilerState, name: string, instanceId: number): 
   const entry: TrackedFn = {
     name,
     paramSource,
-    rendered: '',
     async: fnPath.node.async,
+    finalize: () => '',
+    allWriteDeclIds: new Set(),
+    allCollectionWriteDeclIds: new Set(),
     writeDeclIds: new Set(),
     directCollectionWriteDeclIds: new Set(),
     calleeNames: new Set(),
   }
   ctx.trackedFns.set(name, entry)
   const stmts = fnPath.get('body.body') as NodePath<t.Statement>[]
-  const core = analyzeHandlerStatementsCore(ctx, stmts, instanceId)
-  entry.rendered = core.rendered
-  entry.writeDeclIds = core.writeDeclIds
+  if (stmts.length === 0) return
+  const core = analyzeActionStatements(ctx, stmts, instanceId, true, false, fnPath.node.async)
+  entry.finalize = core.finalize
+  entry.allWriteDeclIds = core.writeDeclIds
+  entry.allCollectionWriteDeclIds = core.allCollectionWriteDeclIds
+  entry.writeDeclIds = core.directWriteDeclIds
   entry.directCollectionWriteDeclIds = core.directCollectionWriteDeclIds
   entry.calleeNames = core.calleeNames
 }
@@ -263,177 +284,26 @@ function collectTransitiveWrites(
   out: Set<DeclId>,
   directCollectionOut: Set<DeclId> = new Set(),
   visited: Set<string> = new Set(),
+  includeDeferredWrites = false,
 ): void {
   for (const name of names) {
     if (visited.has(name)) continue
     visited.add(name)
     const fn = ctx.trackedFns.get(name)
-    if (!fn) continue
-    for (const w of fn.writeDeclIds) out.add(w)
-    for (const w of fn.directCollectionWriteDeclIds) directCollectionOut.add(w)
-    collectTransitiveWrites(ctx, fn.calleeNames, out, directCollectionOut, visited)
-  }
-}
-
-// ハンドラ本体(文配列)の中核解析。読み取り書き換え・書き込み代入化・
-// 追跡呼び出し検出・D3(追跡書き込み後の return 拒否)を行い、書き換え済み
-// テキスト・直接書き込み root signal・直接 callee 名を返す。update_*() の合流は
-// 呼び出し元(analyzeHandlerBody / ハンドラ末尾)に任せるためここでは行わない。
-function analyzeHandlerStatementsCore(
-  ctx: CompilerState,
-  stmts: NodePath<t.Statement>[],
-  instanceId: number,
-): {
-  rendered: string
-  writeDeclIds: Set<DeclId>
-  directCollectionWriteDeclIds: Set<DeclId>
-  calleeNames: Set<string>
-} {
-  for (const stmt of stmts) validateHandlerStatement(stmt)
-
-  if (stmts.length === 0) {
-    return {
-      rendered: '',
-      writeDeclIds: new Set(),
-      directCollectionWriteDeclIds: new Set(),
-      calleeNames: new Set(),
-    }
-  }
-
-  const writeDeclIds = new Set<DeclId>()
-  const directCollectionWriteDeclIds = new Set<DeclId>()
-  const calleeNames = new Set<string>()
-  const edits: Edit[] = []
-  const astRoot = statementProgram(stmts)
-  const ast = stmts.some((stmt) => usesTransformedAst(ctx, stmt as NodePath<t.Node>))
-    ? createAstRewrite(astRoot)
-    : null
-  for (const stmt of stmts) {
-    collectContextCalls(ctx, stmt as NodePath<t.Node>, new Set(), edits, null, ast, null, astRoot)
-  }
-  let firstWriteStart: number | null = null
-  const noteWrite = (pos: number) => {
-    if (firstWriteStart == null || pos < firstWriteStart) firstWriteStart = pos
-  }
-
-  const visit = (idPath: NodePath<t.Identifier>) => {
-    const id = resolveDeclId(ctx, idPath, instanceId)
-    if (!id) {
-      tryHandleTrackedCallee(
-        ctx,
-        idPath,
-        instanceId,
-        calleeNames,
-        noteWrite,
-        edits,
-        ast ? (path, name) => ast.rename(path.node, name) : undefined,
-      )
-      return
-    }
-    noteDeclUse(ctx, id)
-    const outputName = ctx.declOutputName.get(id)
-    if (!outputName) return
-
-    const parent = idPath.parentPath
-    if (ctx.sharedDeclIds.has(id)) {
-      if (parent?.isCallExpression() && parent.node.callee === idPath.node) {
-        if (ctx.declKind.get(id) === 'derived' && parent.node.arguments.length > 0) {
-          throw new Error(
-            `compile: module shared derived "${idPath.node.name}" is read-only (scope limit)`,
-          )
-        }
-        if (parent.node.arguments.length > 1) {
-          throw new Error(
-            `compile: signal writes take exactly one argument, got ${parent.node.arguments.length} for "${idPath.node.name}" (scope limit)`,
-          )
-        }
-        if (parent.node.arguments.length === 1) noteWrite(parent.node.start!)
-      }
-      return
-    }
-    if (parent?.isCallExpression() && parent.node.callee === idPath.node) {
-      if (parent.node.arguments.length === 0) {
-        edits.push({
-          start: parent.node.start!,
-          end: parent.node.end!,
-          text: outputName,
-        })
-        if (ast) {
-          planAstReplacement(ast, parent as NodePath<t.CallExpression>, astRoot, () =>
-            t.identifier(outputName),
-          )
-        }
-        return
-      }
-      if (parent.node.arguments.length > 1) {
-        throw new Error(
-          `compile: signal writes take exactly one argument, got ${parent.node.arguments.length} for "${idPath.node.name}" (scope limit)`,
-        )
-      }
-      if (ctx.declKind.get(id) === 'derived') {
-        throw new Error(`compile: cannot write to derived "${idPath.node.name}"`)
-      }
-      const arg = parent.node.arguments[0]!
-      const functional = arg.type === 'ArrowFunctionExpression' || arg.type === 'FunctionExpression'
-      edits.push({
-        start: parent.node.start!,
-        end: arg.start!,
-        text: `${outputName} = ${functional ? '(' : ''}`,
-      })
-      edits.push({
-        start: arg.end!,
-        end: parent.node.end!,
-        text: functional ? `)(${outputName})` : '',
-      })
-      if (ast) {
-        const callPath = parent as NodePath<t.CallExpression>
-        planAstReplacement(ast, callPath, astRoot, (get) => {
-          const arg = parent.node.arguments[0] as t.Expression
-          const value = get(arg) as t.Expression
-          const rhs = functional ? t.callExpression(value, [t.identifier(outputName)]) : value
-          return t.assignmentExpression('=', t.identifier(outputName), rhs)
-        })
-      }
-      noteWrite(parent.node.start!)
-      for (const sig of resolveToSignals(ctx, id, new Set())) writeDeclIds.add(sig)
-      return
-    }
-
-    if (identifierNeedsRewrite(ctx, idPath, outputName)) {
-      edits.push({
-        start: idPath.node.start!,
-        end: idPath.node.end!,
-        text: outputName,
-      })
-      if (ast) ast.rename(idPath.node, outputName)
-    }
-  }
-
-  for (const stmt of stmts) {
-    stmt.traverse({
-      Identifier(idPath) {
-        if (idPath.isReferencedIdentifier()) visit(idPath)
-      },
-    })
-  }
-
-  if (firstWriteStart != null) {
-    const returnStarts: number[] = []
-    for (const stmt of stmts) collectReturnStarts(stmt, returnStarts)
-    if (returnStarts.some((start) => start > firstWriteStart!)) {
-      throw new Error(
-        'compile: a `return` after a tracked signal write is not supported, the write would be lost (scope limit)',
-      )
-    }
-  }
-
-  return {
-    rendered: ast
-      ? ast.generate()
-      : render(ctx.source, stmts[0]!.node.start!, stmts[stmts.length - 1]!.node.end!, edits),
-    writeDeclIds,
-    directCollectionWriteDeclIds,
-    calleeNames,
+    if (!fn || (!includeDeferredWrites && fn.async)) continue
+    for (const w of includeDeferredWrites ? fn.allWriteDeclIds : fn.writeDeclIds) out.add(w)
+    for (const w of includeDeferredWrites
+      ? fn.allCollectionWriteDeclIds
+      : fn.directCollectionWriteDeclIds)
+      directCollectionOut.add(w)
+    collectTransitiveWrites(
+      ctx,
+      fn.calleeNames,
+      out,
+      directCollectionOut,
+      visited,
+      includeDeferredWrites,
+    )
   }
 }
 
@@ -620,260 +490,28 @@ export function analyzeHandlerExpr(
   exprPath: NodePath<t.Expression>,
   instanceId: number,
 ): HandlerAnalysis {
-  const writeDeclIds = new Set<DeclId>()
-  const directCollectionWriteDeclIds = new Set<DeclId>()
-  const calleeNames = new Set<string>()
-  const edits: Edit[] = []
-  const nestedScopes: ReturnType<typeof analyzeFunctionBodyScope>[] = []
-  const ast = usesTransformedAst(ctx, exprPath as NodePath<t.Node>)
-    ? createAstRewrite(exprPath.node)
-    : null
-  collectContextCalls(ctx, exprPath, new Set(), edits, null, ast, null, exprPath.node)
-
-  const visit = (idPath: NodePath<t.Identifier>) => {
-    const id = resolveDeclId(ctx, idPath, instanceId)
-    if (!id) {
-      // cross-function-handler-writes: 単一式ハンドラ本体(`() => toggle(id)`)
-      // からの動きゾーン関数呼び出しを追跡する(D3 は式1つなので該当なし)。
-      tryHandleTrackedCallee(
-        ctx,
-        idPath,
-        instanceId,
-        calleeNames,
-        () => {},
-        edits,
-        ast ? (path, name) => ast.rename(path.node, name) : undefined,
-      )
-      return
-    }
-    noteDeclUse(ctx, id)
-    const outputName = ctx.declOutputName.get(id)
-    if (!outputName) return
-
-    const parent = idPath.parentPath
-    if (ctx.sharedDeclIds.has(id)) {
-      if (parent?.isCallExpression() && parent.node.callee === idPath.node) {
-        if (ctx.declKind.get(id) === 'derived' && parent.node.arguments.length > 0) {
-          throw new Error(
-            `compile: module shared derived "${idPath.node.name}" is read-only (scope limit)`,
-          )
-        }
-        if (parent.node.arguments.length > 1) {
-          throw new Error(
-            `compile: signal writes take exactly one argument, got ${parent.node.arguments.length} for "${idPath.node.name}" (scope limit)`,
-          )
-        }
-      }
-      return
-    }
-    if (parent?.isCallExpression() && parent.node.callee === idPath.node) {
-      if (parent.node.arguments.length === 0) {
-        edits.push({
-          start: parent.node.start!,
-          end: parent.node.end!,
-          text: outputName,
-        })
-        if (ast) {
-          planAstReplacement(ast, parent as NodePath<t.CallExpression>, exprPath.node, () =>
-            t.identifier(outputName),
-          )
-        }
-        return
-      }
-      if (parent.node.arguments.length > 1) {
-        throw new Error(
-          `compile: signal writes take exactly one argument, got ${parent.node.arguments.length} for "${idPath.node.name}" (scope limit)`,
-        )
-      }
-      if (ctx.declKind.get(id) === 'derived') {
-        throw new Error(`compile: cannot write to derived "${idPath.node.name}"`)
-      }
-      const arg = parent.node.arguments[0]!
-      const functional = arg.type === 'ArrowFunctionExpression' || arg.type === 'FunctionExpression'
-      edits.push({
-        start: parent.node.start!,
-        end: arg.start!,
-        text: `${outputName} = ${functional ? '(' : ''}`,
-      })
-      edits.push({
-        start: arg.end!,
-        end: parent.node.end!,
-        text: functional ? `)(${outputName})` : '',
-      })
-      if (ast) {
-        const callPath = parent as NodePath<t.CallExpression>
-        planAstReplacement(ast, callPath, exprPath.node, (get) => {
-          const arg = parent.node.arguments[0] as t.Expression
-          const value = get(arg) as t.Expression
-          const rhs = functional ? t.callExpression(value, [t.identifier(outputName)]) : value
-          return t.assignmentExpression('=', t.identifier(outputName), rhs)
-        })
-      }
-      for (const sig of resolveToSignals(ctx, id, new Set())) writeDeclIds.add(sig)
-      return
-    }
-
-    if (identifierNeedsRewrite(ctx, idPath, outputName)) {
-      edits.push({
-        start: idPath.node.start!,
-        end: idPath.node.end!,
-        text: outputName,
-      })
-      if (ast) ast.rename(idPath.node, outputName)
-    }
-  }
-
-  const captureNested = (
-    fnPath: NodePath<t.FunctionExpression | t.ArrowFunctionExpression | t.ObjectMethod>,
-  ) => {
-    nestedScopes.push(analyzeFunctionBodyScope(ctx, fnPath, instanceId, false, false))
-    fnPath.skip()
-  }
-  if (exprPath.isIdentifier()) visit(exprPath)
-  exprPath.traverse({
-    Identifier(idPath) {
-      if (idPath.isReferencedIdentifier()) visit(idPath)
-    },
-    FunctionExpression: captureNested,
-    ArrowFunctionExpression: captureNested,
-    ObjectMethod: captureNested,
-  })
-  collectTransitiveWrites(ctx, calleeNames, writeDeclIds, directCollectionWriteDeclIds)
-
-  const allWriteDeclIds = new Set(writeDeclIds)
-  const allCollectionWriteDeclIds = new Set(directCollectionWriteDeclIds)
-  for (const child of nestedScopes) {
-    for (const id of child.writeDeclIds) allWriteDeclIds.add(id)
-    for (const id of child.allCollectionWriteDeclIds) allCollectionWriteDeclIds.add(id)
-  }
-
-  const rendered = ast
-    ? ast.generate()
-    : render(ctx.source, exprPath.node.start!, exprPath.node.end!, edits)
-
+  const scope = analyzeActionExprScope(ctx, exprPath, instanceId, false, false)
   return {
-    rendered,
-    finalize: (resolveUpdateCall) => {
-      const allEdits = [...edits]
-      for (const child of nestedScopes) {
-        const childCode = child.finalize(resolveUpdateCall)
-        allEdits.push({
-          start: child.start,
-          end: child.end,
-          text: childCode,
-        })
-        if (ast) {
-          ast.replace(child.node, child.parent, child.depth, () =>
-            parseGeneratedFunctionBody(stripSourceMapMarkers(childCode)),
-          )
-        }
-      }
-      const rendered = ast
-        ? ast.generate()
-        : render(ctx.source, exprPath.node.start!, exprPath.node.end!, allEdits)
-      const updateCall = resolveUpdateCall(writeDeclIds, directCollectionWriteDeclIds)
-      if (!updateCall.code) return rendered
-      if (updateCall.needsCollectionBatch) {
-        return `{ __update_batch_depth__++; try { ${rendered}; } finally { __update_batch_depth__--; } ${updateCall.code} }`
-      }
-      return `${rendered}; ${updateCall.code}`
-    },
-    writeDeclIds: allWriteDeclIds,
-    directCollectionWriteDeclIds: allCollectionWriteDeclIds,
+    rendered: scope.finalize(NO_ACTION_UPDATE),
+    finalize: scope.finalize,
+    writeDeclIds: scope.writeDeclIds,
+    directCollectionWriteDeclIds: scope.allCollectionWriteDeclIds,
     sourceStart: exprPath.node.start!,
   }
 }
 
-// ADR-0009 D2: IfStatement の consequent/alternate は「4文種そのもの」か
-// 「4文種のみからなる BlockStatement」のどちらか。両形を同じ文配列へ均す。
-function eachBranchStatement(branch: NodePath<t.Statement>): NodePath<t.Statement>[] {
-  return branch.isBlockStatement() ? (branch.get('body') as NodePath<t.Statement>[]) : [branch]
-}
-
-function compileErrorAtStatement(message: string, stmt: NodePath<t.Statement>): Error {
-  const error = new Error(message)
-  if (stmt.node.loc) {
-    Object.defineProperty(error, 'loc', { value: stmt.node.loc, configurable: true })
-  }
-  return error
-}
-
-// ADR-0009 D2/質問2: 4文種(式文 / const・let / if / 裸の return)以外・
-// var・値を返す return を compile error で拒否する。if の枝は再帰検証する。
-// allowValueReturn: ADR-0011 design D4-1。action本体にネストした関数式/arrow
-// 自身の return は「通常の関数の返り値」でありこの規則の対象外(design.md
-// Decision 4-1)なので、その本体を検証する再帰呼び出しでのみ true を渡す。
-// allowThrow: actionのdestroy/初期化失敗を検証するため、action解析だけが明示的に
-// trueを渡す。通常のhandler・追跡functionはADR-0009の4文種を維持する。
-function validateHandlerStatement(
-  stmt: NodePath<t.Statement>,
-  allowValueReturn = false,
-  allowThrow = false,
-): void {
-  if (stmt.isExpressionStatement()) return
-  if (stmt.isVariableDeclaration()) {
-    if (stmt.node.kind === 'var') {
-      throw compileErrorAtStatement(
-        'compile: `var` declarations are not supported in handler bodies, use `const`/`let` (scope limit)',
-        stmt,
-      )
-    }
-    return
-  }
-  if (stmt.isReturnStatement()) {
-    if (stmt.node.argument != null && !allowValueReturn) {
-      throw compileErrorAtStatement(
-        'compile: a handler `return` must not return a value (scope limit)',
-        stmt,
-      )
-    }
-    return
-  }
-  if (stmt.isThrowStatement()) {
-    if (!allowThrow) {
-      throw compileErrorAtStatement(
-        `compile: handler statement "${stmt.node.type}" is not supported yet (scope limit)`,
-        stmt,
-      )
-    }
-    return
-  }
-  if (stmt.isIfStatement()) {
-    for (const s of eachBranchStatement(stmt.get('consequent') as NodePath<t.Statement>)) {
-      validateHandlerStatement(s, allowValueReturn, allowThrow)
-    }
-    const alt = stmt.get('alternate')
-    if (alt.node) {
-      for (const s of eachBranchStatement(alt as NodePath<t.Statement>)) {
-        validateHandlerStatement(s, allowValueReturn, allowThrow)
-      }
-    }
-    return
-  }
-  throw compileErrorAtStatement(
-    `compile: handler statement "${stmt.node.type}" is not supported yet (scope limit)`,
-    stmt,
-  )
-}
-
-// ADR-0009 D3: ソース順で最初の追跡書き込みより後ろに return があると
-// update_*() の取りこぼしが起きるため拒否する。分岐内の return も対象。
+// 初期化本体の末尾returnは別途cleanupとして出力するため、ここでは
+// 関数境界を越えないreturnだけを検査する。通常の関数には文種制限を設けない。
 function collectReturnStarts(stmt: NodePath<t.Statement>, out: number[]): void {
-  if (stmt.isReturnStatement()) {
-    out.push(stmt.node.start!)
-    return
-  }
-  if (stmt.isIfStatement()) {
-    for (const s of eachBranchStatement(stmt.get('consequent') as NodePath<t.Statement>)) {
-      collectReturnStarts(s, out)
-    }
-    const alt = stmt.get('alternate')
-    if (alt.node) {
-      for (const s of eachBranchStatement(alt as NodePath<t.Statement>)) {
-        collectReturnStarts(s, out)
-      }
-    }
-  }
+  if (stmt.isReturnStatement()) out.push(stmt.node.start!)
+  stmt.traverse({
+    Function(path) {
+      path.skip()
+    },
+    ReturnStatement(path) {
+      out.push(path.node.start!)
+    },
+  })
 }
 
 // analyzeHandlerExpr の文レベル版(design D5)。単一式向けの visit をそのまま
@@ -884,6 +522,8 @@ export function analyzeHandlerBody(
   stmts: NodePath<t.Statement>[],
   instanceId: number,
 ): HandlerAnalysis {
+  const fnPath = stmts[0]?.getFunctionParent()
+  if (fnPath) validateFunctionBoundary(ctx, fnPath, instanceId)
   if (stmts.length === 0) {
     return {
       rendered: '',
@@ -893,10 +533,9 @@ export function analyzeHandlerBody(
       sourceStart: 0,
     }
   }
-  // handlerはactionと同じ関数境界解析を使うが、値を返すreturn・throw・
-  // 親スコープへの入れ子書き込み合流は受理しない。各callback自身の実行後に
-  // 更新を置くことで、Promise完了前の親更新を発火させない。
-  const scope = analyzeActionStatements(ctx, stmts, instanceId, false, false, false, false)
+  // callback自身の関数出口で更新する。外側には直接実行する書込みだけを
+  // 合流し、Promise完了前やリスナー登録時に更新を発火させない。
+  const scope = analyzeActionStatements(ctx, stmts, instanceId, true, false)
   return {
     rendered: scope.finalize(NO_ACTION_UPDATE),
     finalize: scope.finalize,
@@ -907,9 +546,8 @@ export function analyzeHandlerBody(
 }
 
 // ADR-0011: action本体・ネストした関数本体・返り値クロージャで共有する
-// 識別子1個ぶんの解析(analyzeHandlerExpr/analyzeHandlerBody の visit と同じ
-// 読み取り書き換え・書き込みの assignment 化)。書き込みの発生位置は D3
-// (return-after-write)判定のため呼び出し元へ onWrite で通知する。
+// 識別子の読み取り・代入化を関数境界間で共有する。書込み位置は初期化
+// 本体の出口検査へ通知し、通常の関数では成功後に局所フラグを立てる。
 function analyzeActionIdentifier(
   ctx: CompilerState,
   instanceId: number,
@@ -923,11 +561,12 @@ function analyzeActionIdentifier(
   root: t.Node,
   ast?: AstRewriteSession | null,
   trackSharedWrites = true,
+  dirtyName: string | null = null,
 ): void {
   const id = resolveDeclId(ctx, idPath, instanceId)
   if (!id) {
     // cross-function-handler-writes: action 本体からの動きゾーン関数呼び出しも
-    // ハンドラと同じ規則で追跡する(onWrite で D3 の追跡書き込み位置を通知)。
+    // ハンドラと同じ規則で追跡する。初期化本体だけが書込み位置を検査する。
     tryHandleTrackedCallee(
       ctx,
       idPath,
@@ -937,6 +576,31 @@ function analyzeActionIdentifier(
       edits,
       ast ? (path, name) => ast.rename(path.node, name) : undefined,
     )
+    const parent = idPath.parentPath
+    const fn = ctx.trackedFns.get(idPath.node.name)
+    if (
+      dirtyName &&
+      fn &&
+      !fn.async &&
+      idPath.scope.getBinding(idPath.node.name)?.path.node ===
+        ctx.movementFns.get(idPath.node.name)?.node &&
+      parent?.isCallExpression() &&
+      parent.node.callee === idPath.node
+    ) {
+      edits.push({
+        start: parent.node.start!,
+        end: parent.node.start!,
+        text: `(${dirtyName} = true, `,
+      })
+      edits.push({ start: parent.node.end!, end: parent.node.end!, text: ')' })
+      if (ast)
+        planAstReplacement(ast, parent, root, (get) =>
+          t.sequenceExpression([
+            t.assignmentExpression('=', t.identifier(dirtyName), t.booleanLiteral(true)),
+            get(parent.node),
+          ]),
+        )
+    }
     return
   }
   noteDeclUse(ctx, id)
@@ -994,19 +658,26 @@ function analyzeActionIdentifier(
     edits.push({
       start: parent.node.start!,
       end: arg.start!,
-      text: `${outputName} = ${functional ? '(' : ''}`,
+      text: `(${outputName} = ${functional ? '(' : ''}`,
     })
     edits.push({
       start: arg.end!,
       end: parent.node.end!,
-      text: functional ? `)(${outputName})` : '',
+      text: `${functional ? `)(${outputName})` : ''}${dirtyName ? `, ${dirtyName} = true, ${outputName}` : ''})`,
     })
     if (ast) {
       const callPath = parent as NodePath<t.CallExpression>
       planAstReplacement(ast, callPath, root, (get) => {
         const value = get(arg as t.Expression) as t.Expression
         const rhs = functional ? t.callExpression(value, [t.identifier(outputName)]) : value
-        return t.assignmentExpression('=', t.identifier(outputName), rhs)
+        const assignment = t.assignmentExpression('=', t.identifier(outputName), rhs)
+        return dirtyName
+          ? t.sequenceExpression([
+              assignment,
+              t.assignmentExpression('=', t.identifier(dirtyName), t.booleanLiteral(true)),
+              t.identifier(outputName),
+            ])
+          : assignment
       })
     }
     for (const sig of resolveToSignals(ctx, id, new Set())) writeDeclIds.add(sig)
@@ -1026,8 +697,8 @@ function analyzeActionIdentifier(
 }
 
 interface ActionScopeAnalysis {
-  /** signalToMarkers 確定後に、このスコープ末尾へ挿入する update_* 呼び出し
-   * (design Decision 5)込みの最終テキストを組み立てる。 */
+  calleeNames: Set<string>
+  /** 依存先の確定後、実行された書込みを関数出口で反映する本文を生成する。 */
   finalize: (resolveUpdateCall: ResolveUpdateCall) => string
   /** このスコープが直接読む signal/derived(推移解決前)。クロージャの依存
    * 解析にのみ使う。 */
@@ -1040,23 +711,38 @@ interface ActionScopeAnalysis {
   allCollectionWriteDeclIds: Set<DeclId>
 }
 
-// action本体・ネストした関数本体で共有する文配列の解析(design D4-1)。
-// ADR-0009 の4文種検証+書き込み書き換えを土台に、ネストした関数式/arrow
-// を見つけるたびに analyzeFunctionBodyScope へ再帰し、その本体全体を
-// 1つの edit(finalize 済みテキストへの置換)として扱う -- 「外側を分割して
-// 内側は同じ traverse パスに解決させる」(docs/conventions.md)の応用。
-// これにより、ネストしたスコープ自身の update_* 呼び出しは、そのスコープが
-// 実際に実行されるたび(例: リスナー発火時)に評価される。
+// 文種ごとの許可表ではなく、関数の本体を更新境界として解析する。
+// 内側の関数は本体だけを別に変換するため、関数の作成と実行を混同せず、
+// this・arguments・new.targetなど元の呼出し文脈を保持する。
 function analyzeActionStatements(
   ctx: CompilerState,
   stmts: NodePath<t.Statement>[],
   instanceId: number,
   allowValueReturn: boolean,
-  allowThrow = true,
-  includeNestedWritesInTail = true,
   trackSharedWrites = true,
+  flushOwnWrites = true,
 ): ActionScopeAnalysis {
-  for (const stmt of stmts) validateHandlerStatement(stmt, allowValueReturn, allowThrow)
+  // cleanupを本体から分離する初期化経路だけは、途中の値returnを受けない。
+  if (!allowValueReturn) {
+    for (const stmt of stmts) {
+      if (stmt.isFunctionDeclaration()) continue
+      const check = (path: NodePath<t.ReturnStatement>) => {
+        if (path.node.argument)
+          throw new Error(
+            'compile: a lifecycle initialization return must be its final cleanup result (scope limit)',
+          )
+      }
+      if (stmt.isReturnStatement()) check(stmt)
+      stmt.traverse({
+        Function(path) {
+          path.skip()
+        },
+        ReturnStatement: check,
+      })
+    }
+  }
+  const dirtyName =
+    allowValueReturn && flushOwnWrites ? stmts[0]!.scope.generateUidIdentifier('write').name : null
 
   const readDeclIds = new Set<DeclId>()
   const directWriteDeclIds = new Set<DeclId>()
@@ -1069,6 +755,14 @@ function analyzeActionStatements(
     ? createAstRewrite(astRoot)
     : null
   for (const stmt of stmts) {
+    if (stmt.isFunctionDeclaration()) ctx.analyzedFunctions.add(stmt.node)
+    else
+      stmt.traverse({
+        Function(path) {
+          ctx.analyzedFunctions.add(path.node)
+          path.skip()
+        },
+      })
     collectContextCalls(ctx, stmt as NodePath<t.Node>, readDeclIds, edits, null, ast, null, astRoot)
   }
   let firstWriteStart: number | null = null
@@ -1091,39 +785,42 @@ function analyzeActionStatements(
       astRoot,
       ast,
       trackSharedWrites,
+      dirtyName,
     )
 
   const captureNested = (
-    fnPath: NodePath<t.FunctionExpression | t.ArrowFunctionExpression | t.ObjectMethod>,
+    fnPath: NodePath<
+      | t.FunctionDeclaration
+      | t.FunctionExpression
+      | t.ArrowFunctionExpression
+      | t.ObjectMethod
+      | t.ClassMethod
+      | t.ClassPrivateMethod
+    >,
   ) => {
-    nestedScopes.push(
-      analyzeFunctionBodyScope(
-        ctx,
-        fnPath,
-        instanceId,
-        includeNestedWritesInTail,
-        trackSharedWrites,
-      ),
-    )
+    nestedScopes.push(analyzeFunctionBodyScope(ctx, fnPath, instanceId, trackSharedWrites))
     fnPath.skip()
   }
 
   for (const stmt of stmts) {
+    if (stmt.isFunctionDeclaration()) {
+      captureNested(stmt)
+      continue
+    }
     stmt.traverse({
       Identifier(idPath) {
         if (idPath.isReferencedIdentifier()) visit(idPath)
       },
-      FunctionExpression: captureNested,
-      ArrowFunctionExpression: captureNested,
-      ObjectMethod: captureNested,
+      Function: captureNested,
+      'ClassProperty|ClassPrivateProperty'(path: NodePath<t.Node>) {
+        validateOutsideBodyState(ctx, path, instanceId)
+      },
     })
   }
 
-  // ADR-0009 D3: このスコープ自身のトップレベルで、追跡書き込みより後ろに
-  // return があると末尾の update_* 挿入が取りこぼされる(ネストした関数の
-  // return は別スコープなので対象外 -- collectReturnStarts は関数境界を
-  // 越えて再帰しない)。
-  if (firstWriteStart != null) {
+  // 初期化本体は末尾のcleanupを別出力する。字句範囲を守って本文を
+  // tryへ移さないため、途中のreturnによる更新漏れだけを引き続き拒否する。
+  if (!allowValueReturn && firstWriteStart != null) {
     const returnStarts: number[] = []
     for (const stmt of stmts) collectReturnStarts(stmt, returnStarts)
     if (returnStarts.some((s) => s > firstWriteStart!)) {
@@ -1133,12 +830,20 @@ function analyzeActionStatements(
     }
   }
 
-  // cross-function-handler-writes D3: 追跡呼び出し先の推移的書き込みを合流し、
-  // このスコープ末尾の update_*() 発火(finalize)に含める。
+  // 同期helperの書込みだけを呼出し元の更新へ合流する。asyncや内側の
+  // callbackの書込みは、下の所有範囲検証用の集合へ別に集める。
   collectTransitiveWrites(ctx, calleeNames, directWriteDeclIds, directCollectionWriteDeclIds)
 
   const writeDeclIds = new Set(directWriteDeclIds)
   const allCollectionWriteDeclIds = new Set(directCollectionWriteDeclIds)
+  collectTransitiveWrites(
+    ctx,
+    calleeNames,
+    writeDeclIds,
+    allCollectionWriteDeclIds,
+    new Set(),
+    true,
+  )
 
   // ネストした関数は自身の実行時に更新文を持つが、構造unit内actionの
   // 字句スコープ検証では、その関数が書くlocal signalもaction全体の参照範囲
@@ -1154,6 +859,7 @@ function analyzeActionStatements(
   const end = stmts[stmts.length - 1]!.node.end!
 
   return {
+    calleeNames,
     readDeclIds,
     directWriteDeclIds,
     directCollectionWriteDeclIds,
@@ -1170,47 +876,38 @@ function analyzeActionStatements(
         })
         if (ast) {
           ast.replace(child.node, child.parent, child.depth, () =>
-            parseGeneratedFunctionBody(stripSourceMapMarkers(childCode)),
+            parseGeneratedFunctionBody(stripSourceMapMarkers(childCode), child.parent),
           )
         }
       }
-      const tailWriteDeclIds = includeNestedWritesInTail ? writeDeclIds : directWriteDeclIds
-      const tailCollectionWriteDeclIds = includeNestedWritesInTail
-        ? allCollectionWriteDeclIds
-        : directCollectionWriteDeclIds
-      const updateCall = resolveUpdateCall(tailWriteDeclIds, tailCollectionWriteDeclIds)
-      if (updateCall.code && !updateCall.needsCollectionBatch) {
-        allEdits.push({
-          start: end,
-          end,
-          // 最終文がセミコロン無しでも、追加する update 文と連結して
-          // JavaScript の同一文にならないよう区切る。
-          text: `; ${updateCall.code}`,
-        })
-      }
+      const updateCall = flushOwnWrites
+        ? resolveUpdateCall(directWriteDeclIds, directCollectionWriteDeclIds)
+        : { code: '', needsCollectionBatch: false }
       const rendered = ast ? ast.generate() : render(ctx.source, start, end, allEdits)
-      if (!updateCall.code) return rendered
-      if (updateCall.needsCollectionBatch) {
-        return `{ __update_batch_depth__++; try { ${rendered} } finally { __update_batch_depth__--; } ${updateCall.code} }`
-      }
-      if (ast) return `${rendered}; ${updateCall.code}`
-      return rendered
+      // NO_ACTION_UPDATEも計装済みsetterを受けるため、フラグ宣言は常に必要。
+      if (!updateCall.code)
+        return dirtyName && (directWriteDeclIds.size > 0 || calleeNames.size > 0)
+          ? `let ${dirtyName} = false; ${rendered}`
+          : rendered
+      if (!dirtyName) return `${rendered}; ${updateCall.code}`
+      const body = updateCall.needsCollectionBatch
+        ? `__update_batch_depth__++; try { ${rendered} } finally { __update_batch_depth__--; if (${dirtyName}) { ${updateCall.code} } }`
+        : `try { ${rendered} } finally { if (${dirtyName}) { ${updateCall.code} } }`
+      return `let ${dirtyName} = false; ${body}`
     },
   }
 }
 
-// 単一式本体(inline arrow の concise body)向けの同型解析。文レベルの
-// 4文種検証・D3 は該当しない(式1つなので早期 return が存在しえない)。
-// 書き込みが挿入する update_* が必要になった場合のみブロックへ包む
-// (design D4-1: 「同じ書き換え」を式本体にも適用する最小コスト実装)。
-//
+// 式本体を更新境界へ変換するときも、その式の値をreturnして保持する。
+// DOMイベント自身は値を利用しないので、イベント入口だけは式文にする。
 function analyzeActionExprScope(
   ctx: CompilerState,
   exprPath: NodePath<t.Expression>,
   instanceId: number,
-  includeNestedWritesInTail = true,
   trackSharedWrites = true,
+  preserveReturn = true,
 ): ActionScopeAnalysis {
+  const dirtyName = exprPath.scope.generateUidIdentifier('write').name
   const readDeclIds = new Set<DeclId>()
   const directWriteDeclIds = new Set<DeclId>()
   const directCollectionWriteDeclIds = new Set<DeclId>()
@@ -1221,6 +918,12 @@ function analyzeActionExprScope(
     ? createAstRewrite(exprPath.node)
     : null
 
+  exprPath.traverse({
+    Function(path) {
+      ctx.analyzedFunctions.add(path.node)
+      path.skip()
+    },
+  })
   collectContextCalls(ctx, exprPath, readDeclIds, edits, null, ast, null, exprPath.node)
 
   const visit = (idPath: NodePath<t.Identifier>) =>
@@ -1237,19 +940,19 @@ function analyzeActionExprScope(
       exprPath.node,
       ast,
       trackSharedWrites,
+      dirtyName,
     )
   const captureNested = (
-    fnPath: NodePath<t.FunctionExpression | t.ArrowFunctionExpression | t.ObjectMethod>,
+    fnPath: NodePath<
+      | t.FunctionDeclaration
+      | t.FunctionExpression
+      | t.ArrowFunctionExpression
+      | t.ObjectMethod
+      | t.ClassMethod
+      | t.ClassPrivateMethod
+    >,
   ) => {
-    nestedScopes.push(
-      analyzeFunctionBodyScope(
-        ctx,
-        fnPath,
-        instanceId,
-        includeNestedWritesInTail,
-        trackSharedWrites,
-      ),
-    )
+    nestedScopes.push(analyzeFunctionBodyScope(ctx, fnPath, instanceId, trackSharedWrites))
     fnPath.skip()
   }
   if (exprPath.isIdentifier()) visit(exprPath)
@@ -1257,14 +960,23 @@ function analyzeActionExprScope(
     Identifier(idPath) {
       if (idPath.isReferencedIdentifier()) visit(idPath)
     },
-    FunctionExpression: captureNested,
-    ArrowFunctionExpression: captureNested,
-    ObjectMethod: captureNested,
+    Function: captureNested,
+    'ClassProperty|ClassPrivateProperty'(path: NodePath<t.Node>) {
+      validateOutsideBodyState(ctx, path, instanceId)
+    },
   })
   collectTransitiveWrites(ctx, calleeNames, directWriteDeclIds, directCollectionWriteDeclIds)
 
   const writeDeclIds = new Set(directWriteDeclIds)
   const allCollectionWriteDeclIds = new Set(directCollectionWriteDeclIds)
+  collectTransitiveWrites(
+    ctx,
+    calleeNames,
+    writeDeclIds,
+    allCollectionWriteDeclIds,
+    new Set(),
+    true,
+  )
   for (const child of nestedScopes) {
     for (const id of child.writeDeclIds) writeDeclIds.add(id)
     for (const id of child.allCollectionWriteDeclIds) allCollectionWriteDeclIds.add(id)
@@ -1273,6 +985,7 @@ function analyzeActionExprScope(
   const start = exprPath.node.start!
   const end = exprPath.node.end!
   return {
+    calleeNames,
     readDeclIds,
     directWriteDeclIds,
     directCollectionWriteDeclIds,
@@ -1289,22 +1002,75 @@ function analyzeActionExprScope(
         })
         if (ast) {
           ast.replace(child.node, child.parent, child.depth, () =>
-            parseGeneratedFunctionBody(stripSourceMapMarkers(childCode)),
+            parseGeneratedFunctionBody(stripSourceMapMarkers(childCode), child.parent),
           )
         }
       }
-      const tailWriteDeclIds = includeNestedWritesInTail ? writeDeclIds : directWriteDeclIds
-      const tailCollectionWriteDeclIds = includeNestedWritesInTail
-        ? allCollectionWriteDeclIds
-        : directCollectionWriteDeclIds
-      const updateCall = resolveUpdateCall(tailWriteDeclIds, tailCollectionWriteDeclIds)
+      const updateCall = resolveUpdateCall(directWriteDeclIds, directCollectionWriteDeclIds)
       const rendered = ast ? ast.generate() : render(ctx.source, start, end, allEdits)
-      if (!updateCall.code) return rendered
-      if (updateCall.needsCollectionBatch) {
-        return `{ __update_batch_depth__++; try { ${rendered}; } finally { __update_batch_depth__--; } ${updateCall.code} }`
-      }
-      return `{ ${rendered}; ${updateCall.code} }`
+      const body = `${preserveReturn ? 'return ' : ''}(${rendered});`
+      if (!updateCall.code)
+        return directWriteDeclIds.size > 0 || calleeNames.size > 0
+          ? `{ let ${dirtyName} = false; ${body} }`
+          : rendered
+      const guardedBody = updateCall.needsCollectionBatch
+        ? `__update_batch_depth__++; try { ${body} } finally { __update_batch_depth__--; if (${dirtyName}) { ${updateCall.code} } }`
+        : `try { ${body} } finally { if (${dirtyName}) { ${updateCall.code} } }`
+      return `{ let ${dirtyName} = false; ${guardedBody} }`
     },
+  }
+}
+
+function compileErrorAtNode(message: string, path: NodePath<t.Node>): Error {
+  const error = new Error(message)
+  if (path.node.loc)
+    Object.defineProperty(error, 'loc', { value: path.node.loc, configurable: true })
+  return error
+}
+
+function validateOutsideBodyState(
+  ctx: CompilerState,
+  path: NodePath<t.Node>,
+  instanceId: number,
+  inspectNestedFunctions = false,
+): void {
+  const visit = (idPath: NodePath<t.Identifier>) => {
+    if (idPath.isReferencedIdentifier() && resolveDeclId(ctx, idPath, instanceId)) {
+      throw compileErrorAtNode(
+        'compile: signal references outside function bodies (parameter initializers, class fields, computed method names) are not supported yet (scope limit)',
+        idPath,
+      )
+    }
+  }
+  if (path.isIdentifier()) visit(path)
+  path.traverse({
+    Function(inner) {
+      // フィールドの関数本体は通常の走査で変換するが、引数と計算名は
+      // 全体を飛ばすため、その内部の関数もここで検査する必要がある。
+      if (!inspectNestedFunctions) inner.skip()
+    },
+    Identifier: visit,
+  })
+}
+
+// 引数の初期化は本体より先に実行されるので、本体の更新境界へ混ぜない。
+// generatorの中断・再開は通常の関数出口とは異なるため、別の変換を要する。
+function validateFunctionBoundary(
+  ctx: CompilerState,
+  fnPath: NodePath<t.Function>,
+  instanceId: number,
+): void {
+  if ('generator' in fnPath.node && fnPath.node.generator) {
+    throw compileErrorAtNode(
+      'compile: generator function bodies are not supported yet (scope limit)',
+      fnPath,
+    )
+  }
+  for (const param of fnPath.get('params') as NodePath<t.Node>[]) {
+    validateOutsideBodyState(ctx, param, instanceId, true)
+  }
+  if ('computed' in fnPath.node && fnPath.node.computed) {
+    validateOutsideBodyState(ctx, fnPath.get('key') as NodePath<t.Node>, instanceId, true)
   }
 }
 
@@ -1314,9 +1080,15 @@ function analyzeActionExprScope(
 // 両方から使う共通処理。
 function analyzeFunctionBodyScope(
   ctx: CompilerState,
-  fnPath: NodePath<t.FunctionExpression | t.ArrowFunctionExpression | t.ObjectMethod>,
+  fnPath: NodePath<
+    | t.FunctionDeclaration
+    | t.FunctionExpression
+    | t.ArrowFunctionExpression
+    | t.ObjectMethod
+    | t.ClassMethod
+    | t.ClassPrivateMethod
+  >,
   instanceId: number,
-  includeNestedWritesInTail = true,
   trackSharedWrites = true,
 ): {
   start: number
@@ -1331,22 +1103,16 @@ function analyzeFunctionBodyScope(
   writeDeclIds: Set<DeclId>
   allCollectionWriteDeclIds: Set<DeclId>
 } {
+  validateFunctionBoundary(ctx, fnPath, instanceId)
   const bodyPath = fnPath.get('body')
   if (bodyPath.isBlockStatement()) {
     const stmts = bodyPath.get('body') as NodePath<t.Statement>[]
     const inner =
       stmts.length > 0
-        ? analyzeActionStatements(
-            ctx,
-            stmts,
-            instanceId,
-            true,
-            true,
-            includeNestedWritesInTail,
-            trackSharedWrites,
-          )
+        ? analyzeActionStatements(ctx, stmts, instanceId, true, trackSharedWrites)
         : {
             finalize: () => '',
+            calleeNames: new Set<string>(),
             readDeclIds: new Set<DeclId>(),
             directWriteDeclIds: new Set<DeclId>(),
             directCollectionWriteDeclIds: new Set<DeclId>(),
@@ -1372,7 +1138,6 @@ function analyzeFunctionBodyScope(
     ctx,
     bodyPath as NodePath<t.Expression>,
     instanceId,
-    includeNestedWritesInTail,
     trackSharedWrites,
   )
   return {

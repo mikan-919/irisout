@@ -43,9 +43,8 @@ UI宣言は各部品に一つだけ許可し、両記法の併用、JSX以外の
 コンパイラは、ハンドラ属性の値が識別子参照(`onClick={handleCountUp}`)である
 場合、その参照を同名のfunction宣言へ解決し、`render()`記法では後方、返却記法では返却前または後方の宣言を扱い、
 その本体をハンドラ本体として配線しなければならない(SHALL)。参照先
-function宣言の本体は、単一の式文、または対応文種のみからなるブロック本体
-(`handler-statement-bodies` が規定する4文種)を受理する。対応文種の外は
-`handler-statement-bodies` の拒否要件に従い compile error とする。
+function宣言の本体は、単一の式文、またはJavaScriptのブロック本体を受理する。
+本体の制御フローと状態の反映は`handler-statement-bodies`に従う。
 
 #### Scenario: 後方 function 宣言を参照するハンドラ
 - **WHEN** authored コンポーネントが `render()` 内で
@@ -63,8 +62,8 @@ function宣言の本体は、単一の式文、または対応文種のみから
   エラーを投げる(識別子参照の解決先は render より後ろの function 宣言に限る)
 
 #### Scenario: 参照先 function 宣言の複数文本体の受理
-- **WHEN** 参照先の function 宣言の本体が対応文種(式文 / `const`・`let` /
-  `if` / 裸の `return`)のみからなる複数の文を含む
+- **WHEN** 参照先の function 宣言の本体が条件分岐、ループ、例外処理、
+  ローカル宣言、返却を含む複数の文を持つ
 - **THEN** コンパイラは compile error を出さずに完了し、生成コードはその
   文列に対応するイベントリスナー配線を含む
 

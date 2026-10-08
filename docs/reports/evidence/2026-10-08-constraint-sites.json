@@ -1,0 +1,1467 @@
+[
+  {
+    "path": "packages/compiler/src/codegen.ts",
+    "line": 249,
+    "excerpt": "247:       const updateExpr = localUpdateExprs[level]\n248:       if (!updateExpr) {\n249:         throw new Error(\n250:           `codegen: missing local update expression for handler ${h.markerId} at level ${level}`,\n251:         )\n252:       }\n253:       return `${updateExpr};`"
+  },
+  {
+    "path": "packages/compiler/src/codegen.ts",
+    "line": 294,
+    "excerpt": "292:       const updateExpr = localUpdateExprs[level]\n293:       if (!updateExpr) {\n294:         throw new Error(\n295:           `codegen: missing local update expression for handler ${h.markerId} at level ${level}`,\n296:         )\n297:       }\n298:       return `${updateExpr};`"
+  },
+  {
+    "path": "packages/compiler/src/codegen.ts",
+    "line": 1028,
+    "excerpt": "1026:     '    } catch (__error__) {',\n1027:     '      try { __destroy_unit__(); } catch (__cleanup_error__) {}',\n1028:     '      throw __error__;',\n1029:     '    }',\n1030:     '  }',\n1031:   )\n1032: "
+  },
+  {
+    "path": "packages/compiler/src/codegen.ts",
+    "line": 1082,
+    "excerpt": "1080:     }\n1081:   }\n1082:   lines.push('    if (__destroy_error__) throw __destroy_error__;', '  }')\n1083:   lines.push(\n1084:     `  return { el: __el__, update: ${updateName}, mount: __mount_unit__, destroy: __destroy_unit__ };`,\n1085:     '}',\n1086:   )"
+  },
+  {
+    "path": "packages/compiler/src/codegen.ts",
+    "line": 1246,
+    "excerpt": "1244:       : null\n1245:   const keyOf = collectionRef\n1246:     ? `(${marker.itemParam}) => { const __key__ = ${marker.keyRendered}; if (!Object.is(${collectionRef}.keyOf(${marker.itemParam}), __key__)) throw new Error(\"keyed signal List key does not match signal identity\"); return __key__; }`\n1247:     : `(${marker.itemParam}) => ${marker.keyRendered}`\n1248:   return [\n1249:     hasLifecycle\n1250:       ? `  __reconcileListWithLifecycle__(__list_${marker.id}__, ${elExpr}, ${marker.arrayRendered}, ${keyOf}, __create_${marker.id}__${updaterArg}, ${mountExpr});`"
+  },
+  {
+    "path": "packages/compiler/src/codegen.ts",
+    "line": 1342,
+    "excerpt": "1340:     lines.push('    }')\n1341:   }\n1342:   if (hasLifecycle) lines.push('    if (__conditional_error__) throw __conditional_error__;')\n1343:   lines.push('  }')\n1344:   return lines\n1345: }\n1346: "
+  },
+  {
+    "path": "packages/compiler/src/codegen.ts",
+    "line": 1360,
+    "excerpt": "1358:       const updateExpr = localUpdateExprs[level]\n1359:       if (!updateExpr) {\n1360:         throw new Error(\n1361:           `codegen: missing local update expression for action ${a.markerId} at level ${level}`,\n1362:         )\n1363:       }\n1364:       return `${updateExpr};`"
+  },
+  {
+    "path": "packages/compiler/src/codegen.ts",
+    "line": 1392,
+    "excerpt": "1390:         const updateExpr = localUpdateExprs[level]\n1391:         if (!updateExpr) {\n1392:           throw new Error(`codegen: missing local update expression for mount at level ${level}`)\n1393:         }\n1394:         return `${updateExpr};`\n1395:       },\n1396:     ),"
+  },
+  {
+    "path": "packages/compiler/src/codegen.ts",
+    "line": 1522,
+    "excerpt": "1520:     moduleLines.push(\n1521:       'function __irisout_require_state__(value) {',\n1522:       \"  if (!value || typeof value !== 'object' || value.__irisout_state__ !== true || !Object.prototype.hasOwnProperty.call(value, 'input') || !Object.prototype.hasOwnProperty.call(value, 'signals')) throw new TypeError('SSR hydration requires state returned by render(input)');\",\n1523:       '  return value;',\n1524:       '}',\n1525:       ...(inputPattern\n1526:         ? ["
+  },
+  {
+    "path": "packages/compiler/src/codegen.ts",
+    "line": 1807,
+    "excerpt": "1805:       : []\n1806:   const destroyErrorThrow =\n1807:     destroyOperations.length > 0 ? ['  if (__destroy_error__) throw __destroy_error__;'] : []\n1808:   const initializationLines = [\n1809:     ...docSetupLines,\n1810:     ...setupLines,\n1811:     ...structuralInitializationLines,"
+  },
+  {
+    "path": "packages/compiler/src/codegen.ts",
+    "line": 1829,
+    "excerpt": "1827:           '  } catch (__error__) {',\n1828:           '    try { unmount(); } catch (__cleanup_error__) {}',\n1829:           '    throw __error__;',\n1830:           '  }',\n1831:         ]\n1832:       : initializationLines\n1833: "
+  },
+  {
+    "path": "packages/compiler/src/codegen.ts",
+    "line": 1843,
+    "excerpt": "1841:     ...(effects.length > 0 ? ['let __initializing__ = false;'] : []),\n1842:     'function mount(container) {',\n1843:     '  if (__mounted__ || __unmounted__) throw new Error(\"component instance can only be mounted or hydrated once\");',\n1844:     structuralMarkerIds.length > 0\n1845:       ? '  ({ markers: __markers__, ranges: __ranges__ } = __mount__(container, __INITIAL_HTML__, __MARKER_IDS__, __RANGE_IDS__));'\n1846:       : '  ({ markers: __markers__ } = __mount__(container, __INITIAL_HTML__, __MARKER_IDS__));',\n1847:     '  __container__ = container;',"
+  },
+  {
+    "path": "packages/compiler/src/codegen.ts",
+    "line": 1856,
+    "excerpt": "1854:     '',\n1855:     'function hydrateComponentInstance(container) {',\n1856:     '  if (__mounted__ || __unmounted__) throw new Error(\"component instance can only be mounted or hydrated once\");',\n1857:     structuralMarkerIds.length > 0\n1858:       ? '  ({ markers: __markers__, ranges: __ranges__ } = __hydrate__(container, __MARKER_IDS__, __RANGE_IDS__));'\n1859:       : '  ({ markers: __markers__ } = __hydrate__(container, __MARKER_IDS__));',\n1860:     ...(ssrHydration && structuralMarkerIds.length > 0"
+  },
+  {
+    "path": "packages/compiler/src/codegen.ts",
+    "line": 1914,
+    "excerpt": "1912:     if (visitedDerived.has(derivedId)) return\n1913:     if (visitingDerived.has(derivedId)) {\n1914:       throw new Error(`compile: derived dependency cycle includes \"${derivedId}\"`)\n1915:     }\n1916:     visitingDerived.add(derivedId)\n1917:     for (const dependency of derivedDeps.get(derivedId) ?? []) {\n1918:       if (derivedDeps.has(dependency)) visitDerived(dependency)"
+  },
+  {
+    "path": "packages/compiler/src/compiler.ts",
+    "line": 36,
+    "excerpt": "34: \n35: function authoringOnly(name: string): never {\n36:   throw new Error(`irisout ${name}() is only available in compiled authored JSX`)\n37: }\n38: \n39: // JSX.Elementと同じく、値を返さないcomponentとhost要素の両方を受ける。\n40: // biome-ignore lint/suspicious/noConfusingVoidType: JSXの値なしcomponentを表す公開型"
+  },
+  {
+    "path": "packages/compiler/src/compiler.ts",
+    "line": 116,
+    "excerpt": "114:     return compileSource(linked.source, options)\n115:   } catch (error) {\n116:     throw withCompileDiagnostic(error, {\n117:       filePath: diagnosticFilePath,\n118:       source: diagnosticSource,\n119:       origins: diagnosticOrigins,\n120:     })"
+  },
+  {
+    "path": "packages/compiler/src/compiler/analyze.ts",
+    "line": 162,
+    "excerpt": "160:   const fn = file.program.body[0]\n161:   if (fn?.type !== 'FunctionDeclaration') {\n162:     throw new Error('compile: failed to parse generated action function body')\n163:   }\n164:   return fn.body\n165: }\n166: "
+  },
+  {
+    "path": "packages/compiler/src/compiler/analyze.ts",
+    "line": 203,
+    "excerpt": "201:   const fn = ctx.movementFns.get(name)\n202:   if (!fn || binding.path.node !== fn.node) {\n203:     throw new Error(\n204:       `compile: calling locally-bound \"${name}\" from a handler/action body is not supported, only movement-zone functions are tracked (scope limit)`,\n205:     )\n206:   }\n207:   ensureTrackedFn(ctx, name, instanceId)"
+  },
+  {
+    "path": "packages/compiler/src/compiler/analyze.ts",
+    "line": 229,
+    "excerpt": "227:   // design D4/task 3.2: 生成側予約名と衝突する authored 名は黙ってリネームせず拒否。\n228:   if (name.startsWith('__') || name.startsWith('update_')) {\n229:     throw new Error(\n230:       `compile: tracked function \"${name}\" collides with a generated reserved name (\\`update_*\\`/\\`__\\` prefix) (scope limit)`,\n231:     )\n232:   }\n233:   const fnPath = ctx.movementFns.get(name)!"
+  },
+  {
+    "path": "packages/compiler/src/compiler/analyze.ts",
+    "line": 341,
+    "excerpt": "339:       if (parent?.isCallExpression() && parent.node.callee === idPath.node) {\n340:         if (ctx.declKind.get(id) === 'derived' && parent.node.arguments.length > 0) {\n341:           throw new Error(\n342:             `compile: module shared derived \"${idPath.node.name}\" is read-only (scope limit)`,\n343:           )\n344:         }\n345:         if (parent.node.arguments.length > 1) {"
+  },
+  {
+    "path": "packages/compiler/src/compiler/analyze.ts",
+    "line": 346,
+    "excerpt": "344:         }\n345:         if (parent.node.arguments.length > 1) {\n346:           throw new Error(\n347:             `compile: signal writes take exactly one argument, got ${parent.node.arguments.length} for \"${idPath.node.name}\" (scope limit)`,\n348:           )\n349:         }\n350:         if (parent.node.arguments.length === 1) noteWrite(parent.node.start!)"
+  },
+  {
+    "path": "packages/compiler/src/compiler/analyze.ts",
+    "line": 369,
+    "excerpt": "367:       }\n368:       if (parent.node.arguments.length > 1) {\n369:         throw new Error(\n370:           `compile: signal writes take exactly one argument, got ${parent.node.arguments.length} for \"${idPath.node.name}\" (scope limit)`,\n371:         )\n372:       }\n373:       if (ctx.declKind.get(id) === 'derived') {"
+  },
+  {
+    "path": "packages/compiler/src/compiler/analyze.ts",
+    "line": 374,
+    "excerpt": "372:       }\n373:       if (ctx.declKind.get(id) === 'derived') {\n374:         throw new Error(`compile: cannot write to derived \"${idPath.node.name}\"`)\n375:       }\n376:       const arg = parent.node.arguments[0]!\n377:       const functional = arg.type === 'ArrowFunctionExpression' || arg.type === 'FunctionExpression'\n378:       edits.push({"
+  },
+  {
+    "path": "packages/compiler/src/compiler/analyze.ts",
+    "line": 424,
+    "excerpt": "422:     for (const stmt of stmts) collectReturnStarts(stmt, returnStarts)\n423:     if (returnStarts.some((start) => start > firstWriteStart!)) {\n424:       throw new Error(\n425:         'compile: a `return` after a tracked signal write is not supported, the write would be lost (scope limit)',\n426:       )\n427:     }\n428:   }"
+  },
+  {
+    "path": "packages/compiler/src/compiler/analyze.ts",
+    "line": 453,
+    "excerpt": "451:   const statement = parsed.program.body[0]\n452:   if (statement?.type !== 'ExpressionStatement') {\n453:     throw new Error('compile: failed to parse generated context expression')\n454:   }\n455:   return statement.expression\n456: }\n457: "
+  },
+  {
+    "path": "packages/compiler/src/compiler/analyze.ts",
+    "line": 466,
+    "excerpt": "464:   const args = callPath.get('arguments')\n465:   if (args.length !== 1 || !args[0]!.isExpression()) {\n466:     throw new Error('compile: useContext() takes exactly one context key (scope limit)')\n467:   }\n468:   const contextId = resolveContextId(ctx, args[0] as NodePath<t.Expression>)\n469:   if (!contextId) {\n470:     throw new Error("
+  },
+  {
+    "path": "packages/compiler/src/compiler/analyze.ts",
+    "line": 470,
+    "excerpt": "468:   const contextId = resolveContextId(ctx, args[0] as NodePath<t.Expression>)\n469:   if (!contextId) {\n470:     throw new Error(\n471:       'compile: useContext() key must be a createContext()/createAsyncContext() binding (scope limit)',\n472:     )\n473:   }\n474:   const provided = ctx.contextValues.get(contextId)"
+  },
+  {
+    "path": "packages/compiler/src/compiler/analyze.ts",
+    "line": 484,
+    "excerpt": "482:     }\n483:   }\n484:   throw new Error('compile: useContext() context key was not collected (scope limit)')\n485: }\n486: \n487: function collectContextCalls(\n488:   ctx: CompilerState,"
+  },
+  {
+    "path": "packages/compiler/src/compiler/analyze.ts",
+    "line": 657,
+    "excerpt": "655:       if (parent?.isCallExpression() && parent.node.callee === idPath.node) {\n656:         if (ctx.declKind.get(id) === 'derived' && parent.node.arguments.length > 0) {\n657:           throw new Error(\n658:             `compile: module shared derived \"${idPath.node.name}\" is read-only (scope limit)`,\n659:           )\n660:         }\n661:         if (parent.node.arguments.length > 1) {"
+  },
+  {
+    "path": "packages/compiler/src/compiler/analyze.ts",
+    "line": 662,
+    "excerpt": "660:         }\n661:         if (parent.node.arguments.length > 1) {\n662:           throw new Error(\n663:             `compile: signal writes take exactly one argument, got ${parent.node.arguments.length} for \"${idPath.node.name}\" (scope limit)`,\n664:           )\n665:         }\n666:       }"
+  },
+  {
+    "path": "packages/compiler/src/compiler/analyze.ts",
+    "line": 684,
+    "excerpt": "682:       }\n683:       if (parent.node.arguments.length > 1) {\n684:         throw new Error(\n685:           `compile: signal writes take exactly one argument, got ${parent.node.arguments.length} for \"${idPath.node.name}\" (scope limit)`,\n686:         )\n687:       }\n688:       if (ctx.declKind.get(id) === 'derived') {"
+  },
+  {
+    "path": "packages/compiler/src/compiler/analyze.ts",
+    "line": 689,
+    "excerpt": "687:       }\n688:       if (ctx.declKind.get(id) === 'derived') {\n689:         throw new Error(`compile: cannot write to derived \"${idPath.node.name}\"`)\n690:       }\n691:       const arg = parent.node.arguments[0]!\n692:       const functional = arg.type === 'ArrowFunctionExpression' || arg.type === 'FunctionExpression'\n693:       edits.push({"
+  },
+  {
+    "path": "packages/compiler/src/compiler/analyze.ts",
+    "line": 794,
+    "excerpt": "792: \n793: function compileErrorAtStatement(message: string, stmt: NodePath<t.Statement>): Error {\n794:   const error = new Error(message)\n795:   if (stmt.node.loc) {\n796:     Object.defineProperty(error, 'loc', { value: stmt.node.loc, configurable: true })\n797:   }\n798:   return error"
+  },
+  {
+    "path": "packages/compiler/src/compiler/analyze.ts",
+    "line": 816,
+    "excerpt": "814:   if (stmt.isVariableDeclaration()) {\n815:     if (stmt.node.kind === 'var') {\n816:       throw compileErrorAtStatement(\n817:         'compile: `var` declarations are not supported in handler bodies, use `const`/`let` (scope limit)',\n818:         stmt,\n819:       )\n820:     }"
+  },
+  {
+    "path": "packages/compiler/src/compiler/analyze.ts",
+    "line": 825,
+    "excerpt": "823:   if (stmt.isReturnStatement()) {\n824:     if (stmt.node.argument != null && !allowValueReturn) {\n825:       throw compileErrorAtStatement(\n826:         'compile: a handler `return` must not return a value (scope limit)',\n827:         stmt,\n828:       )\n829:     }"
+  },
+  {
+    "path": "packages/compiler/src/compiler/analyze.ts",
+    "line": 834,
+    "excerpt": "832:   if (stmt.isThrowStatement()) {\n833:     if (!allowThrow) {\n834:       throw compileErrorAtStatement(\n835:         `compile: handler statement \"${stmt.node.type}\" is not supported yet (scope limit)`,\n836:         stmt,\n837:       )\n838:     }"
+  },
+  {
+    "path": "packages/compiler/src/compiler/analyze.ts",
+    "line": 853,
+    "excerpt": "851:     return\n852:   }\n853:   throw compileErrorAtStatement(\n854:     `compile: handler statement \"${stmt.node.type}\" is not supported yet (scope limit)`,\n855:     stmt,\n856:   )\n857: }"
+  },
+  {
+    "path": "packages/compiler/src/compiler/analyze.ts",
+    "line": 896,
+    "excerpt": "894:     }\n895:   }\n896:   // handlerはactionと同じ関数境界解析を使うが、値を返すreturn・throw・\n897:   // 親スコープへの入れ子書き込み合流は受理しない。各callback自身の実行後に\n898:   // 更新を置くことで、Promise完了前の親更新を発火させない。\n899:   const scope = analyzeActionStatements(ctx, stmts, instanceId, false, false, false, false)\n900:   return {"
+  },
+  {
+    "path": "packages/compiler/src/compiler/analyze.ts",
+    "line": 950,
+    "excerpt": "948:     if (parent?.isCallExpression() && parent.node.callee === idPath.node) {\n949:       if (ctx.declKind.get(id) === 'derived' && parent.node.arguments.length > 0) {\n950:         throw new Error(\n951:           `compile: module shared derived \"${idPath.node.name}\" is read-only (scope limit)`,\n952:         )\n953:       }\n954:       if (parent.node.arguments.length > 1) {"
+  },
+  {
+    "path": "packages/compiler/src/compiler/analyze.ts",
+    "line": 955,
+    "excerpt": "953:       }\n954:       if (parent.node.arguments.length > 1) {\n955:         throw new Error(\n956:           `compile: signal writes take exactly one argument, got ${parent.node.arguments.length} for \"${idPath.node.name}\" (scope limit)`,\n957:         )\n958:       }\n959:       if (parent.node.arguments.length === 0) readDeclIds.add(id)"
+  },
+  {
+    "path": "packages/compiler/src/compiler/analyze.ts",
+    "line": 985,
+    "excerpt": "983:     }\n984:     if (parent.node.arguments.length > 1) {\n985:       throw new Error(\n986:         `compile: signal writes take exactly one argument, got ${parent.node.arguments.length} for \"${idPath.node.name}\" (scope limit)`,\n987:       )\n988:     }\n989:     if (ctx.declKind.get(id) === 'derived') {"
+  },
+  {
+    "path": "packages/compiler/src/compiler/analyze.ts",
+    "line": 990,
+    "excerpt": "988:     }\n989:     if (ctx.declKind.get(id) === 'derived') {\n990:       throw new Error(`compile: cannot write to derived \"${idPath.node.name}\"`)\n991:     }\n992:     const arg = parent.node.arguments[0]!\n993:     const functional = arg.type === 'ArrowFunctionExpression' || arg.type === 'FunctionExpression'\n994:     edits.push({"
+  },
+  {
+    "path": "packages/compiler/src/compiler/analyze.ts",
+    "line": 1130,
+    "excerpt": "1128:     for (const stmt of stmts) collectReturnStarts(stmt, returnStarts)\n1129:     if (returnStarts.some((s) => s > firstWriteStart!)) {\n1130:       throw new Error(\n1131:         'compile: a `return` after a tracked signal write is not supported, the write would be lost (scope limit)',\n1132:       )\n1133:     }\n1134:   }"
+  },
+  {
+    "path": "packages/compiler/src/compiler/analyze.ts",
+    "line": 1457,
+    "excerpt": "1455:   if (argPath.isFunctionExpression() || argPath.isArrowFunctionExpression()) {\n1456:     if (argPath.node.params.length !== 0) {\n1457:       throw new Error(\n1458:         'compile: an action can only return a zero-argument update closure (scope limit)',\n1459:       )\n1460:     }\n1461:     const closureScope = analyzeFunctionBodyScope(ctx, argPath, instanceId)"
+  },
+  {
+    "path": "packages/compiler/src/compiler/analyze.ts",
+    "line": 1474,
+    "excerpt": "1472: \n1473:   if (!argPath.isObjectExpression()) {\n1474:     throw new Error(\n1475:       'compile: an action can only return a zero-argument update closure or { update?, destroy? } (scope limit)',\n1476:     )\n1477:   }\n1478: "
+  },
+  {
+    "path": "packages/compiler/src/compiler/analyze.ts",
+    "line": 1495,
+    "excerpt": "1493:     const name = actionResultPropertyName(property)\n1494:     if (name !== 'update' && name !== 'destroy') {\n1495:       throw new Error(\n1496:         'compile: an action result object may only contain update and destroy (scope limit)',\n1497:       )\n1498:     }\n1499:     if (seen.has(name)) {"
+  },
+  {
+    "path": "packages/compiler/src/compiler/analyze.ts",
+    "line": 1500,
+    "excerpt": "1498:     }\n1499:     if (seen.has(name)) {\n1500:       throw new Error(`compile: an action result object cannot repeat ${name} (scope limit)`)\n1501:     }\n1502:     seen.add(name)\n1503:     const fnPath = actionResultFunctionPath(property)\n1504:     if (!fnPath || fnPath.node.params.length !== 0) {"
+  },
+  {
+    "path": "packages/compiler/src/compiler/analyze.ts",
+    "line": 1505,
+    "excerpt": "1503:     const fnPath = actionResultFunctionPath(property)\n1504:     if (!fnPath || fnPath.node.params.length !== 0) {\n1505:       throw new Error(\n1506:         `compile: an action result object ${name} must be a zero-argument function (scope limit)`,\n1507:       )\n1508:     }\n1509:     const scope = analyzeFunctionBodyScope(ctx, fnPath, instanceId)"
+  },
+  {
+    "path": "packages/compiler/src/compiler/analyze.ts",
+    "line": 1642,
+    "excerpt": "1640:       const returned = last.get('argument') as NodePath<t.Expression>\n1641:       if (!returned.isArrowFunctionExpression() && !returned.isFunctionExpression()) {\n1642:         throw new Error(\n1643:           'compile: onMount() may only return a zero-argument cleanup function (scope limit)',\n1644:         )\n1645:       }\n1646:       returnsCleanup = true"
+  },
+  {
+    "path": "packages/compiler/src/compiler/analyze.ts",
+    "line": 1656,
+    "excerpt": "1654:     returnsCleanup = bodyPath.isArrowFunctionExpression() || bodyPath.isFunctionExpression()\n1655:     if (bodyPath.isObjectExpression()) {\n1656:       throw new Error(\n1657:         'compile: onMount() may only return void or a zero-argument cleanup function (scope limit)',\n1658:       )\n1659:     }\n1660:     body = bodyPath as NodePath<t.Expression>"
+  },
+  {
+    "path": "packages/compiler/src/compiler/analyze.ts",
+    "line": 1665,
+    "excerpt": "1663:   const analysis = analyzeActionBody(ctx, body, instanceId)\n1664:   if (returnsCleanup && !analysis.result) {\n1665:     throw new Error('compile: failed to analyze onMount() cleanup function (scope limit)')\n1666:   }\n1667:   if (!returnsCleanup && analysis.result) {\n1668:     throw new Error(\n1669:       'compile: onMount() may only return void or a zero-argument cleanup function (scope limit)',"
+  },
+  {
+    "path": "packages/compiler/src/compiler/analyze.ts",
+    "line": 1668,
+    "excerpt": "1666:   }\n1667:   if (!returnsCleanup && analysis.result) {\n1668:     throw new Error(\n1669:       'compile: onMount() may only return void or a zero-argument cleanup function (scope limit)',\n1670:     )\n1671:   }\n1672: "
+  },
+  {
+    "path": "packages/compiler/src/compiler/analyze.ts",
+    "line": 1709,
+    "excerpt": "1707:       const returned = last.get('argument') as NodePath<t.Expression>\n1708:       if (!returned.isArrowFunctionExpression() && !returned.isFunctionExpression()) {\n1709:         throw new Error(\n1710:           'compile: effect() may only return a zero-argument cleanup function (scope limit)',\n1711:         )\n1712:       }\n1713:       returnsCleanup = true"
+  },
+  {
+    "path": "packages/compiler/src/compiler/analyze.ts",
+    "line": 1719,
+    "excerpt": "1717:     returnsCleanup = bodyPath.isArrowFunctionExpression() || bodyPath.isFunctionExpression()\n1718:     if (bodyPath.isObjectExpression()) {\n1719:       throw new Error(\n1720:         'compile: effect() may only return void or a zero-argument cleanup function (scope limit)',\n1721:       )\n1722:     }\n1723:     body = bodyPath as NodePath<t.Expression>"
+  },
+  {
+    "path": "packages/compiler/src/compiler/analyze.ts",
+    "line": 1728,
+    "excerpt": "1726:   const analysis = analyzeActionBody(ctx, body, instanceId)\n1727:   if (returnsCleanup && !analysis.result) {\n1728:     throw new Error('compile: failed to analyze effect() cleanup function (scope limit)')\n1729:   }\n1730:   if (!returnsCleanup && analysis.result) {\n1731:     throw new Error(\n1732:       'compile: effect() may only return void or a zero-argument cleanup function (scope limit)',"
+  },
+  {
+    "path": "packages/compiler/src/compiler/analyze.ts",
+    "line": 1731,
+    "excerpt": "1729:   }\n1730:   if (!returnsCleanup && analysis.result) {\n1731:     throw new Error(\n1732:       'compile: effect() may only return void or a zero-argument cleanup function (scope limit)',\n1733:     )\n1734:   }\n1735:   if (analysis.writeDeclIds.size > 0) {"
+  },
+  {
+    "path": "packages/compiler/src/compiler/analyze.ts",
+    "line": 1736,
+    "excerpt": "1734:   }\n1735:   if (analysis.writeDeclIds.size > 0) {\n1736:     throw new Error('compile: effect() cannot write tracked signals (scope limit)')\n1737:   }\n1738: \n1739:   return {\n1740:     finalizeBody: analysis.finalizeBody,"
+  },
+  {
+    "path": "packages/compiler/src/compiler/ast-codegen.ts",
+    "line": 84,
+    "excerpt": "82:     }\n83:   }\n84:   throw new Error('compile: internal AST replacement target was not found')\n85: }\n86: \n87: export function createAstRewrite(root: t.Node): AstRewriteSession {\n88:   const clone = t.cloneNode(root, true) as t.Node"
+  },
+  {
+    "path": "packages/compiler/src/compiler/authoring-import.ts",
+    "line": 36,
+    "excerpt": "34:     },\n35:   })\n36:   if (!result) throw new Error('compile: failed to inspect authoring imports (scope limit)')\n37:   return result\n38: }\n39: \n40: /**"
+  },
+  {
+    "path": "packages/compiler/src/compiler/authoring-import.ts",
+    "line": 57,
+    "excerpt": "55:   for (const statement of statements) {\n56:     if (statement.importKind === 'type' || statement.specifiers.length === 0) {\n57:       throw new Error(\n58:         'compile: `irisout` authoring imports must use named value bindings (scope limit)',\n59:       )\n60:     }\n61:     for (const specifier of statement.specifiers) {"
+  },
+  {
+    "path": "packages/compiler/src/compiler/authoring-import.ts",
+    "line": 63,
+    "excerpt": "61:     for (const specifier of statement.specifiers) {\n62:       if (specifier.type !== 'ImportSpecifier' || specifier.importKind === 'type') {\n63:         throw new Error(\n64:           'compile: `irisout` authoring imports do not support default or namespace bindings (scope limit)',\n65:         )\n66:       }\n67:       const name = importedName(specifier.imported)"
+  },
+  {
+    "path": "packages/compiler/src/compiler/authoring-import.ts",
+    "line": 69,
+    "excerpt": "67:       const name = importedName(specifier.imported)\n68:       if (!AUTHORING_NAMES.has(name)) {\n69:         throw new Error('compile: `' + name + '` is not an irisout authoring API (scope limit)')\n70:       }\n71:       const local = specifier.local.name\n72:       const binding = programPath.scope.getBinding(local)\n73:       if (!binding || binding.path.node !== specifier) {"
+  },
+  {
+    "path": "packages/compiler/src/compiler/authoring-import.ts",
+    "line": 74,
+    "excerpt": "72:       const binding = programPath.scope.getBinding(local)\n73:       if (!binding || binding.path.node !== specifier) {\n74:         throw new Error('compile: failed to resolve irisout authoring import `' + local + '`')\n75:       }\n76:       if (local !== name) {\n77:         const collision = programPath.scope.getOwnBinding(name)\n78:         if (collision && collision !== binding) {"
+  },
+  {
+    "path": "packages/compiler/src/compiler/authoring-import.ts",
+    "line": 79,
+    "excerpt": "77:         const collision = programPath.scope.getOwnBinding(name)\n78:         if (collision && collision !== binding) {\n79:           throw new Error(\n80:             'compile: irisout authoring import `' +\n81:               local +\n82:               '` conflicts with top-level binding `' +\n83:               name +"
+  },
+  {
+    "path": "packages/compiler/src/compiler/decl-graph.ts",
+    "line": 18,
+    "excerpt": "16:     if (visited.has(derivedId)) return\n17:     if (visiting.has(derivedId)) {\n18:       throw new Error(`compile: derived dependency cycle includes \"${derivedId}\"`)\n19:     }\n20:     visiting.add(derivedId)\n21:     for (const dependency of ctx.derivedDeps.get(derivedId) ?? []) {\n22:       if (ctx.derivedDeps.has(dependency)) visit(dependency)"
+  },
+  {
+    "path": "packages/compiler/src/compiler/decl-graph.ts",
+    "line": 37,
+    "excerpt": "35: ): Set<DeclId> {\n36:   if (visited.has(declId)) {\n37:     throw new Error(`compile: derived dependency cycle includes \"${declId}\"`)\n38:   }\n39:   visited.add(declId)\n40:   if (ctx.declKind.get(declId) !== 'derived') {\n41:     visited.delete(declId)"
+  },
+  {
+    "path": "packages/compiler/src/compiler/inline-components.ts",
+    "line": 140,
+    "excerpt": "138:       !parentPath?.isJSXElement()\n139:     ) {\n140:       throw new Error(\n141:         `compile: component \"${tagName}\" may use children only as a direct JSX child (scope limit)`,\n142:       )\n143:     }\n144: "
+  },
+  {
+    "path": "packages/compiler/src/compiler/inline-components.ts",
+    "line": 165,
+    "excerpt": "163:   if (params.length === 0) {\n164:     if (meaningfulChildren.length > 0) {\n165:       throw new Error(\n166:         `compile: component \"${tagName}\" must declare a children prop to receive JSX children (scope limit)`,\n167:       )\n168:     }\n169:     return"
+  },
+  {
+    "path": "packages/compiler/src/compiler/inline-components.ts",
+    "line": 173,
+    "excerpt": "171:   const propParam = params[0]!\n172:   if (params.length > 1 || !propParam.isObjectPattern()) {\n173:     throw new Error(\n174:       `compile: component \"${tagName}\" props must be a single destructured parameter (scope limit)`,\n175:     )\n176:   }\n177: "
+  },
+  {
+    "path": "packages/compiler/src/compiler/inline-components.ts",
+    "line": 181,
+    "excerpt": "179:   for (const propPath of propParam.get('properties')) {\n180:     if (!propPath.isObjectProperty() || propPath.node.computed) {\n181:       throw new Error(\n182:         `compile: component \"${tagName}\" only supports shorthand destructured props (scope limit)`,\n183:       )\n184:     }\n185:     const keyNode = propPath.node.key"
+  },
+  {
+    "path": "packages/compiler/src/compiler/inline-components.ts",
+    "line": 192,
+    "excerpt": "190:       keyNode.name !== valueNode.name\n191:     ) {\n192:       throw new Error(\n193:         `compile: component \"${tagName}\" only supports shorthand destructured props like \\`{ todo }\\` (scope limit)`,\n194:       )\n195:     }\n196:     propNames.push(keyNode.name)"
+  },
+  {
+    "path": "packages/compiler/src/compiler/inline-components.ts",
+    "line": 204,
+    "excerpt": "202:   for (const attrPath of jsxPath.get('openingElement').get('attributes')) {\n203:     if (!attrPath.isJSXAttribute()) {\n204:       throw new Error(`compile: spread props on \"${tagName}\" are not supported yet (scope limit)`)\n205:     }\n206:     const nameNode = attrPath.node.name\n207:     if (nameNode.type !== 'JSXIdentifier') continue\n208:     const valueNode = attrPath.node.value"
+  },
+  {
+    "path": "packages/compiler/src/compiler/inline-components.ts",
+    "line": 211,
+    "excerpt": "209:     if (nameNode.name === 'children' && hasChildrenProp) {\n210:       if (meaningfulChildren.length > 0) {\n211:         throw new Error(\n212:           `compile: component \"${tagName}\" cannot combine a children prop with JSX child elements (scope limit)`,\n213:         )\n214:       }\n215:       const attrChildren = componentChildAttributeValue(valueNode)"
+  },
+  {
+    "path": "packages/compiler/src/compiler/inline-components.ts",
+    "line": 217,
+    "excerpt": "215:       const attrChildren = componentChildAttributeValue(valueNode)\n216:       if (attrChildren == null) {\n217:         throw new Error(\n218:           `compile: component \"${tagName}\" children prop has an unsupported value (scope limit)`,\n219:         )\n220:       }\n221:       componentChildren = attrChildren"
+  },
+  {
+    "path": "packages/compiler/src/compiler/inline-components.ts",
+    "line": 234,
+    "excerpt": "232:       argExprByProp.set(nameNode.name, valueNode.expression as t.Expression)\n233:     } else {\n234:       throw new Error(`compile: unsupported prop value form on \"${tagName}\" (scope limit)`)\n235:     }\n236:   }\n237: \n238:   for (const propName of propNames) {"
+  },
+  {
+    "path": "packages/compiler/src/compiler/inline-components.ts",
+    "line": 241,
+    "excerpt": "239:     if (propName === 'children') continue\n240:     if (!argExprByProp.has(propName)) {\n241:       throw new Error(\n242:         `compile: missing prop \"${propName}\" for component reference \"${tagName}\" (scope limit)`,\n243:       )\n244:     }\n245:   }"
+  },
+  {
+    "path": "packages/compiler/src/compiler/inline-components.ts",
+    "line": 248,
+    "excerpt": "246: \n247:   if (meaningfulChildren.length > 0 && !hasChildrenProp) {\n248:     throw new Error(\n249:       `compile: component \"${tagName}\" must declare a children prop to receive JSX children (scope limit)`,\n250:     )\n251:   }\n252: "
+  },
+  {
+    "path": "packages/compiler/src/compiler/inline-components.ts",
+    "line": 342,
+    "excerpt": "340:     if (renderCallJsx(stmt)) return stmt\n341:   }\n342:   throw new Error(\n343:     'compile: a component must contain a render(<JSX>) call or return JSX (scope limit)',\n344:   )\n345: }\n346: "
+  },
+  {
+    "path": "packages/compiler/src/compiler/inline-components.ts",
+    "line": 506,
+    "excerpt": "504: \n505:   if (visited.has(tagName)) {\n506:     throw new Error(\n507:       `compile: recursive component reference \"${tagName}\" is not supported yet (scope limit)`,\n508:     )\n509:   }\n510: "
+  },
+  {
+    "path": "packages/compiler/src/compiler/module-linker.ts",
+    "line": 65,
+    "excerpt": "63: \n64: function compileError(message: string): Error {\n65:   return new Error(`compile: ${message} (scope limit)`)\n66: }\n67: \n68: function parseModule(filePath: string, source: string): ModuleRecord {\n69:   try {"
+  },
+  {
+    "path": "packages/compiler/src/compiler/module-linker.ts",
+    "line": 72,
+    "excerpt": "70:     return parseModuleUnchecked(filePath, source)\n71:   } catch (error) {\n72:     throw withCompileDiagnostic(error, { filePath, source })\n73:   }\n74: }\n75: \n76: function parseModuleUnchecked(filePath: string, source: string): ModuleRecord {"
+  },
+  {
+    "path": "packages/compiler/src/compiler/module-linker.ts",
+    "line": 84,
+    "excerpt": "82:     })\n83:   } catch (error) {\n84:     throw new Error(\n85:       `compile: failed to parse module \"${filePath}\": ${error instanceof Error ? error.message : String(error)}`,\n86:       { cause: error },\n87:     )\n88:   }"
+  },
+  {
+    "path": "packages/compiler/src/compiler/module-linker.ts",
+    "line": 102,
+    "excerpt": "100:   const addOwnName = (name: string): void => {\n101:     if (ownNameSet.has(name) || importNames.has(name)) {\n102:       throw compileError(`duplicate top-level binding \"${name}\" in module \"${filePath}\"`)\n103:     }\n104:     ownNameSet.add(name)\n105:     ownNames.push(name)\n106:   }"
+  },
+  {
+    "path": "packages/compiler/src/compiler/module-linker.ts",
+    "line": 110,
+    "excerpt": "108:   const addImportName = (name: string): void => {\n109:     if (ownNameSet.has(name) || importNames.has(name)) {\n110:       throw compileError(`duplicate top-level binding \"${name}\" in module \"${filePath}\"`)\n111:     }\n112:     importNames.add(name)\n113:   }\n114: "
+  },
+  {
+    "path": "packages/compiler/src/compiler/module-linker.ts",
+    "line": 117,
+    "excerpt": "115:   const addExport = (exportName: string, localName: string): void => {\n116:     if (exports.has(exportName)) {\n117:       throw compileError(`duplicate export \"${exportName}\" in module \"${filePath}\"`)\n118:     }\n119:     exports.set(exportName, localName)\n120:   }\n121: "
+  },
+  {
+    "path": "packages/compiler/src/compiler/module-linker.ts",
+    "line": 124,
+    "excerpt": "122:   const checkConstDeclaration = (declaration: t.VariableDeclaration): void => {\n123:     if (declaration.kind !== 'const') {\n124:       throw compileError(\n125:         `module \"${filePath}\" only supports top-level function declarations and const declarations`,\n126:       )\n127:     }\n128:     for (const declarator of declaration.declarations) {"
+  },
+  {
+    "path": "packages/compiler/src/compiler/module-linker.ts",
+    "line": 130,
+    "excerpt": "128:     for (const declarator of declaration.declarations) {\n129:       if (declarator.id.type !== 'Identifier' || !declarator.init) {\n130:         throw compileError(\n131:           `module \"${filePath}\" only supports initialized const declarations with simple names`,\n132:         )\n133:       }\n134:       const stateCall = findModuleStateCall(declarator.init)"
+  },
+  {
+    "path": "packages/compiler/src/compiler/module-linker.ts",
+    "line": 140,
+    "excerpt": "138:           (stateCall === 'derived' && isSharedDerivedDeclarator(declarator))\n139:         if (!isSharedState) {\n140:           throw compileError(\n141:             `module \"${filePath}\" cannot declare module-scope ${stateCall}() state`,\n142:           )\n143:         }\n144:       }"
+  },
+  {
+    "path": "packages/compiler/src/compiler/module-linker.ts",
+    "line": 155,
+    "excerpt": "153:     if (statement.type === 'ImportDeclaration') {\n154:       if (statement.importKind === 'type') {\n155:         throw compileError(`type-only imports are not supported in module \"${filePath}\"`)\n156:       }\n157:       const source = statement.source.value\n158:       const isRelative = source.startsWith('./') || source.startsWith('../')\n159:       const resourcePath = isRelative ? resolveResource(source, filePath) : null"
+  },
+  {
+    "path": "packages/compiler/src/compiler/module-linker.ts",
+    "line": 162,
+    "excerpt": "160:       const isResource = resourcePath !== null\n161:       if (isRelative && !isResource && statement.specifiers.length === 0) {\n162:         throw compileError(`side-effect imports are not supported in module \"${filePath}\"`)\n163:       }\n164:       const spec: ImportSpec = {\n165:         source,\n166:         defaultLocal: null,"
+  },
+  {
+    "path": "packages/compiler/src/compiler/module-linker.ts",
+    "line": 175,
+    "excerpt": "173:             continue\n174:           }\n175:           throw compileError(`namespace imports are not supported in module \"${filePath}\"`)\n176:         }\n177:         if (specifier.type === 'ImportDefaultSpecifier') {\n178:           if (spec.defaultLocal) {\n179:             throw compileError(`duplicate default import in module \"${filePath}\"`)"
+  },
+  {
+    "path": "packages/compiler/src/compiler/module-linker.ts",
+    "line": 179,
+    "excerpt": "177:         if (specifier.type === 'ImportDefaultSpecifier') {\n178:           if (spec.defaultLocal) {\n179:             throw compileError(`duplicate default import in module \"${filePath}\"`)\n180:           }\n181:           spec.defaultLocal = specifier.local.name\n182:           addImportName(specifier.local.name)\n183:           continue"
+  },
+  {
+    "path": "packages/compiler/src/compiler/module-linker.ts",
+    "line": 186,
+    "excerpt": "184:         }\n185:         if (specifier.importKind === 'type') {\n186:           throw compileError(`type-only imports are not supported in module \"${filePath}\"`)\n187:         }\n188:         const imported = localNameFromNode(specifier.imported)\n189:         spec.named.push({ imported, local: specifier.local.name })\n190:         addImportName(specifier.local.name)"
+  },
+  {
+    "path": "packages/compiler/src/compiler/module-linker.ts",
+    "line": 197,
+    "excerpt": "195:       } else {\n196:         if (statement.specifiers.length === 0) {\n197:           throw compileError(`side-effect imports are not supported in module \"${filePath}\"`)\n198:         }\n199:         imports.push(spec)\n200:       }\n201:       continue"
+  },
+  {
+    "path": "packages/compiler/src/compiler/module-linker.ts",
+    "line": 206,
+    "excerpt": "204:     if (statement.type === 'ExportNamedDeclaration') {\n205:       if (statement.exportKind === 'type' || statement.source) {\n206:         throw compileError(`re-exports and type exports are not supported in module \"${filePath}\"`)\n207:       }\n208:       if (statement.declaration?.type === 'FunctionDeclaration') {\n209:         if (!statement.declaration.id) {\n210:           throw compileError("
+  },
+  {
+    "path": "packages/compiler/src/compiler/module-linker.ts",
+    "line": 210,
+    "excerpt": "208:       if (statement.declaration?.type === 'FunctionDeclaration') {\n209:         if (!statement.declaration.id) {\n210:           throw compileError(\n211:             `anonymous exported functions are not supported in module \"${filePath}\"`,\n212:           )\n213:         }\n214:         addOwnName(statement.declaration.id.name)"
+  },
+  {
+    "path": "packages/compiler/src/compiler/module-linker.ts",
+    "line": 223,
+    "excerpt": "221:         }\n222:       } else if (statement.declaration) {\n223:         throw compileError(`only function and const exports are supported in module \"${filePath}\"`)\n224:       } else {\n225:         for (const specifier of statement.specifiers) {\n226:           if (specifier.type !== 'ExportSpecifier') {\n227:             throw compileError(`export namespace is not supported in module \"${filePath}\"`)"
+  },
+  {
+    "path": "packages/compiler/src/compiler/module-linker.ts",
+    "line": 227,
+    "excerpt": "225:         for (const specifier of statement.specifiers) {\n226:           if (specifier.type !== 'ExportSpecifier') {\n227:             throw compileError(`export namespace is not supported in module \"${filePath}\"`)\n228:           }\n229:           const local = localNameFromNode(specifier.local)\n230:           const exported = localNameFromNode(specifier.exported)\n231:           if (importNames.has(local)) {"
+  },
+  {
+    "path": "packages/compiler/src/compiler/module-linker.ts",
+    "line": 232,
+    "excerpt": "230:           const exported = localNameFromNode(specifier.exported)\n231:           if (importNames.has(local)) {\n232:             throw compileError(`re-exports are not supported in module \"${filePath}\"`)\n233:           }\n234:           addExport(exported, local)\n235:         }\n236:       }"
+  },
+  {
+    "path": "packages/compiler/src/compiler/module-linker.ts",
+    "line": 243,
+    "excerpt": "241:       if (statement.declaration.type === 'FunctionDeclaration') {\n242:         if (!statement.declaration.id) {\n243:           throw compileError(\n244:             `anonymous default functions are not supported in module \"${filePath}\"`,\n245:           )\n246:         }\n247:         addOwnName(statement.declaration.id.name)"
+  },
+  {
+    "path": "packages/compiler/src/compiler/module-linker.ts",
+    "line": 252,
+    "excerpt": "250:         addExport('default', statement.declaration.name)\n251:       } else {\n252:         throw compileError(`default export expressions are not supported in module \"${filePath}\"`)\n253:       }\n254:       continue\n255:     }\n256: "
+  },
+  {
+    "path": "packages/compiler/src/compiler/module-linker.ts",
+    "line": 259,
+    "excerpt": "257:     if (statement.type === 'FunctionDeclaration') {\n258:       if (!statement.id)\n259:         throw compileError(`anonymous functions are not supported in module \"${filePath}\"`)\n260:       if (!hasRenderCall(statement)) {\n261:         const stateCall = findModuleStateCall(statement)\n262:         if (stateCall) {\n263:           throw compileError("
+  },
+  {
+    "path": "packages/compiler/src/compiler/module-linker.ts",
+    "line": 263,
+    "excerpt": "261:         const stateCall = findModuleStateCall(statement)\n262:         if (stateCall) {\n263:           throw compileError(\n264:             `module helper \"${statement.id.name}\" cannot call ${stateCall}() state`,\n265:           )\n266:         }\n267:       }"
+  },
+  {
+    "path": "packages/compiler/src/compiler/module-linker.ts",
+    "line": 277,
+    "excerpt": "275:     }\n276: \n277:     throw compileError(\n278:       `top-level statement \"${statement.type}\" is not supported in module \"${filePath}\"`,\n279:     )\n280:   }\n281: "
+  },
+  {
+    "path": "packages/compiler/src/compiler/module-linker.ts",
+    "line": 284,
+    "excerpt": "282:   for (const name of importNames) {\n283:     if (ownNameSet.has(name)) {\n284:       throw compileError(`duplicate top-level binding \"${name}\" in module \"${filePath}\"`)\n285:     }\n286:   }\n287: \n288:   for (const [exportName, localName] of exports) {"
+  },
+  {
+    "path": "packages/compiler/src/compiler/module-linker.ts",
+    "line": 290,
+    "excerpt": "288:   for (const [exportName, localName] of exports) {\n289:     if (!ownNameSet.has(localName)) {\n290:       throw compileError(\n291:         `export \"${exportName}\" in module \"${filePath}\" must refer to a local declaration`,\n292:       )\n293:     }\n294:   }"
+  },
+  {
+    "path": "packages/compiler/src/compiler/module-linker.ts",
+    "line": 302,
+    "excerpt": "300:     CallExpression(path: NodePath<t.CallExpression>) {\n301:       if (path.node.callee.type === 'Import') {\n302:         throw compileError(`dynamic import is not supported in module \"${filePath}\"`)\n303:       }\n304:     },\n305:     ImportExpression() {\n306:       throw compileError(`dynamic import is not supported in module \"${filePath}\"`)"
+  },
+  {
+    "path": "packages/compiler/src/compiler/module-linker.ts",
+    "line": 306,
+    "excerpt": "304:     },\n305:     ImportExpression() {\n306:       throw compileError(`dynamic import is not supported in module \"${filePath}\"`)\n307:     },\n308:   })\n309: \n310:   return {"
+  },
+  {
+    "path": "packages/compiler/src/compiler/module-linker.ts",
+    "line": 351,
+    "excerpt": "349:   const resourcePath = path.resolve(path.dirname(fromFile), resourceSpecifier)\n350:   if (!isFile(resourcePath)) {\n351:     throw compileError(`cannot resolve resource import \"${specifier}\" from \"${fromFile}\"`)\n352:   }\n353:   return resourcePath\n354: }\n355: "
+  },
+  {
+    "path": "packages/compiler/src/compiler/module-linker.ts",
+    "line": 421,
+    "excerpt": "419: function resolveModule(fromFile: string, specifier: string): string {\n420:   if (!specifier.startsWith('./') && !specifier.startsWith('../')) {\n421:     throw compileError(`non-relative import \"${specifier}\" is not supported yet`)\n422:   }\n423:   const base = path.resolve(path.dirname(fromFile), specifier)\n424:   const candidates = [base, `${base}.tsx`, `${base}.ts`, `${base}.jsx`, `${base}.js`]\n425:   for (const candidate of candidates) {"
+  },
+  {
+    "path": "packages/compiler/src/compiler/module-linker.ts",
+    "line": 428,
+    "excerpt": "426:     if (!isFile(candidate)) continue\n427:     if (!/\\.(?:[jt]sx?)$/.test(candidate)) {\n428:       throw compileError(`module \"${candidate}\" must use .js, .jsx, .ts, or .tsx`)\n429:     }\n430:     return candidate\n431:   }\n432:   throw compileError(`cannot resolve relative import \"${specifier}\" from \"${fromFile}\"`)"
+  },
+  {
+    "path": "packages/compiler/src/compiler/module-linker.ts",
+    "line": 432,
+    "excerpt": "430:     return candidate\n431:   }\n432:   throw compileError(`cannot resolve relative import \"${specifier}\" from \"${fromFile}\"`)\n433: }\n434: \n435: function loadModule(\n436:   filePath: string,"
+  },
+  {
+    "path": "packages/compiler/src/compiler/module-linker.ts",
+    "line": 446,
+    "excerpt": "444:     source = readFileSync(filePath, 'utf8')\n445:   } catch (error) {\n446:     throw withCompileDiagnostic(\n447:       new Error(\n448:         `compile: failed to read module \"${filePath}\": ${error instanceof Error ? error.message : String(error)}`,\n449:         { cause: error },\n450:       ),"
+  },
+  {
+    "path": "packages/compiler/src/compiler/module-linker.ts",
+    "line": 447,
+    "excerpt": "445:   } catch (error) {\n446:     throw withCompileDiagnostic(\n447:       new Error(\n448:         `compile: failed to read module \"${filePath}\": ${error instanceof Error ? error.message : String(error)}`,\n449:         { cause: error },\n450:       ),\n451:       { filePath, source: '' },"
+  },
+  {
+    "path": "packages/compiler/src/compiler/module-linker.ts",
+    "line": 478,
+    "excerpt": "476:     renameModuleBindingsUnchecked(record, dependencies)\n477:   } catch (error) {\n478:     throw withCompileDiagnostic(error, { filePath: record.filePath, source: record.source })\n479:   }\n480: }\n481: \n482: function renameModuleBindingsUnchecked("
+  },
+  {
+    "path": "packages/compiler/src/compiler/module-linker.ts",
+    "line": 493,
+    "excerpt": "491:     const dependency = dependencies.get(dependencyPath)\n492:     if (!dependency) {\n493:       throw compileError(`internal module graph entry is missing for \"${dependencyPath}\"`)\n494:     }\n495:     if (spec.defaultLocal) {\n496:       const target = dependency.exports.get('default')\n497:       if (!target) {"
+  },
+  {
+    "path": "packages/compiler/src/compiler/module-linker.ts",
+    "line": 498,
+    "excerpt": "496:       const target = dependency.exports.get('default')\n497:       if (!target) {\n498:         throw compileError(\n499:           `module \"${dependency.filePath}\" has no default export for import in \"${record.filePath}\"`,\n500:         )\n501:       }\n502:       importRenames.set(spec.defaultLocal, generatedName(dependency, target))"
+  },
+  {
+    "path": "packages/compiler/src/compiler/module-linker.ts",
+    "line": 507,
+    "excerpt": "505:       const target = dependency.exports.get(item.imported)\n506:       if (!target) {\n507:         throw compileError(\n508:           `module \"${dependency.filePath}\" has no export \"${item.imported}\" for import in \"${record.filePath}\"`,\n509:         )\n510:       }\n511:       importRenames.set(item.local, generatedName(dependency, target))"
+  },
+  {
+    "path": "packages/compiler/src/compiler/module-linker.ts",
+    "line": 523,
+    "excerpt": "521:   })\n522:   if (!foundProgramPath) {\n523:     throw compileError(`failed to inspect module scope for \"${record.filePath}\"`)\n524:   }\n525:   const programPath = foundProgramPath as NodePath<t.Program>\n526:   programPath.scope.crawl()\n527: "
+  },
+  {
+    "path": "packages/compiler/src/compiler/module-linker.ts",
+    "line": 545,
+    "excerpt": "543:     programPath.scope.crawl()\n544:     if (!programPath.scope.getOwnBinding(sourceName)) {\n545:       throw compileError(`import binding \"${sourceName}\" was not found in \"${record.filePath}\"`)\n546:     }\n547:     programPath.scope.rename(sourceName, outputName)\n548:   }\n549: "
+  },
+  {
+    "path": "packages/compiler/src/compiler/module-linker.ts",
+    "line": 612,
+    "excerpt": "610:     if (record.state === 'visiting') {\n611:       const cycle = [...stack, filePath].join(' -> ')\n612:       throw withCompileDiagnostic(\n613:         compileError(`circular module dependency is not supported: ${cycle}`),\n614:         {\n615:           filePath: record.filePath,\n616:           source: record.source,"
+  },
+  {
+    "path": "packages/compiler/src/compiler/module-linker.ts",
+    "line": 626,
+    "excerpt": "624:         visit(resolveModule(record.filePath, spec.source), [...stack, record.filePath])\n625:       } catch (error) {\n626:         throw withCompileDiagnostic(error, { filePath: record.filePath, source: record.source })\n627:       }\n628:     }\n629:     record.state = 'done'\n630:     record.moduleIndex = order.length"
+  },
+  {
+    "path": "packages/compiler/src/compiler/module-linker.ts",
+    "line": 643,
+    "excerpt": "641:   const absoluteEntry = path.resolve(entryPath)\n642:   if (!isFile(absoluteEntry)) {\n643:     throw withCompileDiagnostic(compileError(`entry module \"${absoluteEntry}\" does not exist`), {\n644:       filePath: absoluteEntry,\n645:       source: '',\n646:     })\n647:   }"
+  },
+  {
+    "path": "packages/compiler/src/compiler/module-linker.ts",
+    "line": 649,
+    "excerpt": "647:   }\n648:   if (!/\\.(?:[jt]sx?)$/.test(absoluteEntry)) {\n649:     throw withCompileDiagnostic(\n650:       compileError(`entry module \"${absoluteEntry}\" must use .js, .jsx, .ts, or .tsx`),\n651:       {\n652:         filePath: absoluteEntry,\n653:         source: '',"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 85,
+    "excerpt": "83:   const args = expression.get('arguments')\n84:   if (args.length !== 2 || !args[0]!.isExpression() || !args[1]!.isExpression()) {\n85:     throw new Error(\n86:       'compile: provideContext() takes a context key and one value expression (scope limit)',\n87:     )\n88:   }\n89:   const key = resolveContextId(ctx, args[0] as NodePath<t.Expression>)"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 91,
+    "excerpt": "89:   const key = resolveContextId(ctx, args[0] as NodePath<t.Expression>)\n90:   if (!key) {\n91:     throw new Error(\n92:       'compile: provideContext() key must be a createContext()/createAsyncContext() binding (scope limit)',\n93:     )\n94:   }\n95:   return { key, valuePath: args[1] as NodePath<t.Expression> }"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 152,
+    "excerpt": "150: ): DeclId {\n151:   if (!argPath.isArrowFunctionExpression() || argPath.node.params.length !== 0) {\n152:     throw new Error(\n153:       'compile: derived() must be called with a zero-arg concise arrow function `() => expr` (scope limit)',\n154:     )\n155:   }\n156:   const bodyPath = argPath.get('body')"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 158,
+    "excerpt": "156:   const bodyPath = argPath.get('body')\n157:   if (bodyPath.isBlockStatement()) {\n158:     throw new Error(\n159:       'compile: derived() body must be a single expression, not a block (scope limit)',\n160:     )\n161:   }\n162: "
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 200,
+    "excerpt": "198:   const existingKind = ctx.declKind.get(id)\n199:   if (existingKind && existingKind !== kind) {\n200:     throw new Error(`compile: declaration \"${naturalName}\" changes kind during analysis`)\n201:   }\n202:   ctx.declIdByKey.set(key, id)\n203:   ctx.declKind.set(id, kind)\n204:   const outputName = ctx.declOutputName.get(id) ?? assignOutputName(ctx, naturalName, id)"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 230,
+    "excerpt": "228: function parseSignalDeclStatement(stmt: NodePath<t.Statement>): ParsedSignalDecl {\n229:   const scopeLimit = Object.assign(\n230:     new Error(\n231:       'compile: only top-level `signal()`/`derived()` declarations are supported in this milestone (scope limit)',\n232:     ),\n233:     { loc: stmt.node.loc },\n234:   )"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 236,
+    "excerpt": "234:   )\n235:   if (!stmt.isVariableDeclaration() || stmt.node.declarations.length !== 1) {\n236:     throw scopeLimit\n237:   }\n238:   const declarator = stmt.node.declarations[0]!\n239:   const init = declarator.init\n240:   if ("
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 245,
+    "excerpt": "243:     (init.callee.name !== 'signal' && init.callee.name !== 'derived')\n244:   ) {\n245:     throw scopeLimit\n246:   }\n247: \n248:   // 分割代入宣言子(`const [a] = signal(0)` 等)は無検証キャストで素通り\n249:   // するとビルド時実行の生 ReferenceError になる。ここで明示拒否する。"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 251,
+    "excerpt": "249:   // するとビルド時実行の生 ReferenceError になる。ここで明示拒否する。\n250:   if (declarator.id.type !== 'Identifier') {\n251:     throw new Error(\n252:       'compile: destructuring signal()/derived() declarations are not supported (scope limit)',\n253:     )\n254:   }\n255: "
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 258,
+    "excerpt": "256:   const args = stmt.get('declarations.0.init.arguments') as NodePath<t.Expression>[]\n257:   if (init.callee.name === 'signal' && args.length !== 1) {\n258:     throw new Error('compile: signal() takes exactly one initial value')\n259:   }\n260:   if (init.callee.name === 'derived' && args.length !== 1) {\n261:     throw new Error(`compile: ${init.callee.name}() takes exactly one argument`)\n262:   }"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 261,
+    "excerpt": "259:   }\n260:   if (init.callee.name === 'derived' && args.length !== 1) {\n261:     throw new Error(`compile: ${init.callee.name}() takes exactly one argument`)\n262:   }\n263:   return {\n264:     kind: init.callee.name,\n265:     naturalName: declarator.id.name,"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 317,
+    "excerpt": "315: ): LocalDecl {\n316:   if (!argPath.isArrowFunctionExpression() || argPath.node.params.length !== 0) {\n317:     throw new Error(\n318:       'compile: derived() must be called with a zero-arg concise arrow function `() => expr` (scope limit)',\n319:     )\n320:   }\n321:   const bodyPath = argPath.get('body')"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 323,
+    "excerpt": "321:   const bodyPath = argPath.get('body')\n322:   if (bodyPath.isBlockStatement()) {\n323:     throw new Error(\n324:       'compile: derived() body must be a single expression, not a block (scope limit)',\n325:     )\n326:   }\n327: "
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 420,
+    "excerpt": "418:   if (params.length === 0) return null\n419:   if (params.length > 1) {\n420:     throw new Error(`compile: handler \"${attrName}\" only supports a single parameter (scope limit)`)\n421:   }\n422:   const first = params[0]!\n423:   if (!first.isIdentifier()) {\n424:     throw new Error("
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 424,
+    "excerpt": "422:   const first = params[0]!\n423:   if (!first.isIdentifier()) {\n424:     throw new Error(\n425:       `compile: handler \"${attrName}\" destructured parameters are not supported yet (scope limit)`,\n426:     )\n427:   }\n428:   return first.node.name"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 460,
+    "excerpt": "458:     const fn = handlerFns.get(exprPath.node.name)\n459:     if (!fn) {\n460:       throw new Error(\n461:         `compile: handler \"${attrName}\" must reference a function declared after render() (scope limit)`,\n462:       )\n463:     }\n464:     const param = resolveHandlerParam(fn.get('params'), attrName)"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 471,
+    "excerpt": "469:     }\n470:   }\n471:   throw new Error(\n472:     `compile: handler \"${attrName}\" must be an arrow function or a reference to one (scope limit)`,\n473:   )\n474: }\n475: "
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 477,
+    "excerpt": "475: \n476: function compileErrorAtNode(message: string, node: t.Node): Error {\n477:   const error = new Error(message)\n478:   if (node.loc) Object.defineProperty(error, 'loc', { value: node.loc, configurable: true })\n479:   return error\n480: }\n481: "
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 502,
+    "excerpt": "500:     if (!attr.isJSXAttribute()) {\n501:       // JSXSpreadAttribute({...props})は引き続き拒否する。\n502:       throw compileErrorAtNode(\n503:         'compile: host element attributes are not supported yet (scope limit)',\n504:         attr.node,\n505:       )\n506:     }"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 517,
+    "excerpt": "515:       const namespace = attrName.namespace.name\n516:       if (!svgElement || !['xlink', 'xml', 'xmlns'].includes(namespace)) {\n517:         throw new Error(\n518:           'compile: SVG namespace attributes are only supported on SVG elements (scope limit)',\n519:         )\n520:       }\n521:       if (valueNode?.type !== 'StringLiteral') {"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 522,
+    "excerpt": "520:       }\n521:       if (valueNode?.type !== 'StringLiteral') {\n522:         throw new Error(\n523:           `compile: SVG namespace attribute \"${namespace}:{attrName.name.name}\" must have a static string value (scope limit)`,\n524:         )\n525:       }\n526:       staticAttrs.push({"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 537,
+    "excerpt": "535:     if (attrName.type === 'JSXIdentifier' && attrName.name === 'use') {\n536:       if (actionAttr) {\n537:         throw new Error('compile: an element can only have one `use` attribute (scope limit)')\n538:       }\n539:       if (valueNode?.type !== 'JSXExpressionContainer') {\n540:         throw new Error('compile: `use` must be an expression (scope limit)')\n541:       }"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 540,
+    "excerpt": "538:       }\n539:       if (valueNode?.type !== 'JSXExpressionContainer') {\n540:         throw new Error('compile: `use` must be an expression (scope limit)')\n541:       }\n542:       const exprPath = attr.get('value.expression') as NodePath<t.Expression>\n543:       actionAttr = resolveHandlerBody(exprPath, 'use', handlerFns)\n544:       continue"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 569,
+    "excerpt": "567:         continue\n568:       }\n569:       throw new Error('compile: host element attributes are not supported yet (scope limit)')\n570:     }\n571:     if (valueNode?.type !== 'JSXExpressionContainer') {\n572:       throw new Error(`compile: handler \"${attrName.name}\" must be an expression (scope limit)`)\n573:     }"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 572,
+    "excerpt": "570:     }\n571:     if (valueNode?.type !== 'JSXExpressionContainer') {\n572:       throw new Error(`compile: handler \"${attrName.name}\" must be an expression (scope limit)`)\n573:     }\n574:     const exprPath = attr.get('value.expression') as NodePath<t.Expression>\n575:     const { param, async: isAsync, body } = resolveHandlerBody(exprPath, attrName.name, handlerFns)\n576:     const eventName = attrName.name.slice(2).toLowerCase()"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 670,
+    "excerpt": "668:   const openingName = elementPath.node.openingElement.name\n669:   if (openingName.type !== 'JSXIdentifier') {\n670:     throw new Error('compile: unsupported JSX tag form (scope limit)')\n671:   }\n672:   const tagName = openingName.name\n673:   const svgElement = opts.inSvgNamespace === true || tagName === 'svg'\n674:   const childInSvgNamespace = svgElement && tagName !== 'foreignObject'"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 677,
+    "excerpt": "675: \n676:   if (/^[A-Z]/.test(tagName)) {\n677:     throw new Error(\n678:       `compile: component references (<${tagName}/>) are not supported yet (scope limit)`,\n679:     )\n680:   }\n681:   const { handlerAttrs, staticAttrs, actionAttr, dynamicAttrPaths } = collectAttrs("
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 761,
+    "excerpt": "759:       }\n760:       if (!child.isJSXExpressionContainer()) {\n761:         throw new Error('compile: unsupported JSX child (scope limit)')\n762:       }\n763:       const exprPath = child.get('expression') as NodePath<t.Expression | t.JSXEmptyExpression>\n764:       if (exprPath.isJSXEmptyExpression()) continue\n765:       const contextProvider = resolveContextProviderExpression("
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 771,
+    "excerpt": "769:       if (contextProvider) {\n770:         if (!insideUnit) {\n771:           throw new Error(\n772:             'compile: provideContext() in JSX must be inside a structural unit (scope limit)',\n773:           )\n774:         }\n775:         continue"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 780,
+    "excerpt": "778:       if (mountHook) {\n779:         if (!opts.localMountHooks) {\n780:           throw new Error(\n781:             'compile: onMount() in JSX must be inside a structural unit (scope limit)',\n782:           )\n783:         }\n784:         opts.localMountHooks.push(mountHook)"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 790,
+    "excerpt": "788:       if (effectHook) {\n789:         if (!opts.localEffectHooks) {\n790:           throw new Error('compile: effect() in JSX must be inside a structural unit (scope limit)')\n791:         }\n792:         opts.localEffectHooks.push(effectHook)\n793:         continue\n794:       }"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 797,
+    "excerpt": "795:       const kind = classifyStructuralExpr(exprPath)\n796:       if (!kind) {\n797:         throw new Error(\n798:           'compile: mixing structural rendering with a reactive text expression is not supported yet (scope limit)',\n799:         )\n800:       }\n801:       const markerId ="
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 871,
+    "excerpt": "869:         if (contextProvider) {\n870:           if (!insideUnit) {\n871:             throw new Error(\n872:               'compile: provideContext() in JSX must be inside a structural unit (scope limit)',\n873:             )\n874:           }\n875:           continue"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 882,
+    "excerpt": "880:         if (mountHook) {\n881:           if (!opts.localMountHooks) {\n882:             throw new Error(\n883:               'compile: onMount() in JSX must be inside a structural unit (scope limit)',\n884:             )\n885:           }\n886:           opts.localMountHooks.push(mountHook)"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 894,
+    "excerpt": "892:         if (effectHook) {\n893:           if (!opts.localEffectHooks) {\n894:             throw new Error(\n895:               'compile: effect() in JSX must be inside a structural unit (scope limit)',\n896:             )\n897:           }\n898:           opts.localEffectHooks.push(effectHook)"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 901,
+    "excerpt": "899:           continue\n900:         }\n901:         throw new Error('compile: unsupported JSX child (scope limit)')\n902:       } else throw new Error('compile: unsupported JSX child (scope limit)')\n903:     }\n904:     if (handlerAttrs.length === 0 && !actionAttr && dynAttrs.length === 0) {\n905:       return `<${tagName}${attrs}>${inner}</${tagName}>`"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 902,
+    "excerpt": "900:         }\n901:         throw new Error('compile: unsupported JSX child (scope limit)')\n902:       } else throw new Error('compile: unsupported JSX child (scope limit)')\n903:     }\n904:     if (handlerAttrs.length === 0 && !actionAttr && dynAttrs.length === 0) {\n905:       return `<${tagName}${attrs}>${inner}</${tagName}>`\n906:     }"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 927,
+    "excerpt": "925:       if (mountHook) {\n926:         if (!opts.localMountHooks) {\n927:           throw new Error(\n928:             'compile: onMount() in JSX must be inside a structural unit (scope limit)',\n929:           )\n930:         }\n931:         opts.localMountHooks.push(mountHook)"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 937,
+    "excerpt": "935:       if (effectHook) {\n936:         if (!opts.localEffectHooks) {\n937:           throw new Error('compile: effect() in JSX must be inside a structural unit (scope limit)')\n938:         }\n939:         opts.localEffectHooks.push(effectHook)\n940:         continue\n941:       }"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 944,
+    "excerpt": "942:       runPaths.push(child)\n943:     } else\n944:       throw new Error(\n945:         'compile: mixing elements into a reactive text unit is not supported yet (scope limit)',\n946:       )\n947:   }\n948: "
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 1073,
+    "excerpt": "1071:   }\n1072:   if (!bodyPath.isBlockStatement()) {\n1073:     throw new Error(\n1074:       'compile: list item body must be a JSX element or a block of local signal/derived declarations ending in return (scope limit)',\n1075:     )\n1076:   }\n1077:   const stmts = bodyPath.get('body') as NodePath<t.Statement>[]"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 1080,
+    "excerpt": "1078:   const last = stmts[stmts.length - 1]\n1079:   if (!last?.isReturnStatement()) {\n1080:     throw new Error('compile: list item block body must end with a return statement (scope limit)')\n1081:   }\n1082:   const returnArg = last.get('argument') as NodePath<t.Expression | null>\n1083:   if (!returnArg.isJSXElement()) {\n1084:     throw new Error('compile: list item block body must return a JSX element (scope limit)')"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 1084,
+    "excerpt": "1082:   const returnArg = last.get('argument') as NodePath<t.Expression | null>\n1083:   if (!returnArg.isJSXElement()) {\n1084:     throw new Error('compile: list item block body must return a JSX element (scope limit)')\n1085:   }\n1086:   const localDeclStmts: NodePath<t.VariableDeclaration>[] = []\n1087:   const localMovementFns: HandlerFns = new Map()\n1088:   const localMountHooks: MountHooks = []"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 1109,
+    "excerpt": "1107:     if (s.isFunctionDeclaration() && s.node.id) {\n1108:       if (localMovementFns.has(s.node.id.name)) {\n1109:         throw new Error(\n1110:           `compile: duplicate movement-zone function \"${s.node.id.name}\" in a list item body (scope limit)`,\n1111:         )\n1112:       }\n1113:       localMovementFns.set(s.node.id.name, s as NodePath<t.FunctionDeclaration>)"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 1117,
+    "excerpt": "1115:     }\n1116:     if (!s.isVariableDeclaration()) {\n1117:       throw new Error(\n1118:         'compile: only signal()/derived() declarations, onMount()/effect() calls, and function declarations are allowed before the return in a list item block body (scope limit)',\n1119:       )\n1120:     }\n1121:     localDeclStmts.push(s)"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 1243,
+    "excerpt": "1241:     )\n1242:     if (leaksIntoAnotherLocalScope) {\n1243:       throw new Error(\n1244:         'compile: attribute binding referencing a tracked signal inside a list item or conditional branch is not supported yet (scope limit)',\n1245:       )\n1246:     }\n1247:     for (const d of b.deps) {"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 1254,
+    "excerpt": "1252:     for (const dep of action.resultDeps) {\n1253:       if (ctx.localDeclIds.has(dep) && !accessibleLocalDeclIds.has(dep)) {\n1254:         throw new Error(\n1255:           'compile: an action result references a local signal outside its lexical scope (scope limit)',\n1256:         )\n1257:       }\n1258:       if (!accessibleLocalDeclIds.has(dep)) nestedDeps.add(dep)"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 1264,
+    "excerpt": "1262:     for (const dep of effect.readDeclIds) {\n1263:       if (ctx.localDeclIds.has(dep) && !accessibleLocalDeclIds.has(dep)) {\n1264:         throw new Error(\n1265:           'compile: an effect references a local signal outside its lexical scope (scope limit)',\n1266:         )\n1267:       }\n1268:       if (!accessibleLocalDeclIds.has(dep)) nestedDeps.add(dep)"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 1279,
+    "excerpt": "1277:         : false\n1278:       if (leaksIntoAnotherLocalScope) {\n1279:         throw new Error(\n1280:           'compile: referencing a tracked signal inside a list item or conditional branch is not supported yet (scope limit)',\n1281:         )\n1282:       }\n1283:       for (const d of deps ?? []) {"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 1293,
+    "excerpt": "1291:       for (const d of deps ?? []) {\n1292:         if (ctx.localDeclIds.has(d) && !accessibleLocalDeclIds.has(d)) {\n1293:           throw new Error(\n1294:             'compile: a nested structural unit depends on a local signal outside its lexical scope (scope limit)',\n1295:           )\n1296:         }\n1297:         if (!accessibleLocalDeclIds.has(d)) nestedDeps.add(d)"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 1365,
+    "excerpt": "1363:     ) as NodePath<t.JSXAttribute> | undefined\n1364:   if (!keyAttrPath) {\n1365:     throw new Error('compile: list items require a `key` attribute (scope limit)')\n1366:   }\n1367:   const keyValueNode = keyAttrPath.node.value\n1368:   if (keyValueNode?.type !== 'JSXExpressionContainer') {\n1369:     throw new Error('compile: list item `key` must be an expression (scope limit)')"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 1369,
+    "excerpt": "1367:   const keyValueNode = keyAttrPath.node.value\n1368:   if (keyValueNode?.type !== 'JSXExpressionContainer') {\n1369:     throw new Error('compile: list item `key` must be an expression (scope limit)')\n1370:   }\n1371:   const keyExprPath = keyAttrPath.get('value.expression') as NodePath<t.Expression>\n1372:   const { deps: keyDeps, rendered: keyRendered } = analyzeExpr(ctx, keyExprPath, instanceId)\n1373:   if (keyDeps.size > 0) {"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 1374,
+    "excerpt": "1372:   const { deps: keyDeps, rendered: keyRendered } = analyzeExpr(ctx, keyExprPath, instanceId)\n1373:   if (keyDeps.size > 0) {\n1374:     throw new Error(\n1375:       'compile: list item `key` referencing a tracked signal is not supported yet (scope limit)',\n1376:     )\n1377:   }\n1378: "
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 1437,
+    "excerpt": "1435:     isLogical = false\n1436:   } else {\n1437:     throw new Error('compile: unsupported conditional expression form (scope limit)')\n1438:   }\n1439: \n1440:   const {\n1441:     deps,"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 1508,
+    "excerpt": "1506:   const args = expr.get('arguments')\n1507:   if (args.length !== 1 || !args[0]!.isJSXElement()) {\n1508:     throw new Error('compile: render() takes exactly one JSX element (scope limit)')\n1509:   }\n1510:   return args[0] as NodePath<t.JSXElement>\n1511: }\n1512: "
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 1529,
+    "excerpt": "1527:   const args = expression.get('arguments')\n1528:   if (args.length !== 1 || !args[0]!.isArrowFunctionExpression()) {\n1529:     throw new Error(\n1530:       'compile: onMount() takes exactly one zero-argument arrow function (scope limit)',\n1531:     )\n1532:   }\n1533:   const callback = args[0] as NodePath<t.ArrowFunctionExpression>"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 1535,
+    "excerpt": "1533:   const callback = args[0] as NodePath<t.ArrowFunctionExpression>\n1534:   if (callback.node.params.length !== 0) {\n1535:     throw new Error('compile: onMount() callback must not take parameters (scope limit)')\n1536:   }\n1537:   return callback\n1538: }\n1539: "
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 1562,
+    "excerpt": "1560:   const args = expression.get('arguments')\n1561:   if (args.length !== 1 || !args[0]!.isArrowFunctionExpression()) {\n1562:     throw new Error(\n1563:       'compile: effect() takes exactly one zero-argument arrow function (scope limit)',\n1564:     )\n1565:   }\n1566:   const callback = args[0] as NodePath<t.ArrowFunctionExpression>"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 1568,
+    "excerpt": "1566:   const callback = args[0] as NodePath<t.ArrowFunctionExpression>\n1567:   if (callback.node.params.length !== 0) {\n1568:     throw new Error('compile: effect() callback must not take parameters (scope limit)')\n1569:   }\n1570:   return callback\n1571: }\n1572: "
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 1611,
+    "excerpt": "1609:     const stmt = stmts[i]!\n1610:     if (stmt.isReturnStatement() && !stmt.get('argument').isJSXElement()) {\n1611:       throw new Error(\n1612:         'compile: components declare UI with render(<JSX>) or return <JSX> (scope limit)',\n1613:       )\n1614:     }\n1615:     const jsx = renderCallJsx(stmt)"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 1618,
+    "excerpt": "1616:     if (jsx) {\n1617:       if (renderIndex !== -1) {\n1618:         throw new Error(\n1619:           'compile: a component must contain exactly one render() call or return JSX (scope limit)',\n1620:         )\n1621:       }\n1622:       renderIndex = i"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 1627,
+    "excerpt": "1625:   }\n1626:   if (renderIndex === -1 || !renderJsxPath) {\n1627:     throw new Error(\n1628:       'compile: a component must contain a render(<JSX>) call or return JSX (scope limit)',\n1629:     )\n1630:   }\n1631: "
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 1659,
+    "excerpt": "1657:     const stmt = stmts[i]!\n1658:     if (returnsUi && !stmt.isFunctionDeclaration()) {\n1659:       throw new Error(\n1660:         'compile: only function declarations are allowed after return JSX (scope limit)',\n1661:       )\n1662:     }\n1663:     const mountHook = resolveOnMountHook(stmt)"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 1674,
+    "excerpt": "1672:     }\n1673:     if (!stmt.isFunctionDeclaration() || !stmt.node.id) {\n1674:       throw new Error(\n1675:         'compile: only function declarations are allowed after render(); onMount() and effect() calls are also allowed (scope limit)',\n1676:       )\n1677:     }\n1678:     movementZoneFns.set(stmt.node.id.name, stmt as NodePath<t.FunctionDeclaration>)"
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 1701,
+    "excerpt": "1699:       Object.defineProperty(error, 'loc', { value: componentPath.node.loc, configurable: true })\n1700:     }\n1701:     throw error\n1702:   }\n1703: }\n1704: \n1705: function compileComponentUnchecked("
+  },
+  {
+    "path": "packages/compiler/src/compiler/render.ts",
+    "line": 1770,
+    "excerpt": "1768:       Object.defineProperty(error, 'loc', { value: renderJsxPath.node.loc, configurable: true })\n1769:     }\n1770:     throw error\n1771:   }\n1772: }\n1773: "
+  },
+  {
+    "path": "packages/compiler/src/compiler/source.ts",
+    "line": 119,
+    "excerpt": "117:       )\n118:     if (hasContextCall && !isContextConst) {\n119:       throw new Error(\n120:         'compile: context declarations require one default value and simple names (scope limit)',\n121:       )\n122:     }\n123:     if (inner?.type !== 'FunctionDeclaration' && !isSupportConst && !isContextConst) {"
+  },
+  {
+    "path": "packages/compiler/src/compiler/source.ts",
+    "line": 124,
+    "excerpt": "122:     }\n123:     if (inner?.type !== 'FunctionDeclaration' && !isSupportConst && !isContextConst) {\n124:       throw new Error('compile: only top-level function declarations are supported (scope limit)')\n125:     }\n126:   }\n127: }\n128: "
+  },
+  {
+    "path": "packages/compiler/src/compiler/source.ts",
+    "line": 200,
+    "excerpt": "198:       if (kind === 'signal') {\n199:         if (init.arguments.length !== 1 || init.arguments[0]?.type === 'SpreadElement') {\n200:           throw new Error('compile: module-scope signal() takes exactly one argument')\n201:         }\n202:       } else if (\n203:         kind === 'derived' &&\n204:         (init.arguments.length !== 1 ||"
+  },
+  {
+    "path": "packages/compiler/src/compiler/source.ts",
+    "line": 209,
+    "excerpt": "207:           init.arguments[0].body.type === 'BlockStatement')\n208:       ) {\n209:         throw new Error(\n210:           'compile: module-scope derived() must be called with a zero-arg concise arrow function `() => expr` (scope limit)',\n211:         )\n212:       }\n213: "
+  },
+  {
+    "path": "packages/compiler/src/compiler/source.ts",
+    "line": 288,
+    "excerpt": "286: ): NodePath<t.FunctionDeclaration> {\n287:   const componentsByName = collectTopLevelComponents(ast, renderOnly)\n288:   if (componentsByName.size === 0) throw new Error('compile: no component function found')\n289: \n290:   const referenced = new Set<string>()\n291:   for (const path of componentsByName.values()) {\n292:     path.traverse({"
+  },
+  {
+    "path": "packages/compiler/src/compiler/source.ts",
+    "line": 307,
+    "excerpt": "305:   const rootNames = [...componentsByName.keys()].filter((name) => !referenced.has(name))\n306:   if (rootNames.length !== 1) {\n307:     throw new Error(\n308:       `compile: expected exactly one root component, found [${rootNames.join(', ')}] (scope limit)`,\n309:     )\n310:   }\n311:   return componentsByName.get(rootNames[0]!)!"
+  },
+  {
+    "path": "packages/compiler/src/compiler/source.ts",
+    "line": 390,
+    "excerpt": "388:       const specifier = path.node.source.value\n389:       if (resourceImport.test(specifier)) {\n390:         throw new Error(\n391:           `compile: browser source does not support external resource import \"${specifier}\" (scope limit)`,\n392:         )\n393:       }\n394:       throw new Error("
+  },
+  {
+    "path": "packages/compiler/src/compiler/source.ts",
+    "line": 394,
+    "excerpt": "392:         )\n393:       }\n394:       throw new Error(\n395:         `compile: browser source does not support static import \"${specifier}\" (scope limit)`,\n396:       )\n397:     },\n398:     ExportAllDeclaration(path: NodePath<t.ExportAllDeclaration>) {"
+  },
+  {
+    "path": "packages/compiler/src/compiler/source.ts",
+    "line": 399,
+    "excerpt": "397:     },\n398:     ExportAllDeclaration(path: NodePath<t.ExportAllDeclaration>) {\n399:       throw new Error(\n400:         `compile: browser source does not support external module export \"${path.node.source.value}\" (scope limit)`,\n401:       )\n402:     },\n403:     ExportNamedDeclaration(path: NodePath<t.ExportNamedDeclaration>) {"
+  },
+  {
+    "path": "packages/compiler/src/compiler/source.ts",
+    "line": 405,
+    "excerpt": "403:     ExportNamedDeclaration(path: NodePath<t.ExportNamedDeclaration>) {\n404:       if (!path.node.source) return\n405:       throw new Error(\n406:         `compile: browser source does not support external module export \"${path.node.source.value}\" (scope limit)`,\n407:       )\n408:     },\n409:     CallExpression(path: NodePath<t.CallExpression>) {"
+  },
+  {
+    "path": "packages/compiler/src/compiler/source.ts",
+    "line": 411,
+    "excerpt": "409:     CallExpression(path: NodePath<t.CallExpression>) {\n410:       if ((path.node.callee as t.Node).type !== 'Import') return\n411:       throw new Error('compile: browser source does not support dynamic import (scope limit)')\n412:     },\n413:     ImportExpression() {\n414:       throw new Error('compile: browser source does not support dynamic import (scope limit)')\n415:     },"
+  },
+  {
+    "path": "packages/compiler/src/compiler/source.ts",
+    "line": 414,
+    "excerpt": "412:     },\n413:     ImportExpression() {\n414:       throw new Error('compile: browser source does not support dynamic import (scope limit)')\n415:     },\n416:   })\n417: }\n418: "
+  },
+  {
+    "path": "packages/compiler/src/compiler/source.ts",
+    "line": 421,
+    "excerpt": "419: function assertSsrInputBinding(name: string): void {\n420:   if (SSR_RESERVED_NAMES.has(name)) {\n421:     throw new Error(\n422:       `compile: SSR root input binding \"${name}\" conflicts with generated internal name (scope limit)`,\n423:     )\n424:   }\n425: }"
+  },
+  {
+    "path": "packages/compiler/src/compiler/source.ts",
+    "line": 437,
+    "excerpt": "435:   if (params.length === 0) return null\n436:   if (params.length !== 1) {\n437:     throw new Error('compile: SSR root component accepts at most one input parameter (scope limit)')\n438:   }\n439:   const parameter = params[0]!\n440:   if (parameter.type === 'Identifier') {\n441:     assertSsrInputBinding(parameter.name)"
+  },
+  {
+    "path": "packages/compiler/src/compiler/source.ts",
+    "line": 448,
+    "excerpt": "446:     const end = parameter.end\n447:     if (start == null || end == null) {\n448:       throw new Error('compile: SSR root input parameter must have a source range (scope limit)')\n449:     }\n450:     for (const property of parameter.properties) {\n451:       if (property.type === 'RestElement') {\n452:         throw new Error('compile: SSR root input rest properties are not supported (scope limit)')"
+  },
+  {
+    "path": "packages/compiler/src/compiler/source.ts",
+    "line": 452,
+    "excerpt": "450:     for (const property of parameter.properties) {\n451:       if (property.type === 'RestElement') {\n452:         throw new Error('compile: SSR root input rest properties are not supported (scope limit)')\n453:       }\n454:       if (property.type !== 'ObjectProperty' || property.computed) {\n455:         throw new Error(\n456:           'compile: SSR root input must use simple object destructuring (scope limit)',"
+  },
+  {
+    "path": "packages/compiler/src/compiler/source.ts",
+    "line": 455,
+    "excerpt": "453:       }\n454:       if (property.type !== 'ObjectProperty' || property.computed) {\n455:         throw new Error(\n456:           'compile: SSR root input must use simple object destructuring (scope limit)',\n457:         )\n458:       }\n459:       if (property.key.type !== 'Identifier' && property.key.type !== 'StringLiteral') {"
+  },
+  {
+    "path": "packages/compiler/src/compiler/source.ts",
+    "line": 460,
+    "excerpt": "458:       }\n459:       if (property.key.type !== 'Identifier' && property.key.type !== 'StringLiteral') {\n460:         throw new Error(\n461:           'compile: SSR root input must use identifier or string property names (scope limit)',\n462:         )\n463:       }\n464:       if (property.value.type !== 'Identifier') {"
+  },
+  {
+    "path": "packages/compiler/src/compiler/source.ts",
+    "line": 465,
+    "excerpt": "463:       }\n464:       if (property.value.type !== 'Identifier') {\n465:         throw new Error(\n466:           'compile: SSR root input only supports shorthand destructuring (scope limit)',\n467:         )\n468:       }\n469:       assertSsrInputBinding(property.value.name)"
+  },
+  {
+    "path": "packages/compiler/src/compiler/source.ts",
+    "line": 473,
+    "excerpt": "471:     const pattern = source.slice(start, end)\n472:     if (pattern.includes(':')) {\n473:       throw new Error('compile: SSR root input only supports shorthand destructuring (scope limit)')\n474:     }\n475:     return pattern\n476:   }\n477:   throw new Error('compile: SSR root input must be an identifier or object pattern (scope limit)')"
+  },
+  {
+    "path": "packages/compiler/src/compiler/source.ts",
+    "line": 477,
+    "excerpt": "475:     return pattern\n476:   }\n477:   throw new Error('compile: SSR root input must be an identifier or object pattern (scope limit)')\n478: }\n479: \n480: const SSR_JSON_HELPER = `function __irisout_clone_json__(value) {\n481:   const seen = new Set();"
+  },
+  {
+    "path": "packages/compiler/src/compiler/source.ts",
+    "line": 482,
+    "excerpt": "480: const SSR_JSON_HELPER = `function __irisout_clone_json__(value) {\n481:   const seen = new Set();\n482:   const fail = (message) => { throw new TypeError(message); };\n483:   const visitObject = (current) => {\n484:     const prototype = Object.getPrototypeOf(current);\n485:     if (prototype !== Object.prototype && prototype !== null) fail('SSR input must contain plain JSON objects');\n486:     for (const key of Reflect.ownKeys(current)) {"
+  },
+  {
+    "path": "packages/compiler/src/compiler/source.ts",
+    "line": 485,
+    "excerpt": "483:   const visitObject = (current) => {\n484:     const prototype = Object.getPrototypeOf(current);\n485:     if (prototype !== Object.prototype && prototype !== null) fail('SSR input must contain plain JSON objects');\n486:     for (const key of Reflect.ownKeys(current)) {\n487:       if (typeof key !== 'string') fail('SSR input must not contain symbol properties');\n488:       if (key === 'toJSON') fail('SSR input must not contain toJSON properties');\n489:       const descriptor = Object.getOwnPropertyDescriptor(current, key);"
+  },
+  {
+    "path": "packages/compiler/src/compiler/source.ts",
+    "line": 487,
+    "excerpt": "485:     if (prototype !== Object.prototype && prototype !== null) fail('SSR input must contain plain JSON objects');\n486:     for (const key of Reflect.ownKeys(current)) {\n487:       if (typeof key !== 'string') fail('SSR input must not contain symbol properties');\n488:       if (key === 'toJSON') fail('SSR input must not contain toJSON properties');\n489:       const descriptor = Object.getOwnPropertyDescriptor(current, key);\n490:       if (!descriptor || !descriptor.enumerable || descriptor.get || descriptor.set) fail('SSR input must contain data properties only');\n491:       visit(current[key]);"
+  },
+  {
+    "path": "packages/compiler/src/compiler/source.ts",
+    "line": 488,
+    "excerpt": "486:     for (const key of Reflect.ownKeys(current)) {\n487:       if (typeof key !== 'string') fail('SSR input must not contain symbol properties');\n488:       if (key === 'toJSON') fail('SSR input must not contain toJSON properties');\n489:       const descriptor = Object.getOwnPropertyDescriptor(current, key);\n490:       if (!descriptor || !descriptor.enumerable || descriptor.get || descriptor.set) fail('SSR input must contain data properties only');\n491:       visit(current[key]);\n492:     }"
+  },
+  {
+    "path": "packages/compiler/src/compiler/source.ts",
+    "line": 490,
+    "excerpt": "488:       if (key === 'toJSON') fail('SSR input must not contain toJSON properties');\n489:       const descriptor = Object.getOwnPropertyDescriptor(current, key);\n490:       if (!descriptor || !descriptor.enumerable || descriptor.get || descriptor.set) fail('SSR input must contain data properties only');\n491:       visit(current[key]);\n492:     }\n493:   };\n494:   const visitArray = (current) => {"
+  },
+  {
+    "path": "packages/compiler/src/compiler/source.ts",
+    "line": 495,
+    "excerpt": "493:   };\n494:   const visitArray = (current) => {\n495:     if (Object.getPrototypeOf(current) !== Array.prototype) fail('SSR input must contain ordinary arrays');\n496:     for (const key of Reflect.ownKeys(current)) {\n497:       if (key === 'length') continue;\n498:       if (typeof key !== 'string' || !/^(0|[1-9][0-9]*)$/.test(key) || Number(key) >= current.length) fail('SSR input arrays must contain indexed values only');\n499:       const descriptor = Object.getOwnPropertyDescriptor(current, key);"
+  },
+  {
+    "path": "packages/compiler/src/compiler/source.ts",
+    "line": 498,
+    "excerpt": "496:     for (const key of Reflect.ownKeys(current)) {\n497:       if (key === 'length') continue;\n498:       if (typeof key !== 'string' || !/^(0|[1-9][0-9]*)$/.test(key) || Number(key) >= current.length) fail('SSR input arrays must contain indexed values only');\n499:       const descriptor = Object.getOwnPropertyDescriptor(current, key);\n500:       if (!descriptor || !descriptor.enumerable || descriptor.get || descriptor.set) fail('SSR input must contain data properties only');\n501:       visit(current[Number(key)]);\n502:     }"
+  },
+  {
+    "path": "packages/compiler/src/compiler/source.ts",
+    "line": 500,
+    "excerpt": "498:       if (typeof key !== 'string' || !/^(0|[1-9][0-9]*)$/.test(key) || Number(key) >= current.length) fail('SSR input arrays must contain indexed values only');\n499:       const descriptor = Object.getOwnPropertyDescriptor(current, key);\n500:       if (!descriptor || !descriptor.enumerable || descriptor.get || descriptor.set) fail('SSR input must contain data properties only');\n501:       visit(current[Number(key)]);\n502:     }\n503:   };\n504:   const visit = (current) => {"
+  },
+  {
+    "path": "packages/compiler/src/compiler/source.ts",
+    "line": 507,
+    "excerpt": "505:     if (current === null || typeof current === 'string' || typeof current === 'boolean') return;\n506:     if (typeof current === 'number') {\n507:       if (!Number.isFinite(current)) fail('SSR input must contain finite JSON numbers');\n508:       return;\n509:     }\n510:     if (typeof current !== 'object') fail('SSR input must contain JSON-serializable values');\n511:     if (seen.has(current)) fail('SSR input must not contain cycles');"
+  },
+  {
+    "path": "packages/compiler/src/compiler/source.ts",
+    "line": 510,
+    "excerpt": "508:       return;\n509:     }\n510:     if (typeof current !== 'object') fail('SSR input must contain JSON-serializable values');\n511:     if (seen.has(current)) fail('SSR input must not contain cycles');\n512:     seen.add(current);\n513:     if (Array.isArray(current)) visitArray(current);\n514:     else visitObject(current);"
+  },
+  {
+    "path": "packages/compiler/src/compiler/source.ts",
+    "line": 511,
+    "excerpt": "509:     }\n510:     if (typeof current !== 'object') fail('SSR input must contain JSON-serializable values');\n511:     if (seen.has(current)) fail('SSR input must not contain cycles');\n512:     seen.add(current);\n513:     if (Array.isArray(current)) visitArray(current);\n514:     else visitObject(current);\n515:     seen.delete(current);"
+  },
+  {
+    "path": "packages/compiler/src/compiler/source.ts",
+    "line": 519,
+    "excerpt": "517:   visit(value);\n518:   const encoded = JSON.stringify(value);\n519:   if (encoded === undefined) fail('SSR input must be JSON-serializable');\n520:   return JSON.parse(encoded);\n521: }`\n522: \n523: interface SsrModuleInput {"
+  },
+  {
+    "path": "packages/compiler/src/compiler/source.ts",
+    "line": 627,
+    "excerpt": "625:     const imported = importBindings(statement)\n626:     if (imported.names.some((name) => referencesName(reachableSource, name))) {\n627:       throw new Error(\n628:         `compile: external module \"${imported.source}\" is used during SSR render (scope limit)`,\n629:       )\n630:     }\n631:   }"
+  },
+  {
+    "path": "packages/compiler/src/compiler/source.ts",
+    "line": 678,
+    "excerpt": "676:       )\n677:     ) {\n678:       throw new Error('compile: html document requires head followed by body (scope limit)')\n679:     }\n680:   }\n681:   const inputPattern = options.target === 'ssr' ? rootInputPattern(rootPath, source) : null\n682:   if (options.target === 'ssr' && ctx.sharedDeclIds.size > 0) {"
+  },
+  {
+    "path": "packages/compiler/src/compiler/source.ts",
+    "line": 683,
+    "excerpt": "681:   const inputPattern = options.target === 'ssr' ? rootInputPattern(rootPath, source) : null\n682:   if (options.target === 'ssr' && ctx.sharedDeclIds.size > 0) {\n683:     throw new Error('compile: module shared state is not supported in SSR (scope limit)')\n684:   }\n685:   const out = {\n686:     declStatements: [] as string[],\n687:     instrumentedDeclStatements: [] as string[],"
+  },
+  {
+    "path": "packages/compiler/src/compiler/source.ts",
+    "line": 691,
+    "excerpt": "689:   const rootHtmlSource = compileComponent(ctx, rootPath, ctx.instanceCounter++, out)\n690:   if (options.target === 'ssr' && ctx.localDeclIds.size > 0) {\n691:     throw new Error(\n692:       'compile: signal() and derived() inside structural units are not supported in SSR (scope limit)',\n693:     )\n694:   }\n695: "
+  },
+  {
+    "path": "packages/compiler/src/compiler/source.ts",
+    "line": 992,
+    "excerpt": "990:       const markerStart = template.indexOf(marker)\n991:       if (markerStart < 0) {\n992:         throw new Error(\n993:           `compile: SSR could not locate dynamic attribute marker ${binding.markerId} (scope limit)`,\n994:         )\n995:       }\n996:       const tagEnd = template.indexOf('>', markerStart)"
+  },
+  {
+    "path": "packages/compiler/src/compiler/source.ts",
+    "line": 998,
+    "excerpt": "996:       const tagEnd = template.indexOf('>', markerStart)\n997:       if (tagEnd < 0) {\n998:         throw new Error(\n999:           `compile: SSR could not locate dynamic attribute host for ${binding.markerId} (scope limit)`,\n1000:         )\n1001:       }\n1002:       const expression ="
+  },
+  {
+    "path": "packages/compiler/src/compiler/source.ts",
+    "line": 1098,
+    "excerpt": "1096:           return `const ${decl.outputName} = derived(${decl.sourceRendered}, ${JSON.stringify(decl.id)});`\n1097:         }\n1098:         throw new Error(`compile: unsupported shared declaration kind ${decl.kind}`)\n1099:       }),\n1100:       ...out.instrumentedDeclStatements,\n1101:       `return \\`${rootHtmlSource}\\`;`,\n1102:     ].join('\\n')"
+  },
+  {
+    "path": "packages/compiler/src/compiler/source.ts",
+    "line": 1131,
+    "excerpt": "1129:       initialHtml = runComponent(signal, derived, escapeTextValue, escapeAttrTextValue, {})\n1130:     } catch (e) {\n1131:       throw new Error(\n1132:         `compile: build-time execution failed: ${e instanceof Error ? e.message : String(e)}`,\n1133:         { cause: e },\n1134:       )\n1135:     }"
+  },
+  {
+    "path": "packages/compiler/src/compiler/source.ts",
+    "line": 1145,
+    "excerpt": "1143:       const entry = registry.get(id)\n1144:       if (!entry || entry.kind !== kind) {\n1145:         throw new Error(\n1146:           `compile: expected \"${ctx.declOutputName.get(id)}\" to be a ${kind}() call (ADR-0001 #3 discovery check)`,\n1147:         )\n1148:       }\n1149:     }"
+  },
+  {
+    "path": "packages/compiler/src/compiler/source.ts",
+    "line": 1245,
+    "excerpt": "1243:     return compileSource(source)\n1244:   } catch (error) {\n1245:     throw withCompileDiagnostic(error, { filePath: '<source>', source })\n1246:   }\n1247: }\n1248: \n1249: /** 単一sourceをブラウザ内で変換する。Nodeのファイル機能は使わない。 */"
+  },
+  {
+    "path": "packages/compiler/src/compiler/source.ts",
+    "line": 1254,
+    "excerpt": "1252:     return compileSource(source, { browser: true })\n1253:   } catch (error) {\n1254:     throw withCompileDiagnostic(error, { filePath: '<source>', source })\n1255:   }\n1256: }\n1257: \n1258: export function compileSSR(source: string): CompileResult {"
+  },
+  {
+    "path": "packages/compiler/src/compiler/source.ts",
+    "line": 1262,
+    "excerpt": "1260:     return compileSource(source, { target: 'ssr' })\n1261:   } catch (error) {\n1262:     throw withCompileDiagnostic(error, { filePath: '<source>', source })\n1263:   }\n1264: }\n1265: "
+  },
+  {
+    "path": "packages/compiler/src/compiler/strip-typescript.ts",
+    "line": 12,
+    "excerpt": "10: \n11: function scopeLimit(name: string): Error {\n12:   return new Error(`compile: TypeScript ${name} is not supported yet (scope limit)`)\n13: }\n14: \n15: /** module linkerが扱う前に、実行時に消えるTypeScript構文をASTから除去する。 */\n16: export function stripTypeScript(ast: t.File): void {"
+  },
+  {
+    "path": "packages/compiler/src/compiler/strip-typescript.ts",
+    "line": 49,
+    "excerpt": "47:     },\n48:     TSEnumDeclaration() {\n49:       throw scopeLimit('enum')\n50:     },\n51:     TSModuleDeclaration() {\n52:       throw scopeLimit('namespace')\n53:     },"
+  },
+  {
+    "path": "packages/compiler/src/compiler/strip-typescript.ts",
+    "line": 52,
+    "excerpt": "50:     },\n51:     TSModuleDeclaration() {\n52:       throw scopeLimit('namespace')\n53:     },\n54:     Identifier(path: NodePath<t.Identifier>) {\n55:       path.node.typeAnnotation = null\n56:       path.node.optional = null"
+  },
+  {
+    "path": "packages/hono/src/index.ts",
+    "line": 197,
+    "excerpt": "195: ): CompiledPage {\n196:   const result = compileProject(route.filePath, { target: 'ssr', transformSource })\n197:   if (!result.ssrCode) throw new Error(`compile: missing SSR module for \"${route.filePath}\"`)\n198:   return {\n199:     route,\n200:     dependencies: result.dependencies,\n201:     render: compileRender(result.ssrCode),"
+  },
+  {
+    "path": "packages/hono/src/index.ts",
+    "line": 342,
+    "excerpt": "340:     try {\n341:       const page = pages.get(match.route.id)\n342:       if (!page) throw new Error('missing compiled page')\n343:       const loader = resolveLoader(loaderSource, match.route)\n344:       let input: unknown\n345:       if (loader) {\n346:         input = await loader({"
+  },
+  {
+    "path": "packages/hono/src/index.ts",
+    "line": 394,
+    "excerpt": "392:         })\n393:         if (document instanceof Response) return document\n394:         if (typeof document !== 'string') throw new Error('document renderer must return HTML')\n395:         return htmlResponse(document)\n396:       }\n397:       if (page.isDocument) {\n398:         // ADR-0063: 文書の構造はJSXが所有し、状態とブラウザー入口だけを後から置く。"
+  },
+  {
+    "path": "packages/runtime/src/index.ts",
+    "line": 41,
+    "excerpt": "39:   } catch (error) {\n40:     domUpdateDepth = 0\n41:     throw error\n42:   }\n43: }\n44: \n45: export function endDomUpdate(): void {"
+  },
+  {
+    "path": "packages/runtime/src/index.ts",
+    "line": 46,
+    "excerpt": "44: \n45: export function endDomUpdate(): void {\n46:   if (domUpdateDepth === 0) throw new Error('endDomUpdate called without beginDomUpdate')\n47:   if (--domUpdateDepth > 0) return\n48:   let firstError: unknown\n49:   for (const observer of domUpdateObservers) {\n50:     try {"
+  },
+  {
+    "path": "packages/runtime/src/index.ts",
+    "line": 56,
+    "excerpt": "54:     }\n55:   }\n56:   if (firstError) throw firstError\n57: }\n58: \n59: // CONCEPT.v3: List 全体を再描画せず、listId / itemId / bindingId の3段アドレスで\n60: // 更新先を特定する。文字列の連結やハッシュはホットパスで作らず、List と item は"
+  },
+  {
+    "path": "packages/runtime/src/index.ts",
+    "line": 113,
+    "excerpt": "111:   if (typeof value === 'function') return { update: value as UseActionUpdate }\n112:   if (value === null || typeof value !== 'object' || Array.isArray(value)) {\n113:     throw new Error(\n114:       `use action ${actionId} must return void, a zero-argument update function, or { update?, destroy? }`,\n115:     )\n116:   }\n117: "
+  },
+  {
+    "path": "packages/runtime/src/index.ts",
+    "line": 121,
+    "excerpt": "119:   for (const key of Object.keys(record)) {\n120:     if (key !== 'update' && key !== 'destroy') {\n121:       throw new Error(`use action ${actionId} returned an unsupported property: ${key}`)\n122:     }\n123:   }\n124:   if (record.update !== undefined && typeof record.update !== 'function') {\n125:     throw new Error(`use action ${actionId}.update must be a function when provided`)"
+  },
+  {
+    "path": "packages/runtime/src/index.ts",
+    "line": 125,
+    "excerpt": "123:   }\n124:   if (record.update !== undefined && typeof record.update !== 'function') {\n125:     throw new Error(`use action ${actionId}.update must be a function when provided`)\n126:   }\n127:   if (record.destroy !== undefined && typeof record.destroy !== 'function') {\n128:     throw new Error(`use action ${actionId}.destroy must be a function when provided`)\n129:   }"
+  },
+  {
+    "path": "packages/runtime/src/index.ts",
+    "line": 128,
+    "excerpt": "126:   }\n127:   if (record.destroy !== undefined && typeof record.destroy !== 'function') {\n128:     throw new Error(`use action ${actionId}.destroy must be a function when provided`)\n129:   }\n130:   return {\n131:     update: record.update as UseActionUpdate | undefined,\n132:     destroy: record.destroy as UseActionDestroy | undefined,"
+  },
+  {
+    "path": "packages/runtime/src/index.ts",
+    "line": 172,
+    "excerpt": "170:   const record = runtime.items.get(itemId)\n171:   if (!record) {\n172:     throw new Error(`updateListItem: unknown item ${String(itemId)} in list ${runtime.listId}`)\n173:   }\n174:   if (update) update(record.handle, next)\n175:   else if (record.handle.update) record.handle.update(next)\n176:   else"
+  },
+  {
+    "path": "packages/runtime/src/index.ts",
+    "line": 177,
+    "excerpt": "175:   else if (record.handle.update) record.handle.update(next)\n176:   else\n177:     throw new Error(\n178:       `updateListItem: no updater for item ${String(itemId)} in list ${runtime.listId}`,\n179:     )\n180: }\n181: "
+  },
+  {
+    "path": "packages/runtime/src/index.ts",
+    "line": 229,
+    "excerpt": "227:       const itemId = keyOf(value)\n228:       if (runtime.items.get(itemId) !== undefined) {\n229:         throw new Error(`reconcileList: duplicate key ${String(itemId)} in list ${runtime.listId}`)\n230:       }\n231:       const state: ListItemState = {\n232:         listId: runtime.listId,\n233:         itemId,"
+  },
+  {
+    "path": "packages/runtime/src/index.ts",
+    "line": 245,
+    "excerpt": "243:       const itemId = keyOf(value)\n244:       if (seen.has(itemId)) {\n245:         throw new Error(`reconcileList: duplicate key ${String(itemId)} in list ${runtime.listId}`)\n246:       }\n247:       seen.add(itemId)\n248:       const record = runtime.items.get(itemId)\n249:       if (record) {"
+  },
+  {
+    "path": "packages/runtime/src/index.ts",
+    "line": 253,
+    "excerpt": "251:         else if (record.handle.update) record.handle.update(value)\n252:         else\n253:           throw new Error(\n254:             `reconcileList: no updater for item ${String(itemId)} in list ${runtime.listId}`,\n255:           )\n256:       } else {\n257:         const state: ListItemState = {"
+  },
+  {
+    "path": "packages/runtime/src/index.ts",
+    "line": 318,
+    "excerpt": "316:       }\n317:     }\n318:     throw firstError\n319:   }\n320: \n321:   try {\n322:     for (const value of values) {"
+  },
+  {
+    "path": "packages/runtime/src/index.ts",
+    "line": 326,
+    "excerpt": "324:       let record = runtime.items.get(itemId)\n325:       if (seen ? seen.has(itemId) : record !== undefined) {\n326:         throw new Error(\n327:           'reconcileList: duplicate key ' + String(itemId) + ' in list ' + runtime.listId,\n328:         )\n329:       }\n330:       seen?.add(itemId)"
+  },
+  {
+    "path": "packages/runtime/src/index.ts",
+    "line": 335,
+    "excerpt": "333:         else if (record.handle.update) record.handle.update(value)\n334:         else\n335:           throw new Error(\n336:             'reconcileList: no updater for item ' + String(itemId) + ' in list ' + runtime.listId,\n337:           )\n338:       } else {\n339:         const state: ListItemState = {"
+  },
+  {
+    "path": "packages/runtime/src/index.ts",
+    "line": 390,
+    "excerpt": "388:     if (!parent) {\n389:       if (created.length > 0)\n390:         releaseCreated(firstError ?? new Error('reconcileList: range is detached'))\n391:     }\n392:     for (const record of created) {\n393:       if (!runtime.items.has(record.state.itemId)) continue\n394:       if (record.handle.el.parentNode !== parent) continue"
+  },
+  {
+    "path": "packages/runtime/src/index.ts",
+    "line": 402,
+    "excerpt": "400:     }\n401:   }\n402:   if (firstError) throw firstError\n403: }\n404: \n405: // 親unitがDOMへ接続された時点で、作成済みの子itemを一度だけ接続する。\n406: // 各factoryのmount()は自分で二重初期化を防ぐため、この呼び出しは再入安全である。"
+  },
+  {
+    "path": "packages/runtime/src/index.ts",
+    "line": 417,
+    "excerpt": "415:       firstError ??= cleanupError\n416:     }\n417:     throw firstError\n418:   }\n419: }\n420: \n421: // listの所有者が破棄されるとき、itemを逆順に解放する。destroy例外があっても"
+  },
+  {
+    "path": "packages/runtime/src/index.ts",
+    "line": 440,
+    "excerpt": "438:   }\n439:   runtime.items.clear()\n440:   if (firstError) throw firstError\n441: }\n442: \n443: function isDomRange(value: Element | DomRange): value is DomRange {\n444:   return !('nodeType' in value)"
+  },
+  {
+    "path": "packages/runtime/src/index.ts",
+    "line": 508,
+    "excerpt": "506: //\n507: // expectedIds(生成コードがコンパイル時に確定したマーカー ID 集合)が\n508: // 渡された場合、収集結果に無い ID があれば即 throw する。不一致は続行しても\n509: // 正しく動かない(更新が届かない DOM を放置する)ので、黙って no-op に\n510: // させない。省略時は検証スキップ(後方互換)。\n511: export function hydrate(\n512:   container: Element,"
+  },
+  {
+    "path": "packages/runtime/src/index.ts",
+    "line": 520,
+    "excerpt": "518:     const missing = expectedIds.filter((id) => !markers.has(id))\n519:     if (missing.length > 0) {\n520:       throw new Error(\n521:         `hydrate: missing marker(s): ${missing.join(', ')} — initial HTML does not match compiled output`,\n522:       )\n523:     }\n524:   }"
+  },
+  {
+    "path": "packages/runtime/src/index.ts",
+    "line": 554,
+    "excerpt": "552:     const missing = expectedRangeIds.filter((id) => !ranges.has(id))\n553:     if (missing.length > 0) {\n554:       throw new Error(\n555:         `hydrate: missing range anchor(s): ${missing.join(', ')} — initial HTML does not match compiled output`,\n556:       )\n557:     }\n558:   }"
+  },
+  {
+    "path": "packages/runtime/src/index.ts",
+    "line": 578,
+    "excerpt": "576:   const document = container.ownerDocument\n577:   if (container !== document.documentElement || !document.defaultView) {\n578:     throw new Error('replaceDocument: container must be document.documentElement')\n579:   }\n580:   const parsed = new document.defaultView.DOMParser().parseFromString(html, 'text/html')\n581:   if (Array.from(parsed.scripts).some((script) => script.type !== 'application/json')) {\n582:     throw new Error('replaceDocument: executable scripts require document navigation')"
+  },
+  {
+    "path": "packages/runtime/src/index.ts",
+    "line": 582,
+    "excerpt": "580:   const parsed = new document.defaultView.DOMParser().parseFromString(html, 'text/html')\n581:   if (Array.from(parsed.scripts).some((script) => script.type !== 'application/json')) {\n582:     throw new Error('replaceDocument: executable scripts require document navigation')\n583:   }\n584:   for (const attribute of Array.from(container.attributes))\n585:     container.removeAttribute(attribute.name)\n586:   for (const attribute of Array.from(parsed.documentElement.attributes)) {"
+  },
+  {
+    "path": "packages/vite-plugin/src/hono.ts",
+    "line": 44,
+    "excerpt": "42:     const existing = ids.get(metadata.route.id)\n43:     if (existing && existing !== metadata.route.filePath) {\n44:       throw new Error(\n45:         `compile: irisout Hono route id \"${metadata.route.id}\" is used by ${existing} and ${metadata.route.filePath} (scope limit)`,\n46:       )\n47:     }\n48:     ids.set(metadata.route.id, metadata.route.filePath)"
+  },
+  {
+    "path": "packages/vite-plugin/src/hono.ts",
+    "line": 74,
+    "excerpt": "72: function createRequest(request: IncomingMessage, server: ViteDevServer): Request {\n73:   const host = request.headers.host\n74:   if (!host) throw new Error('開発サーバーのHostがありません')\n75:   const protocol = server.config.server.https ? 'https' : 'http'\n76:   const headers = new Headers()\n77:   for (const [name, value] of Object.entries(request.headers)) {\n78:     if (value !== undefined) headers.set(name, Array.isArray(value) ? value.join(', ') : value)"
+  },
+  {
+    "path": "packages/vite-plugin/src/hono.ts",
+    "line": 126,
+    "excerpt": "124:   const routes = collectRoutes(app)\n125:   if (routes.length === 0) {\n126:     throw new Error('compile: irisoutHono found no createFileRouter routes (scope limit)')\n127:   }\n128:   const routesPlugin = irisoutExplicitRoutes({ ...options, routes, emitEntry: true })\n129:   const pagesPlugin = developmentPages(app, routes)\n130:   const configureRoutes = routesPlugin.configureServer"
+  },
+  {
+    "path": "packages/vite-plugin/src/index.ts",
+    "line": 82,
+    "excerpt": "80:     return [\n81:       `const __irisout_container__ = document.querySelector(${selector});`,\n82:       `if (!__irisout_container__) throw new Error(${message});`,\n83:       'hydrateComponent(__irisout_container__);',\n84:     ].join('\\n')\n85:   }\n86: "
+  },
+  {
+    "path": "packages/vite-plugin/src/index.ts",
+    "line": 135,
+    "excerpt": "133:         // 次の変更でこの値を更新できるため、構文エラーで監視を失わない。\n134:         result = previous\n135:         throw error\n136:       }\n137:       const module = context.server.moduleGraph.getModuleById(resolvedVirtualModuleId)\n138:       if (module) context.server.moduleGraph.invalidateModule(module, undefined, context.timestamp)\n139:       context.server.ws.send({ type: 'full-reload', path: '*' })"
+  },
+  {
+    "path": "packages/vite-plugin/src/index.ts",
+    "line": 164,
+    "excerpt": "162:   const compile = (): CompileResult => {\n163:     const next = compileProject(entryPath, { target: 'ssr' })\n164:     if (!next.ssrCode) throw new Error('irisout SSR: compiler did not produce a server module')\n165:     result = next\n166:     dependencies = new Set(next.dependencies.map(normalizePath))\n167:     return next\n168:   }"
+  },
+  {
+    "path": "packages/vite-plugin/src/index.ts",
+    "line": 201,
+    "excerpt": "199:       if (id !== resolvedVirtualModuleId) return null\n200:       const current = ensureCompiled()\n201:       if (!current.ssrCode) throw new Error('irisout SSR: missing generated server module')\n202:       return { code: current.ssrCode, map: null }\n203:     },\n204:     async handleHotUpdate(context: HmrContext) {\n205:       const changedPath = normalizePath(context.file)"
+  },
+  {
+    "path": "packages/vite-plugin/src/index.ts",
+    "line": 215,
+    "excerpt": "213:       } catch (error) {\n214:         result = previous\n215:         throw error\n216:       }\n217:       const module = context.server.moduleGraph.getModuleById(resolvedVirtualModuleId)\n218:       if (module) context.server.moduleGraph.invalidateModule(module, undefined, context.timestamp)\n219:       context.server.ws.send({ type: 'full-reload', path: '*' })"
+  },
+  {
+    "path": "packages/vite-plugin/src/routes.ts",
+    "line": 81,
+    "excerpt": "79:   const directory = options.directory ?? options.routes\n80:   if (!directory) {\n81:     throw new Error('compile: irisoutRoutes requires directory or routes (scope limit)')\n82:   }\n83:   return directory\n84: }\n85: "
+  },
+  {
+    "path": "packages/vite-plugin/src/routes.ts",
+    "line": 138,
+    "excerpt": "136:     `  if (!__script__) return null;`,\n137:     `  const __route_id__ = __script__.getAttribute('data-irisout-route-id');`,\n138:     `  if (!__route_id__) throw new Error('irisout initial route state has no route id');`,\n139:     `  return { routeId: __route_id__, state: JSON.parse(__script__.textContent ?? '') };`,\n140:     `};`,\n141:     `const __irisout_page_for__ = async (routeId) => {`,\n142:     `  const __load__ = __irisout_pages__[routeId];`,"
+  },
+  {
+    "path": "packages/vite-plugin/src/routes.ts",
+    "line": 143,
+    "excerpt": "141:     `const __irisout_page_for__ = async (routeId) => {`,\n142:     `  const __load__ = __irisout_pages__[routeId];`,\n143:     `  if (!__load__) throw new Error('irisout route page module not found');`,\n144:     `  const __page__ = await __load__();`,\n145:     `  if (typeof __page__.hydrateComponent !== 'function') throw new Error('irisout route page module has no hydrateComponent');`,\n146:     `  return __page__;`,\n147:     `};`,"
+  },
+  {
+    "path": "packages/vite-plugin/src/routes.ts",
+    "line": 145,
+    "excerpt": "143:     `  if (!__load__) throw new Error('irisout route page module not found');`,\n144:     `  const __page__ = await __load__();`,\n145:     `  if (typeof __page__.hydrateComponent !== 'function') throw new Error('irisout route page module has no hydrateComponent');`,\n146:     `  return __page__;`,\n147:     `};`,\n148:     `const __irisout_render__ = async (response, match, containerElement) => {`,\n149:     `  const __page__ = await __irisout_page_for__(response.routeId);`,"
+  },
+  {
+    "path": "packages/vite-plugin/src/routes.ts",
+    "line": 156,
+    "excerpt": "154:           `    return __page__.hydrateComponent(document.documentElement, response.state);`,\n155:           `  }`,\n156:           `  if (containerElement === document.documentElement) throw new Error('irisout fragment page requires document navigation');`,\n157:         ]\n158:       : []),\n159:     `  containerElement.innerHTML = response.html;`,\n160:     `  return __page__.hydrateComponent(containerElement, response.state);`,"
+  },
+  {
+    "path": "packages/vite-plugin/src/routes.ts",
+    "line": 164,
+    "excerpt": "162:     `const __irisout_hydrate_initial__ = async (match, containerElement) => {`,\n163:     `  const __initial__ = __irisout_read_initial__();`,\n164:     `  if (!__initial__) throw new Error('irisout initial route state was not found');`,\n165:     `  if (__initial__.routeId !== match.route.id) throw new Error('irisout initial route state does not match URL');`,\n166:     `  return (await __irisout_page_for__(__initial__.routeId)).hydrateComponent(containerElement, __initial__.state);`,\n167:     `};`,\n168:     `const __irisout_fallback__ = (url) => window.location.assign(url.href);`,"
+  },
+  {
+    "path": "packages/vite-plugin/src/routes.ts",
+    "line": 165,
+    "excerpt": "163:     `  const __initial__ = __irisout_read_initial__();`,\n164:     `  if (!__initial__) throw new Error('irisout initial route state was not found');`,\n165:     `  if (__initial__.routeId !== match.route.id) throw new Error('irisout initial route state does not match URL');`,\n166:     `  return (await __irisout_page_for__(__initial__.routeId)).hydrateComponent(containerElement, __initial__.state);`,\n167:     `};`,\n168:     `const __irisout_fallback__ = (url) => window.location.assign(url.href);`,\n169:     `export const routeTable = __irisout_route_table__;`,"
+  },
+  {
+    "path": "packages/vite-plugin/src/routes.ts",
+    "line": 172,
+    "excerpt": "170:     `export const routeNavigator = createRouteNavigator({`,\n171:     `  table: __irisout_route_table__,`,\n172:     `  container: () => { const __element__ = __irisout_container__(); if (!__element__) throw new Error(${missingContainer}); return __element__; },`,\n173:     `  renderPage: __irisout_render__,`,\n174:     `  hydrateInitial: __irisout_hydrate_initial__,`,\n175:     `  fallback: __irisout_fallback__,`,\n176:     `});`,"
+  },
+  {
+    "path": "packages/vite-plugin/src/routes.ts",
+    "line": 380,
+    "excerpt": "378:       } catch (error) {\n379:         result = previous\n380:         throw error\n381:       }\n382:     },\n383:   }\n384: }"
+  },
+  {
+    "path": "packages/vite-plugin/src/ssr.ts",
+    "line": 45,
+    "excerpt": "43:   if (value === null || typeof value === 'string' || typeof value === 'boolean') return\n44:   if (typeof value === 'number') {\n45:     if (!Number.isFinite(value)) throw new TypeError('SSR state must contain finite JSON numbers')\n46:     return\n47:   }\n48:   if (typeof value !== 'object') throw new TypeError('SSR state must contain JSON values')\n49: "
+  },
+  {
+    "path": "packages/vite-plugin/src/ssr.ts",
+    "line": 48,
+    "excerpt": "46:     return\n47:   }\n48:   if (typeof value !== 'object') throw new TypeError('SSR state must contain JSON values')\n49: \n50:   if (seen.has(value)) throw new TypeError('SSR state must not contain cycles')\n51:   seen.add(value)\n52:   if (Array.isArray(value)) {"
+  },
+  {
+    "path": "packages/vite-plugin/src/ssr.ts",
+    "line": 50,
+    "excerpt": "48:   if (typeof value !== 'object') throw new TypeError('SSR state must contain JSON values')\n49: \n50:   if (seen.has(value)) throw new TypeError('SSR state must not contain cycles')\n51:   seen.add(value)\n52:   if (Array.isArray(value)) {\n53:     if (Object.getPrototypeOf(value) !== Array.prototype) {\n54:       throw new TypeError('SSR state must contain ordinary arrays')"
+  },
+  {
+    "path": "packages/vite-plugin/src/ssr.ts",
+    "line": 54,
+    "excerpt": "52:   if (Array.isArray(value)) {\n53:     if (Object.getPrototypeOf(value) !== Array.prototype) {\n54:       throw new TypeError('SSR state must contain ordinary arrays')\n55:     }\n56:     for (const key of Reflect.ownKeys(value)) {\n57:       if (key === 'length') continue\n58:       if ("
+  },
+  {
+    "path": "packages/vite-plugin/src/ssr.ts",
+    "line": 63,
+    "excerpt": "61:         Number(key) >= value.length\n62:       ) {\n63:         throw new TypeError('SSR state arrays must contain indexed values only')\n64:       }\n65:       const descriptor = Object.getOwnPropertyDescriptor(value, key)\n66:       if (!descriptor || !descriptor.enumerable || descriptor.get || descriptor.set) {\n67:         throw new TypeError('SSR state must contain data properties only')"
+  },
+  {
+    "path": "packages/vite-plugin/src/ssr.ts",
+    "line": 67,
+    "excerpt": "65:       const descriptor = Object.getOwnPropertyDescriptor(value, key)\n66:       if (!descriptor || !descriptor.enumerable || descriptor.get || descriptor.set) {\n67:         throw new TypeError('SSR state must contain data properties only')\n68:       }\n69:       assertJsonValue(value[Number(key)], seen)\n70:     }\n71:   } else {"
+  },
+  {
+    "path": "packages/vite-plugin/src/ssr.ts",
+    "line": 74,
+    "excerpt": "72:     const prototype = Object.getPrototypeOf(value)\n73:     if (prototype !== Object.prototype && prototype !== null) {\n74:       throw new TypeError('SSR state must contain plain JSON objects')\n75:     }\n76:     const record = value as Record<string, unknown>\n77:     for (const key of Reflect.ownKeys(value)) {\n78:       if (typeof key !== 'string')"
+  },
+  {
+    "path": "packages/vite-plugin/src/ssr.ts",
+    "line": 79,
+    "excerpt": "77:     for (const key of Reflect.ownKeys(value)) {\n78:       if (typeof key !== 'string')\n79:         throw new TypeError('SSR state must not contain symbol properties')\n80:       if (key === 'toJSON') throw new TypeError('SSR state must not contain toJSON properties')\n81:       const descriptor = Object.getOwnPropertyDescriptor(value, key)\n82:       if (!descriptor || !descriptor.enumerable || descriptor.get || descriptor.set) {\n83:         throw new TypeError('SSR state must contain data properties only')"
+  },
+  {
+    "path": "packages/vite-plugin/src/ssr.ts",
+    "line": 80,
+    "excerpt": "78:       if (typeof key !== 'string')\n79:         throw new TypeError('SSR state must not contain symbol properties')\n80:       if (key === 'toJSON') throw new TypeError('SSR state must not contain toJSON properties')\n81:       const descriptor = Object.getOwnPropertyDescriptor(value, key)\n82:       if (!descriptor || !descriptor.enumerable || descriptor.get || descriptor.set) {\n83:         throw new TypeError('SSR state must contain data properties only')\n84:       }"
+  },
+  {
+    "path": "packages/vite-plugin/src/ssr.ts",
+    "line": 83,
+    "excerpt": "81:       const descriptor = Object.getOwnPropertyDescriptor(value, key)\n82:       if (!descriptor || !descriptor.enumerable || descriptor.get || descriptor.set) {\n83:         throw new TypeError('SSR state must contain data properties only')\n84:       }\n85:       assertJsonValue(record[key], seen)\n86:     }\n87:   }"
+  },
+  {
+    "path": "packages/vite-plugin/src/ssr.ts",
+    "line": 95,
+    "excerpt": "93:   assertJsonValue(value, new Set())\n94:   const encoded = JSON.stringify(value)\n95:   if (encoded === undefined) throw new TypeError('SSR state must contain JSON values')\n96:   return encoded.replace(/[<>&\\u2028\\u2029]/g, (character) => {\n97:     if (character === '<') return '\\\\u003C'\n98:     if (character === '>') return '\\\\u003E'\n99:     if (character === '&') return '\\\\u0026'"
+  }
+]

@@ -10,9 +10,9 @@ export function createComponent() {
 
   const __MARKER_IDS__ = ["m0","m1"];
 
-  const __handler_m1_click = (e, ...__args) => { if (e.detail > 1) return;
+  const __handler_m1_click = (e, ...__args) => { let _write = false; try { if (e.detail > 1) return;
     const n = count + 1;
-    count = n;; update_count(); };
+    (count = n, _write = true, count); } finally { if (_write) { update_count(); } } };
 
   let __markers__;
   let __container__;
@@ -156,7 +156,7 @@ export function createComponent() {
 
   const __MARKER_IDS__ = ["m0","m1"];
 
-  const __handler_m1_click = (...__args) => { count = count + 1; update_count(); };
+  const __handler_m1_click = (...__args) => { { let _write = false; try { ((count = count + 1, _write = true, count)); } finally { if (_write) { update_count(); } } } };
 
   let __markers__;
   let __container__;

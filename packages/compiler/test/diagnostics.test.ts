@@ -125,9 +125,9 @@ export function Counter() {
   })
 
   it.each([
-    ['TryStatement', '    try {\n      count(count() + 1)\n    } catch {}'],
-    ['ForStatement', '    for (let index = 0; index < 1; index++) {\n      count(index)\n    }'],
-  ])('points unsupported %s handler syntax to the rejected statement', (statement, body) => {
+    ['generator', '    function* stream() { count(1); yield count(); }'],
+    ['outside function bodies', '    function stream(value = count()) { return value; }'],
+  ])('points unsupported %s function boundaries to their source location', (statement, body) => {
     const source = `export function App() {
   const count = signal(0)
   render(<button onClick={update}>{count()}</button>)
@@ -147,7 +147,7 @@ ${body}
     const diagnostic = caught as CompileDiagnostic
     expect(diagnostic.filePath).toBe('<source>')
     expect(diagnostic.line).toBe(5)
-    expect(diagnostic.column).toBe(5)
-    expect(diagnostic.message).toContain(`handler statement "${statement}"`)
+    expect(diagnostic.column).toBeGreaterThanOrEqual(5)
+    expect(diagnostic.message).toContain(statement)
   })
 })

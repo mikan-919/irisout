@@ -35,7 +35,7 @@ JSXタグを、既存のrender-tree走査(`compileComponent`)より前に実行�
   違反する形になる
 - **THEN** コンパイラは展開前ではなく展開後のASTに対して既存のscope
   limitエラーを出す(構造ユニットの静的兄弟との混在はコメントアンカーで
-  受理し、深すぎるネストなどの未対応範囲だけを拒否する)
+  受理する。構造ユニットの深さは固定値で制限せず、未対応範囲だけを拒否する)
 
 ### Requirement: propsのコンパイル時識別子置換
 コンパイラは、呼び出し先コンポーネントの分割代入パラメータ
@@ -139,8 +139,9 @@ signal/derivedに依存することを許可しなければならない(SHALL)�
 構造ユニットの条件式・配列式・ハンドラが同じ局所signalを参照または書き込む
 場合も許可しなければならない(SHALL)。生成コードは、局所signalを宣言した
 factoryの更新処理へ接続し、局所signalのDeclIdをrootの依存表へ漏らしては
-ならない(SHALL NOT)。ルートsignalの直接テキスト/属性依存、または字句的に
-参照できない別unitのローカルsignal依存は`scope limit`で拒否しなければ
+ならない(SHALL NOT)。ルートsignalの直接テキスト/属性依存は受理し、その依存を
+親の構造マーカーへ持ち上げてfactoryの更新へ接続しなければならない(SHALL)。
+字句的に参照できない別unitのローカルsignal依存は`scope limit`で拒否しなければ
 ならない(SHALL)。
 
 #### Scenario: ローカルsignalに依存する動的属性バインディングが動く
@@ -164,11 +165,14 @@ factoryの更新処理へ接続し、局所signalのDeclIdをrootの依存表へ
 - **THEN** コンパイラはscope limitエラーを出さず、祖先factoryの更新から
   内側unitの条件分岐・List・binding更新へ接続する
 
-#### Scenario: ルートsignalへの依存は引き続き拒否
+#### Scenario: ルートsignalへの依存を親の更新へ接続する
 - **WHEN** リストアイテム本体内のテキストマーカーがルートスコープの
   signal/derivedを直接参照する(インライン化を経由しない従来通りの形)
-- **THEN** コンパイラは`(scope limit)`を含むcompile errorで拒否する
-  (本changeで導入する許可の対象外)
+- **THEN** コンパイラは受理し、ルートsignalの更新時に一覧項目のテキストを更新する
+
+#### Scenario: 一覧項目の属性がルートsignalの変更へ追従する
+- **WHEN** 一覧項目の動的class属性がルートsignalを参照する
+- **THEN** 初期値を属性へ反映し、イベントによるルートsignalの変更後も属性を更新する
 
 ### Requirement: 字句スコープ外のローカルsignal依存を拒否
 コンパイラは、構造ユニットから参照できない別unitのローカルsignal/derivedを

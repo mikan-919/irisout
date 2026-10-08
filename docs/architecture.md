@@ -81,7 +81,7 @@ linked source + module-scope補助宣言
 `compileProject(entryPath, { target: 'ssr' })`は同じ解析結果から`ssrCode`を追加生成する。
 公開側は`irisout/ssr`の`irisoutSsr()`でこのtargetを選び、仮想moduleの`render(input)`から
 要求ごとのHTMLとstateを得る。SSRではrootの入力を要求ごとに複製し、必須入力を空objectで
-ビルド時実行しない。初期SSRは単一module入口に限り、構造unit内のsignal/derivedはscope limitで
+ビルド時実行しない。相対moduleをリンクした入口もSSRで受理し、構造unit内のsignal/derivedはscope limitで
 拒否する。構造unitは条件・一覧を初期HTMLへ展開してから対応するrange markerを残す。client生成物は
 `render()`が返したstateを`hydrateComponent(container, state)`または`mountComponent(container, state)`へ
 渡してsignal初期値を復元する。raw inputとの推測は行わない。相対moduleの補助宣言は要求ごとの

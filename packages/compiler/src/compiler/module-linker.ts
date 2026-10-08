@@ -51,7 +51,7 @@ export interface LinkedProject {
   source: string
   supportStatements: string[]
   supportNames: Set<string>
-  /** 相対module。初期SSRは単一ファイル入口に限定する。 */
+  /** 相対moduleを含むか。SSRでは補助宣言を要求ごとのrender内へ配置する。 */
   hasRelativeModule: boolean
   /** 外部moduleとViteの資源import。compilerのAST解析へ入れず生成moduleへ残す。 */
   externalImports: string[]

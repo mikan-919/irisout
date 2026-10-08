@@ -1,0 +1,2 @@
+{"label":"parameter initializer IIFE","compiled":true,"errors":["TypeError: value is not a function. (In 'value()', 'value' is 0)"]}
+{"label":"computed method name IIFE","compiled":true,"errors":["TypeError: value is not a function. (In 'value()', 'value' is 0)"]}

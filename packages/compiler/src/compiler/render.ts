@@ -1241,7 +1241,7 @@ function renderStructuralUnitBody(
     )
     if (leaksIntoAnotherLocalScope) {
       throw new Error(
-        'compile: attribute binding referencing a tracked signal inside a list item or conditional branch is not supported yet (scope limit)',
+        'compile: an attribute binding references a local signal outside its lexical scope (scope limit)',
       )
     }
     for (const d of b.deps) {
@@ -1277,7 +1277,7 @@ function renderStructuralUnitBody(
         : false
       if (leaksIntoAnotherLocalScope) {
         throw new Error(
-          'compile: referencing a tracked signal inside a list item or conditional branch is not supported yet (scope limit)',
+          'compile: a text binding references a local signal outside its lexical scope (scope limit)',
         )
       }
       for (const d of deps ?? []) {

@@ -1,0 +1,2 @@
+{"label":"parameter initializer IIFE","compiled":false,"error":"CompileDiagnostic: compile: signal references outside function bodies (parameter initializers, class fields, computed method names) are not supported yet (scope limit) [<source>:4:53]"}
+{"label":"computed method name IIFE","compiled":false,"error":"CompileDiagnostic: compile: signal references outside function bodies (parameter initializers, class fields, computed method names) are not supported yet (scope limit) [<source>:4:50]"}

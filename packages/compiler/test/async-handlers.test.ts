@@ -129,7 +129,7 @@ export function App() {
     expect(span?.textContent).toBe('error')
   })
 
-  it('rejects try/catch in a handler until its update ordering is specified', () => {
+  it('updates after an awaited write in try/catch', async () => {
     const source = `
 export function App() {
   const value = signal('before');
@@ -143,6 +143,11 @@ export function App() {
   }
 }
 `
-    expect(() => compile(source)).toThrow(/TryStatement.*scope limit/)
+    const mod = await loadGenerated(compile(source).code)
+    const container = createContainer()
+    ;(mod.mountComponent as (c: Element) => void)(container)
+    dispatchClick(container, container.querySelector('button'))
+    await flushPromiseCallbacks()
+    expect(container.querySelector('span')?.textContent).toBe('after')
   })
 })

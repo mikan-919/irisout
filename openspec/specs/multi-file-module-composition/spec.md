@@ -57,11 +57,16 @@ props object、汎用component runtimeを出力してはならない(SHALL NOT)�
 - **THEN** 既存の単一file APIはmodule解決を行わず、`compile:`エラーを返す
 
 ### Requirement: 未対応module機能の明示拒否
-外部specifier、未解決path、dynamic import、namespace/side-effect import、re-export、循環依存、トップレベル副作用、直接形でないトップレベルのstateは`compile:`で始まるエラーを返さなければならない(SHALL)。黙って無視してはならない(SHALL NOT)。
+未解決path、dynamic import、相対moduleのnamespace/side-effect import、re-export、循環依存、トップレベル副作用、直接形でないトップレベルのstateは`compile:`で始まるエラーを返さなければならない(SHALL)。黙って無視してはならない(SHALL NOT)。外部packageとVite資源のimportはリンク対象にせず、生成moduleへ保存しなければならない(SHALL)。
 
 #### Scenario: 未対応module構文を拒否する
-- **WHEN** module graphに外部import、dynamic import、re-export、循環依存、または二引数のmodule scope signalが含まれる
+- **WHEN** module graphにdynamic import、相対moduleのnamespace/side-effect import、re-export、循環依存、または二引数のmodule scope signalが含まれる
 - **THEN** compileProjectは生成物を作らず、原因を示す`compile:`エラーを返す
+
+#### Scenario: 外部importと資源importを保存する
+- **WHEN** module graphが外部package、CSS、`?url`、`?worker`をimportする
+- **THEN** compileProjectはimportを生成moduleへ残し、相対資源のpathを監視対象へ含める
+- **AND** 外部packageの本体をirisoutの部品として解析しない
 
 #### Scenario: module共有signalを受理する
 - **WHEN** module graphに単純な`const count = signal(initial)`が含まれ、componentがcountを読む

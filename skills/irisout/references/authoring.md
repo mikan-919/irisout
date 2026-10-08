@@ -54,7 +54,7 @@ export function Counter() {
 ## Supported behavior
 
 - Dynamic text and ordinary attributes.
-- Direct DOM event handlers, including block-bodied handlers within the accepted statement set.
+- Direct DOM event handlers. Check the installed version before using expanded function bodies.
 - Keyed lists written as direct `.map()` expressions. Update arrays with `signal((previous) => next)` and use JSX `key` for identity.
 - Ternary and `&&` conditional rendering, including nested structural units.
 - `use=` actions with optional update and destroy behavior.
@@ -65,8 +65,8 @@ export function Counter() {
 
 - This is not React. Do not import React, hooks, or a JSX runtime.
 - `compileProject()` follows relative `.js`, `.jsx`, `.ts`, and `.tsx` modules. External libraries and Vite resource imports pass through to Vite; irisout does not compile their internals.
-- Handler control flow such as unsupported `try/catch/finally`, loops, or switches may be rejected when update placement cannot be determined statically.
-- Inside a handler or action, use a `const` arrow function for an event listener. Nested function declarations are rejected as `handler statement "FunctionDeclaration" ... (scope limit)`. Remove the same listener in the action's `destroy` callback.
+- The unpublished source supports loops, switches, `try/catch/finally`, local function declarations and methods, and value returns in handlers and callbacks. It preserves callback results and flushes writes when the executed function completes, including return and throw paths. Released 0.3.7 still restricts statement forms and rejects nested function declarations; use a `const` arrow listener with that release. Remove the same listener in the action's `destroy` callback.
+- Remaining source limits include terminal cleanup/result returns in action and `onMount` initialization bodies, simple event parameters, direct calls through untracked parameter or alias function values, state accesses outside function bodies (such as default parameters or class fields), and generator update boundaries. See `docs/events-and-actions.md` in the source repository for the accepted forms; do not treat all JavaScript syntax as validated.
 - Request cancellation, stale-result selection, Worker protocols, persistence, routing, and external-service behavior belong to application code.
 - Per-request server rendering is available through `irisout/ssr` and `irisout/hono`; `irisout/hono/vite` connects file routes to browser navigation. These are separate from the standard `irisout/vite` client-build entry. For Hono document pages without `index.html`, set `build.rollupOptions.input` to `{}`. The Hono plugin serves page GET requests during development; application API routes need a separate development adapter or proxy.
 - Portals and component-level error recovery are outside the supported boundary. Motion is an optional extension through `irisout/motion` and `irisout/motion/vite`.

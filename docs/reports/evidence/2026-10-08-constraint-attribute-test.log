@@ -1,0 +1,9 @@
+$ vp test --run packages/compiler/test/dynamic-attrs.test.ts -t "updates an item-scoped attribute expression referencing a root signal"
+
+ RUN  v4.1.11 /home/nixos/ghq/github.com/mikan-919/irisout
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 7 skipped (8)
+   Start at  14:53:04
+   Duration  765ms (transform 172ms, setup 0ms, import 582ms, tests 89ms, environment 0ms)

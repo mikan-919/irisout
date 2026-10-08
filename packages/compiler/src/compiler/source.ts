@@ -1154,7 +1154,7 @@ export function compileSource(source: string, options: CompileOptions = {}): Com
   const emittedFns = [...ctx.trackedFns.values()].map((f) => ({
     name: f.name,
     params: f.paramSource,
-    body: f.rendered,
+    body: f.finalize(resolveUpdateCall),
     async: f.async,
   }))
   const signalState =
