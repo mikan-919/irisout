@@ -81,7 +81,7 @@
     },
     "packages/irisout": {
       "name": "irisout",
-      "version": "0.3.6",
+      "version": "0.3.7",
       "peerDependencies": {
         "hono": ">=4.0.0",
         "motion": "13.4.x",

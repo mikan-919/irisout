@@ -3,9 +3,11 @@
 実装の現在地、完了した段階、既知の制約を記録する。設計判断は`docs/adr/`、受入条件は
 `openspec/specs/`、今後の作業は`ROADMAP.md`を正本とする。
 
-## 現在地（2026-10-05）
+## 現在地（2026-10-06）
 
-2026-10-05にjjの変更確定・送信前検査を追加した。`bun run jj:install`でリポジトリに`jj ci`・`jj finish`・`jj push`を登録し、静的検査と試験の失敗時は処理を中止する。jj本体にはフックがないため、組み込みコマンドの直接実行には介入しない。検査対象は現在の作業コピーであり、送信履歴ごとの隔離検査は行わない。手順は`docs/jj-hooks.md`にある。
+2026-10-06にJujutsu用の別名、スクリプト、文書を削除し、Git運用へ戻した。ローカル`main`を現在の履歴まで早送りして既存コミットを保ち、変更確定時はHuskyのpre-commitフックから`bun run check`と`bun run test`を実行する。
+
+2026-10-08にTodoMVCベンチマークをReactと同じ初期表示条件で測定し直した。件数100、1,000、10,000のmount・update・delete・unmountの18項目で、生成コードはReact以下の実行時間となった。イベント委譲と一覧操作を改善し、転送量とヒープ使用量も削減した。詳細は`packages/irisout/CHANGELOG.md`に記録した。
 
 2026-10-05にタグpushからの公開手順を追加した。版更新と照合、既存CI、npm公開、公開版の隔離導入検査、GitHubリリース作成を接続した。手動実行は公開の予行だけを行う。npmの信頼された公開元として`mikan-919/irisout`の`release.yml`を登録した。全341試験、型検査、Actionsの構文検査を通過し、GitHub上の[予行](https://github.com/mikan-919/irisout/actions/runs/37298050619)も成功した。予行中に既存のPlayground色分け試験の失敗を確認し、比較用テキストを可視範囲へ置いて描画を待つよう修正した。OIDCによる実公開は次回の公開タグから実行する。手順は`docs/releasing.md`にある。
 
@@ -36,7 +38,7 @@
 
 公開物は`packages/irisout`の単一パッケージである。コンパイラ、実行時処理、Vite連携の
 ソースは責務別のディレクトリに置くが、内部パッケージとしては梱包しない。旧JavaScript実装は
-移植完了により削除した。履歴はJujutsuとGitから参照できる。
+移植完了により削除した。履歴はGitから参照できる。
 
 公式サイトと共有Playgroundの計画は、第0段階（文書8分類、Counter・List・SVGの例、
 `docs/getting-started.md`の正本、SSR入口、hydrate state、限定共有、投稿JSXの非実行）の範囲を

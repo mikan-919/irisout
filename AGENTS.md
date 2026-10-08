@@ -3,15 +3,14 @@ COMMENT in Japanese
 
 The session directory contains a history of your previous actions; if necessary, use grep or a similar tool to narrow down your search.
 
-## jj の作業保存・変更確定・送信
+## Gitでの作業と変更の確定
 
-- Gitリポジトリがjj管理下にない場合は、`jj git init --colocate`で初期化する。
-- 初回は`bun run jj:install`で、このリポジトリに検査付きの別名を登録する。
-- 作業途中とユーザーへ応答する前は`jj status`で作業コピーを保存する。この操作では検査を実行しない。
-- 変更確定には`jj ci -m "<英語命令形の要約>"`または`jj finish -m "<英語命令形の要約>"`を使う。静的検査・型検査・試験を通してから、変更を確定して次の作業コピーを作成する。
-- 送信には`jj push`を使う。送信対象は`--bookmark`などで指定する。
-- 検査失敗時は原因を修正する。検査を回避する目的で`jj commit`、`jj describe`と`jj new`の組み合わせ、`jj git push`を直接使わない。jj本体はGitフックを実行しないため、これらの操作では検査が走らない。
-- 検査対象は現在の作業コピー全体である。別の履歴を送信するときは、その変更を作業コピーに開いて検査する。詳細は`docs/jj-hooks.md`を参照する。
+- このプロジェクトのバージョン管理にはGitだけを使う。Jujutsu（`jj`）は使わず、初期化や別名の登録もしない。
+- 作業前、作業中、確定前に`git status --short --branch`で状態を確認する。
+- 確定する変更を`git add`し、差分を確認してから`git commit -m "<英語命令形の要約>"`を使う。
+- Gitのpre-commitフックが`bun run check`と`bun run test`を実行する。失敗した場合は原因を直してから再度確定する。`HUSKY=0`などで検査を飛ばさない。
+- 送信には`git push`を使う。送信前にブランチと送信先を確認する。
+- ユーザーへ応答する前に`git status --short --branch`で作業状態を確認する。
 
 ## ドキュメントの役割分担
 

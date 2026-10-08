@@ -10,9 +10,9 @@ bun run release:prepare 0.3.7
 
 ```bash
 bun run release:check v0.3.7
-jj describe -m "Prepare irisout 0.3.7 release"
-jj new
-jj bookmark set main -r @-
+git status --short --branch
+git add -A
+git commit -m "Prepare irisout 0.3.7 release"
 git tag v0.3.7 main
 git push --atomic origin main refs/tags/v0.3.7
 ```
