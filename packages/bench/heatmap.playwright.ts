@@ -222,7 +222,13 @@ async function measureSource(
 async function checkInteractions(
   browser: Awaited<ReturnType<typeof chromium.launch>>,
   origin: string,
-): Promise<{ keyboardResponseMs: number; statusDuringComposition: string; scoreText: string }> {
+): Promise<{
+  keyboardResponseMs: number
+  statusDuringComposition: string
+  scoreText: string
+  statusAfterOverLimitInput: string
+  tokenScoreAfterOverLimitInput: string
+}> {
   const page = await openHeatmapPage(browser, origin)
   try {
     const keyboardResponseMs = await page.evaluate(() => {
@@ -256,7 +262,46 @@ async function checkInteractions(
       textarea.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true }))
     })
     await waitForCompleted(page, 1)
-    return { keyboardResponseMs, statusDuringComposition, scoreText }
+
+    const validLongInput = makeSource(MAX_PARAGRAPHS)
+    const statusAfterOverLimitInput = await page.evaluate(
+      ({ validLongInput, overLimitInput }) => {
+        const textarea = document.querySelector('textarea')
+        if (!(textarea instanceof HTMLTextAreaElement)) throw new Error('textareaがありません')
+        textarea.value = validLongInput
+        textarea.dispatchEvent(new Event('input', { bubbles: true }))
+        textarea.value = overLimitInput
+        textarea.dispatchEvent(new Event('input', { bubbles: true }))
+        return document.querySelector('.analysis-status')?.textContent ?? ''
+      },
+      { validLongInput, overLimitInput: '長文'.repeat(MAX_CHARS / 2 + 1) },
+    )
+    if (!statusAfterOverLimitInput.includes('解析対象が上限を超えています')) {
+      throw new Error(`上限超過を表示しません: ${statusAfterOverLimitInput}`)
+    }
+    await page.waitForTimeout(1_500)
+    const currentStatus = (await page.locator('.analysis-status').textContent()) ?? ''
+    if (
+      !currentStatus.includes('解析対象が上限を超えています') ||
+      !currentStatus.includes('単語数 0')
+    ) {
+      throw new Error(`上限超過後に古い解析結果が残っています: ${currentStatus}`)
+    }
+    await page.locator('.metric-controls button').nth(2).click()
+    const tokenScoreAfterOverLimitInput =
+      (await page.locator('#paragraph-1 .paragraph-score').textContent()) ?? ''
+    if (!tokenScoreAfterOverLimitInput.includes('解析語数: 0')) {
+      throw new Error(
+        `上限超過後の解析語数が初期化されていません: ${tokenScoreAfterOverLimitInput}`,
+      )
+    }
+    return {
+      keyboardResponseMs,
+      statusDuringComposition,
+      scoreText,
+      statusAfterOverLimitInput: currentStatus,
+      tokenScoreAfterOverLimitInput,
+    }
   } finally {
     await page.close()
   }

@@ -210,6 +210,31 @@ describe('apps/demos/heatmap.jsx', () => {
       worker.emitError()
       expect(container.querySelector('.analysis-status')?.textContent).toContain('解析に失敗')
 
+      const analyzeCountBeforeLimit = worker.messages.filter(
+        (message) => message.type === 'analyze',
+      ).length
+      textarea.value = '長文'.repeat(12_501)
+      textarea.dispatchEvent(new textarea.ownerDocument.defaultView!.Event('input'))
+      expect(worker.messages.filter((message) => message.type === 'analyze')).toHaveLength(
+        analyzeCountBeforeLimit,
+      )
+      expect(container.querySelector('.analysis-status')?.textContent).toContain(
+        '解析対象が上限を超えています',
+      )
+      expect(container.querySelector('.analysis-status')?.textContent).toContain('単語数 0')
+      click(container, '.metric-controls button:nth-of-type(3)')
+      expect(container.querySelector('#paragraph-1 .paragraph-score')?.textContent).toContain(
+        '解析語数: 0',
+      )
+      expect(container.querySelector('#paragraph-1 .paragraph-reason')?.textContent).toContain(
+        'Workerの解析結果を待っています',
+      )
+      worker.emit({ type: 'result', requestId: 4, tokenCount: 99, elapsedMs: 1 })
+      expect(container.querySelector('.analysis-status')?.textContent).toContain('単語数 0')
+      expect(container.querySelector('#paragraph-1 .paragraph-score')?.textContent).toContain(
+        '解析語数: 0',
+      )
+
       instance.unmount()
       expect(worker.messages.at(-1)).toEqual({ type: 'dispose' })
       expect(worker.terminated).toBe(true)

@@ -117,6 +117,10 @@ export function HeatmapApp() {
       dictionaryUrl: analysisDictionaryUrl,
       getSource: () => source(),
       onStatus: (status) => analysisStatus(status),
+      onClearResults: () => {
+        tokenCount(0)
+        analysisResults({})
+      },
       onResult: (result) => {
         tokenCount(result.tokenCount)
         analysisResults(

@@ -7,12 +7,14 @@ export function startHeatmapAnalysis({
   dictionaryUrl,
   getSource,
   onStatus,
+  onClearResults,
   onResult,
 }) {
   const worker = new Worker()
   let disposed = false
   let workerReady = false
   let composing = false
+  let hasAnalysis = false
   let requestId = 0
   let latestRequestId = 0
 
@@ -21,15 +23,22 @@ export function startHeatmapAnalysis({
     return source.length <= 25_000 && paragraphCount <= 300
   }
 
+  const clearAnalysis = () => {
+    if (!hasAnalysis) return
+    hasAnalysis = false
+    onClearResults()
+  }
+
   const requestAnalysis = () => {
     if (disposed || composing || !workerReady) return
     const source = getSource()
+    const nextRequestId = ++requestId
+    latestRequestId = nextRequestId
+    clearAnalysis()
     if (!canAnalyze(source)) {
       onStatus('解析対象が上限を超えています')
       return
     }
-    const nextRequestId = ++requestId
-    latestRequestId = nextRequestId
     onStatus('解析中')
     worker.postMessage({ type: 'analyze', requestId: nextRequestId, source })
   }
@@ -41,6 +50,7 @@ export function startHeatmapAnalysis({
       onStatus('解析準備完了')
       requestAnalysis()
     } else if (event.data?.type === 'result' && event.data.requestId === latestRequestId) {
+      hasAnalysis = true
       onResult(event.data)
       onStatus(`解析完了 (${event.data.elapsedMs.toFixed(2)}ms)`)
     } else if (
