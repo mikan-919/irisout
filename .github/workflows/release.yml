@@ -64,7 +64,15 @@ jobs:
         run: bunx npm@11.19.0 publish "$RUNNER_TEMP/irisout-$RELEASE_VERSION.tgz" --access public --dry-run --force
       - name: Verify public package
         if: github.event_name == 'push'
-        run: bun run registry:smoke
+        run: |
+          for attempt in {1..12}; do
+            if bun run registry:smoke; then
+              exit 0
+            fi
+            if (( attempt == 12 )); then exit 1; fi
+            echo "npm公開版の反映を待って再試行します (${attempt}/12)"
+            sleep 10
+          done
       - name: Create GitHub release
         if: github.event_name == 'push'
         env:
