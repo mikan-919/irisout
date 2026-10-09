@@ -10,6 +10,8 @@ unit instanceのunmountへcleanupを接続する。`effect`とcontextは対象�
 ルートcomponentの動きゾーンにある`onMount`は、0引数arrow callbackを受理しなければ
 ならない(SHALL)。callbackはcomponent instanceのmountまたはhydrate完了後に一度だけ
 実行されなければならない(SHALL)。
+callbackは同期関数に限る。非同期callbackは位置付きのscope limit診断で拒否し、
+`async`を落としたコードを生成してはならない(SHALL NOT)。
 
 #### Scenario: mount後にcallbackを実行する
 
@@ -20,6 +22,31 @@ unit instanceのunmountへcleanupを接続する。`effect`とcontextは対象�
 
 - **WHEN** root componentが`onMount(() => { ... })`を含み既存HTMLへhydrateされる
 - **THEN** hydrate完了後にcallbackが一度実行される
+
+### Requirement: callbackの制御フローと返却
+
+コンパイラはcallbackの分岐や例外処理内の返却を受理し、本体と返却を同じ関数内に
+保持しなければならない(SHALL)。各返却は値なし、void、または引数なしの後始末関数に限る。
+条件式の各枝も同じ返却形を満たさなければならない(SHALL)。
+書込み後の返却と例外でも終了時に状態を反映し、作者の`finally`を先に実行する。
+後始末関数の作成だけではその内部の書込みを反映せず、後始末にはDOM更新を挿入しない。
+式本体の`onMount(() => setup())`は従来どおり返り値を破棄する。
+
+#### Scenario: 分岐内で書込みと後始末を返す
+
+- **WHEN** callbackが分岐内でsignalを書き換え、局所変数を参照する後始末関数を返す
+- **THEN** 終了時に状態を反映し、返った後始末だけを保持する
+- **AND** 後始末は本体の局所変数を参照できる
+
+#### Scenario: 書込み前の返却
+
+- **WHEN** callbackが書込みも追跡補助関数呼出しも行わずに値なしで返す
+- **THEN** そのcallbackの書込みを理由とするDOM更新やeffect再実行を行わない
+
+#### Scenario: 途中返却の形を検証する
+
+- **WHEN** callbackが分岐内からobjectまたは引数付き関数を返す
+- **THEN** scope limit診断で拒否する
 
 ### Requirement: cleanup ownership
 

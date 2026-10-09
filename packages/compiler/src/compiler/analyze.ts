@@ -156,7 +156,9 @@ function parseGeneratedFunctionBody(
   originalFunction: t.Node | null,
 ): t.BlockStatement {
   const trimmed = code.trim()
-  const body = trimmed.startsWith('{') ? trimmed : `{ return (${trimmed}); }`
+  const body = stripSourceMapMarkers(trimmed).trim().startsWith('{')
+    ? trimmed
+    : `{ return (${trimmed}); }`
   const privateNames = new Set<string>()
   if (originalFunction)
     t.traverseFast(originalFunction, (node) => {
@@ -258,6 +260,8 @@ function ensureTrackedFn(ctx: CompilerState, name: string, instanceId: number): 
     paramSource,
     async: fnPath.node.async,
     finalize: () => '',
+    finalizeCleanup: () => '',
+    node: fnPath.node,
     allWriteDeclIds: new Set(),
     allCollectionWriteDeclIds: new Set(),
     writeDeclIds: new Set(),
@@ -267,13 +271,57 @@ function ensureTrackedFn(ctx: CompilerState, name: string, instanceId: number): 
   ctx.trackedFns.set(name, entry)
   const stmts = fnPath.get('body.body') as NodePath<t.Statement>[]
   if (stmts.length === 0) return
-  const core = analyzeActionStatements(ctx, stmts, instanceId, true, false, fnPath.node.async)
+  const core = analyzeActionStatements(ctx, stmts, instanceId, false, fnPath.node.async)
   entry.finalize = core.finalize
+  entry.finalizeCleanup = () => core.finalize(NO_HELPER_UPDATE)
   entry.allWriteDeclIds = core.writeDeclIds
   entry.allCollectionWriteDeclIds = core.allCollectionWriteDeclIds
   entry.writeDeclIds = core.directWriteDeclIds
   entry.directCollectionWriteDeclIds = core.directCollectionWriteDeclIds
   entry.calleeNames = core.calleeNames
+}
+
+// 呼び出した局所関数の読み取りだけを依存へ合流する。宣言や返却した
+// 閉包の作成は本体を実行しないため、内側の関数は呼出し先としてのみ辿る。
+function collectCalledReads(
+  ctx: CompilerState,
+  path: NodePath<t.Function>,
+  instanceId: number,
+  out: Set<DeclId>,
+  visited: Set<t.Function> = new Set(),
+): void {
+  if (visited.has(path.node)) return
+  visited.add(path.node)
+  const body = path.get('body') as NodePath<t.Node>
+  const visit = (idPath: NodePath<t.Identifier>) => {
+    if (!idPath.isReferencedIdentifier()) return
+    const parent = idPath.parentPath
+    const call = parent?.isCallExpression() && parent.node.callee === idPath.node
+    const id = resolveDeclId(ctx, idPath, instanceId)
+    if (id) {
+      if (!call || parent.node.arguments.length === 0) out.add(id)
+      return
+    }
+    if (!call) return
+    const binding = idPath.scope.getBinding(idPath.node.name)
+    const fn = binding?.path.isFunctionDeclaration()
+      ? binding.path
+      : binding?.path.isVariableDeclarator()
+        ? binding.path.get('init')
+        : null
+    if (fn && !Array.isArray(fn) && fn.isFunction())
+      collectCalledReads(ctx, fn, instanceId, out, visited)
+  }
+  if (body.isIdentifier()) visit(body)
+  if (!body.isFunction())
+    body.traverse({
+      Function(inner) {
+        if (inner.parentPath?.isCallExpression() && inner.parentPath.node.callee === inner.node)
+          collectCalledReads(ctx, inner, instanceId, out, visited)
+        inner.skip()
+      },
+      Identifier: visit,
+    })
 }
 
 // 呼び出しグラフを visited-set で辿り、名前集合から到達可能な追跡関数の
@@ -492,26 +540,12 @@ export function analyzeHandlerExpr(
 ): HandlerAnalysis {
   const scope = analyzeActionExprScope(ctx, exprPath, instanceId, false, false)
   return {
-    rendered: scope.finalize(NO_ACTION_UPDATE),
+    rendered: scope.finalize(NO_ACTION_RENDER),
     finalize: scope.finalize,
     writeDeclIds: scope.writeDeclIds,
     directCollectionWriteDeclIds: scope.allCollectionWriteDeclIds,
     sourceStart: exprPath.node.start!,
   }
-}
-
-// 初期化本体の末尾returnは別途cleanupとして出力するため、ここでは
-// 関数境界を越えないreturnだけを検査する。通常の関数には文種制限を設けない。
-function collectReturnStarts(stmt: NodePath<t.Statement>, out: number[]): void {
-  if (stmt.isReturnStatement()) out.push(stmt.node.start!)
-  stmt.traverse({
-    Function(path) {
-      path.skip()
-    },
-    ReturnStatement(path) {
-      out.push(path.node.start!)
-    },
-  })
 }
 
 // analyzeHandlerExpr の文レベル版(design D5)。単一式向けの visit をそのまま
@@ -535,9 +569,9 @@ export function analyzeHandlerBody(
   }
   // callback自身の関数出口で更新する。外側には直接実行する書込みだけを
   // 合流し、Promise完了前やリスナー登録時に更新を発火させない。
-  const scope = analyzeActionStatements(ctx, stmts, instanceId, true, false)
+  const scope = analyzeActionStatements(ctx, stmts, instanceId, false)
   return {
-    rendered: scope.finalize(NO_ACTION_UPDATE),
+    rendered: scope.finalize(NO_ACTION_RENDER),
     finalize: scope.finalize,
     writeDeclIds: scope.writeDeclIds,
     directCollectionWriteDeclIds: scope.allCollectionWriteDeclIds,
@@ -577,6 +611,17 @@ function analyzeActionIdentifier(
       ast ? (path, name) => ast.rename(path.node, name) : undefined,
     )
     const parent = idPath.parentPath
+    if (parent?.isCallExpression() && parent.node.callee === idPath.node) {
+      const binding = idPath.scope.getBinding(idPath.node.name)
+      const local = binding?.path.isFunctionDeclaration()
+        ? binding.path
+        : binding?.path.isVariableDeclarator()
+          ? binding.path.get('init')
+          : null
+      if (local && !Array.isArray(local) && local.isFunction()) {
+        collectCalledReads(ctx, local, instanceId, readDeclIds)
+      }
+    }
     const fn = ctx.trackedFns.get(idPath.node.name)
     if (
       dirtyName &&
@@ -711,6 +756,145 @@ interface ActionScopeAnalysis {
   allCollectionWriteDeclIds: Set<DeclId>
 }
 
+interface FunctionReference {
+  path: NodePath<t.Identifier>
+  functionPath: NodePath<t.Function>
+  movement: boolean
+  call: boolean
+}
+
+function recordFunctionReference(
+  ctx: CompilerState,
+  path: NodePath<t.Identifier>,
+  instanceId: number,
+  out: FunctionReference[],
+): void {
+  const binding = path.scope.getBinding(path.node.name)
+  const fn = binding?.path.isFunctionDeclaration()
+    ? binding.path
+    : binding?.path.isVariableDeclarator()
+      ? binding.path.get('init')
+      : null
+  if (!fn || Array.isArray(fn) || !fn.isFunction()) return
+  const movement = ctx.movementFns.get(path.node.name)?.node === fn.node
+  if (!movement && !ctx.analyzedFunctions.has(fn.node)) return
+  if (movement) ensureTrackedFn(ctx, path.node.name, instanceId)
+  out.push({
+    path,
+    functionPath: fn,
+    movement,
+    call: !!path.parentPath?.isCallExpression() && path.parentPath.node.callee === path.node,
+  })
+}
+
+function finalizeFunctionReferences(
+  ctx: CompilerState,
+  refs: FunctionReference[],
+  resolve: ResolveUpdateCall,
+  edits: Edit[],
+  ast: AstRewriteSession | null,
+): void {
+  const cleanup = resolve === NO_ACTION_UPDATE || resolve === NO_HELPER_UPDATE
+  for (const ref of refs) {
+    if (!ref.call) {
+      const parent = ref.path.parentPath
+      const callee = parent?.isCallExpression() ? parent.node.callee : null
+      // listener解除へ渡す関数は、登録時と同じ参照をそのまま保持する。
+      const preservesIdentity =
+        callee?.type === 'MemberExpression' &&
+        !callee.computed &&
+        callee.property.type === 'Identifier' &&
+        callee.property.name === 'removeEventListener'
+      const pureRead =
+        parent?.isUnaryExpression({ operator: 'typeof' }) ||
+        (parent?.isBinaryExpression() && ['===', '!=='].includes(parent.node.operator)) ||
+        (parent?.isMemberExpression() &&
+          parent.node.object === ref.path.node &&
+          !(parent.parentPath?.isCallExpression() && parent.parentPath.node.callee === parent.node))
+      if (!pureRead && ((cleanup && !preservesIdentity) || (!cleanup && ref.movement)))
+        throw compileErrorAtNode(
+          'compile: passing tracked function values for deferred execution is not supported yet (scope limit)',
+          ref.path,
+        )
+      continue
+    }
+    if (!cleanup) {
+      if (ast) ast.rename(ref.path.node, ref.path.node.name)
+      continue
+    }
+    const binding = ref.path.scope.getBinding(ref.path.node.name)
+    if (binding && !binding.constant)
+      throw compileErrorAtNode(
+        'compile: calling reassigned functions from cleanup is not supported yet (scope limit)',
+        ref.path,
+      )
+    let name = ctx.cleanupFunctionNames.get(ref.functionPath.node)
+    if (!name) {
+      name = ref.functionPath.scope.generateUidIdentifier(`cleanup_${ref.path.node.name}`).name
+      ctx.cleanupFunctionNames.set(ref.functionPath.node, name)
+    }
+    const start = ref.path.node.start!
+    const end = ref.path.node.end!
+    for (let i = edits.length - 1; i >= 0; i--)
+      if (edits[i]!.start === start && edits[i]!.end === end) edits.splice(i, 1)
+    edits.push({ start, end, text: name })
+    if (ast) ast.rename(ref.path.node, name)
+  }
+}
+
+function cleanupLocalDeclarations(
+  ctx: CompilerState,
+  scopes: ReturnType<typeof analyzeFunctionBodyScope>[],
+  edits: Edit[],
+  ast: AstRewriteSession | null,
+): void {
+  const emitted = new Set<t.Function>()
+  for (;;) {
+    let changed = false
+    for (const scope of scopes) {
+      if (!scope.parent || !t.isFunction(scope.parent) || emitted.has(scope.parent)) continue
+      const name = ctx.cleanupFunctionNames.get(scope.parent)
+      if (!name) continue
+      emitted.add(scope.parent)
+      const body = scope.finalize(NO_HELPER_UPDATE)
+      const fn = scope.parent
+      if (t.isFunctionDeclaration(fn)) {
+        const params = fn.params.length
+          ? ctx.source.slice(fn.params[0]!.start!, fn.params.at(-1)!.end!)
+          : ''
+        const code = `${fn.async ? 'async ' : ''}function ${name}(${params}) ${body}`
+        edits.push({ start: fn.end!, end: fn.end!, text: `; ${code}` })
+        if (ast)
+          ast.insertAfter(fn, scope.functionPath.parentPath?.node ?? null, () => {
+            const parsed = parseGeneratedExpression(code) as t.FunctionExpression
+            return t.functionDeclaration(
+              t.identifier(name),
+              parsed.params,
+              parsed.body,
+              parsed.generator,
+              parsed.async,
+            )
+          })
+      } else {
+        const code = `${ctx.source.slice(fn.start!, scope.start)}${body}${ctx.source.slice(scope.end, fn.end!)}`
+        const declarator = scope.functionPath.parentPath
+        if (!declarator?.isVariableDeclarator()) continue
+        edits.push({
+          start: declarator.node.end!,
+          end: declarator.node.end!,
+          text: `, ${name} = ${code}`,
+        })
+        if (ast)
+          ast.insertAfter(declarator.node, declarator.parentPath.node, () =>
+            t.variableDeclarator(t.identifier(name), parseGeneratedExpression(code)),
+          )
+      }
+      changed = true
+    }
+    if (!changed) return
+  }
+}
+
 // 文種ごとの許可表ではなく、関数の本体を更新境界として解析する。
 // 内側の関数は本体だけを別に変換するため、関数の作成と実行を混同せず、
 // this・arguments・new.targetなど元の呼出し文脈を保持する。
@@ -718,36 +902,17 @@ function analyzeActionStatements(
   ctx: CompilerState,
   stmts: NodePath<t.Statement>[],
   instanceId: number,
-  allowValueReturn: boolean,
   trackSharedWrites = true,
   flushOwnWrites = true,
+  resultScopes: Map<t.Node, ReturnType<typeof analyzeFunctionBodyScope>> = new Map(),
 ): ActionScopeAnalysis {
-  // cleanupを本体から分離する初期化経路だけは、途中の値returnを受けない。
-  if (!allowValueReturn) {
-    for (const stmt of stmts) {
-      if (stmt.isFunctionDeclaration()) continue
-      const check = (path: NodePath<t.ReturnStatement>) => {
-        if (path.node.argument)
-          throw new Error(
-            'compile: a lifecycle initialization return must be its final cleanup result (scope limit)',
-          )
-      }
-      if (stmt.isReturnStatement()) check(stmt)
-      stmt.traverse({
-        Function(path) {
-          path.skip()
-        },
-        ReturnStatement: check,
-      })
-    }
-  }
-  const dirtyName =
-    allowValueReturn && flushOwnWrites ? stmts[0]!.scope.generateUidIdentifier('write').name : null
+  const dirtyName = flushOwnWrites ? stmts[0]!.scope.generateUidIdentifier('write').name : null
 
   const readDeclIds = new Set<DeclId>()
   const directWriteDeclIds = new Set<DeclId>()
   const directCollectionWriteDeclIds = new Set<DeclId>()
   const calleeNames = new Set<string>()
+  const functionReferences: FunctionReference[] = []
   const edits: Edit[] = []
   const nestedScopes: ReturnType<typeof analyzeFunctionBodyScope>[] = []
   const astRoot = statementProgram(stmts)
@@ -765,9 +930,9 @@ function analyzeActionStatements(
       })
     collectContextCalls(ctx, stmt as NodePath<t.Node>, readDeclIds, edits, null, ast, null, astRoot)
   }
-  let firstWriteStart: number | null = null
 
-  const visit = (idPath: NodePath<t.Identifier>) =>
+  const visit = (idPath: NodePath<t.Identifier>) => {
+    recordFunctionReference(ctx, idPath, instanceId, functionReferences)
     analyzeActionIdentifier(
       ctx,
       instanceId,
@@ -776,17 +941,14 @@ function analyzeActionStatements(
       readDeclIds,
       directWriteDeclIds,
       directCollectionWriteDeclIds,
-      (pos) => {
-        if (firstWriteStart == null || pos < firstWriteStart) {
-          firstWriteStart = pos
-        }
-      },
+      () => {},
       calleeNames,
       astRoot,
       ast,
       trackSharedWrites,
       dirtyName,
     )
+  }
 
   const captureNested = (
     fnPath: NodePath<
@@ -798,7 +960,12 @@ function analyzeActionStatements(
       | t.ClassPrivateMethod
     >,
   ) => {
-    nestedScopes.push(analyzeFunctionBodyScope(ctx, fnPath, instanceId, trackSharedWrites))
+    if (fnPath.parentPath?.isCallExpression() && fnPath.parentPath.node.callee === fnPath.node)
+      collectCalledReads(ctx, fnPath, instanceId, readDeclIds)
+    nestedScopes.push(
+      resultScopes.get(fnPath.node) ??
+        analyzeFunctionBodyScope(ctx, fnPath, instanceId, trackSharedWrites),
+    )
     fnPath.skip()
   }
 
@@ -816,18 +983,6 @@ function analyzeActionStatements(
         validateOutsideBodyState(ctx, path, instanceId)
       },
     })
-  }
-
-  // 初期化本体は末尾のcleanupを別出力する。字句範囲を守って本文を
-  // tryへ移さないため、途中のreturnによる更新漏れだけを引き続き拒否する。
-  if (!allowValueReturn && firstWriteStart != null) {
-    const returnStarts: number[] = []
-    for (const stmt of stmts) collectReturnStarts(stmt, returnStarts)
-    if (returnStarts.some((s) => s > firstWriteStart!)) {
-      throw new Error(
-        'compile: a `return` after a tracked signal write is not supported, the write would be lost (scope limit)',
-      )
-    }
   }
 
   // 同期helperの書込みだけを呼出し元の更新へ合流する。asyncや内側の
@@ -867,6 +1022,7 @@ function analyzeActionStatements(
     allCollectionWriteDeclIds,
     finalize: (resolveUpdateCall) => {
       const allEdits = [...edits]
+      finalizeFunctionReferences(ctx, functionReferences, resolveUpdateCall, allEdits, ast)
       for (const child of nestedScopes) {
         const childCode = child.finalize(resolveUpdateCall)
         allEdits.push({
@@ -876,13 +1032,14 @@ function analyzeActionStatements(
         })
         if (ast) {
           ast.replace(child.node, child.parent, child.depth, () =>
-            parseGeneratedFunctionBody(stripSourceMapMarkers(childCode), child.parent),
+            parseGeneratedFunctionBody(childCode, child.parent),
           )
         }
       }
       const updateCall = flushOwnWrites
         ? resolveUpdateCall(directWriteDeclIds, directCollectionWriteDeclIds)
         : { code: '', needsCollectionBatch: false }
+      cleanupLocalDeclarations(ctx, nestedScopes, allEdits, ast)
       const rendered = ast ? ast.generate() : render(ctx.source, start, end, allEdits)
       // NO_ACTION_UPDATEも計装済みsetterを受けるため、フラグ宣言は常に必要。
       if (!updateCall.code)
@@ -906,12 +1063,15 @@ function analyzeActionExprScope(
   instanceId: number,
   trackSharedWrites = true,
   preserveReturn = true,
+  resultScopes: Map<t.Node, ReturnType<typeof analyzeFunctionBodyScope>> = new Map(),
+  asFunctionBody = false,
 ): ActionScopeAnalysis {
   const dirtyName = exprPath.scope.generateUidIdentifier('write').name
   const readDeclIds = new Set<DeclId>()
   const directWriteDeclIds = new Set<DeclId>()
   const directCollectionWriteDeclIds = new Set<DeclId>()
   const calleeNames = new Set<string>()
+  const functionReferences: FunctionReference[] = []
   const edits: Edit[] = []
   const nestedScopes: ReturnType<typeof analyzeFunctionBodyScope>[] = []
   const ast = usesTransformedAst(ctx, exprPath as NodePath<t.Node>)
@@ -926,7 +1086,8 @@ function analyzeActionExprScope(
   })
   collectContextCalls(ctx, exprPath, readDeclIds, edits, null, ast, null, exprPath.node)
 
-  const visit = (idPath: NodePath<t.Identifier>) =>
+  const visit = (idPath: NodePath<t.Identifier>) => {
+    recordFunctionReference(ctx, idPath, instanceId, functionReferences)
     analyzeActionIdentifier(
       ctx,
       instanceId,
@@ -942,6 +1103,7 @@ function analyzeActionExprScope(
       trackSharedWrites,
       dirtyName,
     )
+  }
   const captureNested = (
     fnPath: NodePath<
       | t.FunctionDeclaration
@@ -952,19 +1114,28 @@ function analyzeActionExprScope(
       | t.ClassPrivateMethod
     >,
   ) => {
-    nestedScopes.push(analyzeFunctionBodyScope(ctx, fnPath, instanceId, trackSharedWrites))
+    if (fnPath.parentPath?.isCallExpression() && fnPath.parentPath.node.callee === fnPath.node)
+      collectCalledReads(ctx, fnPath, instanceId, readDeclIds)
+    nestedScopes.push(
+      resultScopes.get(fnPath.node) ??
+        analyzeFunctionBodyScope(ctx, fnPath, instanceId, trackSharedWrites),
+    )
     fnPath.skip()
   }
-  if (exprPath.isIdentifier()) visit(exprPath)
-  exprPath.traverse({
-    Identifier(idPath) {
-      if (idPath.isReferencedIdentifier()) visit(idPath)
-    },
-    Function: captureNested,
-    'ClassProperty|ClassPrivateProperty'(path: NodePath<t.Node>) {
-      validateOutsideBodyState(ctx, path, instanceId)
-    },
-  })
+  if (exprPath.isFunctionExpression() || exprPath.isArrowFunctionExpression())
+    captureNested(exprPath)
+  else {
+    if (exprPath.isIdentifier()) visit(exprPath)
+    exprPath.traverse({
+      Identifier(idPath) {
+        if (idPath.isReferencedIdentifier()) visit(idPath)
+      },
+      Function: captureNested,
+      'ClassProperty|ClassPrivateProperty'(path: NodePath<t.Node>) {
+        validateOutsideBodyState(ctx, path, instanceId)
+      },
+    })
+  }
   collectTransitiveWrites(ctx, calleeNames, directWriteDeclIds, directCollectionWriteDeclIds)
 
   const writeDeclIds = new Set(directWriteDeclIds)
@@ -993,6 +1164,7 @@ function analyzeActionExprScope(
     allCollectionWriteDeclIds,
     finalize: (resolveUpdateCall) => {
       const allEdits = [...edits]
+      finalizeFunctionReferences(ctx, functionReferences, resolveUpdateCall, allEdits, ast)
       for (const child of nestedScopes) {
         const childCode = child.finalize(resolveUpdateCall)
         allEdits.push({
@@ -1002,17 +1174,20 @@ function analyzeActionExprScope(
         })
         if (ast) {
           ast.replace(child.node, child.parent, child.depth, () =>
-            parseGeneratedFunctionBody(stripSourceMapMarkers(childCode), child.parent),
+            parseGeneratedFunctionBody(childCode, child.parent),
           )
         }
       }
       const updateCall = resolveUpdateCall(directWriteDeclIds, directCollectionWriteDeclIds)
+      cleanupLocalDeclarations(ctx, nestedScopes, allEdits, ast)
       const rendered = ast ? ast.generate() : render(ctx.source, start, end, allEdits)
       const body = `${preserveReturn ? 'return ' : ''}(${rendered});`
       if (!updateCall.code)
         return directWriteDeclIds.size > 0 || calleeNames.size > 0
           ? `{ let ${dirtyName} = false; ${body} }`
-          : rendered
+          : asFunctionBody
+            ? body
+            : rendered
       const guardedBody = updateCall.needsCollectionBatch
         ? `__update_batch_depth__++; try { ${body} } finally { __update_batch_depth__--; if (${dirtyName}) { ${updateCall.code} } }`
         : `try { ${body} } finally { if (${dirtyName}) { ${updateCall.code} } }`
@@ -1091,6 +1266,7 @@ function analyzeFunctionBodyScope(
   instanceId: number,
   trackSharedWrites = true,
 ): {
+  functionPath: NodePath<t.Function>
   start: number
   end: number
   node: t.Node
@@ -1109,7 +1285,7 @@ function analyzeFunctionBodyScope(
     const stmts = bodyPath.get('body') as NodePath<t.Statement>[]
     const inner =
       stmts.length > 0
-        ? analyzeActionStatements(ctx, stmts, instanceId, true, trackSharedWrites)
+        ? analyzeActionStatements(ctx, stmts, instanceId, trackSharedWrites)
         : {
             finalize: () => '',
             calleeNames: new Set<string>(),
@@ -1120,6 +1296,7 @@ function analyzeFunctionBodyScope(
             allCollectionWriteDeclIds: new Set<DeclId>(),
           }
     return {
+      functionPath: fnPath,
       start: bodyPath.node.start!,
       end: bodyPath.node.end!,
       node: bodyPath.node,
@@ -1141,6 +1318,7 @@ function analyzeFunctionBodyScope(
     trackSharedWrites,
   )
   return {
+    functionPath: fnPath,
     start: bodyPath.node.start!,
     end: bodyPath.node.end!,
     node: bodyPath.node,
@@ -1158,32 +1336,22 @@ function analyzeFunctionBodyScope(
 
 export interface ActionBodyAnalysis {
   finalizeBody: (resolveUpdateCall: ResolveUpdateCall) => string
-  /** action/effect本体が直接読み取る宣言。返り値cleanupのreadは含めない。 */
   readDeclIds: Set<DeclId>
-  /** 返り値(function または { update?, destroy? })。無ければ null。 */
-  result: {
-    finalize: (resolveUpdateCall: ResolveUpdateCall) => string
-    /** update が直接読む signal/derived(推移解決前 -- ctx.markerDeps と
-     * 同じ形、resolveToSignals による展開は compiler.ts の
-     * buildSignalToMarkers に任せる)。destroy の読み取りはここへ含めない。 */
-    deps: Set<DeclId>
-    /** update/destroy の本体が書く宣言。字句範囲検証に使う。 */
-    writeDeclIds: Set<DeclId>
-    directCollectionWriteDeclIds: Set<DeclId>
-  } | null
-  /** action本体が書く宣言。 */
+  hasResult: boolean
+  resultDeps: Set<DeclId>
   writeDeclIds: Set<DeclId>
   directCollectionWriteDeclIds: Set<DeclId>
 }
 
-const NO_ACTION_UPDATE: ResolveUpdateCall = () => ({
-  code: '',
-  needsCollectionBatch: false,
-})
+// 空の表示用生成と後始末の最終化は、補助関数の呼出し先が異なる。
+const NO_ACTION_UPDATE: ResolveUpdateCall = () => ({ code: '', needsCollectionBatch: false })
+const NO_ACTION_RENDER: ResolveUpdateCall = () => ({ code: '', needsCollectionBatch: false })
 
-// onMountのcleanupはunmount中に実行するため、その本体へsignal更新を
-// 挿入しない。callback本体の更新は通常のresolveUpdateCallを使う。
-const NO_MOUNT_CLEANUP_UPDATE: ResolveUpdateCall = NO_ACTION_UPDATE
+// 後始末用の別名関数は元の定義と同じ字句範囲へ生成する。通常の関数と
+// 出口の更新を分け、asyncやcallbackも生存するDOMへ更新しない。
+const NO_HELPER_UPDATE: ResolveUpdateCall = () => ({ code: '', needsCollectionBatch: false })
+
+type LifecycleKind = 'action' | 'onMount' | 'effect'
 
 type ActionResultFunctionPath = NodePath<
   t.FunctionExpression | t.ArrowFunctionExpression | t.ObjectMethod
@@ -1212,169 +1380,155 @@ function actionResultFunctionPath(
   return value as ActionResultFunctionPath
 }
 
-function analyzeActionResultExpression(
+// 初期化自身のreturnだけを検査し、返却関数の実行時点と更新契約を
+// 共通の本体解析へ渡す。returnを本文から取り出さないため、分岐やfinally、
+// const/letの閉包とJavaScriptの返却順序をそのまま保持できる。
+function analyzeLifecycleBody(
   ctx: CompilerState,
-  argPath: NodePath<t.Expression>,
+  body: NodePath<t.Expression> | NodePath<t.Statement>[],
   instanceId: number,
-): NonNullable<ActionBodyAnalysis['result']> {
-  if (argPath.isFunctionExpression() || argPath.isArrowFunctionExpression()) {
-    if (argPath.node.params.length !== 0) {
-      throw new Error(
-        'compile: an action can only return a zero-argument update closure (scope limit)',
-      )
-    }
-    const closureScope = analyzeFunctionBodyScope(ctx, argPath, instanceId)
-    // クロージャは0引数(検証済み)なので、関数キーワード/params/矢印までの
-    // 前置テキストは書き換え不要でそのまま source から取り出せる。
-    const prefix = ctx.source.slice(argPath.node.start!, closureScope.start)
-    return {
-      deps: closureScope.readDeclIds,
-      writeDeclIds: closureScope.writeDeclIds,
-      directCollectionWriteDeclIds: closureScope.allCollectionWriteDeclIds,
-      finalize: (resolveUpdateCall) => `${prefix}${closureScope.finalize(resolveUpdateCall)}`,
+  kind: LifecycleKind,
+): ActionBodyAnalysis {
+  // 返却関数が初期化本体の局所関数を参照できるよう、返却の解析より先に登録する。
+  if (Array.isArray(body)) {
+    for (const stmt of body) {
+      if (stmt.isFunctionDeclaration()) ctx.analyzedFunctions.add(stmt.node)
+      else
+        stmt.traverse({
+          Function(path) {
+            ctx.analyzedFunctions.add(path.node)
+            path.skip()
+          },
+        })
     }
   }
-
-  if (!argPath.isObjectExpression()) {
-    throw new Error(
-      'compile: an action can only return a zero-argument update closure or { update?, destroy? } (scope limit)',
+  const resultScopes = new Map<t.Node, ReturnType<typeof analyzeFunctionBodyScope>>()
+  const resultDeps = new Set<DeclId>()
+  let hasResult = false
+  const invalidResult = (path: NodePath<t.Node>) =>
+    compileErrorAtNode(
+      kind === 'action'
+        ? 'compile: an action can only return a zero-argument update closure or { update?, destroy? } (scope limit)'
+        : `compile: ${kind}() may only return a zero-argument cleanup function (scope limit)`,
+      path,
     )
-  }
-
-  const properties = argPath.get('properties') as NodePath<
-    t.ObjectProperty | t.ObjectMethod | t.SpreadElement
-  >[]
-  const seen = new Set<string>()
-  const resultEdits: {
-    start: number
-    end: number
-    finalize: (resolveUpdateCall: ResolveUpdateCall) => string
-  }[] = []
-  let updateDeps = new Set<DeclId>()
-  const writeDeclIds = new Set<DeclId>()
-  const directCollectionWriteDeclIds = new Set<DeclId>()
-
-  for (const property of properties) {
-    const name = actionResultPropertyName(property)
-    if (name !== 'update' && name !== 'destroy') {
-      throw new Error(
-        'compile: an action result object may only contain update and destroy (scope limit)',
-      )
-    }
-    if (seen.has(name)) {
-      throw new Error(`compile: an action result object cannot repeat ${name} (scope limit)`)
-    }
-    seen.add(name)
-    const fnPath = actionResultFunctionPath(property)
-    if (!fnPath || fnPath.node.params.length !== 0) {
-      throw new Error(
-        `compile: an action result object ${name} must be a zero-argument function (scope limit)`,
-      )
-    }
-    const scope = analyzeFunctionBodyScope(ctx, fnPath, instanceId)
-    if (name === 'update') updateDeps = scope.readDeclIds
-    for (const id of scope.writeDeclIds) writeDeclIds.add(id)
-    for (const id of scope.allCollectionWriteDeclIds) {
-      directCollectionWriteDeclIds.add(id)
-    }
-    resultEdits.push({
-      start: scope.start,
-      end: scope.end,
-      finalize: (resolveUpdateCall) =>
-        scope.finalize(name === 'update' ? resolveUpdateCall : NO_ACTION_UPDATE),
+  const addResultFunction = (path: ActionResultFunctionPath, update: boolean) => {
+    if (path.node.params.length !== 0) throw invalidResult(path)
+    const scope = analyzeFunctionBodyScope(ctx, path, instanceId)
+    if (update) for (const id of scope.readDeclIds) resultDeps.add(id)
+    resultScopes.set(path.node, {
+      ...scope,
+      finalize: (resolve) => scope.finalize(update ? resolve : NO_ACTION_UPDATE),
     })
+    hasResult = true
   }
-
+  const validateResult = (path: NodePath<t.Expression>): void => {
+    if (path.isIdentifier({ name: 'undefined' }) && !path.scope.getBinding('undefined')) return
+    if (path.isUnaryExpression({ operator: 'void' })) return
+    if (path.isConditionalExpression()) {
+      validateResult(path.get('consequent'))
+      validateResult(path.get('alternate'))
+      return
+    }
+    if (path.isFunctionExpression() || path.isArrowFunctionExpression()) {
+      addResultFunction(path, kind === 'action')
+      return
+    }
+    if (!path.isObjectExpression() || kind !== 'action') throw invalidResult(path)
+    const seen = new Set<string>()
+    for (const property of path.get('properties') as NodePath<
+      t.ObjectProperty | t.ObjectMethod | t.SpreadElement
+    >[]) {
+      const name = actionResultPropertyName(property)
+      if (name !== 'update' && name !== 'destroy') {
+        throw compileErrorAtNode(
+          'compile: an action result object may only contain update and destroy (scope limit)',
+          property,
+        )
+      }
+      if (seen.has(name))
+        throw compileErrorAtNode(
+          `compile: an action result object cannot repeat ${name} (scope limit)`,
+          property,
+        )
+      seen.add(name)
+      const fn = actionResultFunctionPath(property)
+      if (!fn || fn.node.params.length !== 0) {
+        throw compileErrorAtNode(
+          `compile: an action result object ${name} must be a zero-argument function (scope limit)`,
+          property,
+        )
+      }
+      addResultFunction(fn, name === 'update')
+    }
+    hasResult = true
+  }
+  const visitReturn = (path: NodePath<t.ReturnStatement>) => {
+    if (path.node.argument) validateResult(path.get('argument') as NodePath<t.Expression>)
+  }
+  if (Array.isArray(body)) {
+    for (const stmt of body) {
+      if (stmt.isFunctionDeclaration()) continue
+      if (stmt.isReturnStatement()) visitReturn(stmt)
+      stmt.traverse({
+        Function(path) {
+          path.skip()
+        },
+        ReturnStatement: visitReturn,
+      })
+    }
+    if (body.length === 0)
+      return {
+        finalizeBody: () => '',
+        readDeclIds: new Set(),
+        hasResult,
+        resultDeps,
+        writeDeclIds: new Set(),
+        directCollectionWriteDeclIds: new Set(),
+      }
+    const scope = analyzeActionStatements(ctx, body, instanceId, true, true, resultScopes)
+    return {
+      finalizeBody: scope.finalize,
+      readDeclIds: scope.readDeclIds,
+      hasResult,
+      resultDeps,
+      writeDeclIds: scope.writeDeclIds,
+      directCollectionWriteDeclIds: scope.allCollectionWriteDeclIds,
+    }
+  }
+  const isResultExpression = (path: NodePath<t.Expression>): boolean =>
+    path.isFunctionExpression() ||
+    path.isArrowFunctionExpression() ||
+    path.isObjectExpression() ||
+    (path.isConditionalExpression() &&
+      (isResultExpression(path.get('consequent')) || isResultExpression(path.get('alternate'))))
+  const returnsResult = isResultExpression(body)
+  if (returnsResult) validateResult(body)
+  const scope = analyzeActionExprScope(
+    ctx,
+    body,
+    instanceId,
+    true,
+    returnsResult,
+    resultScopes,
+    true,
+  )
   return {
-    deps: updateDeps,
-    writeDeclIds,
-    directCollectionWriteDeclIds,
-    finalize: (resolveUpdateCall) =>
-      render(
-        ctx.source,
-        argPath.node.start!,
-        argPath.node.end!,
-        resultEdits.map((edit) => ({
-          start: edit.start,
-          end: edit.end,
-          text: edit.finalize(resolveUpdateCall),
-        })),
-      ),
+    finalizeBody: scope.finalize,
+    readDeclIds: scope.readDeclIds,
+    hasResult,
+    resultDeps,
+    writeDeclIds: scope.writeDeclIds,
+    directCollectionWriteDeclIds: scope.allCollectionWriteDeclIds,
   }
 }
 
-// ADR-0011 design D4/D5: action本体の解析エントリポイント。render.ts の
-// resolveHandlerBody が返す body(ブロック文配列 or inline arrow の単一式)を
-// そのまま受け取る。本体トップレベルの末尾 `return <0引数関数式>` または
-// `return { update?, destroy? }` だけを返り値として分離し(D4-2)、残りの文には通常のハンドラ同型解析
-// (ネストした関数本体への再帰込み、D4-1)を適用する。
 export function analyzeActionBody(
   ctx: CompilerState,
   body: NodePath<t.Expression> | NodePath<t.Statement>[],
   instanceId: number,
 ): ActionBodyAnalysis {
-  if (!Array.isArray(body)) {
-    if (
-      body.isFunctionExpression() ||
-      body.isArrowFunctionExpression() ||
-      body.isObjectExpression()
-    ) {
-      return {
-        finalizeBody: () => '',
-        readDeclIds: new Set<DeclId>(),
-        result: analyzeActionResultExpression(ctx, body, instanceId),
-        writeDeclIds: new Set<DeclId>(),
-        directCollectionWriteDeclIds: new Set<DeclId>(),
-      }
-    }
-    const scope = analyzeActionExprScope(ctx, body, instanceId)
-    return {
-      finalizeBody: scope.finalize,
-      readDeclIds: scope.readDeclIds,
-      result: null,
-      writeDeclIds: scope.writeDeclIds,
-      directCollectionWriteDeclIds: scope.allCollectionWriteDeclIds,
-    }
-  }
-
-  const last = body[body.length - 1]
-  let bodyStmts = body
-  let result: ActionBodyAnalysis['result'] = null
-
-  if (last?.isReturnStatement() && last.node.argument != null) {
-    const argPath = last.get('argument') as NodePath<t.Expression>
-    bodyStmts = body.slice(0, -1)
-    result = analyzeActionResultExpression(ctx, argPath, instanceId)
-  }
-
-  const bodyScope =
-    bodyStmts.length > 0
-      ? analyzeActionStatements(ctx, bodyStmts, instanceId, false)
-      : {
-          finalize: () => '',
-          readDeclIds: new Set<DeclId>(),
-          directWriteDeclIds: new Set<DeclId>(),
-          directCollectionWriteDeclIds: new Set<DeclId>(),
-          writeDeclIds: new Set<DeclId>(),
-          allCollectionWriteDeclIds: new Set<DeclId>(),
-        }
-
-  const writeDeclIds = new Set(bodyScope.writeDeclIds)
-  const directCollectionWriteDeclIds = new Set(bodyScope.allCollectionWriteDeclIds)
-  if (result) {
-    for (const id of result.writeDeclIds) writeDeclIds.add(id)
-    for (const id of result.directCollectionWriteDeclIds) {
-      directCollectionWriteDeclIds.add(id)
-    }
-  }
-
-  return {
-    finalizeBody: bodyScope.finalize,
-    readDeclIds: bodyScope.readDeclIds,
-    result,
-    writeDeclIds,
-    directCollectionWriteDeclIds,
-  }
+  return analyzeLifecycleBody(ctx, body, instanceId, 'action')
 }
 
 export interface MountBodyAnalysis {
@@ -1382,131 +1536,50 @@ export interface MountBodyAnalysis {
   readDeclIds: Set<DeclId>
   writeDeclIds: Set<DeclId>
   directCollectionWriteDeclIds: Set<DeclId>
-  /** `onMount` callbackが返す、unmount時だけ呼ぶcleanup。 */
-  finalizeCleanup: (() => string) | null
+  hasCleanup: boolean
 }
 
-// `onMount(() => void | (() => void))` のcallbackをactionと同じ解析機械へ
-// 通す。actionのobject resultは要素action専用なので拒否し、cleanupは
-// `NO_MOUNT_CLEANUP_UPDATE`で確定してunmount後のDOM更新を出力しない。
 export function analyzeMountBody(
   ctx: CompilerState,
   callbackPath: NodePath<t.ArrowFunctionExpression>,
   instanceId: number,
 ): MountBodyAnalysis {
   const bodyPath = callbackPath.get('body')
-  let body: NodePath<t.Expression> | NodePath<t.Statement>[]
-  let returnsCleanup = false
-
-  if (bodyPath.isBlockStatement()) {
-    const stmts = bodyPath.get('body') as NodePath<t.Statement>[]
-    const last = stmts[stmts.length - 1]
-    if (last?.isReturnStatement() && last.node.argument != null) {
-      const returned = last.get('argument') as NodePath<t.Expression>
-      if (!returned.isArrowFunctionExpression() && !returned.isFunctionExpression()) {
-        throw new Error(
-          'compile: onMount() may only return a zero-argument cleanup function (scope limit)',
-        )
-      }
-      returnsCleanup = true
-    }
-    body = stmts
-  } else {
-    // Concise `() => () => cleanup()` is the compact cleanup-only form. Other
-    // concise expressions are setup statements and their return value is
-    // intentionally discarded by codegen, so `onMount(() => setup())` remains
-    // a void callback.
-    returnsCleanup = bodyPath.isArrowFunctionExpression() || bodyPath.isFunctionExpression()
-    if (bodyPath.isObjectExpression()) {
-      throw new Error(
-        'compile: onMount() may only return void or a zero-argument cleanup function (scope limit)',
-      )
-    }
-    body = bodyPath as NodePath<t.Expression>
-  }
-
-  const analysis = analyzeActionBody(ctx, body, instanceId)
-  if (returnsCleanup && !analysis.result) {
-    throw new Error('compile: failed to analyze onMount() cleanup function (scope limit)')
-  }
-  if (!returnsCleanup && analysis.result) {
-    throw new Error(
-      'compile: onMount() may only return void or a zero-argument cleanup function (scope limit)',
-    )
-  }
-
+  const body = bodyPath.isBlockStatement()
+    ? (bodyPath.get('body') as NodePath<t.Statement>[])
+    : (bodyPath as NodePath<t.Expression>)
+  const analysis = analyzeLifecycleBody(ctx, body, instanceId, 'onMount')
   return {
     finalizeBody: analysis.finalizeBody,
     readDeclIds: analysis.readDeclIds,
     writeDeclIds: analysis.writeDeclIds,
     directCollectionWriteDeclIds: analysis.directCollectionWriteDeclIds,
-    finalizeCleanup: analysis.result
-      ? () => analysis.result!.finalize(NO_MOUNT_CLEANUP_UPDATE)
-      : null,
+    hasCleanup: analysis.hasResult,
   }
 }
 
 export interface EffectBodyAnalysis {
   finalizeBody: (resolveUpdateCall: ResolveUpdateCall) => string
-  /** effect callback本体が直接読み取る宣言。cleanupのreadは除外する。 */
   readDeclIds: Set<DeclId>
-  finalizeCleanup: (() => string) | null
+  hasCleanup: boolean
 }
 
-// `effect(() => void | (() => void))` のcallbackをonMountと同じ解析機械へ
-// 通す。ただしeffect本体・cleanupから追跡対象signalへ書き込むと、同期
-// update_*()の再入を暗黙に発生させるためscope limitで拒否する。
 export function analyzeEffectBody(
   ctx: CompilerState,
   callbackPath: NodePath<t.ArrowFunctionExpression>,
   instanceId: number,
 ): EffectBodyAnalysis {
   const bodyPath = callbackPath.get('body')
-  let body: NodePath<t.Expression> | NodePath<t.Statement>[]
-  let returnsCleanup = false
-
-  if (bodyPath.isBlockStatement()) {
-    const stmts = bodyPath.get('body') as NodePath<t.Statement>[]
-    const last = stmts[stmts.length - 1]
-    if (last?.isReturnStatement() && last.node.argument != null) {
-      const returned = last.get('argument') as NodePath<t.Expression>
-      if (!returned.isArrowFunctionExpression() && !returned.isFunctionExpression()) {
-        throw new Error(
-          'compile: effect() may only return a zero-argument cleanup function (scope limit)',
-        )
-      }
-      returnsCleanup = true
-    }
-    body = stmts
-  } else {
-    returnsCleanup = bodyPath.isArrowFunctionExpression() || bodyPath.isFunctionExpression()
-    if (bodyPath.isObjectExpression()) {
-      throw new Error(
-        'compile: effect() may only return void or a zero-argument cleanup function (scope limit)',
-      )
-    }
-    body = bodyPath as NodePath<t.Expression>
-  }
-
-  const analysis = analyzeActionBody(ctx, body, instanceId)
-  if (returnsCleanup && !analysis.result) {
-    throw new Error('compile: failed to analyze effect() cleanup function (scope limit)')
-  }
-  if (!returnsCleanup && analysis.result) {
-    throw new Error(
-      'compile: effect() may only return void or a zero-argument cleanup function (scope limit)',
-    )
-  }
-  if (analysis.writeDeclIds.size > 0) {
+  const body = bodyPath.isBlockStatement()
+    ? (bodyPath.get('body') as NodePath<t.Statement>[])
+    : (bodyPath as NodePath<t.Expression>)
+  const analysis = analyzeLifecycleBody(ctx, body, instanceId, 'effect')
+  if (analysis.writeDeclIds.size > 0)
     throw new Error('compile: effect() cannot write tracked signals (scope limit)')
-  }
-
   return {
     finalizeBody: analysis.finalizeBody,
     readDeclIds: analysis.readDeclIds,
-    finalizeCleanup: analysis.result
-      ? () => analysis.result!.finalize(NO_MOUNT_CLEANUP_UPDATE)
-      : null,
+    hasCleanup: analysis.hasResult,
   }
 }
 

@@ -1,0 +1,82 @@
+{
+  "startedAt": "2026-10-09T04:02:03.576Z",
+  "command": "bun fixtures/lifecycle-control-flow/verify.mjs",
+  "repoRoot": "/home/nixos/ghq/github.com/mikan-919/irisout",
+  "browser": "/nix/store/g0yvxs8p2ijrvmxpd5mim1ni0fyk9bnh-chromium-154.0.8037.57/bin/chromium",
+  "checks": [
+    {
+      "name": "action_capture_and_guard_mount",
+      "pass": false,
+      "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n+   'destroy-a:after',\n+   'destroy-watch',\n    'second-after',\n    'first-a',\n-   'destroy-a:after',\n-   'destroy-watch'\n  ]\n",
+      "stack": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n+   'destroy-a:after',\n+   'destroy-watch',\n    'second-after',\n    'first-a',\n-   'destroy-a:after',\n-   'destroy-watch'\n  ]\n\n    at <anonymous> (/home/nixos/ghq/github.com/mikan-919/irisout/fixtures/lifecycle-control-flow/verify.mjs:295:14)\n    at async check (/home/nixos/ghq/github.com/mikan-919/irisout/fixtures/lifecycle-control-flow/verify.mjs:269:62)\n    at processTicksAndRejections (native:7:39)"
+    },
+    {
+      "name": "action_capture_and_guard_hydrate",
+      "pass": false,
+      "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n+   'destroy-a:after',\n+   'destroy-watch',\n    'second-after',\n    'first-a',\n-   'destroy-a:after',\n-   'destroy-watch'\n  ]\n",
+      "stack": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n+   'destroy-a:after',\n+   'destroy-watch',\n    'second-after',\n    'first-a',\n-   'destroy-a:after',\n-   'destroy-watch'\n  ]\n\n    at <anonymous> (/home/nixos/ghq/github.com/mikan-919/irisout/fixtures/lifecycle-control-flow/verify.mjs:295:14)\n    at async check (/home/nixos/ghq/github.com/mikan-919/irisout/fixtures/lifecycle-control-flow/verify.mjs:269:62)\n    at processTicksAndRejections (native:7:39)"
+    },
+    {
+      "name": "alternate_action_return_branch",
+      "pass": false,
+      "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n+   'destroy-watch',\n    'second-after',\n    'first-b',\n-   'destroy-watch'\n  ]\n",
+      "stack": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n+   'destroy-watch',\n    'second-after',\n    'first-b',\n-   'destroy-watch'\n  ]\n\n    at <anonymous> (/home/nixos/ghq/github.com/mikan-919/irisout/fixtures/lifecycle-control-flow/verify.mjs:309:12)\n    at async check (/home/nixos/ghq/github.com/mikan-919/irisout/fixtures/lifecycle-control-flow/verify.mjs:269:62)\n    at processTicksAndRejections (native:7:39)"
+    },
+    {
+      "name": "mount_throw_finally_recovery",
+      "pass": false,
+      "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n    'watch-0',\n    'watch-2',\n+   'destroy-watch',\n    'cleanup-second',\n    'cleanup-first',\n-   'destroy-watch'\n  ]\n",
+      "stack": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n    'watch-0',\n    'watch-2',\n+   'destroy-watch',\n    'cleanup-second',\n    'cleanup-first',\n-   'destroy-watch'\n  ]\n\n    at <anonymous> (/home/nixos/ghq/github.com/mikan-919/irisout/fixtures/lifecycle-control-flow/verify.mjs:321:14)\n    at async check (/home/nixos/ghq/github.com/mikan-919/irisout/fixtures/lifecycle-control-flow/verify.mjs:269:62)\n    at processTicksAndRejections (native:7:39)"
+    },
+    {
+      "name": "use_throw_finally_recovery",
+      "pass": true,
+      "evidence": {
+        "mounted": {
+          "mounted": false,
+          "message": "lifecycle failure",
+          "original": true
+        },
+        "log": ["watch-0", "watch-2", "destroy-watch"]
+      }
+    },
+    {
+      "name": "keyed_unit_cleanup_ownership",
+      "pass": true,
+      "evidence": {
+        "removed": ["action-1", "mount-1"],
+        "destroyed": ["action-1", "mount-1", "other-2"]
+      }
+    },
+    {
+      "name": "effect_branch_cleanup_and_read_dependencies",
+      "pass": true,
+      "evidence": {
+        "initial": ["update-0", "effect-0"],
+        "log": [
+          "update-0",
+          "effect-0",
+          "update-1",
+          "cleanup-zero-1",
+          "effect-1",
+          "update-2",
+          "effect-2",
+          "destroy-1",
+          "cleanup-2"
+        ]
+      }
+    },
+    {
+      "name": "cleanup_helper_does_not_flush_root_dom",
+      "pass": true,
+      "evidence": {
+        "value": "0",
+        "log": ["cleanup-write"]
+      }
+    }
+  ],
+  "pageErrors": [],
+  "pass": false,
+  "version": "154.0.8037.57",
+  "finishedAt": "2026-10-09T04:02:04.927Z"
+}

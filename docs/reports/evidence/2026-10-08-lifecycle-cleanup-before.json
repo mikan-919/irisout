@@ -1,0 +1,52 @@
+[
+  {
+    "name": "direct_sync_control",
+    "baseline": "cd7a654",
+    "source": "export function App() { const count = signal(0); const items = signal([{id:1}]); render(<div><span class=\"root-count\">{count()}</span><button onClick={() => items([])}>remove</button><ul>{items().map(item => { onMount(() => () => cleanupHelper()); function cleanupHelper() { count(count() + 1); } return <li key={item.id}>item</li>; })}</ul></div>); }",
+    "expectedRootDomAfterRemoval": "0",
+    "initialRootDom": "0",
+    "synchronousRootDomAfterRemoval": "0",
+    "rootDomAfterMicrotasks": "0",
+    "remainingItems": 0
+  },
+  {
+    "name": "nested_sync_callback",
+    "baseline": "cd7a654",
+    "source": "export function App() { const count = signal(0); const items = signal([{id:1}]); render(<div><span class=\"root-count\">{count()}</span><button onClick={() => items([])}>remove</button><ul>{items().map(item => { onMount(() => () => cleanupHelper()); function cleanupHelper() { (() => count(count() + 1))(); } return <li key={item.id}>item</li>; })}</ul></div>); }",
+    "expectedRootDomAfterRemoval": "0",
+    "initialRootDom": "0",
+    "synchronousRootDomAfterRemoval": "1",
+    "rootDomAfterMicrotasks": "1",
+    "remainingItems": 0
+  },
+  {
+    "name": "nested_local_function",
+    "baseline": "cd7a654",
+    "source": "export function App() { const count = signal(0); const items = signal([{id:1}]); render(<div><span class=\"root-count\">{count()}</span><button onClick={() => items([])}>remove</button><ul>{items().map(item => { onMount(() => () => cleanupHelper()); function cleanupHelper() { function write() { count(count() + 1); } write(); } return <li key={item.id}>item</li>; })}</ul></div>); }",
+    "expectedRootDomAfterRemoval": "0",
+    "initialRootDom": "0",
+    "synchronousRootDomAfterRemoval": "1",
+    "rootDomAfterMicrotasks": "1",
+    "remainingItems": 0
+  },
+  {
+    "name": "promise_callback",
+    "baseline": "cd7a654",
+    "source": "export function App() { const count = signal(0); const items = signal([{id:1}]); render(<div><span class=\"root-count\">{count()}</span><button onClick={() => items([])}>remove</button><ul>{items().map(item => { onMount(() => () => cleanupHelper()); function cleanupHelper() { Promise.resolve().then(() => count(count() + 1)); } return <li key={item.id}>item</li>; })}</ul></div>); }",
+    "expectedRootDomAfterRemoval": "0",
+    "initialRootDom": "0",
+    "synchronousRootDomAfterRemoval": "0",
+    "rootDomAfterMicrotasks": "1",
+    "remainingItems": 0
+  },
+  {
+    "name": "async_helper",
+    "baseline": "cd7a654",
+    "source": "export function App() { const count = signal(0); const items = signal([{id:1}]); render(<div><span class=\"root-count\">{count()}</span><button onClick={() => items([])}>remove</button><ul>{items().map(item => { onMount(() => () => cleanupHelper()); async function cleanupHelper() { await Promise.resolve(); count(count() + 1); } return <li key={item.id}>item</li>; })}</ul></div>); }",
+    "expectedRootDomAfterRemoval": "0",
+    "initialRootDom": "0",
+    "synchronousRootDomAfterRemoval": "0",
+    "rootDomAfterMicrotasks": "1",
+    "remainingItems": 0
+  }
+]

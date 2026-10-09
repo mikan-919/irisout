@@ -1,0 +1,3 @@
+{"name":"use","accepted":false,"error":"CompileDiagnostic: compile: a lifecycle initialization return must be its final cleanup result (scope limit) [<source>:1:52]"}
+{"name":"onMount","accepted":false,"error":"CompileDiagnostic: compile: a lifecycle initialization return must be its final cleanup result (scope limit) [<source>:1:8]"}
+{"name":"effect","accepted":false,"error":"CompileDiagnostic: compile: a lifecycle initialization return must be its final cleanup result (scope limit) [<source>:1:8]"}

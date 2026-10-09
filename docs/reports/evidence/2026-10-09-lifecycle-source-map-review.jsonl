@@ -1,0 +1,4 @@
+{"version":"before","originalNeedle":"console.log('other branch'","position":{"source":"<source>","line":10,"column":19,"name":null}}
+{"version":"before","originalNeedle":"console.log('finally'","position":{"source":null,"line":null,"column":null,"name":null}}
+{"version":"after","originalNeedle":"console.log('other branch'","position":{"source":"<source>","line":10,"column":19,"name":null}}
+{"version":"after","originalNeedle":"console.log('finally'","position":{"source":null,"line":null,"column":null,"name":null}}

@@ -440,6 +440,12 @@ function resolveHandlerBody(
   handlerFns: HandlerFns,
 ): HandlerBody {
   if (exprPath.isArrowFunctionExpression()) {
+    if (attrName === 'use' && exprPath.node.async) {
+      throw compileErrorAtNode(
+        'compile: use initialization must be synchronous (scope limit)',
+        exprPath.node,
+      )
+    }
     const param = resolveHandlerParam(exprPath.get('params'), attrName)
     const bodyPath = exprPath.get('body')
     if (bodyPath.isBlockStatement()) {
@@ -459,6 +465,18 @@ function resolveHandlerBody(
     if (!fn) {
       throw new Error(
         `compile: handler "${attrName}" must reference a function declared after render() (scope limit)`,
+      )
+    }
+    if (attrName === 'use' && fn.node.async) {
+      throw compileErrorAtNode(
+        'compile: use initialization must be synchronous (scope limit)',
+        fn.node,
+      )
+    }
+    if (attrName === 'use' && fn.node.generator) {
+      throw compileErrorAtNode(
+        'compile: generator function bodies are not supported yet (scope limit)',
+        fn.node,
       )
     }
     const param = resolveHandlerParam(fn.get('params'), attrName)
@@ -604,42 +622,27 @@ function registerAction(
   instanceId: number,
   local = false,
 ): void {
-  const { finalizeBody, result, writeDeclIds, directCollectionWriteDeclIds } = analyzeActionBody(
-    ctx,
-    action.body,
-    instanceId,
-  )
+  const { finalizeBody, hasResult, resultDeps, writeDeclIds, directCollectionWriteDeclIds } =
+    analyzeActionBody(ctx, action.body, instanceId)
   if (!local) {
     // void actionも対象要素をmarker registryから取得する必要がある。
     // 返り値の有無をmarkerの有無と混同しない(ADR-0011)。
     ctx.markers.push({ id: markerId, kind: 'action' })
     const deps = ctx.markerDeps.get(markerId) ?? new Set<DeclId>()
-    for (const dep of result?.deps ?? []) deps.add(dep)
+    for (const dep of resultDeps) deps.add(dep)
     ctx.markerDeps.set(markerId, deps)
   }
   ctx.actions.push({
     markerId,
     elParam: action.param,
     finalizeBody,
-    finalizeResult: result?.finalize ?? null,
-    resultDeps: result?.deps ?? new Set<DeclId>(),
+    hasResult,
+    resultDeps,
     writeDeclIds,
     directCollectionWriteDeclIds,
     bodySourceStart: Array.isArray(action.body)
       ? (action.body[0]?.node.start ?? 0)
       : (action.body.node.start ?? 0),
-    resultSourceStart: Array.isArray(action.body)
-      ? (() => {
-          const last = action.body.at(-1)
-          return last?.isReturnStatement() && last.node.argument
-            ? (last.node.argument.start ?? null)
-            : null
-        })()
-      : action.body.isFunctionExpression() ||
-          action.body.isArrowFunctionExpression() ||
-          action.body.isObjectExpression()
-        ? (action.body.node.start ?? null)
-        : null,
   })
 }
 
@@ -1204,7 +1207,7 @@ function renderStructuralUnitBody(
       const analysis = analyzeMountBody(ctx, callbackPath, instanceId)
       localMounts.push({
         finalizeBody: analysis.finalizeBody,
-        finalizeCleanup: analysis.finalizeCleanup,
+        hasCleanup: analysis.hasCleanup,
         writeDeclIds: analysis.writeDeclIds,
         directCollectionWriteDeclIds: analysis.directCollectionWriteDeclIds,
         ...callbackSourceStarts(callbackPath),
@@ -1214,7 +1217,7 @@ function renderStructuralUnitBody(
       const analysis = analyzeEffectBody(ctx, callbackPath, instanceId)
       localEffects.push({
         finalizeBody: analysis.finalizeBody,
-        finalizeCleanup: analysis.finalizeCleanup,
+        hasCleanup: analysis.hasCleanup,
         readDeclIds: analysis.readDeclIds,
         ...callbackSourceStarts(callbackPath),
       })
@@ -1308,6 +1311,7 @@ function renderStructuralUnitBody(
       localEffects,
       localAttrBindings,
       localDecls,
+      localFnNames: [...localMovementFns.keys()],
       rootDeps: new Set(nestedDeps),
     },
     nestedDeps,
@@ -1531,6 +1535,12 @@ function resolveOnMountExpression(
     )
   }
   const callback = args[0] as NodePath<t.ArrowFunctionExpression>
+  if (callback.node.async) {
+    throw compileErrorAtNode(
+      'compile: onMount() initialization must be synchronous (scope limit)',
+      callback.node,
+    )
+  }
   if (callback.node.params.length !== 0) {
     throw new Error('compile: onMount() callback must not take parameters (scope limit)')
   }
@@ -1564,6 +1574,12 @@ function resolveEffectExpression(
     )
   }
   const callback = args[0] as NodePath<t.ArrowFunctionExpression>
+  if (callback.node.async) {
+    throw compileErrorAtNode(
+      'compile: effect() initialization must be synchronous (scope limit)',
+      callback.node,
+    )
+  }
   if (callback.node.params.length !== 0) {
     throw new Error('compile: effect() callback must not take parameters (scope limit)')
   }
@@ -1572,24 +1588,11 @@ function resolveEffectExpression(
 
 function callbackSourceStarts(callbackPath: NodePath<t.ArrowFunctionExpression>): {
   bodySourceStart: number
-  cleanupSourceStart: number | null
 } {
   const body = callbackPath.node.body
-  if (body.type !== 'BlockStatement') {
-    return {
-      bodySourceStart: body.start ?? callbackPath.node.start ?? 0,
-      cleanupSourceStart:
-        body.type === 'ArrowFunctionExpression' || body.type === 'FunctionExpression'
-          ? (body.start ?? null)
-          : null,
-    }
-  }
-  const first = body.body[0]
-  const last = body.body.at(-1)
   return {
-    bodySourceStart: first?.start ?? body.start ?? callbackPath.node.start ?? 0,
-    cleanupSourceStart:
-      last?.type === 'ReturnStatement' && last.argument ? (last.argument.start ?? null) : null,
+    bodySourceStart:
+      body.type === 'BlockStatement' ? (body.body[0]?.start ?? body.start ?? 0) : (body.start ?? 0),
   }
 }
 
@@ -1742,7 +1745,7 @@ function compileComponentUnchecked(
     const analysis = analyzeMountBody(ctx, callbackPath, instanceId)
     const mount: MountDecl = {
       finalizeBody: analysis.finalizeBody,
-      finalizeCleanup: analysis.finalizeCleanup,
+      hasCleanup: analysis.hasCleanup,
       writeDeclIds: analysis.writeDeclIds,
       directCollectionWriteDeclIds: analysis.directCollectionWriteDeclIds,
       ...callbackSourceStarts(callbackPath),
@@ -1754,7 +1757,7 @@ function compileComponentUnchecked(
     const analysis = analyzeEffectBody(ctx, callbackPath, instanceId)
     const effect: EffectDecl = {
       finalizeBody: analysis.finalizeBody,
-      finalizeCleanup: analysis.finalizeCleanup,
+      hasCleanup: analysis.hasCleanup,
       readDeclIds: analysis.readDeclIds,
       ...callbackSourceStarts(callbackPath),
     }

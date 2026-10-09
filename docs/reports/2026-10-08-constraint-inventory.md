@@ -1,5 +1,7 @@
 # irisout 拒否条件の整理
 
+初期化本体の途中返却の制限は、後続の[初期化関数の制御フロー](./2026-10-09-lifecycle-control-flow.md)で解消した。この文書の表と試験件数は前段の記録を保持する。
+
 調査対象は `packages/compiler/src`、`packages/vite-plugin/src`、`packages/hono/src`、`packages/runtime/src` と `openspec/specs`。以下の表は2026-10-08の作業開始時点（`da83fa8`）の調査を保存したもの。表の行番号と拒否条件は変更前を指す。この調査後の変更を次に記載する。
 
 ## この変更で解消した制限と不具合

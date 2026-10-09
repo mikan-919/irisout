@@ -49,6 +49,7 @@ import type {
   ListMarker,
   MarkerId,
   MountDecl,
+  ResolveUpdateCall,
   StructuralUnitBody,
 } from './state.ts'
 import { assignOutputName, createCompilerState, toContextId, toDeclId } from './state.ts'
@@ -873,9 +874,8 @@ export function compileSource(source: string, options: CompileOptions = {}): Com
       markerId: a.markerId,
       elParam: a.elParam,
       bodyRendered: a.finalizeBody(resolveActionUpdateCall),
-      resultRendered: a.finalizeResult ? a.finalizeResult(resolveActionUpdateCall) : null,
+      hasResult: a.hasResult,
       bodySourceStart: a.bodySourceStart,
-      resultSourceStart: a.resultSourceStart,
     }
   }
   const convertMount = (m: MountDecl, localScopes: Set<DeclId>[] = []): MountOutput => {
@@ -903,16 +903,14 @@ export function compileSource(source: string, options: CompileOptions = {}): Com
     }
     return {
       bodyRendered: m.finalizeBody(resolveMountUpdateCall),
-      cleanupRendered: m.finalizeCleanup ? m.finalizeCleanup() : null,
+      hasCleanup: m.hasCleanup,
       bodySourceStart: m.bodySourceStart,
-      cleanupSourceStart: m.cleanupSourceStart,
     }
   }
   const convertLocalEffect = (effect: (typeof ctx.effects)[number]): LocalEffectOutput => ({
     bodyRendered: effect.finalizeBody(() => ({ code: '', needsCollectionBatch: false })),
-    cleanupRendered: effect.finalizeCleanup ? effect.finalizeCleanup() : null,
+    hasCleanup: effect.hasCleanup,
     bodySourceStart: effect.bodySourceStart,
-    cleanupSourceStart: effect.cleanupSourceStart,
     signalNames: [
       ...new Set(
         [...effect.readDeclIds]
@@ -923,6 +921,33 @@ export function compileSource(source: string, options: CompileOptions = {}): Com
     ],
   })
   const handlerOutputs = ctx.handlers.map((h) => convertHandler(h))
+  const localTrackedFnNames = new Set<string>()
+  const emitFunctions = (names: string[], resolve: ResolveUpdateCall) => {
+    const output = names.flatMap((name) => {
+      const fn = ctx.trackedFns.get(name)
+      return fn
+        ? [{ name, params: fn.paramSource, body: fn.finalize(resolve), async: fn.async }]
+        : []
+    })
+    const emittedCleanup = new Set<string>()
+    for (;;) {
+      let changed = false
+      for (const name of names) {
+        const fn = ctx.trackedFns.get(name)
+        const cleanupName = fn && ctx.cleanupFunctionNames.get(fn.node)
+        if (!fn || !cleanupName || emittedCleanup.has(cleanupName)) continue
+        emittedCleanup.add(cleanupName)
+        output.push({
+          name: cleanupName,
+          params: fn.paramSource,
+          body: fn.finalizeCleanup(),
+          async: fn.async,
+        })
+        changed = true
+      }
+      if (!changed) return output
+    }
+  }
 
   // M5.5: ネストした構造ユニット(body.localMarkers 内の list/conditional)の
   // ローカルハンドラにも同じ変換が要るため、body と marker で相互再帰する。
@@ -951,7 +976,20 @@ export function compileSource(source: string, options: CompileOptions = {}): Com
   ): StructuralUnitBodyOutput => {
     const localDeclIds = new Set(body.localDecls.map((d) => d.id))
     const localScopes = [localDeclIds, ...ancestorLocalScopes]
-    return {
+    for (const name of body.localFnNames) localTrackedFnNames.add(name)
+    const resolveLocalFunctionUpdate: ResolveUpdateCall = (ids, collectionIds) => {
+      const plan = resolveUpdateCall(ids, collectionIds)
+      const locals = localScopes.flatMap((scope, level) =>
+        [...ids].some((id) => scope.has(id))
+          ? [`${level === 0 ? '__LOCAL_SELF_UPDATE__' : `__LOCAL_ANCESTOR_${level}__`}();`]
+          : [],
+      )
+      return {
+        code: [plan.code, ...locals].filter(Boolean).join(' '),
+        needsCollectionBatch: plan.needsCollectionBatch,
+      }
+    }
+    const result: StructuralUnitBodyOutput = {
       template: body.template,
       localMarkers: body.localMarkers.map((m) =>
         m.kind === 'text' ? m : convertUnitMarker(m, localScopes),
@@ -963,7 +1001,10 @@ export function compileSource(source: string, options: CompileOptions = {}): Com
       localAttrBindings: body.localAttrBindings,
       localDecls: body.localDecls,
       rootDeps: body.rootDeps,
+      emittedFns: [],
     }
+    result.emittedFns = emitFunctions(body.localFnNames, resolveLocalFunctionUpdate)
+    return result
   }
   const markerOutputs: MarkerOutput[] = ctx.markers.map((m) => {
     if (m.kind === 'text' || m.kind === 'action') return m
@@ -1068,9 +1109,8 @@ export function compileSource(source: string, options: CompileOptions = {}): Com
   const mountOutputs: MountOutput[] = ctx.mounts.map((m: MountDecl) => convertMount(m))
   const effectOutputs: EffectOutput[] = ctx.effects.map((effect) => ({
     bodyRendered: effect.finalizeBody(resolveUpdateCall),
-    cleanupRendered: effect.finalizeCleanup ? effect.finalizeCleanup() : null,
+    hasCleanup: effect.hasCleanup,
     bodySourceStart: effect.bodySourceStart,
-    cleanupSourceStart: effect.cleanupSourceStart,
     signalIds: [
       ...new Set(
         [...effect.readDeclIds].flatMap((dep) => [...resolveToSignals(ctx, dep, new Set())]),
@@ -1149,14 +1189,12 @@ export function compileSource(source: string, options: CompileOptions = {}): Com
     }
   }
 
-  // cross-function-handler-writes: 追跡された動きゾーン関数を emit 用の素の
-  // 文字列へ落とす(Map の挿入順 = 追跡順で1回ずつ)。
-  const emittedFns = [...ctx.trackedFns.values()].map((f) => ({
-    name: f.name,
-    params: f.paramSource,
-    body: f.finalize(resolveUpdateCall),
-    async: f.async,
-  }))
+  // 構造単位の補助関数は各factoryへ配置済み。残る関数だけを元の
+  // instanceの字句範囲へ通常版と後始末版に分けて生成する。
+  const emittedFns = emitFunctions(
+    [...ctx.trackedFns.keys()].filter((name) => !localTrackedFnNames.has(name)),
+    resolveUpdateCall,
+  )
   const signalState =
     options.target === 'ssr'
       ? [...ctx.declKind]

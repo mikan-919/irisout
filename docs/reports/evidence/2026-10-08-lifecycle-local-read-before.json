@@ -1,0 +1,73 @@
+[
+  {
+    "name": "effect_executed_local_helper",
+    "expectedAfterClick": ["body:0", "body:1"],
+    "source": "export function App() { const count = signal(0); render(<button onClick={() => count(count() + 1)}>{count()}</button>); effect(() => { function read() { return count(); } globalThis.__localReadReviewLog.push(\"body:\" + read()); }); }",
+    "baseline": "cd7a654",
+    "afterMount": ["body:0"],
+    "afterClick": ["body:0"],
+    "domAfterClick": "1",
+    "afterUnmount": ["body:0"]
+  },
+  {
+    "name": "effect_function_creation_without_call",
+    "expectedAfterClick": ["setup"],
+    "source": "export function App() { const count = signal(0); render(<button onClick={() => count(count() + 1)}>{count()}</button>); effect(() => { const read = () => count(); globalThis.__localReadReviewLog.push(\"setup\"); }); }",
+    "baseline": "cd7a654",
+    "afterMount": ["setup"],
+    "afterClick": ["setup"],
+    "domAfterClick": "1",
+    "afterUnmount": ["setup"]
+  },
+  {
+    "name": "effect_cleanup_only_direct_read",
+    "expectedAfterClick": ["setup"],
+    "expectedAfterUnmount": ["setup", "cleanup:1"],
+    "source": "export function App() { const count = signal(0); render(<button onClick={() => count(count() + 1)}>{count()}</button>); effect(() => { globalThis.__localReadReviewLog.push(\"setup\"); return () => { globalThis.__localReadReviewLog.push(\"cleanup:\" + count()); }; }); }",
+    "baseline": "cd7a654",
+    "afterMount": ["setup"],
+    "afterClick": ["setup"],
+    "domAfterClick": "1",
+    "afterUnmount": ["setup", "cleanup:1"]
+  },
+  {
+    "name": "effect_cleanup_only_nested_local_helper",
+    "expectedAfterClick": ["setup"],
+    "expectedAfterUnmount": ["setup", "cleanup:1"],
+    "source": "export function App() { const count = signal(0); render(<button onClick={() => count(count() + 1)}>{count()}</button>); effect(() => { globalThis.__localReadReviewLog.push(\"setup\"); return () => { function read() { return count(); } globalThis.__localReadReviewLog.push(\"cleanup:\" + read()); }; }); }",
+    "baseline": "cd7a654",
+    "afterMount": ["setup"],
+    "afterClick": ["setup"],
+    "domAfterClick": "1",
+    "afterUnmount": ["setup", "cleanup:1"]
+  },
+  {
+    "name": "effect_cleanup_calls_initializer_local_helper",
+    "expectedAfterClick": ["setup"],
+    "expectedAfterUnmount": ["setup", "cleanup:1"],
+    "source": "export function App() { const count = signal(0); render(<button onClick={() => count(count() + 1)}>{count()}</button>); effect(() => { function read() { return count(); } globalThis.__localReadReviewLog.push(\"setup\"); return () => { globalThis.__localReadReviewLog.push(\"cleanup:\" + read()); }; }); }",
+    "baseline": "cd7a654",
+    "error": "CompileDiagnostic: compile: calling locally-bound \"read\" from a handler/action body is not supported, only movement-zone functions are tracked (scope limit) [<source>:1:8]"
+  },
+  {
+    "name": "use_update_executed_local_helper",
+    "expectedAfterClick": ["update:0", "update:1"],
+    "source": "export function App() { const count = signal(0); render(<div><button onClick={() => count(count() + 1)}>{count()}</button><span use={setup}>fixed</span></div>); function setup(el) { return () => { function read() { return count(); } globalThis.__localReadReviewLog.push(\"update:\" + read()); }; } }",
+    "baseline": "cd7a654",
+    "afterMount": ["update:0"],
+    "afterClick": ["update:0"],
+    "domAfterClick": "1fixed",
+    "afterUnmount": ["update:0"]
+  },
+  {
+    "name": "use_destroy_only_nested_local_helper",
+    "expectedAfterClick": ["setup"],
+    "expectedAfterUnmount": ["setup", "destroy:1"],
+    "source": "export function App() { const count = signal(0); render(<button use={setup} onClick={() => count(count() + 1)}>{count()}</button>); function setup(el) { globalThis.__localReadReviewLog.push(\"setup\"); return { destroy() { function read() { return count(); } globalThis.__localReadReviewLog.push(\"destroy:\" + read()); } }; } }",
+    "baseline": "cd7a654",
+    "afterMount": ["setup"],
+    "afterClick": ["setup"],
+    "domAfterClick": "1",
+    "afterUnmount": ["setup", "destroy:1"]
+  }
+]

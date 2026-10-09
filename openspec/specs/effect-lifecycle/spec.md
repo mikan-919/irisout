@@ -14,6 +14,8 @@ The compiler SHALL accept zero-argument root movement-zone and structural-unit `
 callbacks, including callbacks from inline child components. Each callback SHALL run once after
 the owning root or factory mount/hydrate initialization, rerun when a tracked dependency read by
 its body changes, and call the previous cleanup before rerunning.
+Callbacks SHALL be synchronous. Asynchronous initializers SHALL fail with a positioned scope-limit
+diagnostic rather than being emitted as synchronous functions.
 
 #### Scenario: dependency rerun
 
@@ -35,6 +37,34 @@ its body changes, and call the previous cleanup before rerunning.
 The generated component instance SHALL retain a function returned by an effect callback, call the
 current function once before each rerun and once at unmount, and call multiple unmount cleanups in
 reverse registration order.
+
+The compiler SHALL preserve returns inside branches and exception-handling statements in the
+callback body. Every return value, including each arm of a conditional expression, SHALL be void
+or satisfy the existing zero-argument cleanup function contract. Callback dependencies SHALL be the union of body reads across branches, excluding reads
+inside returned cleanups. Only the cleanup actually returned SHALL be retained. Returned cleanups
+SHALL capture the callback's local bindings without being moved outside their lexical scope.
+
+#### Scenario: conditional cleanup selection
+
+- **WHEN** an effect returns different cleanup functions from branches controlled by a signal
+- **THEN** the selected cleanup runs before rerunning and once at unmount
+- **AND** cleanups from unexecuted branches never run
+
+#### Scenario: cleanup-only reads are not dependencies
+
+- **WHEN** an effect's returned cleanup reads a signal that its body does not read
+- **THEN** changing that signal does not rerun the effect
+
+#### Scenario: directly called local helper reads
+
+- **WHEN** an effect body directly calls a locally declared helper that reads a signal
+- **THEN** changing that signal reruns the effect
+- **AND** merely creating the helper or invoking it only from cleanup does not add a body dependency
+
+#### Scenario: invalid intermediate cleanup return
+
+- **WHEN** a branch returns an object or a function with parameters
+- **THEN** compilation fails with the same scope-limit diagnostic as an invalid terminal return
 
 #### Scenario: unmount cleanup
 

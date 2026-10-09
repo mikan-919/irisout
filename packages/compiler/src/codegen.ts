@@ -35,6 +35,17 @@ import type {
 import { attrBindingKind, innerTemplateSource } from './template.ts'
 import { mappedSource } from './source-map.ts'
 
+function replaceLocalUpdateCalls(source: string, updates: (string | null)[]): string {
+  return source.replace(
+    /__LOCAL_(SELF_UPDATE|ANCESTOR_(\d+))__\(\)/g,
+    (_match, kind: string, level: string) => {
+      const update = updates[kind === 'SELF_UPDATE' ? 0 : Number(level)]
+      if (!update) throw new Error('codegen: missing local update expression for tracked function')
+      return update
+    },
+  )
+}
+
 // M2/ADR-0020: compiler.ts が writeDeclIds をマーカーを持つroot signalへ
 // 解決し、通常は updateNames、共有markerがあるときは updateBatchNameへ
 // 変換した後の、codegen向けハンドラ表現。
@@ -76,6 +87,7 @@ export interface StructuralUnitBodyOutput {
   localAttrBindings: AttrBinding[]
   /** same-file-component-composition: このユニット直下のローカルsignal宣言。 */
   localDecls: LocalDecl[]
+  emittedFns: { name: string; params: string; body: string; async: boolean }[]
   /** ルートsignal/derivedを読むため、親unitから更新を受ける依存。 */
   rootDeps: Set<DeclId>
 }
@@ -120,47 +132,43 @@ export interface UpdateBatchOutput {
 }
 
 // ADR-0011: signalToMarkers/ctx.markerDeps 確定後に compiler.ts が組み立てる
-// action1個ぶんの最終テキスト。bodyRendered/resultRendered は既に個別 update
+// action1個ぶんの最終テキスト。bodyRendered は返却と個別 update
 // または同期 batch 呼び出し込み(design D4-1/D5) -- codegen はこれを文字列として
 // 組み立てるだけで、ctx や AST には一切触れない。
 export interface ActionOutput {
   markerId: MarkerId
   elParam: string | null
   bodyRendered: string
-  /** 返り値(function または { update?, destroy? })。無ければ null。 */
-  resultRendered: string | null
+  /** 更新関数または { update?, destroy? } を返す経路がある。 */
+  hasResult: boolean
   bodySourceStart: number
-  resultSourceStart: number | null
 }
 
 // ルートcomponentのonMount callback。callback本体はmount直後、cleanupは
 // unmount時に実行する。cleanupへ更新呼び出しは挿入しない。
 export interface MountOutput {
   bodyRendered: string
-  cleanupRendered: string | null
+  hasCleanup: boolean
   bodySourceStart: number
-  cleanupSourceStart: number | null
 }
 
 // 構造unit内effectは依存を外側markerへ合流した後、factory自身のupdateへ
 // 接続する。signal idはcompiler側の依存解決専用なので出力には保持しない。
 export interface LocalEffectOutput {
   bodyRendered: string
-  cleanupRendered: string | null
+  hasCleanup: boolean
   /** root/derived依存がこのfactory更新を起動する出力名。 */
   signalNames: string[]
   bodySourceStart: number
-  cleanupSourceStart: number | null
 }
 
 // ルートcomponentのeffect callback。signalIdsはcallback本体のreadをroot
 // signalへ展開した依存で、専用update_*()の末尾からrunnerを呼ぶ。
 export interface EffectOutput {
   bodyRendered: string
-  cleanupRendered: string | null
+  hasCleanup: boolean
   signalIds: DeclId[]
   bodySourceStart: number
-  cleanupSourceStart: number | null
 }
 
 export interface GenerateModuleInput {
@@ -348,7 +356,7 @@ function bodyHasLifecycle(body: StructuralUnitBodyOutput): boolean {
 
 function bodyHasResultActions(body: StructuralUnitBodyOutput): boolean {
   return (
-    body.localActions.some((action) => action.resultRendered != null) ||
+    body.localActions.some((action) => action.hasResult) ||
     bodyUnits(body).some((unit) => {
       if (unit.kind === 'list') return bodyHasResultActions(unit.body)
       return unit.branches.some(
@@ -584,7 +592,12 @@ function generateFactoryLegacy(
   // update関数はfactoryと同じスコープに1個だけ生成し、runtimeが
   // update(handle, next)として呼ぶ。ネスト構造またはローカルsignalを持つitemは
   // まだ外側のlexical scopeを必要とするため、下の汎用factory経路を使う。
-  if (itemParam != null && units.length === 0 && body.localDecls.length === 0) {
+  if (
+    itemParam != null &&
+    units.length === 0 &&
+    body.localDecls.length === 0 &&
+    body.emittedFns.length === 0
+  ) {
     const lines: string[] = []
     const attrs = body.localAttrBindings
     const refIds = new Set<string>([
@@ -669,6 +682,11 @@ function generateFactoryLegacy(
   // このfactoryインスタンス専有のクロージャ変数として宣言する(design D5)。
   for (const d of body.localDecls) {
     lines.push(`  let ${d.outputName} = ${d.rendered};`)
+  }
+  for (const fn of body.emittedFns) {
+    lines.push(
+      `  ${fn.async ? 'async ' : ''}function ${fn.name}(${fn.params}) {${replaceLocalUpdateCalls(fn.body, localUpdateExprs)}}`,
+    )
   }
   for (const m of body.localMarkers) {
     if (m.kind === 'text') {
@@ -843,8 +861,13 @@ function generateLifecycleFactory(
     lines.push('  const __unit_state__ = { bindings: new Map() };')
   }
   for (const d of body.localDecls) lines.push(`  let ${d.outputName} = ${d.rendered};`)
+  for (const fn of body.emittedFns) {
+    lines.push(
+      `  ${fn.async ? 'async ' : ''}function ${fn.name}(${fn.params}) {${replaceLocalUpdateCalls(fn.body, localUpdateExprs)}}`,
+    )
+  }
   for (const action of ownActions) {
-    if (action.resultRendered) {
+    if (action.hasResult) {
       lines.push(
         `  let __use_update_${action.markerId}__;`,
         `  let __use_destroy_${action.markerId}__;`,
@@ -852,10 +875,10 @@ function generateLifecycleFactory(
     }
   }
   for (const [index, mount] of ownMounts.entries()) {
-    if (mount.cleanupRendered) lines.push(`  let __unit_mount_cleanup_${index}__;`)
+    if (mount.hasCleanup) lines.push(`  let __unit_mount_cleanup_${index}__;`)
   }
   for (const [index, effect] of ownEffects.entries()) {
-    if (effect.cleanupRendered) lines.push(`  let __unit_effect_cleanup_${index}__;`)
+    if (effect.hasCleanup) lines.push(`  let __unit_effect_cleanup_${index}__;`)
   }
   lines.push('  let __unit_mounted__ = false;', '  let __unit_destroyed__ = false;')
 
@@ -986,7 +1009,7 @@ function generateLifecycleFactory(
     }
   }
   for (const action of ownActions) {
-    if (action.resultRendered) {
+    if (action.hasResult) {
       lines.push(`    if (__use_update_${action.markerId}__) __use_update_${action.markerId}__();`)
     }
   }
@@ -1057,7 +1080,7 @@ function generateLifecycleFactory(
     }
   }
   for (const action of [...ownActions].reverse()) {
-    if (action.resultRendered) {
+    if (action.hasResult) {
       lines.push(
         `    try { if (__use_destroy_${action.markerId}__) { const __destroy__ = __use_destroy_${action.markerId}__; __use_destroy_${action.markerId}__ = null; __use_update_${action.markerId}__ = null; __destroy__(); } else { __use_update_${action.markerId}__ = null; } } catch (__error__) { __destroy_error__ ??= __error__; }`,
       )
@@ -1065,7 +1088,7 @@ function generateLifecycleFactory(
   }
   for (const [index, mount] of [...ownMounts].reverse().entries()) {
     const mountIndex = ownMounts.length - 1 - index
-    if (mount.cleanupRendered) {
+    if (mount.hasCleanup) {
       lines.push(
         `    try { if (__unit_mount_cleanup_${mountIndex}__) { const __cleanup__ = __unit_mount_cleanup_${mountIndex}__; __unit_mount_cleanup_${mountIndex}__ = null; __cleanup__(); } } catch (__error__) { __destroy_error__ ??= __error__; }`,
       )
@@ -1073,7 +1096,7 @@ function generateLifecycleFactory(
   }
   for (const [index, effect] of [...ownEffects].reverse().entries()) {
     const effectIndex = ownEffects.length - 1 - index
-    if (effect.cleanupRendered) {
+    if (effect.hasCleanup) {
       lines.push(
         `    try { if (__unit_effect_cleanup_${effectIndex}__) { const __cleanup__ = __unit_effect_cleanup_${effectIndex}__; __unit_effect_cleanup_${effectIndex}__ = null; __cleanup__(); } } catch (__error__) { __destroy_error__ ??= __error__; }`,
       )
@@ -1364,10 +1387,9 @@ function renderActionCall(
       return `${updateExpr};`
     })
   const bodyRendered = mappedSource(replaceLocalUpdates(a.bodyRendered), a.bodySourceStart)
-  const resultRendered = a.resultRendered ? replaceLocalUpdates(a.resultRendered) : null
-  const fn = `function(${a.elParam ?? ''}) {${bodyRendered}${resultRendered ? ` return ${resultRendered};` : ''}}`
+  const fn = `function(${a.elParam ?? ''}) {${bodyRendered}}`
   const call = `(${fn})(${elementExpr})`
-  if (!a.resultRendered) return `${call};`
+  if (!a.hasResult) return `${call};`
   const resultVar = `__use_result_${a.markerId}__`
   return `{ const ${resultVar} = __normalizeUseActionResult__(${call}, ${JSON.stringify(a.markerId)}); __use_update_${a.markerId}__ = ${resultVar}.update ?? null; __use_destroy_${a.markerId}__ = ${resultVar}.destroy ?? null; if (__use_update_${a.markerId}__) __use_update_${a.markerId}__(); }`
 }
@@ -1397,9 +1419,8 @@ function renderMountCall(
     m.bodySourceStart,
   )
   const body = bodyRendered ? `${bodyRendered};` : ''
-  const cleanupRendered = m.cleanupRendered
-  const callback = `(function() { ${body}${cleanupRendered ? ` return ${cleanupRendered};` : ''} })()`
-  if (!m.cleanupRendered) return `${callback};`
+  const callback = `(function() { ${body} })()`
+  if (!m.hasCleanup) return `${callback};`
   const cleanupName = `${cleanupPrefix}${index}__`
   return `{ const __mount_cleanup_result__ = ${callback}; ${cleanupName} = __mount_cleanup_result__; }`
 }
@@ -1409,13 +1430,12 @@ function renderMountCall(
 // unmountで二重に呼ばない。
 function renderEffectRunner(e: EffectOutput, index: number): string[] {
   const body = e.bodyRendered ? `${mappedSource(e.bodyRendered, e.bodySourceStart)};` : ''
-  const cleanupRendered = e.cleanupRendered
-  const callback = `(function() { ${body}${cleanupRendered ? ` return ${cleanupRendered};` : ''} })()`
+  const callback = `(function() { ${body} })()`
   const lines = [
     `function __run_effect_${index}__() {`,
     '  if (!__mounted__ || __unmounted__) return;',
   ]
-  if (e.cleanupRendered) {
+  if (e.hasCleanup) {
     lines.push(
       `  if (__effect_cleanup_${index}__) { const __cleanup__ = __effect_cleanup_${index}__; __effect_cleanup_${index}__ = null; __cleanup__(); }`,
       `  __effect_cleanup_${index}__ = ${callback};`,
@@ -1432,13 +1452,12 @@ function renderEffectRunner(e: EffectOutput, index: number): string[] {
 // cleanup slotも生成しない。
 function renderLocalEffectRunner(e: LocalEffectOutput, index: number): string[] {
   const body = e.bodyRendered ? `${mappedSource(e.bodyRendered, e.bodySourceStart)};` : ''
-  const cleanupRendered = e.cleanupRendered
-  const callback = `(function() { ${body}${cleanupRendered ? ` return ${cleanupRendered};` : ''} })()`
+  const callback = `(function() { ${body} })()`
   const lines = [
     `function __run_unit_effect_${index}__() {`,
     '  if (!__unit_mounted__ || __unit_destroyed__) return;',
   ]
-  if (e.cleanupRendered) {
+  if (e.hasCleanup) {
     lines.push(
       `  if (__unit_effect_cleanup_${index}__) { const __cleanup__ = __unit_effect_cleanup_${index}__; __unit_effect_cleanup_${index}__ = null; __cleanup__(); }`,
       `  __unit_effect_cleanup_${index}__ = ${callback};`,
@@ -1490,7 +1509,7 @@ export function generateModule({
     ? [`${mountName}WithRanges as __mount__`, 'hydrateWithRanges as __hydrate__']
     : [`${mountName} as __mount__`, 'hydrate as __hydrate__']
   runtimeImports.push('beginDomUpdate as __beginDomUpdate__', 'endDomUpdate as __endDomUpdate__')
-  if (actions.some((a) => a.resultRendered) || markersHaveResultActions(markers)) {
+  if (actions.some((a) => a.hasResult) || markersHaveResultActions(markers)) {
     runtimeImports.push('normalizeUseActionResult as __normalizeUseActionResult__')
   }
   if (markersHaveList(markers)) {
@@ -1604,7 +1623,7 @@ export function generateModule({
   // 返り値を持つactionだけ、update/destroy を保持するinstanceスコープ変数を
   // 宣言する。返り値の無いactionには既存どおり配線機構を出力しない。
   const actionDeclLines = actions
-    .filter((a) => a.resultRendered)
+    .filter((a) => a.hasResult)
     .flatMap((a) => [`let __use_update_${a.markerId}__;`, `let __use_destroy_${a.markerId}__;`])
   if (actionDeclLines.length > 0) instanceLines.push(...actionDeclLines, '')
 
@@ -1612,7 +1631,7 @@ export function generateModule({
   // 生成する。onMount未使用、またはcleanupなしのcallbackでは関連コードを
   // 出力しない。
   const mountCleanupDeclLines = mounts
-    .map((mount, index) => (mount.cleanupRendered ? `let __on_mount_cleanup_${index}__;` : null))
+    .map((mount, index) => (mount.hasCleanup ? `let __on_mount_cleanup_${index}__;` : null))
     .filter((line): line is string => line !== null)
   if (mountCleanupDeclLines.length > 0) instanceLines.push(...mountCleanupDeclLines, '')
 
@@ -1620,7 +1639,7 @@ export function generateModule({
   // 生成する。effect未使用、またはcleanupなしのcallbackでは関連コードを
   // 出力しない。
   const effectCleanupDeclLines = effects
-    .map((effect, index) => (effect.cleanupRendered ? `let __effect_cleanup_${index}__;` : null))
+    .map((effect, index) => (effect.hasCleanup ? `let __effect_cleanup_${index}__;` : null))
     .filter((line): line is string => line !== null)
   if (effectCleanupDeclLines.length > 0) instanceLines.push(...effectCleanupDeclLines, '')
 
@@ -1734,7 +1753,7 @@ export function generateModule({
   const effectCallLines = effects.map((_, index) => `  __run_effect_${index}__();`)
 
   const actionDestroyOperations = actions
-    .filter((a) => a.resultRendered)
+    .filter((a) => a.hasResult)
     .reverse()
     .map(
       (a) =>
@@ -1742,7 +1761,7 @@ export function generateModule({
     )
   const mountCleanupOperations = mounts
     .map((mount, index) =>
-      mount.cleanupRendered
+      mount.hasCleanup
         ? `if (__on_mount_cleanup_${index}__) { const __cleanup__ = __on_mount_cleanup_${index}__; __on_mount_cleanup_${index}__ = null; __cleanup__(); }`
         : null,
     )
@@ -1750,7 +1769,7 @@ export function generateModule({
     .reverse()
   const effectCleanupOperations = effects
     .map((effect, index) =>
-      effect.cleanupRendered
+      effect.hasCleanup
         ? `if (__effect_cleanup_${index}__) { const __cleanup__ = __effect_cleanup_${index}__; __effect_cleanup_${index}__ = null; __cleanup__(); }`
         : null,
     )

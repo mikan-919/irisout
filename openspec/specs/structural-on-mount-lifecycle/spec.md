@@ -20,6 +20,12 @@ when the handle is destroyed.
 - **WHEN** a keyed list item with an onMount callback is removed
 - **THEN** the item's cleanup runs once and no runtime child component object is created
 
+#### Scenario: item callback returns cleanup from a branch
+
+- **WHEN** a keyed item's onMount callback writes local state and returns cleanup from a branch
+- **THEN** the local state is reflected when the callback completes
+- **AND** only the returned cleanup is retained by that item's factory and runs once on removal
+
 ### Requirement: root inline child ownership
 
 The compiler SHALL move callbacks from a root-scope inline child into the root component instance.

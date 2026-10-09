@@ -115,6 +115,8 @@ export interface StructuralUnitBody {
   localAttrBindings: AttrBinding[]
   /** same-file-component-composition: このユニット直下のローカルsignal宣言。 */
   localDecls: LocalDecl[]
+  /** この構造単位で宣言された補助関数の名前。生成先の字句範囲を保つ。 */
+  localFnNames: string[]
   /** 親のsignal/derivedに依存する本文・属性・入れ子unitの依存。 */
   rootDeps: Set<DeclId>
 }
@@ -157,7 +159,7 @@ export interface ConditionalMarker {
 // ADR-0011: `use={fn}`のトップレベル要素マーカー。返り値がある action は
 // action 呼び出し対象を hydrate で検証するため push される。destroy-only action
 // も要素マーカーを必要とするが、signalToMarkers には登録しない。中身(本体・返り値のレンダー済みテキスト)は signalToMarkers
-// 確定後にしか確定しない(ActionDecl.finalizeBody/finalizeResult)ため、Marker
+// 確定後にしか確定しない(ActionDecl.finalizeBody)ため、Marker
 // 自体はワイヤリングの目印(id のみ)に留める。
 export interface ActionMarker {
   id: MarkerId
@@ -176,15 +178,14 @@ export interface ActionDecl {
   /** action本体の第1仮引数(要素自身)の authored 名。0引数なら null。 */
   elParam: string | null
   finalizeBody: (resolveUpdateCall: ResolveUpdateCall) => string
-  /** 返り値(function または { update?, destroy? })。無ければ null。 */
-  finalizeResult: ((resolveUpdateCall: ResolveUpdateCall) => string) | null
+  /** 更新関数または { update?, destroy? } を返す経路がある。 */
+  hasResult: boolean
   /** 返り値のupdateが読むsignal/derived。構造unitの親依存へ合流する。 */
   resultDeps: Set<DeclId>
   /** action本体・返り値のupdateが書く宣言。字句範囲検証に使う。 */
   writeDeclIds: Set<DeclId>
   directCollectionWriteDeclIds: Set<DeclId>
   bodySourceStart: number
-  resultSourceStart: number | null
 }
 
 // ルートcomponentの`onMount(() => ...)` 1個ぶんの解析結果。actionと同じ
@@ -193,11 +194,10 @@ export interface ActionDecl {
 // 破棄される段階でDOM更新を発生させないためである。
 export interface MountDecl {
   finalizeBody: (resolveUpdateCall: ResolveUpdateCall) => string
-  finalizeCleanup: (() => string) | null
+  hasCleanup: boolean
   writeDeclIds: Set<DeclId>
   directCollectionWriteDeclIds: Set<DeclId>
   bodySourceStart: number
-  cleanupSourceStart: number | null
 }
 
 // ルートcomponentの`effect(() => ...)` 1個ぶんの解析結果。依存は本体の
@@ -206,10 +206,9 @@ export interface MountDecl {
 // 既存actionと共有できるが実際には空になる。
 export interface EffectDecl {
   finalizeBody: (resolveUpdateCall: ResolveUpdateCall) => string
-  finalizeCleanup: (() => string) | null
+  hasCleanup: boolean
   readDeclIds: Set<DeclId>
   bodySourceStart: number
-  cleanupSourceStart: number | null
 }
 
 export interface ContextDecl {
@@ -252,6 +251,8 @@ export interface SharedDecl {
 // 自身の関数出口で更新する。全書込みと同期の直接書込みを分けて保持する。
 export interface TrackedFn {
   finalize: (resolveUpdateCall: ResolveUpdateCall) => string
+  finalizeCleanup: () => string
+  node: t.FunctionDeclaration
   allWriteDeclIds: Set<DeclId>
   allCollectionWriteDeclIds: Set<DeclId>
   name: string
@@ -314,10 +315,11 @@ export interface CompilerState {
   // render.ts の一時 handlerFns と同じ内容を、呼び出し追跡(callee の binding
   // 同一性確認)のため analyze.ts から参照できるよう ctx へ載せる。
   movementFns: Map<string, NodePath<t.FunctionDeclaration>>
-  // 追跡対象として呼ばれ、モジュールスコープへ emit する関数(名前 → 解析結果)。
-  // Map の挿入順にちょうど1回ずつ codegen が emit する。
+  // 追跡対象として呼ばれる関数(名前 → 解析結果)。元の定義に対応する
+  // instance/factoryへ通常版と必要な後始末版だけを生成する。
   trackedFns: Map<string, TrackedFn>
   analyzedFunctions: Set<t.Function>
+  cleanupFunctionNames: Map<t.Function, string>
 
   // same-file-component-composition: 構造ユニットへインライン化された
   // ローカルsignal/derived の declId 集合(CONTEXT.md「ローカルsignal」)。
@@ -364,6 +366,7 @@ export function createCompilerState(
     movementFns: new Map(),
     trackedFns: new Map(),
     analyzedFunctions: new Set(),
+    cleanupFunctionNames: new Map(),
     localDeclIds: new Set(),
     sharedDecls: [],
     sharedDeclIdByBindingKey: new Map(),

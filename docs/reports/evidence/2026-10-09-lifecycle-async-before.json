@@ -1,0 +1,30 @@
+[
+  {
+    "baseline": "cd7a654",
+    "source": "export function App(){render(<div use={async el=>{await Promise.resolve()}}/>);}",
+    "compiled": true,
+    "loaded": false,
+    "error": "AggregateError: 2 errors building \"/tmp/irisout-1791518418546-0.8996591051558736.mjs\""
+  },
+  {
+    "baseline": "cd7a654",
+    "source": "export function App(){render(<div use={setup}/>);async function setup(el){await Promise.resolve()}}",
+    "compiled": true,
+    "loaded": false,
+    "error": "AggregateError: 2 errors building \"/tmp/irisout-1791518418565-0.06318386385543229.mjs\""
+  },
+  {
+    "baseline": "cd7a654",
+    "source": "export function App(){render(<div/>);onMount(async()=>{await Promise.resolve()});}",
+    "compiled": true,
+    "loaded": false,
+    "error": "AggregateError: 2 errors building \"/tmp/irisout-1791518418585-0.6050376154223812.mjs\""
+  },
+  {
+    "baseline": "cd7a654",
+    "source": "export function App(){render(<div/>);effect(async()=>{await Promise.resolve()});}",
+    "compiled": true,
+    "loaded": false,
+    "error": "AggregateError: 2 errors building \"/tmp/irisout-1791518418599-0.12972623449903653.mjs\""
+  }
+]

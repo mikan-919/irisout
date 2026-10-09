@@ -25,6 +25,7 @@ export interface AstRewriteSession {
     depth: number,
     build: (get: AstNodeGetter) => t.Node,
   ): void
+  insertAfter(target: t.Node, parent: t.Node | null, build: () => t.Node): void
   generate(): string
 }
 
@@ -91,6 +92,7 @@ export function createAstRewrite(root: t.Node): AstRewriteSession {
 
   const renames = new Map<t.Identifier, string>()
   const replacements: Replacement[] = []
+  const insertions: { target: t.Node; parent: t.Node | null; build: () => t.Node }[] = []
 
   return {
     rename(original, name) {
@@ -99,6 +101,9 @@ export function createAstRewrite(root: t.Node): AstRewriteSession {
 
     replace(target, parent, depth, build) {
       replacements.push({ target, parent, depth, build })
+    },
+    insertAfter(target, parent, build) {
+      insertions.push({ target, parent, build })
     },
 
     generate() {
@@ -125,8 +130,31 @@ export function createAstRewrite(root: t.Node): AstRewriteSession {
         }
         current.set(replacement.target, next)
       }
+      for (const insertion of insertions) {
+        const target = current.get(insertion.target)
+        const parent = insertion.parent ? (current.get(insertion.parent) ?? outputRoot) : outputRoot
+        const list =
+          (parent as unknown as { body?: t.Node[]; declarations?: t.Node[] }).body ??
+          (parent as unknown as { declarations?: t.Node[] }).declarations
+        const index = target && list ? list.indexOf(target) : -1
+        if (!list || index < 0)
+          throw new Error('compile: internal AST insertion target was not found')
+        const node = insertion.build()
+        const name = 'id' in node && node.id?.type === 'Identifier' ? node.id.name : null
+        const existing = name
+          ? list.findIndex(
+              (item) => 'id' in item && item.id?.type === 'Identifier' && item.id.name === name,
+            )
+          : -1
+        if (existing >= 0) list[existing] = node
+        else list.splice(index + 1, 0, node)
+      }
 
-      return generate(outputRoot, { comments: false }).code
+      // 再解析した関数本体の位置マーカーだけを残し、元のコメントは出力しない。
+      return generate(outputRoot, {
+        comments: true,
+        shouldPrintComment: (value) => value.includes('__IRISOUT_MAP_'),
+      }).code
     },
   }
 }
