@@ -1731,7 +1731,7 @@ export function generateModule({
   if (markersHaveList(markers)) {
     runtimeImports.push(
       'createListRuntime as __createListRuntime__',
-      'createFlatListRecord as __createFlatListRecord__',
+      'createFlatListHandle as __createFlatListRecord__',
       'FlatListHandle as __FlatListHandle__',
       'reconcileList as __reconcileList__',
       'updateListBinding as __updateListBinding__',

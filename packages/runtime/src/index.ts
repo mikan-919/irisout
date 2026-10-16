@@ -218,6 +218,19 @@ export function createFlatListRecord<T>(
   return new FlatListRecord(listId, itemId, handle)
 }
 
+// 生成側がFlatListHandleを返す経路は、互換用の包みと型判定を出荷しない。
+export function createFlatListHandle<T>(
+  listId: string,
+  itemId: unknown,
+  value: T,
+  create: (value: T, state: ListItemState) => ListItemHandle<T>,
+): ListRecord<T> {
+  const handle = (create as (value: T) => FlatListHandle<T>)(value)
+  handle.listId = listId
+  handle.itemId = itemId
+  return handle
+}
+
 function createListRecord<T>(
   listId: string,
   itemId: unknown,
@@ -734,12 +747,7 @@ export function reconcileList<T>(
       // ADR-0069: 全置換では新旧のMapを走査せず、新しい順序から登録し直す。
       runtime.items.clear()
       for (const record of ordered)
-        runtime.items.set(
-          record instanceof FlatListHandle || record instanceof FlatListRecord
-            ? record.itemId
-            : record.state.itemId,
-          record,
-        )
+        runtime.items.set('itemId' in record ? record.itemId : record.state.itemId, record)
       runtime.ordered = ordered
       return
     }

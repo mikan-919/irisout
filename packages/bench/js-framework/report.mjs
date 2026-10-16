@@ -3,7 +3,10 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { frameworks, root } from './config.mjs'
 
-const directory = path.join(root, 'results')
+const tag = process.env.JSFB_RESULT_TAG ?? ''
+if (tag && !/^[a-z0-9-]+$/.test(tag)) throw new Error('Invalid JSFB_RESULT_TAG')
+const suffix = tag ? `-${tag}` : ''
+const directory = path.join(root, `results${suffix}`)
 const environment = JSON.parse(fs.readFileSync(path.join(directory, 'environment.json'), 'utf8'))
 const samples = fs
   .readdirSync(directory)
@@ -138,8 +141,8 @@ function readCurrentProbe(file) {
   }
   return value
 }
-const probe = readCurrentProbe('optimization.json')
-const vanillaProbe = readCurrentProbe('vanilla-comparison.json')
+const probe = readCurrentProbe(`optimization${suffix}.json`)
+const vanillaProbe = readCurrentProbe(`vanilla-comparison${suffix}.json`)
 const median = (values) => {
   const sorted = [...values].sort((a, b) => a - b)
   return (sorted[Math.floor((sorted.length - 1) / 2)] + sorted[Math.floor(sorted.length / 2)]) / 2
@@ -271,8 +274,14 @@ ${table(12, 15)}
 単一環境での測定であり、一般のアプリ全体の性能順位を示さない。React・Vue・Solidは上流の実装と構築設定を維持した。irisoutは宣言した状態と一覧から生成し、手書きのDOM操作や測定専用の実行時最適化を加えていない。生の全試行値、script/paint内訳、版情報は[results.json](./results.json)を参照。再実行は[README.md](./README.md)を参照。
 `
 fs.writeFileSync(
-  path.join(root, 'results.json'),
+  path.join(root, `results${suffix}.json`),
   JSON.stringify({ environment, samples }, null, 2) + '\n',
 )
-fs.writeFileSync(path.join(root, 'results.md'), report)
+fs.writeFileSync(
+  path.join(root, `results${suffix}.md`),
+  report
+    .replaceAll('./results.json', `./results${suffix}.json`)
+    .replaceAll('./optimization.json', `./optimization${suffix}.json`)
+    .replaceAll('./vanilla-comparison.json', `./vanilla-comparison${suffix}.json`),
+)
 console.log(report)

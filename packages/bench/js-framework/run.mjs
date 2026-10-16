@@ -15,7 +15,9 @@ if (!Number.isSafeInteger(memoryCount) || memoryCount < 1)
   throw new Error('JSFB_MEMORY_COUNT must be a positive integer')
 const chrome = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ?? chromium.executablePath()
 const env = { ...process.env, PORT: process.env.JSFB_PORT ?? '8080' }
-const output = path.join(root, 'results')
+const tag = process.env.JSFB_RESULT_TAG ?? ''
+if (tag && !/^[a-z0-9-]+$/.test(tag)) throw new Error('Invalid JSFB_RESULT_TAG')
+const output = path.join(root, tag ? `results-${tag}` : 'results')
 if (fs.existsSync(output)) fs.renameSync(output, `${output}-${Date.now()}`)
 fs.mkdirSync(output, { recursive: true })
 const driver = path.join(checkout, 'webdriver-ts')
