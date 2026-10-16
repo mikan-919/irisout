@@ -8,9 +8,9 @@
 
 測定した画面は幅375・768・1,280の表示検査と8操作の検査を通過した。表示検査の警告は共通サーバーの`favicon.ico`の404が1件で、表示崩れの検出は0件だった。
 
-公式測定はirisout・React Hooks・Vue・Solid・Vanillaの5実装、CPU全9操作を各10回（選択20回）、メモリ全3項目を各3回、転送量と初回描画を各1回とする。公式のキー付き判定では、5実装とも作成・削除・交換時の要素再利用を通過した。条件と全結果は[results.md](./results.md)、全試行値は[results.json](./results.json)を参照。
+公式測定はirisout・React Hooks・Vue・Solid・Vanillaの5実装、CPU全9操作を各10回（選択20回）、メモリ全3項目を各3回、転送量と初回描画を各1回とする。公式のキー付き判定では、5実装とも作成・削除・交換時の要素再利用を通過した。条件と全結果は[results.md](./baseline-results.md)、全試行値は[results.json](./baseline-results.json)を参照。
 
-同期比較はVanillaとirisoutを交互に各100回実行する。同期処理とはクリックの処理関数とDOM書込みが終了するまでの時間であり、レイアウト・描画を含まない。別のページで操作回数を数え、時間の測定には計装したコードを使わない。回数は[vanilla-work.json](./vanilla-work.json)、同期時間は[vanilla-comparison.json](./vanilla-comparison.json)に保存する。
+同期比較はVanillaとirisoutを交互に各100回実行する。同期処理とはクリックの処理関数とDOM書込みが終了するまでの時間であり、レイアウト・描画を含まない。別のページで操作回数を数え、時間の測定には計装したコードを使わない。回数は[vanilla-work.json](./vanilla-work.json)、同期時間は[vanilla-comparison.json](./baseline-vanilla-comparison.json)に保存する。
 
 ## 時間差が再現した操作
 

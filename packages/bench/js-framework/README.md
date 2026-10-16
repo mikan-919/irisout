@@ -70,10 +70,10 @@ bunx vlmkit verify flow http://localhost:8080/frameworks/keyed/irisout/dist/inde
 
 ## 修正前後の処理時間
 
-[optimization.json](./optimization.json)は、同じJSXを前回確定版（コミット`fbb8601`）と修正後で構築した比較。公式サーバー上の修正前後の画面を`probe.mjs`へ渡すと再実行できる。2026-10-15の最初の改善値はGitの`fbb8601:packages/bench/js-framework/optimization.json`に保存している。
+[optimization.json](./optimization.json)は、同じJSXを最初の基準版（コミット`390f84a`）と修正後で構築した比較。公式サーバー上の修正前後の画面を`probe.mjs`へ渡すと再実行できる。2026-10-15の最初の改善値はGitの`fbb8601:packages/bench/js-framework/optimization.json`に保存している。
 
 ```sh
-PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/path/to/chrome bun packages/bench/js-framework/probe.mjs http://localhost:8080/frameworks/keyed/irisout-stage1/dist/index.html http://localhost:8080/frameworks/keyed/irisout/dist/index.html
+PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/path/to/chrome bun packages/bench/js-framework/probe.mjs http://localhost:8080/frameworks/keyed/irisout-before-work/dist/index.html http://localhost:8080/frameworks/keyed/irisout/dist/index.html
 ```
 
 3回の事前実行後に15回測り、各試行で修正前後の順序を交互にする。乱数の初期値を固定し、選択は200回、交換は20回の操作時間を1回当たりへ換算する。同期したイベント処理とDOM書き込みの時間を測り、レイアウト・描画は含まない。両ページのconsole.logを抑止して、上流の手書き実装に残る開発用ログの転送費用を除く。公式測定ではログの挙動を変えない。比較するスクリプトのURLとSHA-256をJSONへ記録する。
@@ -93,3 +93,9 @@ bun packages/bench/js-framework/report.mjs
 `work-probe.mjs`は別のページで組込み関数とDOM操作を計装し、9操作の呼出し回数を[vanilla-work.json](./vanilla-work.json)へ保存する。計装した値を時間の比較には使わない。配列操作は長さ100以上を対象とし、`inputItems`は入力の長さの合計であって、実際の要素評価回数ではない。各操作は初期状態から1回だけ実行し、初回作成には遅延初期化も含む。
 
 `report.mjs`は同期比較のスクリプトのSHA-256を公式測定の生成物と照合し、版が異なる過去の比較を除外する。中央値差の95%区間は同じ試行の組を再抽出する方法で求める。0を含む場合は同等と断定せず「差未確定」と記録する。
+
+## 一覧高速化計画の最終集計
+
+`bun packages/bench/js-framework/report.mjs`に続いて`bun packages/bench/js-framework/work-report.mjs`を実行する。後者は同期比較3組、中間段階、行数・CPU減速別の全削除、行イベント登録の比較実験を読み、`work-results.md`と`work-analysis.json`へ中央値・絶対差・比率・95%区間を出力する。最終生成物のSHA-256と各100試行を照合し、中間段階は各段階の保存済みSHA-256へ照合する。
+
+最初の調査の公式値は[baseline-results.md](./baseline-results.md)と[baseline-results.json](./baseline-results.json)、同期値は[baseline-vanilla-comparison.json](./baseline-vanilla-comparison.json)へ保存した。最新結果で基準版の値を上書きしない。
