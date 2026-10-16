@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-16T09:52:18.716Z",
+  "timestamp": "2026-10-16T09:56:32.105Z",
   "browser": "153.0.8010.12",
   "method": "one click from a fresh 1000-row state, or empty state for create; instrumented calls only, no timing; console.log disabled; numeric Map keys; array operations counted only for length >= 100",
   "measurements": [

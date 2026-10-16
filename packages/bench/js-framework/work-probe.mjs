@@ -78,7 +78,7 @@ try {
             ...descriptor,
             get() {
               record('get.' + name)
-              return Reflect.apply(descriptor.get, this, [])
+              return descriptor.get.call(this)
             },
           })
         }
@@ -93,7 +93,7 @@ try {
           ...descriptor,
           set(value) {
             record(name)
-            return Reflect.apply(descriptor.set, this, [value])
+            return descriptor.set.call(this, value)
           },
         })
       }
