@@ -1568,6 +1568,9 @@ export function generateModule({
   if (usesListMap)
     runtimeImports.push(
       'mapListValues as __mapListValues__',
+      'appendListValues as __appendListValues__',
+      'filterListValues as __filterListValues__',
+      'copyListValues as __copyListValues__',
       'reconcileListMap as __reconcileListMap__',
     )
   if (actions.some((a) => a.hasResult) || markersHaveResultActions(markers)) {

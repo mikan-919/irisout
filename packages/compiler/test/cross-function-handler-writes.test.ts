@@ -24,6 +24,18 @@ async function mount(code: string): Promise<Element> {
 }
 
 describe('cross-function-handler-writes: 追跡と発火', () => {
+  it('同期補助関数を状態書込みの引数にしても括弧と返り値を保持する', async () => {
+    const { code } = compile(`export function App() {
+      const count=signal(0); const calls=signal(0);
+      render(<main><span>{count()}</span><output>{calls()}</output><button onClick={()=>count(next())}>next</button></main>);
+      function next() { calls(calls()+1); return calls()*2; }
+    }`)
+    const container = await mount(code)
+    dispatchClick(container, container.querySelector('button'))
+    expect(container.querySelector('span')?.textContent).toBe('2')
+    expect(container.querySelector('output')?.textContent).toBe('1')
+  })
+
   // 発見時の再現形: リストアイテムの `onClick={() => toggle(todo.id)}`。
   const TODO_SOURCE = `
 export function App() {

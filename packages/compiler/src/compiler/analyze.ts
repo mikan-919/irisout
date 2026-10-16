@@ -10,7 +10,14 @@ import * as t from '@babel/types'
 import { createAstRewrite } from './ast-codegen.ts'
 import type { AstRewriteSession } from './ast-codegen.ts'
 import { resolveToSignals } from './decl-graph.ts'
-import { isOwnedRowArray, isPureRowMap, rowMapRange } from './list-map.ts'
+import {
+  isOwnedRowArray,
+  isPureRowMap,
+  isPureRowFilter,
+  isRowAppend,
+  rowPermutationIndexes,
+  rowMapRange,
+} from './list-map.ts'
 import type {
   CompilerState,
   ContextId,
@@ -91,7 +98,8 @@ function forEachReferencedIdentifier(
 }
 
 function render(source: string, start: number, end: number, edits: Edit[]): string {
-  const sorted = [...edits].sort((a, b) => a.start - b.start)
+  // 同じ位置の内側の閉じ括弧を先に挿入し、外側の置換で元の文字を一度だけ消費する。
+  const sorted = [...edits].sort((a, b) => a.start - b.start || a.end - b.end)
   let out = ''
   let cursor = start
   for (const edit of sorted) {
@@ -690,6 +698,43 @@ function analyzeActionIdentifier(
   }
   if (parent?.isCallExpression() && parent.node.callee === idPath.node) {
     if (parent.node.arguments.length === 0) {
+      const member = parent.parentPath
+      const copy = member?.parentPath
+      if (
+        !ctx.localDeclIds.has(id) &&
+        member?.isMemberExpression() &&
+        !member.node.computed &&
+        t.isIdentifier(member.node.property, { name: 'slice' }) &&
+        copy?.isCallExpression() &&
+        copy.node.arguments.length === 0 &&
+        copy.parentPath?.isVariableDeclarator() &&
+        t.isIdentifier(copy.parentPath.node.id)
+      ) {
+        const binding = idPath.scope.getBinding(idPath.node.name)!
+        const local = copy.scope.getBinding(copy.parentPath.node.id.name)
+        const indexes = local && rowPermutationIndexes(local, binding)
+        if (indexes) {
+          let owned = ctx.ownedRowArrays.get(binding.path.node)
+          if (owned === undefined) {
+            owned = isOwnedRowArray(binding)
+            ctx.ownedRowArrays.set(binding.path.node, owned)
+          }
+          if (owned) {
+            ctx.listMapDeclIds.add(id)
+            edits.push(
+              { start: parent.node.start!, end: parent.node.start!, text: '__copyListValues__(' },
+              { start: parent.node.end!, end: copy.node.end!, text: `, ${indexes.join(', ')})` },
+            )
+            if (ast)
+              planAstReplacement(ast, copy as NodePath<t.CallExpression>, root, (get) =>
+                t.callExpression(t.identifier('__copyListValues__'), [
+                  get(parent.node) as t.Expression,
+                  ...indexes.map((value) => t.numericLiteral(value)),
+                ]),
+              )
+          }
+        }
+      }
       readDeclIds.add(id)
       edits.push({
         start: parent.node.start!,
@@ -714,7 +759,12 @@ function analyzeActionIdentifier(
     const arg = parent.node.arguments[0]!
     const binding = idPath.scope.getBinding(idPath.node.name)!
     const argumentPath = parent.get('arguments.0') as NodePath<t.Expression>
-    if (!ctx.localDeclIds.has(id) && isPureRowMap(argumentPath, binding)) {
+    if (
+      !ctx.localDeclIds.has(id) &&
+      (isPureRowMap(argumentPath, binding) ||
+        isPureRowFilter(argumentPath, binding) ||
+        isRowAppend(argumentPath, binding))
+    ) {
       let owned = ctx.ownedRowArrays.get(binding.path.node)
       if (owned === undefined) {
         owned = isOwnedRowArray(binding)
@@ -722,23 +772,45 @@ function analyzeActionIdentifier(
       }
       if (owned) {
         ctx.listMapDeclIds.add(id)
-        const map = argumentPath.node
-        const range = rowMapRange(map)
-        const object = (map.callee as t.MemberExpression).object
-        edits.push(
-          { start: object.start!, end: object.start!, text: '__mapListValues__(' },
-          { start: object.end!, end: map.arguments[0]!.start!, text: ', ' },
-        )
-        if (range)
-          edits.push({ start: map.end! - 1, end: map.end! - 1, text: `, ${range.join(', ')}` })
-        if (ast)
-          planAstReplacement(ast, argumentPath, root, (get) =>
-            t.callExpression(t.identifier('__mapListValues__'), [
-              get(object) as t.Expression,
-              get(map.arguments[0]!) as t.Expression,
-              ...(range ? range.map((value) => t.numericLiteral(value)) : []),
-            ]),
+        if (isRowAppend(argumentPath, binding)) {
+          const [first, second] = argumentPath.node.elements as t.SpreadElement[]
+          edits.push(
+            {
+              start: argumentPath.node.start!,
+              end: first!.argument.start!,
+              text: '__appendListValues__(',
+            },
+            { start: first!.argument.end!, end: second!.argument.start!, text: ', ' },
+            { start: second!.argument.end!, end: argumentPath.node.end!, text: ')' },
           )
+          if (ast)
+            planAstReplacement(ast, argumentPath, root, (get) =>
+              t.callExpression(t.identifier('__appendListValues__'), [
+                get(first!.argument) as t.Expression,
+                get(second!.argument) as t.Expression,
+              ]),
+            )
+        } else {
+          const map = argumentPath.node as t.CallExpression
+          const filtering = isPureRowFilter(argumentPath, binding)
+          const range = rowMapRange(map)
+          const object = (map.callee as t.MemberExpression).object
+          const helper = filtering ? '__filterListValues__' : '__mapListValues__'
+          edits.push(
+            { start: object.start!, end: object.start!, text: helper + '(' },
+            { start: object.end!, end: map.arguments[0]!.start!, text: ', ' },
+          )
+          if (range)
+            edits.push({ start: map.end! - 1, end: map.end! - 1, text: `, ${range.join(', ')}` })
+          if (ast)
+            planAstReplacement(ast, argumentPath, root, (get) =>
+              t.callExpression(t.identifier(helper), [
+                get(object) as t.Expression,
+                get(map.arguments[0]!) as t.Expression,
+                ...(range ? range.map((value) => t.numericLiteral(value)) : []),
+              ]),
+            )
+        }
       }
     }
     const functional = arg.type === 'ArrowFunctionExpression' || arg.type === 'FunctionExpression'

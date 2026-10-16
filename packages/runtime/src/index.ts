@@ -206,15 +206,79 @@ export function createListRuntime<T = unknown>(listId: string): ListRuntime<T> {
   return { listId, items: new Map() }
 }
 
-interface ListMapChange {
+interface ListChangeBase {
   token: object
   base?: object
-  changes: [unknown, unknown][]
 }
+
+type ListMapChange = ListChangeBase &
+  (
+    | { kind: 'base' }
+    | { kind: 'map'; changes: [unknown, unknown][] }
+    | { kind: 'append'; start: number }
+    | { kind: 'filter'; removed: unknown[] }
+    | { kind: 'swap'; indexes: [number, number]; before: [unknown, unknown]; length: number }
+  )
 
 // ADR-0067: 元の配列を保持すると更新履歴が連鎖して残るため、基点は識別子だけを持つ。
 const listMapChanges = new WeakMap<readonly unknown[], ListMapChange>()
-const listMapBases = new WeakMap<object, readonly unknown[]>()
+const listMapBases = new WeakMap<object, object>()
+
+function listToken(values: readonly unknown[]): object {
+  let change = listMapChanges.get(values)
+  if (!change) {
+    change = { kind: 'base', token: {} }
+    listMapChanges.set(values, change)
+  }
+  return change.token
+}
+
+// ADR-0068: 配列の複製と式の評価順は維持し、保持行の再照合だけを省く。
+export function appendListValues<T>(values: readonly T[], added: readonly T[]): T[] {
+  const next = [...values, ...added]
+  listMapChanges.set(next, {
+    kind: 'append',
+    token: {},
+    base: listToken(values),
+    start: values.length,
+  })
+  return next
+}
+
+export function filterListValues<T>(
+  values: readonly T[],
+  predicate: (value: T, index: number) => unknown,
+): T[] {
+  const removed: T[] = []
+  const next = values.filter((value, index) => {
+    const keep = predicate(value, index)
+    if (!keep) removed.push(value)
+    return keep
+  })
+  listMapChanges.set(next, { kind: 'filter', token: {}, base: listToken(values), removed })
+  return next
+}
+
+export function copyListValues<T>(values: readonly T[], first: number, second: number): T[] {
+  const next = values.slice()
+  if (
+    first !== second &&
+    first >= 0 &&
+    second >= 0 &&
+    first < values.length &&
+    second < values.length
+  ) {
+    listMapChanges.set(next, {
+      kind: 'swap',
+      token: {},
+      base: listToken(values),
+      indexes: [first, second],
+      before: [values[first], values[second]],
+      length: values.length,
+    })
+  }
+  return next
+}
 
 // コンパイラが所有権とmap本体を検証した場合だけ呼ぶ。公開signalの契約は変えない。
 export function mapListValues<T>(
@@ -223,11 +287,7 @@ export function mapListValues<T>(
   stride?: number,
   offset = 0,
 ): T[] {
-  let base = listMapChanges.get(values)
-  if (!base) {
-    base = { token: {}, changes: [] }
-    listMapChanges.set(values, base)
-  }
+  const base = listToken(values)
   const changes: [unknown, unknown][] = []
   const apply = (value: T, index: number): T => {
     const result = map(value, index)
@@ -240,7 +300,7 @@ export function mapListValues<T>(
       if (index in values) next[index] = apply(values[index]!, index)
     }
   }
-  listMapChanges.set(next, { token: {}, base: base.token, changes })
+  listMapChanges.set(next, { kind: 'map', token: {}, base, changes })
   return next
 }
 
@@ -257,9 +317,70 @@ export function reconcileListMap<T>(
   const previous = listMapBases.get(runtime)
   listMapBases.delete(runtime)
   const change = listMapChanges.get(values)
-  if (allowMap && previous && change?.base && change.base === listMapChanges.get(previous)?.token) {
+  if (allowMap && previous && change?.base === previous) {
+    const parent = container
+      ? isDomRange(container)
+        ? container.start.parentNode
+        : container
+      : null
+    if (change.kind === 'append' && change.start === runtime.items.size) {
+      const fragment = parent?.ownerDocument?.createDocumentFragment()
+      for (let index = change.start; index < values.length; index++) {
+        const value = values[index]!
+        const itemId = keyOf(value)
+        if (runtime.items.has(itemId))
+          throw new Error(
+            `reconcileList: duplicate key ${String(itemId)} in list ${runtime.listId}`,
+          )
+        const record = (recordFactory ?? createListRecord)(runtime.listId, itemId, value, create)
+        runtime.items.set(itemId, record)
+        fragment?.append(record.handle.el)
+      }
+      if (parent && fragment)
+        parent.insertBefore(fragment, container && isDomRange(container) ? container.end : null)
+      listMapBases.set(runtime, change.token)
+      return
+    }
+    if (change.kind === 'filter') {
+      for (const value of change.removed) {
+        const itemId = keyOf(value as T)
+        const record = runtime.items.get(itemId)
+        record?.handle.el.remove()
+        runtime.items.delete(itemId)
+      }
+      listMapBases.set(runtime, change.token)
+      return
+    }
+    if (
+      change.kind === 'swap' &&
+      values.length === change.length &&
+      values[change.indexes[0]] === change.before[1] &&
+      values[change.indexes[1]] === change.before[0]
+    ) {
+      const first = runtime.items.get(keyOf(change.before[0] as T))?.handle.el
+      const second = runtime.items.get(keyOf(change.before[1] as T))?.handle.el
+      if (
+        first &&
+        second &&
+        (!parent || (first.parentNode === parent && second.parentNode === parent))
+      ) {
+        if (parent) {
+          const afterFirst = first.nextSibling
+          const afterSecond = second.nextSibling
+          if (afterFirst === second) parent.insertBefore(second, first)
+          else if (afterSecond === first) parent.insertBefore(first, second)
+          else {
+            parent.insertBefore(second, afterFirst)
+            parent.insertBefore(first, afterSecond)
+          }
+        }
+        listMapBases.set(runtime, change.token)
+        return
+      }
+    }
     // キー変更は構造変更なので、更新前に全変更行を検査して通常照合へ戻す。
     if (
+      change.kind === 'map' &&
       change.changes.every(
         ([before, after]) =>
           Object.is(keyOf(before as T), keyOf(after as T)) && runtime.items.has(keyOf(before as T)),
@@ -267,12 +388,12 @@ export function reconcileListMap<T>(
     ) {
       for (const [, next] of change.changes)
         update(runtime.items.get(keyOf(next as T))!.handle, next as T)
-      listMapBases.set(runtime, values)
+      listMapBases.set(runtime, change.token)
       return
     }
   }
   reconcileList(runtime, container, values, keyOf, create, update, recordFactory)
-  listMapBases.set(runtime, values)
+  listMapBases.set(runtime, listToken(values))
 }
 
 // bindingId はコンパイラが item factory 内の更新箇所ごとに固定する。初回、または

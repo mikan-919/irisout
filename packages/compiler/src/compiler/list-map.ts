@@ -250,7 +250,7 @@ function permutation(binding: Binding, state: Binding): boolean {
   })
 }
 
-export function isOwnedRowArray(state: Binding): boolean {
+function ownedRowFields(state: Binding): Set<string> | false {
   if (!state.constant || !state.path.isVariableDeclarator()) return false
   let hasEval = false
   state.path.getFunctionParent()?.traverse({
@@ -367,7 +367,7 @@ export function isOwnedRowArray(state: Binding): boolean {
   const fields = new Set(proof.shapes![0] ?? [])
   for (const shape of proof.shapes!)
     for (const field of fields) if (!shape.has(field)) fields.delete(field)
-  return (
+  const valid =
     [...maps].every((map) => pureCallback(map, true, { fields })) &&
     [...items].every((item) =>
       item.referencePaths.every(
@@ -376,7 +376,11 @@ export function isOwnedRowArray(state: Binding): boolean {
           fields.has(property(ref.parentPath.node.property)!),
       ),
     )
-  )
+  return valid ? fields : false
+}
+
+export function isOwnedRowArray(state: Binding): boolean {
+  return ownedRowFields(state) !== false
 }
 
 export function isPureRowMap(path: NodePath, state: Binding): path is NodePath<t.CallExpression> {
@@ -396,6 +400,125 @@ export function isPureRowMap(path: NodePath, state: Binding): path is NodePath<t
     object.scope.getBinding(object.node.callee.name) === state &&
     pureCallback(path.get('arguments.0') as NodePath, true)
   )
+}
+
+// ADR-0068: 書込み位置が二つだけの複製を記録する。実際に交換したかは反映時に確認する。
+export function rowPermutationIndexes(copy: Binding, state: Binding): [number, number] | null {
+  if (!permutation(copy, state)) return null
+  const indexes = new Set<number>()
+  for (const ref of copy.referencePaths) {
+    const member = ref.parentPath
+    if (
+      member?.isMemberExpression() &&
+      member.node.computed &&
+      t.isNumericLiteral(member.node.property) &&
+      member.parentPath?.isAssignmentExpression() &&
+      member.parentPath.node.left === member.node
+    ) {
+      indexes.add(member.node.property.value)
+    }
+  }
+  if (indexes.size !== 2 || [...indexes].some((index) => !Number.isSafeInteger(index) || index < 0))
+    return null
+  return [...indexes].sort((a, b) => a - b) as [number, number]
+}
+
+export function isRowAppend(path: NodePath, state: Binding): path is NodePath<t.ArrayExpression> {
+  if (!path.isArrayExpression() || path.node.elements.length !== 2) return false
+  const [first, second] = path.get('elements') as NodePath[]
+  if (!first?.isSpreadElement() || !second?.isSpreadElement()) return false
+  const read = first.get('argument')
+  return (
+    read.isCallExpression() &&
+    read.node.arguments.length === 0 &&
+    t.isIdentifier(read.node.callee) &&
+    read.scope.getBinding(read.node.callee.name) === state &&
+    freshBuilder(second.get('argument'), {})
+  )
+}
+
+// フィルターは呼出し・代入を許可しない。捕捉した行は同じ所有配列の表示引数だけに限る。
+export function isPureRowFilter(
+  path: NodePath,
+  state: Binding,
+): path is NodePath<t.CallExpression> {
+  if (!path.isCallExpression() || path.node.arguments.length !== 1) return false
+  const callee = path.get('callee')
+  if (
+    !callee.isMemberExpression() ||
+    callee.node.computed ||
+    !t.isIdentifier(callee.node.property, { name: 'filter' })
+  )
+    return false
+  const object = callee.get('object')
+  if (
+    !object.isCallExpression() ||
+    object.node.arguments.length !== 0 ||
+    !t.isIdentifier(object.node.callee) ||
+    object.scope.getBinding(object.node.callee.name) !== state
+  )
+    return false
+  const callback = path.get('arguments.0') as NodePath
+  if (
+    !callback.isArrowFunctionExpression() ||
+    callback.node.async ||
+    callback.node.params.length > 2 ||
+    !t.isIdentifier(callback.node.params[0])
+  )
+    return false
+  const fields = ownedRowFields(state)
+  if (!fields) return false
+  const item = callback.scope.getBinding(callback.node.params[0].name)
+  const index = t.isIdentifier(callback.node.params[1])
+    ? callback.scope.getBinding(callback.node.params[1].name)
+    : null
+  const safe = (part: NodePath): boolean => {
+    if (part.isLiteral() && !part.isRegExpLiteral()) return true
+    if (part.isIdentifier()) {
+      const binding = part.scope.getBinding(part.node.name)
+      if (binding === index && binding) return true
+      return (
+        !!binding?.constant &&
+        binding.path.isVariableDeclarator() &&
+        t.isLiteral(binding.path.node.init) &&
+        !t.isRegExpLiteral(binding.path.node.init)
+      )
+    }
+    if (part.isMemberExpression() && !part.node.computed && t.isIdentifier(part.node.object)) {
+      const binding = part.scope.getBinding(part.node.object.name)
+      if (!fields.has(property(part.node.property)!)) return false
+      if (binding === item) return true
+      const fn = binding?.path.getFunctionParent()
+      if (
+        !fn?.isArrowFunctionExpression() ||
+        !t.isJSXElement(fn.node.body) ||
+        fn.node.params[0] !== binding?.identifier
+      )
+        return false
+      const map = fn.parentPath
+      if (
+        !map?.isCallExpression() ||
+        !t.isMemberExpression(map.node.callee) ||
+        !t.isIdentifier(map.node.callee.property, { name: 'map' })
+      )
+        return false
+      const source = map.node.callee.object
+      return (
+        t.isCallExpression(source) &&
+        source.arguments.length === 0 &&
+        t.isIdentifier(source.callee) &&
+        map.scope.getBinding(source.callee.name) === state
+      )
+    }
+    if (part.isBinaryExpression() || part.isLogicalExpression())
+      return safe(part.get('left') as NodePath) && safe(part.get('right') as NodePath)
+    if (part.isUnaryExpression() && part.node.operator !== 'delete')
+      return safe(part.get('argument'))
+    if (part.isConditionalExpression())
+      return safe(part.get('test')) && safe(part.get('consequent')) && safe(part.get('alternate'))
+    return false
+  }
+  return safe(callback.get('body'))
 }
 
 // 添字だけで決まる等間隔・単一位置の更新は、その位置だけcallbackを実行する。
