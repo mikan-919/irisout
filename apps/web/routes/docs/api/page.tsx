@@ -183,7 +183,7 @@ function Toolbar() {
       <pre>
         <code>{`import { compile, compileSSR } from 'irisout'
 
-compile(source: string): CompileResult
+compile(source: string, options?: { listEvents?: 'direct' | 'delegated' }): CompileResult
 compileSSR(source: string): CompileResult`}</code>
       </pre>
       <p>
@@ -197,6 +197,7 @@ compileSSR(source: string): CompileResult`}</code>
 
 compileProject(entryPath, {
   target?: 'client' | 'ssr',
+  listEvents?: 'direct' | 'delegated',
   transformSource?: (source, filePath) => string,
 }): CompileResult`}</code>
       </pre>
@@ -242,11 +243,18 @@ irisout({
   htmlMarker: '<!--irisout-html-->',
   virtualModuleId: 'virtual:irisout-entry',
   transformSource,
+  listEvents: 'direct',
 })`}</code>
       </pre>
       <p>
         <code>entry</code>
         は必須です。残りは初期HTMLの差し込み位置、クライアント入口、前処理を指定します。
+      </p>
+      <p>
+        <code>listEvents</code>の既定は<code>direct</code>です。<code>delegated</code>
+        はルートの平坦な一覧の引数なしclickを親で処理し、行ごとの登録を省きます。
+        非バブルのclickは処理せず、途中の伝播停止や外部リスナーとの実行順が直接方式と異なります。
+        引数付きclick、blur、入れ子とライフサイクルのある一覧は直接登録を保ちます。
       </p>
 
       <h2>SSR連携</h2>

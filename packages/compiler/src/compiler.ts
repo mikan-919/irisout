@@ -81,6 +81,8 @@ export function useContext<T>(_context: IrisContext<T>): T {
 export interface CompileProjectOptions {
   /** clientは既存入口、ssrは要求単位のrender moduleを追加生成する。 */
   target?: 'client' | 'ssr'
+  /** 引数なしの一覧clickを親で処理する。非バブルのclickは対象外。 */
+  listEvents?: 'direct' | 'delegated'
   /** 外部拡張が各moduleをirisoutの標準記法へ下げる前処理。 */
   transformSource?: (source: string, filePath: string) => string
 }
@@ -103,6 +105,7 @@ export function compileProject(
     const options: CompileOptions = {
       allowModuleSupport: true,
       target: projectOptions.target,
+      listEvents: projectOptions.listEvents,
       hasRelativeModule: linked.hasRelativeModule,
       supportStatements: linked.supportStatements,
       supportNames: linked.supportNames,

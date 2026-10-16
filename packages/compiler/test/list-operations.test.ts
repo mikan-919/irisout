@@ -127,7 +127,7 @@ describe('owned list operations', () => {
     } finally {
       spy.mockRestore()
     }
-    expect(measured!).toEqual({ lookups: 1, compares: 1, siblings: 0 })
+    expect(measured!).toEqual({ lookups: 0, compares: 1, siblings: 0 })
     expect(largeCopies).toBe(1)
     expect(app.rows()[0]?.querySelector('span')?.textContent).toBe('a!')
   })
@@ -250,7 +250,7 @@ describe('owned list operations', () => {
       const swap = app.button('swap')
       expect(app.code).toContain(`__copyListValues__(rows, 0, ${size - 1}, true)`)
       expect(work(app.container, () => app.click(swap))).toEqual({
-        lookups: 2,
+        lookups: 0,
         compares: 0,
         siblings: 2,
       })
@@ -339,7 +339,7 @@ describe('owned list operations', () => {
     app.click(app.button('partial'))
     const remove = before[0]!.querySelector('button')!
     expect(work(app.container, () => app.click(remove))).toEqual({
-      lookups: 1,
+      lookups: 0,
       compares: 0,
       siblings: 0,
     })

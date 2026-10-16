@@ -62,7 +62,7 @@ useContext<T>(context: IrisContext<T>): T
 ## コンパイラ
 
 ```ts
-compile(source: string): CompileResult
+compile(source: string, options?: { listEvents?: 'direct' | 'delegated' }): CompileResult
 compileSSR(source: string): CompileResult
 compileProject(entryPath: string, options?): CompileResult
 ```
@@ -70,6 +70,8 @@ compileProject(entryPath: string, options?): CompileResult
 `CompileResult`にはブラウザー用の`code`、ソースマップ`map`、初期描画`initialHtml`、SSR用の`ssrCode`、読み込んだ`dependencies`が入る。
 
 `irisout/browser`の`compile()`はNode.jsのファイル機能を使わず、Workerなどで単一ソースを変換する。
+
+Node側の`compile()`、`compileProject()`とViteの`irisout()`は`listEvents`を指定できる。既定の`'direct'`は要素へ直接登録する。`'delegated'`はルートの平坦な一覧の引数なし`onClick`を親で処理し、行ごとの登録と対象要素の初期探索を省く。引数付きclick、blur、入れ子やライフサイクルのある一覧は直接登録を保つ。委譲では非バブルのclickを処理せず、途中の伝播停止や外部リスナーとの実行順も直接方式とは異なる。この観測の変更を許容する場合に指定する。
 
 ## ViteとSSR
 

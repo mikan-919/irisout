@@ -173,9 +173,30 @@ class FlatListRecord<T> implements ListRecord<T> {
 
   constructor(
     private readonly listId: string,
-    private readonly itemId: unknown,
+    readonly itemId: unknown,
     readonly handle: ListItemHandle<T>,
   ) {}
+
+  get state(): ListItemState {
+    return (this.#state ??= new ItemState(this.listId, this.itemId))
+  }
+}
+
+// ADR-0069: 生成側の保存領域を記録自身にし、行ごとの包みを確保しない。
+export class FlatListHandle<T> implements ListRecord<T>, ListItemHandle<T> {
+  #state?: ListItemState
+  listId!: string
+  itemId: unknown
+  seen?: object
+
+  constructor(
+    readonly el: Element,
+    public value: T,
+  ) {}
+
+  get handle(): this {
+    return this
+  }
 
   get state(): ListItemState {
     return (this.#state ??= new ItemState(this.listId, this.itemId))
@@ -188,7 +209,13 @@ export function createFlatListRecord<T>(
   value: T,
   create: (value: T, state: ListItemState) => ListItemHandle<T>,
 ): ListRecord<T> {
-  return new FlatListRecord(listId, itemId, (create as (value: T) => ListItemHandle<T>)(value))
+  const handle = (create as (value: T) => ListItemHandle<T>)(value)
+  if (handle instanceof FlatListHandle) {
+    handle.listId = listId
+    handle.itemId = itemId
+    return handle
+  }
+  return new FlatListRecord(listId, itemId, handle)
 }
 
 function createListRecord<T>(
@@ -204,10 +231,12 @@ function createListRecord<T>(
 export interface ListRuntime<T> {
   readonly listId: string
   readonly items: Map<unknown, ListRecord<T>>
+  ordered?: ListRecord<T>[]
+  readonly direct?: boolean
 }
 
-export function createListRuntime<T = unknown>(listId: string): ListRuntime<T> {
-  return { listId, items: new Map() }
+export function createListRuntime<T = unknown>(listId: string, direct = false): ListRuntime<T> {
+  return { listId, items: new Map(), direct }
 }
 
 interface ListChangeBase {
@@ -218,9 +247,9 @@ interface ListChangeBase {
 type ListMapChange = ListChangeBase &
   (
     | { kind: 'base' }
-    | { kind: 'map'; changes: [unknown, unknown][]; fields?: readonly string[] }
+    | { kind: 'map'; changes: unknown[]; fields?: readonly string[] }
     | { kind: 'append'; start: number }
-    | { kind: 'filter'; removed: unknown[] }
+    | { kind: 'filter'; removed: unknown[]; indexes: number[] }
     | { kind: 'swap'; indexes: [number, number]; before: [unknown, unknown]; length: number }
   )
 
@@ -275,12 +304,16 @@ export function filterListValues<T>(
   predicate: (value: T, index: number) => unknown,
 ): T[] {
   const removed: T[] = []
+  const indexes: number[] = []
   const next = values.filter((value, index) => {
     const keep = predicate(value, index)
-    if (!keep) removed.push(value)
+    if (!keep) {
+      removed.push(value)
+      indexes.push(index)
+    }
     return keep
   })
-  listMapChanges.set(next, { kind: 'filter', token: {}, base: listToken(values), removed })
+  listMapChanges.set(next, { kind: 'filter', token: {}, base: listToken(values), removed, indexes })
   return next
 }
 
@@ -316,10 +349,10 @@ export function mapListValues<T>(
   fields?: readonly string[],
 ): T[] {
   const base = listToken(values)
-  const changes: [unknown, unknown][] = []
+  const changes: unknown[] = []
   const apply = (value: T, index: number): T => {
     const result = map(value, index)
-    if (result !== value) changes.push([value, result])
+    if (result !== value) changes.push(index, value, result)
     return result
   }
   const next = stride === undefined ? values.map(apply) : values.slice()
@@ -349,6 +382,9 @@ export function reconcileListMap<T>(
   const previous = listMapBases.get(runtime)
   listMapBases.delete(runtime)
   const change = listMapChanges.get(values)
+  const ordered = runtime.ordered
+  // 作成や更新が例外・再入で中断した記録を、次の添字更新へ持ち越さない。
+  runtime.ordered = undefined
   if (allowMap && previous && change?.base === previous) {
     const parent =
       container && change.kind !== 'map'
@@ -357,7 +393,8 @@ export function reconcileListMap<T>(
           : container
         : null
     if (change.kind === 'append' && change.start === runtime.items.size) {
-      const fragment = parent?.ownerDocument?.createDocumentFragment()
+      const direct = runtime.direct && ordered
+      const fragment = direct ? undefined : parent?.ownerDocument?.createDocumentFragment()
       for (let index = change.start; index < values.length; index++) {
         const value = values[index]!
         const itemId = keyOf(value)
@@ -367,21 +404,40 @@ export function reconcileListMap<T>(
           )
         const record = (recordFactory ?? createListRecord)(runtime.listId, itemId, value, create)
         runtime.items.set(itemId, record)
+        ordered?.push(record)
         fragment?.append(record.handle.el)
       }
       if (parent && fragment)
         parent.insertBefore(fragment, container && isDomRange(container) ? container.end : null)
+      else if (parent && direct)
+        for (let index = change.start; index < ordered.length; index++)
+          parent.insertBefore(
+            ordered[index]!.handle.el,
+            container && isDomRange(container) ? container.end : null,
+          )
       listMapBases.set(runtime, change.token)
+      runtime.ordered = ordered
       return
     }
     if (change.kind === 'filter') {
-      for (const value of change.removed) {
+      for (const [index, value] of change.removed.entries()) {
         const itemId = keyOf(value as T)
-        const record = runtime.items.get(itemId)
+        const record = ordered?.[change.indexes[index]!] ?? runtime.items.get(itemId)
         record?.handle.el.remove()
         runtime.items.delete(itemId)
       }
+      if (ordered && change.indexes.length === 1) ordered.splice(change.indexes[0]!, 1)
+      else if (ordered && change.indexes.length > 1) {
+        let removed = 0
+        let write = 0
+        for (let index = 0; index < ordered.length; index++) {
+          if (index === change.indexes[removed]) removed++
+          else ordered[write++] = ordered[index]!
+        }
+        ordered.length = write
+      }
       listMapBases.set(runtime, change.token)
+      runtime.ordered = ordered
       return
     }
     if (
@@ -390,8 +446,12 @@ export function reconcileListMap<T>(
       values[change.indexes[0]] === change.before[1] &&
       values[change.indexes[1]] === change.before[0]
     ) {
-      const first = runtime.items.get(keyOf(change.before[0] as T))?.handle.el
-      const second = runtime.items.get(keyOf(change.before[1] as T))?.handle.el
+      const first = (
+        ordered?.[change.indexes[0]] ?? runtime.items.get(keyOf(change.before[0] as T))
+      )?.handle.el
+      const second = (
+        ordered?.[change.indexes[1]] ?? runtime.items.get(keyOf(change.before[1] as T))
+      )?.handle.el
       if (
         first &&
         second &&
@@ -407,25 +467,36 @@ export function reconcileListMap<T>(
             parent.insertBefore(first, afterSecond)
           }
         }
+        if (ordered)
+          [ordered[change.indexes[0]], ordered[change.indexes[1]]] = [
+            ordered[change.indexes[1]]!,
+            ordered[change.indexes[0]]!,
+          ]
         listMapBases.set(runtime, change.token)
+        runtime.ordered = ordered
         return
       }
     }
     // キー変更は構造変更なので、更新前に全変更行を検査して通常照合へ戻す。
     if (
       change.kind === 'map' &&
+      ordered &&
       ((keyField !== undefined &&
         change.fields !== undefined &&
         !change.fields.includes(keyField)) ||
         change.changes.every(
-          ([before, after]) =>
-            Object.is(keyOf(before as T), keyOf(after as T)) &&
-            runtime.items.has(keyOf(before as T)),
+          (value, index) =>
+            index % 3 !== 2 || Object.is(keyOf(change.changes[index - 1] as T), keyOf(value as T)),
         ))
     ) {
-      for (const [, next] of change.changes)
-        update(runtime.items.get(keyOf(next as T))!.handle, next as T, change.fields)
+      for (let index = 0; index < change.changes.length; index += 3)
+        update(
+          ordered[change.changes[index] as number]!.handle,
+          change.changes[index + 2] as T,
+          change.fields,
+        )
       listMapBases.set(runtime, change.token)
+      runtime.ordered = ordered
       return
     }
   }
@@ -468,8 +539,13 @@ function insertListRecords<T>(
   ordered: readonly ListRecord<T>[],
   batch: boolean,
   start?: ChildNode,
+  direct = false,
 ): void {
   if (batch && ordered.length > 0) {
+    if (direct) {
+      for (const record of ordered) parent.insertBefore(record.handle.el, boundary)
+      return
+    }
     const ownerDocument = parent.ownerDocument
     if (ownerDocument) {
       const fragment = ownerDocument.createDocumentFragment()
@@ -575,11 +651,17 @@ function insertListRecords<T>(
 function replaceListContents<T>(
   container: Element | DomRange | undefined,
   ordered: readonly ListRecord<T>[],
+  direct = false,
 ): boolean {
   if (!container || !isDomRange(container)) return false
   const parent = container.start.parentNode
   if (!parent || parent.firstChild !== container.start || parent.lastChild !== container.end)
     return false
+  if (direct || ordered.length === 0) {
+    parent.replaceChildren(container.start, container.end)
+    for (const record of ordered) parent.insertBefore(record.handle.el, container.end)
+    return true
+  }
   const fragment = parent.ownerDocument!.createDocumentFragment()
   for (const record of ordered) fragment.append(record.handle.el)
   parent.replaceChildren(container.start, fragment, container.end)
@@ -599,10 +681,12 @@ export function reconcileList<T>(
   update?: ListItemUpdater<T>,
   recordFactory: ListRecordFactory<T> = createListRecord,
 ): void {
+  runtime.ordered = undefined
   const initiallyEmpty = runtime.items.size === 0
   const ordered: ListRecord<T>[] = []
   if (values.length === 0 && !initiallyEmpty && replaceListContents(container, ordered)) {
     runtime.items.clear()
+    runtime.ordered = ordered
     return
   }
 
@@ -645,17 +729,30 @@ export function reconcileList<T>(
       }
       ordered.push(record)
     }
-    const replaced = !reused && replaceListContents(container, ordered)
+    const replaced = !reused && replaceListContents(container, ordered, runtime.direct)
+    if (replaced) {
+      // ADR-0069: 全置換では新旧のMapを走査せず、新しい順序から登録し直す。
+      runtime.items.clear()
+      for (const record of ordered)
+        runtime.items.set(
+          record instanceof FlatListHandle || record instanceof FlatListRecord
+            ? record.itemId
+            : record.state.itemId,
+          record,
+        )
+      runtime.ordered = ordered
+      return
+    }
     if (values.length !== runtime.items.size) {
       for (const [itemId, record] of runtime.items) {
         if (record.seen === seen) continue
-        if (!replaced) record.handle.el.remove()
+        record.handle.el.remove()
         runtime.items.delete(itemId)
       }
     }
-    if (replaced) return
   }
 
+  runtime.ordered = ordered
   if (!container) return
   const parent = isDomRange(container) ? container.start.parentNode : container
   if (!parent) return
@@ -666,6 +763,7 @@ export function reconcileList<T>(
     ordered,
     initiallyEmpty && ordered.length > 0,
     isDomRange(container) ? container.start : undefined,
+    runtime.direct,
   )
 }
 

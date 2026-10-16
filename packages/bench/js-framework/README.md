@@ -12,6 +12,8 @@ Vanillaのソースと生成物の比較は[vanilla-code-review.md](./vanilla-co
 
 所有する配列のmapを変更行へ接続した後の測定は[map-results.md](./map-results.md)に分けて保存する。修正前後とSolidとの同期比較、および公式測定器による部分更新の再測定であり、既存の全操作の公式比較を置き換えない。
 
+Vanillaのコード調査を受けた修正後は、構築設定で`listEvents: 'delegated'`を明示する。行の引数なしclickを親で処理し、JSXへDOM操作を追加しない。コンパイラとViteの既定は直接配線である。`JSFB_LIST_EVENTS=direct bun packages/bench/js-framework/irisout/build.mjs`で直接配線の比較用生成物を構築できる。非バブルのclickや外部リスナーとの順序の違いは[ADR-0069](../../../docs/adr/0069-list-storage-and-explicit-click-delegation.md)を参照する。過去の`results.md`は直接配線の測定として保持する。
+
 ## 再実行
 
 リポジトリのルートから実行する。Bun、Node 24以降、Git、起動可能なChromiumが必要。

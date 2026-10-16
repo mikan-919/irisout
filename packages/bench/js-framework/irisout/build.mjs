@@ -8,7 +8,13 @@ await build({
   root,
   configFile: false,
   base: '/frameworks/keyed/irisout/dist/',
-  plugins: [irisout({ entry: 'main.jsx', container: '#main' })],
+  plugins: [
+    irisout({
+      entry: 'main.jsx',
+      container: '#main',
+      listEvents: process.env.JSFB_LIST_EVENTS === 'direct' ? 'direct' : 'delegated',
+    }),
+  ],
   resolve: { alias: { 'irisout/runtime': path.resolve(root, '../../../irisout/dist/runtime.js') } },
   build: {
     outDir: path.join(checkout, 'frameworks/keyed/irisout/dist'),

@@ -51,7 +51,7 @@ function itemLookups(run: () => void): number {
 }
 
 describe('compiled list map changes', () => {
-  it('updates 100 changed rows with 100 item lookups and preserves all elements', async () => {
+  it('updates 100 changed rows without item lookups and preserves all elements', async () => {
     const data = JSON.stringify(
       Array.from({ length: 1000 }, (_, index) => ({ id: index + 1, label: 'a' })),
     )
@@ -70,15 +70,15 @@ describe('compiled list map changes', () => {
         .dispatchEvent(new container.ownerDocument.defaultView!.Event('click'))
     click('run')
     const elements = [...container.querySelectorAll('li')]
-    expect(itemLookups(() => click('update'))).toBe(100)
+    expect(itemLookups(() => click('update'))).toBe(0)
     expect([...container.querySelectorAll('li')]).toEqual(elements)
     expect(elements.map((el) => el.textContent)).toEqual(
       elements.map((_, index) => (index % 10 === 0 ? 'a!' : 'a')),
     )
-    expect(itemLookups(() => click('update'))).toBe(100)
+    expect(itemLookups(() => click('update'))).toBe(0)
     expect(elements[0]?.textContent).toBe('a!!')
     click('run')
-    expect(itemLookups(() => click('update'))).toBe(100)
+    expect(itemLookups(() => click('update'))).toBe(0)
   })
 
   it('keeps the map base after permutation, removal, clear, and replacement', async () => {
@@ -89,17 +89,17 @@ describe('compiled list map changes', () => {
     click('partial')
     click('other')
     expect(container.querySelectorAll('li')[1]).toBe(first)
-    expect(itemLookups(() => click('partial'))).toBe(1)
+    expect(itemLookups(() => click('partial'))).toBe(0)
     expect(container.textContent).toContain('b!a!')
     const replacement = await app(
       `function other() { rows([{id: 1, label: 'c'}, {id: 2, label: 'd'}]); }`,
     )
     replacement.click('other')
-    expect(itemLookups(() => replacement.click('partial'))).toBe(1)
+    expect(itemLookups(() => replacement.click('partial'))).toBe(0)
     expect(replacement.container.querySelector('span')?.textContent).toBe('c!')
     const removal = await app(`function other() { rows(rows().filter(row => row.id !== 2)); }`)
     removal.click('other')
-    expect(itemLookups(() => removal.click('partial'))).toBe(1)
+    expect(itemLookups(() => removal.click('partial'))).toBe(0)
     const empty = await app(`function other() { rows([]); }`)
     empty.click('other')
     expect(itemLookups(() => empty.click('partial'))).toBe(0)
@@ -113,7 +113,7 @@ describe('compiled list map changes', () => {
     click('other')
     expect(container.querySelector('li')).not.toBe(before)
     expect(container.querySelectorAll('li')).toHaveLength(2)
-    expect(itemLookups(() => click('partial'))).toBe(1)
+    expect(itemLookups(() => click('partial'))).toBe(0)
   })
 
   it('falls back when several map writes or another dependency change share an update', async () => {
@@ -229,7 +229,7 @@ describe('compiled list map changes', () => {
           .querySelector('button')!
           .dispatchEvent(new container.ownerDocument.defaultView!.Event('click')),
       ),
-    ).toBe(1)
+    ).toBe(0)
     expect(container.querySelector('li')?.textContent).toBe('a!')
   })
 

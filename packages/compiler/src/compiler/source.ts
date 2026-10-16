@@ -341,6 +341,8 @@ function buildSignalToMarkers(
 
 export interface CompileOptions {
   target?: 'client' | 'ssr'
+  /** 引数なしの平坦な一覧のclickを親で受ける明示契約。既定は直接配線。 */
+  listEvents?: 'direct' | 'delegated'
   /** 単一sourceのブラウザ境界を検査する。Nodeの入口では使わない。 */
   browser?: boolean
   allowModuleSupport?: boolean
@@ -1003,6 +1005,7 @@ export function compileSource(source: string, options: CompileOptions = {}): Com
       }
     }
     const result: StructuralUnitBodyOutput = {
+      delegateClicks: options.listEvents === 'delegated' && ancestorLocalScopes.length === 0,
       template: body.template,
       localMarkers: body.localMarkers.map((m) =>
         m.kind === 'text' ? m : convertUnitMarker(m, localScopes),
@@ -1290,9 +1293,12 @@ export function compileSource(source: string, options: CompileOptions = {}): Com
   }
 }
 
-export function compile(source: string): CompileResult {
+export function compile(
+  source: string,
+  options: Pick<CompileOptions, 'listEvents'> = {},
+): CompileResult {
   try {
-    return compileSource(source)
+    return compileSource(source, options)
   } catch (error) {
     throw withCompileDiagnostic(error, { filePath: '<source>', source })
   }

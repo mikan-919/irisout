@@ -14,6 +14,8 @@ const DEFAULT_HTML_MARKER = '<!--irisout-html-->'
 const DEFAULT_CONTAINER = '#app'
 
 export interface IrisoutPluginOptions {
+  /** 引数なしの一覧clickを親で処理する明示契約。既定は直接配線。 */
+  listEvents?: 'direct' | 'delegated'
   /** Viteのrootから解決する入口。絶対pathも受け付ける。 */
   entry: string
   /** 初期HTMLを埋め込む場所とhydrate対象を示すCSS selector。 */
@@ -59,7 +61,10 @@ export function irisout(options: IrisoutPluginOptions): Plugin {
   let dependencies = new Set<string>()
 
   const compile = (): CompileResult => {
-    const next = compileProject(entryPath, { transformSource: options.transformSource })
+    const next = compileProject(entryPath, {
+      transformSource: options.transformSource,
+      listEvents: options.listEvents,
+    })
     result = next
     dependencies = new Set(next.dependencies.map(normalizePath))
     return next

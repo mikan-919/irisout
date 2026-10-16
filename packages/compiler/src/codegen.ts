@@ -74,6 +74,7 @@ export interface HandlerOutput {
 // HandlerOutput へ変換したもの。それ以外のフィールドは同じ形。
 // M5.5: ネストした構造ユニットも localMarkers に含まれる。
 export interface StructuralUnitBodyOutput {
+  delegateClicks?: boolean
   template: string
   localMarkers: (TextMarker | ListMarkerOutput | ConditionalMarkerOutput)[]
   localHandlers: HandlerOutput[]
@@ -324,6 +325,7 @@ function renderSharedItemHandlerCall(
   itemParam: string,
   handleKey: string,
   localUpdateExprs: (string | null)[] = [],
+  handleExpr = `__args[0]?.currentTarget?.[${handleKey}]`,
 ): string {
   const updateCalls = h.updateBatchName
     ? `${h.updateBatchName}();`
@@ -357,7 +359,7 @@ function renderSharedItemHandlerCall(
     ? ''
     : `${updateCalls}${localUpdateCalls ? ` ${localUpdateCalls}` : ''}`
   const eventBinding = h.param ? `const ${h.param} = __args[0]; ` : ''
-  return `${h.async ? 'async ' : ''}(...__args) => { const __handle__ = __args[0]?.currentTarget?.[${handleKey}]; if (!__handle__) return; let ${itemParam} = __handle__.value; ${eventBinding}${scopedBody}${h.updatesInRendered ? '' : ';'}${tail ? ` ${tail}` : ''} }`
+  return `${h.async ? 'async ' : ''}(...__args) => { const __handle__ = ${handleExpr}; if (!__handle__) return; let ${itemParam} = __handle__.value; ${eventBinding}${scopedBody}${h.updatesInRendered ? '' : ';'}${tail ? ` ${tail}` : ''} }`
 }
 
 // ADR-0012 決定2: 動的属性1個ぶんの設定文。boolProp/prop はプロパティ代入、
@@ -389,6 +391,17 @@ function itemField(item: string, code: string): string | null {
   const prefix = item + '.'
   const field = code.startsWith(prefix) ? code.slice(prefix.length) : ''
   return /^[A-Za-z_$][\w$]*$/.test(field) ? field : null
+}
+
+// ADR-0069: 既定のイベント契約は変えず、明示された引数なしclickだけを親で受ける。
+function delegatedClicks(body: StructuralUnitBodyOutput): HandlerOutput[] {
+  return body.delegateClicks &&
+    !bodyHasLifecycle(body) &&
+    bodyUnits(body).length === 0 &&
+    body.localDecls.length === 0 &&
+    body.emittedFns.length === 0
+    ? body.localHandlers.filter((h) => h.eventName === 'click' && h.param === null)
+    : []
 }
 
 function bodyHasLifecycle(body: StructuralUnitBodyOutput): boolean {
@@ -615,6 +628,7 @@ function generateFactoryLegacy(
   inItemScope: boolean,
   ancestorUpdateExprs: (string | null)[] = [],
   adoptExisting = false,
+  stableKeyField?: string,
 ): string[] {
   const texts = bodyTexts(body)
   const units = bodyUnits(body)
@@ -649,11 +663,30 @@ function generateFactoryLegacy(
   ) {
     const lines: string[] = []
     const attrs = body.localAttrBindings
+    const delegated = delegatedClicks(body)
+    const direct = body.localHandlers.filter((h) => !delegated.includes(h))
+    const rootHandleKey = `${factoryName}handle__`
     const refIds = new Set<string>([
       ...body.localMarkers.map((m) => m.id),
       ...attrs.map((b) => b.markerId),
-      ...body.localHandlers.map((h) => h.markerId),
+      ...direct.map((h) => h.markerId),
     ])
+    // ADR-0069: 作成時だけの参照と、キーで不変と証明された表示は保存しない。
+    const immutableTexts = new Set(
+      stableKeyField === undefined
+        ? []
+        : texts.filter((m) =>
+            m.contentParts.every(
+              (part) => part.type === 'text' || itemField(itemParam, part.code) === stableKeyField,
+            ),
+          ),
+    )
+    const updateRefs = new Set([
+      ...texts.filter((m) => !immutableTexts.has(m)).map((m) => m.id),
+      ...attrs.map((binding) => binding.markerId),
+    ])
+    const rootId = body.template.match(/^<[^>]*\bdata-iris-id="([^"]+)"/)?.[1]
+    const handleRef = (id: string) => (id === rootId ? '__handle__.el' : `__handle__.${id}`)
     const firstRef = [...refIds][0]
     const emptyClasses =
       /<[\w:]*-[\w:-]*(?:\s|>)/.test(body.template) || /\sis\s*=/.test(body.template)
@@ -662,13 +695,15 @@ function generateFactoryLegacy(
             .filter((binding) => binding.name === 'class' && binding.keySelector)
             .map((binding) => binding.markerId)
     const pathsName = `${factoryName}paths__`
-    if (refIds.size > 0) lines.push(`let ${pathsName};`)
+    if (refIds.size > 0 || delegated.length > 0) lines.push(`let ${pathsName};`)
+    if (delegated.length > 0) lines.push(`const ${rootHandleKey} = Symbol();`)
 
     lines.push(`function ${updateName}(__handle__, __next__, __fields__) {`)
     // 呼び出し元の一覧更新がDOM更新取引を所有し、単純な行では重ねて開始しない。
     lines.push(`  const ${itemParam} = __handle__.value = __next__;`)
-    for (const id of refIds) lines.push(`  const __${id}__ = __handle__.${id};`)
+    for (const id of updateRefs) lines.push(`  const __${id}__ = ${handleRef(id)};`)
     for (const m of texts) {
+      if (immutableTexts.has(m)) continue
       const valueVar = `__value_${m.id}__`
       const fields = m.contentParts.flatMap((part) =>
         part.type === 'expr' ? [itemField(itemParam, part.code)] : [],
@@ -696,7 +731,7 @@ function generateFactoryLegacy(
     })
     lines.push('}')
     lines.push(`function ${factoryName}(${itemParam}) {`)
-    if (refIds.size > 0)
+    if (refIds.size > 0 || delegated.length > 0)
       lines.push(
         `  ${pathsName} ??= __collectPaths__(${templateVar}, ${JSON.stringify(firstRef)}, ${JSON.stringify(emptyClasses)});`,
       )
@@ -708,11 +743,19 @@ function generateFactoryLegacy(
         `  const __${id}__ = __followPath__(__el__, ${pathsName}.${id}${id !== firstRef ? `, __${firstRef}__` : ''});`,
       )
     }
-    const refs = [...refIds].map((id) => `${id}: __${id}__`).join(', ')
     lines.push(
-      `  const __handle__ = { el: __el__, value: ${itemParam}${refs ? ', ' + refs : ''} };`,
+      `  const __handle__ = new __FlatListHandle__(__el__, ${itemParam});`,
+      ...[...updateRefs]
+        .filter((id) => id !== rootId)
+        .map((id) => `  __handle__.${id} = __${id}__;`),
     )
     for (const h of body.localHandlers) {
+      if (delegated.includes(h)) {
+        lines.unshift(
+          `const __item_handler_${h.markerId}__ = ${renderSharedItemHandlerCall(h, itemParam, '', [null, ...ancestorUpdateExprs], '__args[1]')};`,
+        )
+        continue
+      }
       if (h.param === itemParam) {
         lines.push(
           `  __${h.markerId}__.addEventListener(${JSON.stringify(h.eventName)}, ${renderHandlerCall(h, itemParam, `${itemParam} = __handle__.value; `, [null, ...ancestorUpdateExprs])});`,
@@ -730,10 +773,11 @@ function generateFactoryLegacy(
         `  __${h.markerId}__.addEventListener(${JSON.stringify(h.eventName)}, ${handlerName});`,
       )
     }
+    if (delegated.length > 0) lines.push(`  __el__[${rootHandleKey}] = __handle__;`)
     // ADR-0068: 新規複製の文字列位置は既知。通常更新の外部変更復元とは分ける。
     for (const m of texts) {
       lines.push(
-        `  __${m.id}__.firstChild.nodeValue = __handle__.text_${m.id} = \`${innerTemplateSource(m.contentParts)}\`;`,
+        `  __${m.id}__.firstChild.nodeValue = ${immutableTexts.has(m) ? '' : `__handle__.text_${m.id} = `}\`${innerTemplateSource(m.contentParts)}\`;`,
       )
     }
     attrs.forEach((b, i) => {
@@ -1204,6 +1248,7 @@ function generateFactory(
   body: StructuralUnitBodyOutput,
   inItemScope: boolean,
   ancestorUpdateExprs: (string | null)[] = [],
+  stableKeyField?: string,
 ): string[] {
   return bodyHasLifecycle(body)
     ? generateLifecycleFactory(
@@ -1221,6 +1266,8 @@ function generateFactory(
         body,
         inItemScope,
         ancestorUpdateExprs,
+        false,
+        stableKeyField,
       )
 }
 
@@ -1286,12 +1333,53 @@ function generateStructuralUnits(
       const factoryName = `__create_${marker.id}__`
       declLines.push(
         `let ${tplVar};`,
-        `let __list_${marker.id}__ = __createListRuntime__(${JSON.stringify(marker.id)});`,
+        `let __list_${marker.id}__ = __createListRuntime__(${JSON.stringify(marker.id)}${!bodyHasLifecycle(marker.body) && bodyUnits(marker.body).length === 0 && !/<[\w:]*-[\w:-]*(?:\s|>)/.test(marker.body.template) && !/\sis\s*=/.test(marker.body.template) ? ', true' : ''});`,
       )
       declLines.push(
-        ...generateFactory(factoryName, tplVar, marker.itemParam, marker.body, false),
+        ...generateFactory(
+          factoryName,
+          tplVar,
+          marker.itemParam,
+          marker.body,
+          false,
+          [],
+          marker.mapUpdates
+            ? (itemField(marker.itemParam, marker.keyRendered) ?? undefined)
+            : undefined,
+        ),
         '',
       )
+      const delegated = delegatedClicks(marker.body)
+      if (delegated.length > 0) {
+        const parent = `__delegate_parent_${marker.id}__`
+        const dispatch = `__delegate_${marker.id}__`
+        const handleKey = `${factoryName}handle__`
+        declLines.push(
+          `let ${parent};`,
+          `function ${dispatch}(__event__) {`,
+          '  const __path__ = __event__.composedPath();',
+          `  const __root__ = __path__.find(__node__ => __node__[${handleKey}]);`,
+          '  if (!__root__) return;',
+          `  const __handle__ = __root__[${handleKey}];`,
+          `  if (__list_${marker.id}__?.items.get(__handle__.itemId)?.handle !== __handle__) return;`,
+          ...delegated.map(
+            (h) =>
+              `  const __target_${h.markerId}__ = __followPath__(__root__, ${factoryName}paths__.${h.markerId});`,
+          ),
+          '  for (const __node__ of __path__) {',
+          ...delegated.map(
+            (h) =>
+              `    if (__node__ === __target_${h.markerId}__) __item_handler_${h.markerId}__(__event__, __handle__);`,
+          ),
+          '    if (__node__ === __root__ || __event__.cancelBubble) break;',
+          '  }',
+          '}',
+        )
+        templateSetupLines.push(
+          `  ${parent} = __ranges__.get(${JSON.stringify(marker.id)})?.start.parentNode;`,
+          `  ${parent}?.addEventListener("click", ${dispatch});`,
+        )
+      }
       if (marker.keySelector) {
         declLines.push(
           `let __selected_key_${marker.id}__ = ${marker.keySelector.outputName};`,
@@ -1301,7 +1389,7 @@ function generateStructuralUnits(
           `  const ${marker.itemParam} = __handle__.value;`,
           ...marker.body.localAttrBindings.flatMap((binding, index) => [
             `  const __value_${index}__ = ${binding.rendered};`,
-            `  if (!Object.is(__handle__.attr_${index}, __value_${index}__)) { __handle__.attr_${index} = __value_${index}__; ${renderAttrSet(`__handle__.${binding.markerId}`, { ...binding, rendered: `__value_${index}__` })} }`,
+            `  if (!Object.is(__handle__.attr_${index}, __value_${index}__)) { __handle__.attr_${index} = __value_${index}__; ${renderAttrSet(marker.body.template.match(/^<[^>]*\bdata-iris-id="([^"]+)"/)?.[1] === binding.markerId ? '__handle__.el' : `__handle__.${binding.markerId}`, { ...binding, rendered: `__value_${index}__` })} }`,
           ]),
           '}',
         )
@@ -1644,6 +1732,7 @@ export function generateModule({
     runtimeImports.push(
       'createListRuntime as __createListRuntime__',
       'createFlatListRecord as __createFlatListRecord__',
+      'FlatListHandle as __FlatListHandle__',
       'reconcileList as __reconcileList__',
       'updateListBinding as __updateListBinding__',
     )
@@ -1908,6 +1997,11 @@ export function generateModule({
     (h) =>
       `  __markers__?.get(${JSON.stringify(h.markerId)})?.removeEventListener(${JSON.stringify(h.eventName)}, __handler_${h.markerId}_${h.eventName});`,
   )
+  for (const marker of markers)
+    if (marker.kind === 'list' && delegatedClicks(marker.body).length > 0)
+      handlerRemoveLines.push(
+        `  __delegate_parent_${marker.id}__?.removeEventListener("click", __delegate_${marker.id}__); __delegate_parent_${marker.id}__ = null;`,
+      )
   const structuralDestroyOperations: string[] = []
   const listCleanupLines = markers
     .filter((marker): marker is ListMarkerOutput => marker.kind === 'list')
