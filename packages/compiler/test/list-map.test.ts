@@ -200,6 +200,7 @@ describe('compiled list map changes', () => {
         render(<main><ul>{rows().map(row => <li key={row.id}>{__irisoutMapRead__(row.label)}</li>)}</ul><button onClick={() => rows(rows().map((row, index) => index === 0 ? {...row, label: 'c'} : row))}>update</button></main>);
       }`)
       const mod = await loadGenerated(code)
+      expect(code).toContain('["label"]')
       const container = createContainer()
       ;(mod.mountComponent as (element: Element) => void)(container)
       read.mockClear()

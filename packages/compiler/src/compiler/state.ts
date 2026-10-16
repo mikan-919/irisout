@@ -326,6 +326,7 @@ export interface CompilerState {
   trackedFns: Map<string, TrackedFn>
   analyzedFunctions: Set<t.Function>
   ownedRowArrays: Map<t.Node, boolean>
+  mutableRowArrays: Map<t.Node, boolean>
   listMapDeclIds: Set<DeclId>
   cleanupFunctionNames: Map<t.Function, string>
 
@@ -375,6 +376,7 @@ export function createCompilerState(
     trackedFns: new Map(),
     analyzedFunctions: new Set(),
     ownedRowArrays: new Map(),
+    mutableRowArrays: new Map(),
     listMapDeclIds: new Set(),
     cleanupFunctionNames: new Map(),
     localDeclIds: new Set(),

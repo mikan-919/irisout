@@ -12,11 +12,14 @@ import type { AstRewriteSession } from './ast-codegen.ts'
 import { resolveToSignals } from './decl-graph.ts'
 import {
   isOwnedRowArray,
+  canMutateRowArray,
   isPureRowMap,
   isPureRowFilter,
   isRowAppend,
+  isAtomicRowPermutation,
   rowPermutationIndexes,
   rowMapRange,
+  rowMapFields,
 } from './list-map.ts'
 import type {
   CompilerState,
@@ -720,16 +723,27 @@ function analyzeActionIdentifier(
             ctx.ownedRowArrays.set(binding.path.node, owned)
           }
           if (owned) {
+            let mutable = ctx.mutableRowArrays.get(binding.path.node)
+            if (mutable === undefined) {
+              mutable = canMutateRowArray(binding)
+              ctx.mutableRowArrays.set(binding.path.node, mutable)
+            }
+            const inPlace = mutable && isAtomicRowPermutation(local!, binding)
             ctx.listMapDeclIds.add(id)
             edits.push(
               { start: parent.node.start!, end: parent.node.start!, text: '__copyListValues__(' },
-              { start: parent.node.end!, end: copy.node.end!, text: `, ${indexes.join(', ')})` },
+              {
+                start: parent.node.end!,
+                end: copy.node.end!,
+                text: `, ${indexes.join(', ')}, ${inPlace})`,
+              },
             )
             if (ast)
               planAstReplacement(ast, copy as NodePath<t.CallExpression>, root, (get) =>
                 t.callExpression(t.identifier('__copyListValues__'), [
                   get(parent.node) as t.Expression,
                   ...indexes.map((value) => t.numericLiteral(value)),
+                  t.booleanLiteral(inPlace),
                 ]),
               )
           }
@@ -778,36 +792,52 @@ function analyzeActionIdentifier(
             {
               start: argumentPath.node.start!,
               end: first!.argument.start!,
-              text: '__appendListValues__(',
+              text: '__appendListValues__(__beginListAppend__(',
             },
-            { start: first!.argument.end!, end: second!.argument.start!, text: ', ' },
-            { start: second!.argument.end!, end: argumentPath.node.end!, text: ')' },
+            { start: first!.argument.end!, end: second!.argument.start!, text: '), ' },
+            { start: second!.argument.end!, end: argumentPath.node.end!, text: ', true)' },
           )
           if (ast)
             planAstReplacement(ast, argumentPath, root, (get) =>
               t.callExpression(t.identifier('__appendListValues__'), [
-                get(first!.argument) as t.Expression,
+                t.callExpression(t.identifier('__beginListAppend__'), [
+                  get(first!.argument) as t.Expression,
+                ]),
                 get(second!.argument) as t.Expression,
+                t.booleanLiteral(true),
               ]),
             )
         } else {
           const map = argumentPath.node as t.CallExpression
           const filtering = isPureRowFilter(argumentPath, binding)
           const range = rowMapRange(map)
+          const fields = filtering ? null : rowMapFields(map)
           const object = (map.callee as t.MemberExpression).object
           const helper = filtering ? '__filterListValues__' : '__mapListValues__'
           edits.push(
             { start: object.start!, end: object.start!, text: helper + '(' },
             { start: object.end!, end: map.arguments[0]!.start!, text: ', ' },
           )
-          if (range)
-            edits.push({ start: map.end! - 1, end: map.end! - 1, text: `, ${range.join(', ')}` })
+          const options = filtering
+            ? ''
+            : `, ${range?.[0] ?? 'void 0'}, ${range?.[1] ?? 0}, ${fields ? JSON.stringify(fields) : 'void 0'}`
+          if (options) edits.push({ start: map.end! - 1, end: map.end! - 1, text: options })
           if (ast)
             planAstReplacement(ast, argumentPath, root, (get) =>
               t.callExpression(t.identifier(helper), [
                 get(object) as t.Expression,
                 get(map.arguments[0]!) as t.Expression,
-                ...(range ? range.map((value) => t.numericLiteral(value)) : []),
+                ...(!filtering
+                  ? [
+                      range
+                        ? t.numericLiteral(range[0])
+                        : t.unaryExpression('void', t.numericLiteral(0)),
+                      t.numericLiteral(range?.[1] ?? 0),
+                      fields
+                        ? t.arrayExpression(fields.map((field) => t.stringLiteral(field)))
+                        : t.unaryExpression('void', t.numericLiteral(0)),
+                    ]
+                  : []),
               ]),
             )
         }

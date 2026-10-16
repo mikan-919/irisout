@@ -7,20 +7,29 @@ import {
   copyListValues,
   createListRuntime,
   filterListValues,
+  mapListValues,
   reconcileListMap,
 } from '../../runtime/src/index.ts'
 
-async function application(size: number, first: number, second: number, extra = '') {
+async function application(
+  size: number,
+  first: number,
+  second: number,
+  extra = '',
+  builderPrefix = '',
+  helpers = '',
+) {
   const { code } = compile(`export function App() {
     const rows = signal([]); const selected = signal(0);
     render(<main><ul><li id="before">before</li>{rows().map(row => <li data-row="" key={row.id} class={selected() === row.id ? 'on' : ''}><span>{row.label}</span><button onClick={() => rows(rows().filter(item => item.id !== row.id))}>remove</button></li>)}<li id="after">after</li></ul>
       <button id="run" onClick={run}>run</button><button id="swap" onClick={swap}>swap</button><button id="add" onClick={add}>add</button><button id="partial" onClick={partial}>partial</button><button id="other" onClick={other}>other</button></main>);
-    function build(count, offset) { const data = []; for (let i=0; i<count; i++) data.push({id: offset + i + 1, label: 'a'}); return data; }
+    function build(count, offset) { ${builderPrefix} const data = []; for (let i=0; i<count; i++) data.push({id: offset + i + 1, label: 'a'}); return data; }
     function run() { rows(build(${size}, 0)); }
     function swap() { const data = rows().slice(); const temp = data[${first}]; data[${first}] = data[${second}]; data[${second}] = temp; rows(data); }
     function add() { rows([...rows(), ...build(2, ${size})]); }
     function partial() { rows(rows().map((row, index) => index === 0 ? {...row, label: row.label + '!'} : row)); }
     function other() { ${extra} }
+    ${helpers}
   }`)
   const mod = await loadGenerated(code)
   const container = createContainer()
@@ -64,6 +73,142 @@ function work(container: Element, run: () => void) {
 }
 
 describe('owned list operations', () => {
+  it('updates only the changed field and retains the array copy', async () => {
+    const app = await application(1000, 1, 998)
+    const button = app.button('partial')
+    const slice = Reflect.get(Array.prototype, 'slice') as (
+      this: unknown[],
+      start?: number,
+      end?: number,
+    ) => unknown[]
+    let largeCopies = 0
+    const spy = vi.spyOn(Array.prototype, 'slice').mockImplementation(function (
+      this: unknown[],
+      start?: number,
+      end?: number,
+    ) {
+      if (this.length >= 1000) largeCopies++
+      return slice.call(this, start, end)
+    })
+    let measured: ReturnType<typeof work>
+    try {
+      measured = work(app.container, () => app.click(button))
+    } finally {
+      spy.mockRestore()
+    }
+    expect(measured!).toEqual({ lookups: 1, compares: 1, siblings: 0 })
+    expect(largeCopies).toBe(1)
+    expect(app.rows()[0]?.querySelector('span')?.textContent).toBe('a!')
+  })
+
+  it('keeps the source array and old row objects intact when evaluating updates', () => {
+    const input = [
+      { id: 1, label: 'a' },
+      { id: 2, label: 'b' },
+    ]
+    const before = [...input]
+    expect(() =>
+      mapListValues(
+        input,
+        (row, index) => {
+          if (index === 1) throw Error('stop')
+          return { ...row, label: 'c' }
+        },
+        undefined,
+        0,
+        ['label'],
+      ),
+    ).toThrow('stop')
+    expect(input).toEqual(before)
+    expect(input[0]).toBe(before[0])
+    expect(
+      mapListValues(input, (row) => ({ ...row, label: 'c' }), undefined, 0, ['label']),
+    ).not.toBe(input)
+    expect(before.map((row) => row.label)).toEqual(['a', 'b'])
+    expect(input.map((row) => row.label)).toEqual(['a', 'b'])
+  })
+
+  it('copies swaps with a call before the setter so a thrown call leaves state intact', async () => {
+    const app = await application(
+      3,
+      0,
+      2,
+      `try { const data=rows().slice(); const temp=data[0]; data[0]=data[2]; data[2]=temp; fail(); rows(data); } catch {} selected(1);`,
+      '',
+      `function fail(){throw Error('stop');}`,
+    )
+    expect(app.code).toContain('__copyListValues__(rows, 0, 2, false)')
+    const before = app.rows()
+    app.click(app.button('other'))
+    expect(app.rows()).toEqual(before)
+    expect(app.rows()[0]?.className).toBe('on')
+  })
+
+  it('retains copied arrays used after a write and copies inside loops', async () => {
+    const alias = await application(
+      3,
+      0,
+      2,
+      `const saved=rows().slice(); rows(saved); rows(rows().map(row=>({...row,label:'b'}))); rows(saved);`,
+    )
+    expect(alias.code).toContain('["label"]')
+    alias.click(alias.button('other'))
+    expect(alias.rows().map((row) => row.querySelector('span')?.textContent)).toEqual([
+      'a',
+      'a',
+      'a',
+    ])
+    const loop = await application(
+      3,
+      0,
+      2,
+      `const saved=rows().slice(); for(let index=0;index<2;index++){ rows(saved); rows(rows().map(row=>({...row,label:'b'}))); }`,
+    )
+    expect(loop.code).toContain('["label"]')
+  })
+
+  it('snapshots an appended prefix before a builder can change the current array', async () => {
+    const app = await application(3, 0, 2, '', 'bump();', `function bump(){swap();}`)
+    expect(app.code).toContain('["label"]')
+    const prefix = app.rows()
+    app.click(app.button('add'))
+    expect(app.rows().slice(0, 3)).toEqual(prefix)
+    expect(app.rows().map((row) => row.querySelector('span')?.textContent)).toEqual([
+      'a',
+      'a',
+      'a',
+      'a',
+      'a',
+    ])
+  })
+
+  it('keeps row references read after a map in an active event unchanged', async () => {
+    const { code } = compile(
+      `export function App(){const rows=signal([{id:1,label:'a'}]);const seen=signal('');render(<main><p>{seen()}</p><ul>{rows().map(row=><li key={row.id}><span>{row.label}</span><button onClick={()=>{rows(rows().map((item,index)=>index===0?{...item,label:item.label+'!'}:item));seen(row.label);}}>update</button></li>)}</ul></main>);}`,
+    )
+    const mod = await loadGenerated(code)
+    const container = createContainer()
+    ;(mod.mountComponent as (element: Element) => void)(container)
+    container
+      .querySelector('button')!
+      .dispatchEvent(new container.ownerDocument.defaultView!.Event('click'))
+    expect(container.querySelector('span')?.textContent).toBe('a!')
+    expect(container.querySelector('p')?.textContent).toBe('a')
+  })
+
+  it('keeps side-effecting filter callbacks on an immutable input array', async () => {
+    const app = await application(
+      3,
+      0,
+      2,
+      `rows(rows().filter(row=>retain(row.id)));`,
+      '',
+      `function retain(id){partial();return id>0;}`,
+    )
+    expect(app.code).toContain('["label"]')
+    app.click(app.button('other'))
+    expect(app.rows().map((row) => row.querySelector('span')?.textContent)).toEqual(['a', 'a', 'a'])
+  })
   it.each([100, 1000, 10000])(
     'keeps swap work constant for %i rows and preserves siblings and item identity',
     async (size) => {
@@ -72,6 +217,7 @@ describe('owned list operations', () => {
       const staticBefore = app.button('before')
       const staticAfter = app.button('after')
       const swap = app.button('swap')
+      expect(app.code).toContain(`__copyListValues__(rows, 0, ${size - 1}, true)`)
       expect(work(app.container, () => app.click(swap))).toEqual({
         lookups: 2,
         compares: 0,

@@ -352,6 +352,12 @@ function bodyHasList(body: StructuralUnitBodyOutput): boolean {
   })
 }
 
+function itemField(item: string, code: string): string | null {
+  const prefix = item + '.'
+  const field = code.startsWith(prefix) ? code.slice(prefix.length) : ''
+  return /^[A-Za-z_$][\w$]*$/.test(field) ? field : null
+}
+
 function bodyHasLifecycle(body: StructuralUnitBodyOutput): boolean {
   return (
     body.localActions.length > 0 ||
@@ -618,23 +624,35 @@ function generateFactoryLegacy(
     const pathsName = `${factoryName}paths__`
     if (refIds.size > 0) lines.push(`let ${pathsName};`)
 
-    lines.push(`function ${updateName}(__handle__, __next__) {`)
+    lines.push(`function ${updateName}(__handle__, __next__, __fields__) {`)
     // 呼び出し元の一覧更新がDOM更新取引を所有し、単純な行では重ねて開始しない。
     lines.push(`  const ${itemParam} = __handle__.value = __next__;`)
     for (const id of refIds) lines.push(`  const __${id}__ = __handle__.${id};`)
     for (const m of texts) {
       const valueVar = `__value_${m.id}__`
+      const fields = m.contentParts.flatMap((part) =>
+        part.type === 'expr' ? [itemField(itemParam, part.code)] : [],
+      )
+      const narrowed = fields.length > 0 && fields.every((field) => field !== null)
+      if (narrowed)
+        lines.push(
+          `  if (!__fields__ || ${fields.map((field) => `__fields__.includes(${JSON.stringify(field)})`).join(' || ')}) {`,
+        )
       lines.push(
         `  const ${valueVar} = \`${innerTemplateSource(m.contentParts)}\`;`,
         `  if (!Object.is(__handle__.text_${m.id}, ${valueVar})) { __handle__.text_${m.id} = ${valueVar}; __setListText__(__${m.id}__, ${valueVar}); }`,
       )
+      if (narrowed) lines.push('  }')
     }
     attrs.forEach((b, i) => {
       const valueVar = `__attr_${i}__`
+      const field = b.keySelector && itemField(itemParam, b.keySelector.keyRendered)
+      if (field) lines.push(`  if (!__fields__ || __fields__.includes(${JSON.stringify(field)})) {`)
       lines.push(
         `  const ${valueVar} = ${b.rendered};`,
         `  if (!Object.is(__handle__.attr_${i}, ${valueVar})) { __handle__.attr_${i} = ${valueVar}; ${renderAttrSet(`__${b.markerId}__`, { ...b, rendered: valueVar })} }`,
       )
+      if (field) lines.push('  }')
     })
     lines.push('}')
     lines.push(`function ${factoryName}(${itemParam}) {`)
@@ -1322,7 +1340,7 @@ function generateListUpdate(
     hasLifecycle
       ? `  __reconcileListWithLifecycle__(__list_${marker.id}__, ${elExpr}, ${marker.arrayRendered}, ${keyOf}, __create_${marker.id}__${updaterArg}, ${mountExpr});`
       : mapUpdateExpr !== undefined
-        ? `  __reconcileListMap__(__list_${marker.id}__, ${elExpr}, ${marker.arrayRendered}, ${keyOf}, __create_${marker.id}__${updaterArg}, ${mapUpdateExpr}${usesSharedUpdater ? ', __createFlatListRecord__' : ''});`
+        ? `  __reconcileListMap__(__list_${marker.id}__, ${elExpr}, ${marker.arrayRendered}, ${keyOf}, __create_${marker.id}__${updaterArg}, ${mapUpdateExpr}${usesSharedUpdater ? ', __createFlatListRecord__' : ''}${marker.mapUpdates ? ', ' + JSON.stringify(itemField(marker.itemParam, marker.keyRendered)) : ''});`
         : `  __reconcileList__(__list_${marker.id}__, ${elExpr}, ${marker.arrayRendered}, ${keyOf}, __create_${marker.id}__${updaterArg}${usesSharedUpdater ? ', __createFlatListRecord__' : ''});`,
     ...(marker.keySelector
       ? [`  __selected_key_${marker.id}__ = ${marker.keySelector.outputName};`]
@@ -1569,6 +1587,7 @@ export function generateModule({
     runtimeImports.push(
       'mapListValues as __mapListValues__',
       'appendListValues as __appendListValues__',
+      'beginListAppend as __beginListAppend__',
       'filterListValues as __filterListValues__',
       'copyListValues as __copyListValues__',
       'reconcileListMap as __reconcileListMap__',

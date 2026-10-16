@@ -383,6 +383,104 @@ export function isOwnedRowArray(state: Binding): boolean {
   return ownedRowFields(state) !== false
 }
 
+// 配列の別名は、複製後の並べ替えを最後に設定して寿命を終えるものだけに限る。
+// 行オブジェクトの別名は残り得るため、この判定で行のその場書換えは許可しない。
+export function canMutateRowArray(state: Binding): boolean {
+  if (!isOwnedRowArray(state)) return false
+  for (const ref of state.referencePaths) {
+    const read = ref.parentPath
+    const member = read?.parentPath
+    const call = member?.parentPath
+    if (member?.isMemberExpression() && call?.isCallExpression()) {
+      if (t.isIdentifier(member.node.property, { name: 'filter' }) && !isPureRowFilter(call, state))
+        return false
+      if (t.isIdentifier(member.node.property, { name: 'map' })) {
+        const callback = call.get('arguments.0') as NodePath
+        if (callback?.isArrowFunctionExpression() && t.isJSXElement(callback.node.body)) {
+          let safe = true
+          callback.get('body').traverse({
+            Function(path) {
+              path.skip()
+            },
+            CallExpression(path) {
+              if (!t.isIdentifier(path.node.callee) || path.node.arguments.length !== 0) {
+                safe = false
+                return
+              }
+              const binding = path.scope.getBinding(path.node.callee.name)
+              const init = binding?.path.isVariableDeclarator() ? binding.path.node.init : null
+              if (
+                !t.isCallExpression(init) ||
+                !t.isIdentifier(init.callee) ||
+                !['signal', 'derived'].includes(init.callee.name)
+              )
+                safe = false
+            },
+            JSXOpeningElement(path) {
+              if (!t.isJSXIdentifier(path.node.name) || path.node.name.name.includes('-'))
+                safe = false
+            },
+            JSXAttribute(path) {
+              if (t.isJSXIdentifier(path.node.name) && ['use', 'is'].includes(path.node.name.name))
+                safe = false
+            },
+          })
+          if (!safe) return false
+        }
+      }
+    }
+    if (
+      !member?.isMemberExpression() ||
+      !t.isIdentifier(member.node.property, { name: 'slice' }) ||
+      !call?.isCallExpression()
+    )
+      continue
+    const decl = call.parentPath
+    if (!decl?.isVariableDeclarator() || !t.isIdentifier(decl.node.id)) return false
+    const copy = decl.scope.getBinding(decl.node.id.name)
+    if (!copy) return false
+    const writes = copy.referencePaths.filter((use) => setter(use.parentPath, state))
+    if (writes.length !== 1) return false
+    const write = writes[0]!.parentPath!
+    if (copy.referencePaths.some((use) => use.node.start! > write.node.end!)) return false
+    let tail: NodePath | null = write.parentPath
+    if (!tail?.isExpressionStatement()) return false
+    while (tail.parentPath && !tail.parentPath.isFunction()) {
+      const parent: NodePath = tail.parentPath
+      if (parent.isBlockStatement()) {
+        if (parent.node.body.at(-1) !== tail.node) return false
+      } else if (!parent.isIfStatement()) return false
+      tail = parent
+    }
+  }
+  return true
+}
+
+export function rowMapFields(map: t.CallExpression): string[] | null {
+  const callback = map.arguments[0]
+  if (!t.isArrowFunctionExpression(callback) || !t.isIdentifier(callback.params[0])) return null
+  const item = callback.params[0].name
+  const fields = new Set<string>()
+  const visit = (node: t.Node): boolean => {
+    if (t.isIdentifier(node, { name: item })) return true
+    if (t.isConditionalExpression(node)) return visit(node.consequent) && visit(node.alternate)
+    if (
+      !t.isObjectExpression(node) ||
+      !t.isSpreadElement(node.properties[0]) ||
+      !t.isIdentifier(node.properties[0].argument, { name: item })
+    )
+      return false
+    return node.properties.slice(1).every((entry) => {
+      if (!t.isObjectProperty(entry) || entry.computed) return false
+      const name = property(entry.key)
+      if (name === null) return false
+      fields.add(name)
+      return true
+    })
+  }
+  return visit(callback.body) ? [...fields] : null
+}
+
 export function isPureRowMap(path: NodePath, state: Binding): path is NodePath<t.CallExpression> {
   if (!path.isCallExpression() || path.node.arguments.length !== 1) return false
   const callee = path.get('callee')
@@ -421,6 +519,48 @@ export function rowPermutationIndexes(copy: Binding, state: Binding): [number, n
   if (indexes.size !== 2 || [...indexes].some((index) => !Number.isSafeInteger(index) || index < 0))
     return null
   return [...indexes].sort((a, b) => a - b) as [number, number]
+}
+
+// 複製から設定までが配列参照の読書きだけなら、途中を観測する呼出しや例外がない。
+export function isAtomicRowPermutation(copy: Binding, state: Binding): boolean {
+  const declaration = copy.path.parentPath
+  const block = declaration?.parentPath
+  if (
+    !declaration?.isVariableDeclaration() ||
+    declaration.node.declarations.length !== 1 ||
+    !block?.isBlockStatement()
+  )
+    return false
+  const statements = block.get('body') as NodePath<t.Statement>[]
+  const start = statements.findIndex((statement) => statement.node === declaration.node)
+  const temporaries = new Set<string>()
+  const isIndex = (node: t.Node): boolean =>
+    t.isMemberExpression(node) &&
+    node.computed &&
+    t.isIdentifier(node.object, { name: copy.identifier.name }) &&
+    t.isNumericLiteral(node.property)
+  return statements.slice(start + 1).every((statement, index, rest) => {
+    if (statement.isVariableDeclaration())
+      return statement.node.declarations.every((decl) => {
+        if (!t.isIdentifier(decl.id) || !decl.init || !isIndex(decl.init)) return false
+        temporaries.add(decl.id.name)
+        return true
+      })
+    if (!statement.isExpressionStatement()) return false
+    const expression = statement.get('expression')
+    if (setter(expression, state))
+      return (
+        index === rest.length - 1 &&
+        t.isCallExpression(expression.node) &&
+        t.isIdentifier(expression.node.arguments[0], { name: copy.identifier.name })
+      )
+    return (
+      expression.isAssignmentExpression({ operator: '=' }) &&
+      isIndex(expression.node.left) &&
+      (isIndex(expression.node.right) ||
+        (t.isIdentifier(expression.node.right) && temporaries.has(expression.node.right.name)))
+    )
+  })
 }
 
 export function isRowAppend(path: NodePath, state: Binding): path is NodePath<t.ArrayExpression> {

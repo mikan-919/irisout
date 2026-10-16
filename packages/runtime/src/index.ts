@@ -147,7 +147,11 @@ export function normalizeUseActionResult(
   }
 }
 
-export type ListItemUpdater<T> = (handle: ListItemHandle<T>, next: T) => void
+export type ListItemUpdater<T> = (
+  handle: ListItemHandle<T>,
+  next: T,
+  fields?: readonly string[],
+) => void
 
 interface ListRecord<T> {
   state: ListItemState
@@ -214,7 +218,7 @@ interface ListChangeBase {
 type ListMapChange = ListChangeBase &
   (
     | { kind: 'base' }
-    | { kind: 'map'; changes: [unknown, unknown][] }
+    | { kind: 'map'; changes: [unknown, unknown][]; fields?: readonly string[] }
     | { kind: 'append'; start: number }
     | { kind: 'filter'; removed: unknown[] }
     | { kind: 'swap'; indexes: [number, number]; before: [unknown, unknown]; length: number }
@@ -234,7 +238,28 @@ function listToken(values: readonly unknown[]): object {
 }
 
 // ADR-0068: 配列の複製と式の評価順は維持し、保持行の再照合だけを省く。
-export function appendListValues<T>(values: readonly T[], added: readonly T[]): T[] {
+export function beginListAppend<T>(values: readonly T[]): T[] {
+  const next = [...values]
+  listMapChanges.set(next, {
+    kind: 'append',
+    token: {},
+    base: listToken(values),
+    start: values.length,
+  })
+  return next
+}
+
+export function appendListValues<T>(
+  values: readonly T[],
+  added: readonly T[],
+  prepared = false,
+): T[] {
+  if (prepared) {
+    const next = values as T[]
+    const length = added.length
+    for (let index = 0; index < length; index++) next.push(added[index]!)
+    return next
+  }
   const next = [...values, ...added]
   listMapChanges.set(next, {
     kind: 'append',
@@ -259,19 +284,21 @@ export function filterListValues<T>(
   return next
 }
 
-export function copyListValues<T>(values: readonly T[], first: number, second: number): T[] {
-  const next = values.slice()
-  if (
-    first !== second &&
-    first >= 0 &&
-    second >= 0 &&
-    first < values.length &&
-    second < values.length
-  ) {
+export function copyListValues<T>(
+  values: readonly T[],
+  first: number,
+  second: number,
+  inPlace = false,
+): T[] {
+  const valid =
+    first !== second && first >= 0 && second >= 0 && first < values.length && second < values.length
+  const base = listToken(values)
+  const next = inPlace && valid ? (values as T[]) : values.slice()
+  if (valid) {
     listMapChanges.set(next, {
       kind: 'swap',
       token: {},
-      base: listToken(values),
+      base,
       indexes: [first, second],
       before: [values[first], values[second]],
       length: values.length,
@@ -286,6 +313,7 @@ export function mapListValues<T>(
   map: (value: T, index: number) => T,
   stride?: number,
   offset = 0,
+  fields?: readonly string[],
 ): T[] {
   const base = listToken(values)
   const changes: [unknown, unknown][] = []
@@ -296,11 +324,14 @@ export function mapListValues<T>(
   }
   const next = stride === undefined ? values.map(apply) : values.slice()
   if (stride !== undefined) {
-    for (let index = offset; index < values.length; index += stride || values.length) {
-      if (index in values) next[index] = apply(values[index]!, index)
+    const length = values.length
+    for (let index = offset; index < length; index += stride === undefined ? 1 : stride || length) {
+      if (index in values) {
+        next[index] = apply(values[index]!, index)
+      }
     }
   }
-  listMapChanges.set(next, { kind: 'map', token: {}, base, changes })
+  listMapChanges.set(next, { kind: 'map', token: {}, base, changes, fields })
   return next
 }
 
@@ -313,16 +344,18 @@ export function reconcileListMap<T>(
   update: ListItemUpdater<T>,
   allowMap: boolean,
   recordFactory?: ListRecordFactory<T>,
+  keyField?: string,
 ): void {
   const previous = listMapBases.get(runtime)
   listMapBases.delete(runtime)
   const change = listMapChanges.get(values)
   if (allowMap && previous && change?.base === previous) {
-    const parent = container
-      ? isDomRange(container)
-        ? container.start.parentNode
-        : container
-      : null
+    const parent =
+      container && change.kind !== 'map'
+        ? isDomRange(container)
+          ? container.start.parentNode
+          : container
+        : null
     if (change.kind === 'append' && change.start === runtime.items.size) {
       const fragment = parent?.ownerDocument?.createDocumentFragment()
       for (let index = change.start; index < values.length; index++) {
@@ -381,13 +414,17 @@ export function reconcileListMap<T>(
     // キー変更は構造変更なので、更新前に全変更行を検査して通常照合へ戻す。
     if (
       change.kind === 'map' &&
-      change.changes.every(
-        ([before, after]) =>
-          Object.is(keyOf(before as T), keyOf(after as T)) && runtime.items.has(keyOf(before as T)),
-      )
+      ((keyField !== undefined &&
+        change.fields !== undefined &&
+        !change.fields.includes(keyField)) ||
+        change.changes.every(
+          ([before, after]) =>
+            Object.is(keyOf(before as T), keyOf(after as T)) &&
+            runtime.items.has(keyOf(before as T)),
+        ))
     ) {
       for (const [, next] of change.changes)
-        update(runtime.items.get(keyOf(next as T))!.handle, next as T)
+        update(runtime.items.get(keyOf(next as T))!.handle, next as T, change.fields)
       listMapBases.set(runtime, change.token)
       return
     }

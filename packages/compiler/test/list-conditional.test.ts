@@ -76,7 +76,7 @@ describe('M5: list rendering (keyed reuse factory)', () => {
 
   it('shares one update function across item state objects', () => {
     const { code } = compile(LIST_SOURCE)
-    expect(code).toContain('function __create_m3__update__(__handle__, __next__)')
+    expect(code).toContain('function __create_m3__update__(__handle__, __next__, __fields__)')
     expect(code).toContain('return __handle__;')
     expect(code).toContain('__create_m3__, __create_m3__update__')
     expect(code).not.toContain('return { el: __el__, update };')

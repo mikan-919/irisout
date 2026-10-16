@@ -23,16 +23,38 @@ const allScenarios = [
 ]
 const scenarios = process.env.JSFB_PROBE_SCENARIOS?.split(',') ?? allScenarios
 const sampleCount = Number(process.env.JSFB_PROBE_SAMPLES ?? 15)
+const cpuRate = Number(process.env.JSFB_PROBE_CPU_RATE ?? 1)
+const clearRows = Number(process.env.JSFB_PROBE_CLEAR_ROWS ?? 1000)
+const disableRowListeners = process.env.JSFB_PROBE_DISABLE_ROW_LISTENERS === '1'
 if (!Number.isSafeInteger(sampleCount) || sampleCount < 1)
   throw new Error('Invalid probe sample count')
+if (!Number.isFinite(cpuRate) || cpuRate < 1) throw new Error('Invalid CPU rate')
+if (![0, 1000, 10000].includes(clearRows)) throw new Error('Invalid clear row count')
 if (scenarios.some((name) => !allScenarios.includes(name)))
   throw new Error('Unknown probe scenario')
+if (disableRowListeners && scenarios.some((name) => ['select', 'remove'].includes(name)))
+  throw new Error('Listener experiment cannot verify selection or removal')
 const samples = Object.fromEntries(scenarios.map((name) => [name, [[], []]]))
 const artifacts = []
 try {
   const pages = []
   for (const url of urls) {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } })
+    if (cpuRate !== 1) {
+      const session = await page.context().newCDPSession(page)
+      await session.send('Emulation.setCPUThrottlingRate', { rate: cpuRate })
+    }
+    // 比較用の第2ページだけで直接登録を省く。製品コードと公式測定には適用しない。
+    if (disableRowListeners) {
+      await page.addInitScript((disable) => {
+        const add = EventTarget.prototype.addEventListener
+        EventTarget.prototype.addEventListener = function (...args) {
+          const row = this instanceof Element && this.closest('tr')
+          if (disable && row) return
+          return Reflect.apply(add, this, args)
+        }
+      }, pages.length === 1)
+    }
     await page.addInitScript(() => {
       // DOM処理の比較へ開発用ログの転送費用を混ぜない。両方の実装へ同じ条件を適用する。
       console.log = () => {}
@@ -65,52 +87,57 @@ try {
   for (const scenario of scenarios) {
     for (let repeat = -3; repeat < sampleCount; repeat++) {
       for (const index of repeat % 2 ? [1, 0] : [0, 1]) {
-        const result = await pages[index].evaluate(async (scenario) => {
-          const click = (id) => document.getElementById(id).click()
-          click('clear')
-          if (!['create', 'create10k'].includes(scenario)) click('run')
-          await new Promise((resolve) =>
-            requestAnimationFrame(() => requestAnimationFrame(resolve)),
-          )
-          const buttons = {
-            create: 'run',
-            replace: 'run',
-            partial: 'update',
-            swap: 'swaprows',
-            create10k: 'runlots',
-            append: 'add',
-            clear: 'clear',
-          }
-          const label1 = document.querySelector('tbody tr:first-child td:nth-child(2) a')
-          const label2 = document.querySelector('tbody tr:nth-child(2) td:nth-child(2) a')
-          const remove = document.querySelector('tbody tr:nth-child(2) td:nth-child(3) span')
-          const button = document.getElementById(buttons[scenario])
-          const iterations = scenario === 'select' ? 200 : scenario === 'swap' ? 20 : 1
-          const start = performance.now()
-          for (let i = 0; i < iterations; i++) {
-            if (scenario === 'select') (i % 2 ? label2 : label1).click()
-            else if (scenario === 'remove') remove.click()
-            else button.click()
-          }
-          const elapsed = (performance.now() - start) / iterations
-          const count = document.querySelectorAll('tbody tr').length
-          const expected =
-            scenario === 'create10k'
-              ? 10000
-              : scenario === 'append'
-                ? 2000
-                : scenario === 'clear'
-                  ? 0
-                  : scenario === 'remove'
-                    ? 999
-                    : 1000
-          if (count !== expected) throw new Error(`${scenario}: ${count}/${expected}`)
-          if (scenario === 'select' && document.querySelectorAll('tbody tr.danger').length !== 1)
-            throw new Error('Selection failed')
-          if (scenario === 'partial' && !label1.textContent.endsWith(' !!!'))
-            throw new Error('Partial update failed')
-          return elapsed
-        }, scenario)
+        const result = await pages[index].evaluate(
+          async ({ scenario, clearRows }) => {
+            const click = (id) => document.getElementById(id).click()
+            click('clear')
+            if (scenario === 'clear') {
+              if (clearRows > 0) click(clearRows === 10000 ? 'runlots' : 'run')
+            } else if (!['create', 'create10k'].includes(scenario)) click('run')
+            await new Promise((resolve) =>
+              requestAnimationFrame(() => requestAnimationFrame(resolve)),
+            )
+            const buttons = {
+              create: 'run',
+              replace: 'run',
+              partial: 'update',
+              swap: 'swaprows',
+              create10k: 'runlots',
+              append: 'add',
+              clear: 'clear',
+            }
+            const label1 = document.querySelector('tbody tr:first-child td:nth-child(2) a')
+            const label2 = document.querySelector('tbody tr:nth-child(2) td:nth-child(2) a')
+            const remove = document.querySelector('tbody tr:nth-child(2) td:nth-child(3) span')
+            const button = document.getElementById(buttons[scenario])
+            const iterations = scenario === 'select' ? 200 : scenario === 'swap' ? 20 : 1
+            const start = performance.now()
+            for (let i = 0; i < iterations; i++) {
+              if (scenario === 'select') (i % 2 ? label2 : label1).click()
+              else if (scenario === 'remove') remove.click()
+              else button.click()
+            }
+            const elapsed = (performance.now() - start) / iterations
+            const count = document.querySelectorAll('tbody tr').length
+            const expected =
+              scenario === 'create10k'
+                ? 10000
+                : scenario === 'append'
+                  ? 2000
+                  : scenario === 'clear'
+                    ? 0
+                    : scenario === 'remove'
+                      ? 999
+                      : 1000
+            if (count !== expected) throw new Error(`${scenario}: ${count}/${expected}`)
+            if (scenario === 'select' && document.querySelectorAll('tbody tr.danger').length !== 1)
+              throw new Error('Selection failed')
+            if (scenario === 'partial' && !label1.textContent.endsWith(' !!!'))
+              throw new Error('Partial update failed')
+            return elapsed
+          },
+          { scenario, clearRows },
+        )
         if (repeat >= 0) samples[scenario][index].push(result)
       }
     }
@@ -133,6 +160,9 @@ try {
         cpu: os.cpus()[0]?.model,
         urls,
         artifacts,
+        cpuRate,
+        clearRows,
+        disableRowListenersInSecondPage: disableRowListeners,
         method: `synchronous click handler and DOM writes; excludes layout and paint; 3 warmups and ${sampleCount} samples; select averages 200 clicks, swap averages 20 clicks; alternating implementation order; console.log disabled in both pages`,
         samples,
       },
