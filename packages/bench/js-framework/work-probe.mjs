@@ -57,6 +57,8 @@ try {
           return Reflect.apply(original, this, args)
         }
       }
+      method(DocumentFragment.prototype, 'append', 'fragment.append')
+      method(Document.prototype, 'createDocumentFragment')
       method(Node.prototype, 'cloneNode')
       method(Node.prototype, 'insertBefore')
       method(Node.prototype, 'appendChild')
@@ -67,7 +69,10 @@ try {
       method(Object, 'is', 'Object.is')
       method(Map.prototype, 'clear', 'map.clear')
       for (const [prototype, names] of [
-        [Node.prototype, ['firstChild', 'lastChild', 'nextSibling', 'parentNode', 'nodeType']],
+        [
+          Node.prototype,
+          ['firstChild', 'lastChild', 'nextSibling', 'parentNode', 'nodeType', 'childNodes'],
+        ],
         [Element.prototype, ['firstElementChild', 'nextElementSibling']],
         [DocumentFragment.prototype, ['firstElementChild']],
         [HTMLTemplateElement.prototype, ['content']],
@@ -174,7 +179,7 @@ try {
         timestamp: new Date().toISOString(),
         browser: browser.version(),
         method:
-          'one click from a fresh 1000-row state, or empty state for create; instrumented calls only, no timing; console.log disabled; numeric Map keys; array operations counted only for length >= 100',
+          'one click from a fresh 1000-row state, or empty state for create; instrumented calls only, no timing; includes DocumentFragment.append, createDocumentFragment and Node.childNodes; console.log disabled; numeric Map keys; array operations counted only for length >= 100',
         measurements,
       },
       null,

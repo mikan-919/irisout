@@ -8,6 +8,8 @@
 
 一覧高速化計画の実装、採用しなかった配列複製省略、段階ごとの全試行値は[work-results.md](./work-results.md)を参照する。基準版は`390f84a`である。
 
+Vanillaのソースと生成物の比較は[vanilla-code-review.md](./vanilla-code-review.md)、断片への追加と子節点の参照を含めた呼出し回数は[vanilla-code-work.json](./vanilla-code-work.json)を参照する。コード上の差と未測定の削減候補を区別して記録する。
+
 所有する配列のmapを変更行へ接続した後の測定は[map-results.md](./map-results.md)に分けて保存する。修正前後とSolidとの同期比較、および公式測定器による部分更新の再測定であり、既存の全操作の公式比較を置き換えない。
 
 ## 再実行
@@ -91,6 +93,8 @@ bun packages/bench/js-framework/report.mjs
 ```
 
 `work-probe.mjs`は別のページで組込み関数とDOM操作を計装し、9操作の呼出し回数を[vanilla-work.json](./vanilla-work.json)へ保存する。計装した値を時間の比較には使わない。配列操作は長さ100以上を対象とし、`inputItems`は入力の長さの合計であって、実際の要素評価回数ではない。各操作は初期状態から1回だけ実行し、初回作成には遅延初期化も含む。
+
+現在の計装は`DocumentFragment.append`、`createDocumentFragment`、`Node.childNodes`も含む。これらは既存の`vanilla-work.json`には含まれず、追加後の実測は`vanilla-code-work.json`に保存した。JavaScriptからの呼出し回数であり、ブラウザー内部の処理回数や所要時間は示さない。
 
 `report.mjs`は同期比較のスクリプトのSHA-256を公式測定の生成物と照合し、版が異なる過去の比較を除外する。中央値差の95%区間は同じ試行の組を再抽出する方法で求める。0を含む場合は同等と断定せず「差未確定」と記録する。
 
