@@ -1,0 +1,257 @@
+{
+  "timestamp": "2026-10-16T09:52:18.716Z",
+  "browser": "153.0.8010.12",
+  "method": "one click from a fresh 1000-row state, or empty state for create; instrumented calls only, no timing; console.log disabled; numeric Map keys; array operations counted only for length >= 100",
+  "measurements": [
+    {
+      "url": "http://localhost:8080/frameworks/keyed/vanillajs/index.html",
+      "assets": [
+        {
+          "url": "http://localhost:8080/frameworks/keyed/vanillajs/src/Main.js",
+          "sha256": "08a5cb7d5cec199396561ed28b3c2db77577f066480f33c19f22ce6b0b0c980f"
+        }
+      ],
+      "results": {
+        "create": {
+          "counts": {
+            "textContent": 1,
+            "get.firstChild": 4001,
+            "remove": 1,
+            "cloneNode": 1000,
+            "get.nextSibling": 1000,
+            "nodeValue": 2000,
+            "appendChild": 1000,
+            "insertBefore": 1
+          },
+          "rows": 1000
+        },
+        "replace": {
+          "counts": {
+            "textContent": 1,
+            "get.firstChild": 4001,
+            "remove": 1,
+            "cloneNode": 1000,
+            "get.nextSibling": 1000,
+            "nodeValue": 2000,
+            "appendChild": 1000,
+            "insertBefore": 1
+          },
+          "rows": 1000
+        },
+        "partial": {
+          "counts": {
+            "get.firstChild": 100,
+            "nodeValue": 100
+          },
+          "rows": 1000
+        },
+        "select": {
+          "counts": {
+            "get.parentNode": 4,
+            "array.findIndex": 1,
+            "array.findIndex.inputItems": 1000,
+            "className": 1
+          },
+          "rows": 1000
+        },
+        "swap": {
+          "counts": {
+            "insertBefore": 2
+          },
+          "rows": 1000
+        },
+        "remove": {
+          "counts": {
+            "get.parentNode": 7,
+            "array.findIndex": 3,
+            "array.findIndex.inputItems": 2999,
+            "array.filter": 1,
+            "array.filter.inputItems": 1000,
+            "remove": 1,
+            "array.splice": 2,
+            "array.splice.inputItems": 2000
+          },
+          "rows": 999
+        },
+        "create10k": {
+          "counts": {
+            "textContent": 1,
+            "get.firstChild": 40001,
+            "remove": 1,
+            "cloneNode": 10000,
+            "get.nextSibling": 10000,
+            "nodeValue": 20000,
+            "appendChild": 10000,
+            "insertBefore": 1
+          },
+          "rows": 10000
+        },
+        "append": {
+          "counts": {
+            "array.concat": 1,
+            "array.concat.inputItems": 1000,
+            "get.firstChild": 4001,
+            "cloneNode": 1000,
+            "get.nextSibling": 1000,
+            "nodeValue": 2000,
+            "appendChild": 1000
+          },
+          "rows": 2000
+        },
+        "clear": {
+          "counts": {
+            "textContent": 1
+          },
+          "rows": 0
+        }
+      }
+    },
+    {
+      "url": "http://localhost:8080/frameworks/keyed/irisout/dist/index.html",
+      "assets": [
+        {
+          "url": "http://localhost:8080/frameworks/keyed/irisout/dist/assets/index-Dbf78uoj.js",
+          "sha256": "d725efed01bce46eca23236d2e41e8287d32a2bbff83682f1d3e16d2b4531f11"
+        }
+      ],
+      "results": {
+        "create": {
+          "counts": {
+            "numericMap.get": 1000,
+            "get.content": 1001,
+            "get.firstElementChild": 6009,
+            "get.nextElementSibling": 3007,
+            "cloneNode": 1000,
+            "addEventListener": 2000,
+            "get.firstChild": 2000,
+            "get.nodeType": 2000,
+            "get.lastChild": 2000,
+            "nodeValue": 2000,
+            "setAttribute": 1000,
+            "numericMap.set": 1000,
+            "get.parentNode": 1,
+            "insertBefore": 1
+          },
+          "rows": 1000
+        },
+        "replace": {
+          "counts": {
+            "numericMap.get": 1000,
+            "get.content": 1000,
+            "get.firstElementChild": 6000,
+            "cloneNode": 1000,
+            "get.nextElementSibling": 3000,
+            "addEventListener": 2000,
+            "get.firstChild": 2001,
+            "get.nodeType": 2000,
+            "get.lastChild": 2001,
+            "nodeValue": 2000,
+            "setAttribute": 1000,
+            "numericMap.set": 1000,
+            "get.parentNode": 1,
+            "replaceChildren": 1,
+            "numericMap.delete": 1000
+          },
+          "rows": 1000
+        },
+        "partial": {
+          "counts": {
+            "array.slice": 1,
+            "array.slice.inputItems": 1000,
+            "Object.is": 400,
+            "numericMap.has": 100,
+            "numericMap.get": 100,
+            "get.firstChild": 100,
+            "get.nodeType": 100,
+            "get.lastChild": 100,
+            "nodeValue": 100
+          },
+          "rows": 1000
+        },
+        "select": {
+          "counts": {
+            "Object.is": 2,
+            "numericMap.get": 2,
+            "setAttribute": 1
+          },
+          "rows": 1000
+        },
+        "swap": {
+          "counts": {
+            "array.slice": 1,
+            "array.slice.inputItems": 1000,
+            "numericMap.get": 1000,
+            "Object.is": 3000,
+            "get.parentNode": 1,
+            "get.nextSibling": 1000,
+            "insertBefore": 2
+          },
+          "rows": 1000
+        },
+        "remove": {
+          "counts": {
+            "array.filter": 1,
+            "array.filter.inputItems": 1000,
+            "numericMap.get": 999,
+            "Object.is": 2997,
+            "remove": 1,
+            "numericMap.delete": 1,
+            "get.parentNode": 1,
+            "get.nextSibling": 1000
+          },
+          "rows": 999
+        },
+        "create10k": {
+          "counts": {
+            "numericMap.get": 10000,
+            "get.content": 10000,
+            "get.firstElementChild": 60000,
+            "cloneNode": 10000,
+            "get.nextElementSibling": 30000,
+            "addEventListener": 20000,
+            "get.firstChild": 20000,
+            "get.nodeType": 20000,
+            "get.lastChild": 20000,
+            "nodeValue": 20000,
+            "setAttribute": 10000,
+            "numericMap.set": 10000,
+            "get.parentNode": 1,
+            "insertBefore": 1
+          },
+          "rows": 10000
+        },
+        "append": {
+          "counts": {
+            "numericMap.get": 2000,
+            "Object.is": 3000,
+            "get.content": 1000,
+            "get.firstElementChild": 6000,
+            "cloneNode": 1000,
+            "get.nextElementSibling": 3000,
+            "addEventListener": 2000,
+            "get.firstChild": 2000,
+            "get.nodeType": 2000,
+            "get.lastChild": 2000,
+            "nodeValue": 2000,
+            "setAttribute": 1000,
+            "numericMap.set": 1000,
+            "get.parentNode": 1,
+            "get.nextSibling": 1001,
+            "insertBefore": 1
+          },
+          "rows": 2000
+        },
+        "clear": {
+          "counts": {
+            "get.parentNode": 1,
+            "get.firstChild": 1,
+            "get.lastChild": 1,
+            "replaceChildren": 1,
+            "map.clear": 1
+          },
+          "rows": 0
+        }
+      }
+    }
+  ]
+}

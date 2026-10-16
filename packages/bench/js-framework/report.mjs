@@ -43,7 +43,7 @@ const labels = [
   'Brotli圧縮後',
   '初回描画（ms、各1回）',
 ]
-function find(name, id) {
+function resultFor(name, id) {
   const matches = samples.filter(
     (result) =>
       result.benchmark === id &&
@@ -53,18 +53,26 @@ function find(name, id) {
   )
   if (matches.length !== 1)
     throw new Error(`Expected one result for ${name}/${id}, got ${matches.length}`)
-  const result = matches[0]
+  return matches[0]
+}
+function find(name, id) {
+  const result = resultFor(name, id)
   const values = result.type === 'cpu' ? result.values.total : result.values.DEFAULT
-  if (!values.values.length || values.values.some((value) => !Number.isFinite(value) || value < 0))
-    throw new Error(`Invalid samples for ${name}/${id}`)
   const expected =
     result.type === 'cpu'
       ? environment.count + (id === '04_select1k' ? 10 : 0)
       : result.type === 'memory'
         ? environment.memoryCount
         : 1
-  if (values.values.length !== expected)
-    throw new Error(`Incomplete samples for ${name}/${id}: ${values.values.length}/${expected}`)
+  for (const measured of result.type === 'cpu' ? Object.values(result.values) : [values]) {
+    if (
+      !measured.values.length ||
+      measured.values.some((value) => !Number.isFinite(value) || value < 0)
+    )
+      throw new Error(`Invalid samples for ${name}/${id}`)
+    if (measured.values.length !== expected)
+      throw new Error(`Incomplete samples for ${name}/${id}: ${measured.values.length}/${expected}`)
+  }
   return values.median
 }
 const rows = ids.map(
@@ -79,17 +87,81 @@ const ratios = frameworks.map((name) =>
 )
 const table = (from, to) =>
   [
-    '| 操作 | irisout | React Hooks | Vue | Solid | JavaScript |',
+    '| 操作 | irisout | React Hooks | Vue | Solid | Vanilla |',
     '| --- | ---: | ---: | ---: | ---: | ---: |',
     ...rows.slice(from, to),
   ].join('\n')
-const probeFile = path.join(root, 'optimization.json')
-const probe = fs.existsSync(probeFile) ? JSON.parse(fs.readFileSync(probeFile, 'utf8')) : null
-const vanillaFile = path.join(root, 'vanilla-comparison.json')
-const vanillaProbe = fs.existsSync(vanillaFile)
-  ? JSON.parse(fs.readFileSync(vanillaFile, 'utf8'))
-  : null
-const median = (values) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)]
+const cpuDetails = ids
+  .slice(0, 9)
+  .map((id, index) => {
+    const vanilla = resultFor('vanillajs', id).values
+    const irisout = resultFor('irisout', id).values
+    return `| ${labels[index]} | ${vanilla.script.median.toFixed(2)} | ${irisout.script.median.toFixed(2)} | ${(irisout.script.median / vanilla.script.median).toFixed(2)} | ${vanilla.paint.median.toFixed(2)} | ${irisout.paint.median.toFixed(2)} |`
+  })
+  .join('\n')
+// 別の生成物を測った同期値を、今回の公式値と同じ版として表示しない。
+const measuredScripts = new Set(
+  Object.entries(environment.irisoutAssets ?? {})
+    .filter(([file]) => file.endsWith('.js'))
+    .map(([, hash]) => hash),
+)
+function readCurrentProbe(file) {
+  const source = path.join(root, file)
+  if (!fs.existsSync(source)) return null
+  const value = JSON.parse(fs.readFileSync(source, 'utf8'))
+  const scripts = value.artifacts?.[1] ?? []
+  if (!scripts.length || scripts.some((script) => !measuredScripts.has(script.sha256))) {
+    console.log(`Skipping ${file}: measured scripts do not match this run`)
+    return null
+  }
+  const expectedScenarios = [
+    'create',
+    'replace',
+    'partial',
+    'select',
+    'swap',
+    'remove',
+    'create10k',
+    'append',
+    'clear',
+  ]
+  if (Object.keys(value.samples).join(',') !== expectedScenarios.join(','))
+    throw new Error(`Incomplete probe scenarios: ${file}`)
+  for (const [scenario, runs] of Object.entries(value.samples)) {
+    if (
+      runs.length !== 2 ||
+      !runs[0].length ||
+      runs[0].length !== runs[1].length ||
+      runs.some((values) => values.some((sample) => !Number.isFinite(sample) || sample < 0))
+    )
+      throw new Error(`Invalid paired probe samples: ${file}/${scenario}`)
+  }
+  return value
+}
+const probe = readCurrentProbe('optimization.json')
+const vanillaProbe = readCurrentProbe('vanilla-comparison.json')
+const median = (values) => {
+  const sorted = [...values].sort((a, b) => a - b)
+  return (sorted[Math.floor((sorted.length - 1) / 2)] + sorted[Math.floor(sorted.length / 2)]) / 2
+}
+function pairedDifferenceInterval(before, after) {
+  if (before.length !== after.length) throw new Error('Paired probe samples have different lengths')
+  let seed = 42
+  const differences = []
+  for (let repeat = 0; repeat < 5000; repeat++) {
+    const first = [],
+      second = []
+    for (let index = 0; index < before.length; index++) {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
+      const selected = Math.floor((seed / 4294967296) * before.length)
+      first.push(before[selected])
+      second.push(after[selected])
+    }
+    differences.push(median(second) - median(first))
+  }
+  differences.sort((a, b) => a - b)
+  return [differences[125], differences[4875]]
+}
 const gzipSizes = probe?.artifacts?.map((assets) =>
   assets.reduce((sum, asset) => sum + asset.gzipBytes, 0),
 )
@@ -108,7 +180,9 @@ const vanillaTable = vanillaProbe
   ? Object.values(vanillaProbe.samples)
       .map((runs, index) => {
         const [vanilla, irisout] = runs.map(median)
-        return `| ${labels[index].replace(/（.*）/, '')} | ${vanilla.toFixed(4)} | ${irisout.toFixed(4)} | ${(irisout / vanilla).toFixed(2)} |`
+        const [low, high] = pairedDifferenceInterval(...runs)
+        const verdict = low > 0 ? 'irisoutが遅い' : high < 0 ? 'irisoutが速い' : '差未確定'
+        return `| ${labels[index].replace(/（.*）/, '')} | ${vanilla.toFixed(4)} | ${irisout.toFixed(4)} | ${(irisout / vanilla).toFixed(2)} | ${low.toFixed(4)}〜${high.toFixed(4)} | ${verdict} |`
       })
       .join('\n')
   : ''
@@ -132,17 +206,25 @@ const report = `# js-framework-benchmark 比較結果
 
 ${table(0, 9)}
 
-| 指標 | irisout | React Hooks | Vue | Solid | JavaScript |
+| 指標 | irisout | React Hooks | Vue | Solid | Vanilla |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| JavaScriptを1とした時間比の幾何平均 | ${ratios.map((value) => value.toFixed(2)).join(' | ')} |
+| Vanillaを1とした時間比の幾何平均 | ${ratios.map((value) => value.toFixed(2)).join(' | ')} |
 
-9操作の中央値をJavaScriptで割り、等しい重みで幾何平均（比率を掛け合わせた平均）を求めた。上流の重み付き総合指標とは異なる。
+9操作の中央値をVanillaで割り、等しい重みで幾何平均（比率を掛け合わせた平均）を求めた。上流の重み付き総合指標とは異なる。
+
+## Vanillaとの差の内訳（公式測定、ms）
+
+| 操作 | JavaScript処理：Vanilla | JavaScript処理：irisout | 処理時間比 | 描画：Vanilla | 描画：irisout |
+| --- | ---: | ---: | ---: | ---: | ---: |
+${cpuDetails}
+
+処理時間比はirisout÷Vanilla。減速倍率は上の操作名に従う。scriptとpaintは上流測定器の区分で、描画にはレイアウトを含む。各中央値は別々に求めるため、足して全体と一致するとは限らない。全体の差が小さくても、JavaScript処理に差が残る場合を区別する。
 
 ${
   probe
     ? `## 修正前後の同期処理時間（ms）
 
-同じJSXを修正前（${probe.baselineCommit ?? '第1URL'}）と修正後で構築し、同じブラウザーで順序を交互にして測定した。3回の事前実行後に15試行。選択は200回、交換は20回の操作から1回当たりを求める。同期したイベント処理とDOM書き込みの時間であり、レイアウト・描画を含まない。上の公式測定とは別の指標。
+同じJSXを修正前（${probe.baselineCommit ?? '第1URL'}）と修正後で構築し、同じブラウザーで順序を交互にして測定した。3回の事前実行後に${Object.values(probe.samples)[0][0].length}試行。選択は200回、交換は20回の操作から1回当たりを求める。同期したイベント処理とDOM書き込みの時間であり、レイアウト・描画を含まない。上の公式測定とは別の指標。
 
 | 操作 | 修正前 | 修正後 | 修正前÷修正後 |
 | --- | ---: | ---: | ---: |
@@ -159,11 +241,13 @@ ${
   vanillaProbe
     ? `## 手書きJavaScriptとの同期処理比較（ms）
 
-上流のvanillajs実装と最終版irisoutを、同じ乱数の初期値と順序を交互にする15試行で比較した。両ページのconsole.logを抑止し、手書き実装に残る開発用ログの転送費用を除く。レイアウト・描画は含まない。右列はirisoutの時間をJavaScriptで割った比率で、1未満ならirisoutが短い。
+上流のvanillajs実装と今回のirisoutを、同じ乱数の初期値と順序を交互にする${Object.values(vanillaProbe.samples)[0][0].length}試行で比較した。両ページのconsole.logを抑止し、手書き実装に残る開発用ログの転送費用を除く。レイアウト・描画は含まない。比率はirisoutの時間をVanillaで割った値で、1未満ならirisoutが短い。
 
-| 操作 | JavaScript | irisout | irisout÷JavaScript |
-| --- | ---: | ---: | ---: |
+| 操作 | Vanilla | irisout | irisout÷Vanilla | 中央値差の95%区間（ms） | 判定 |
+| --- | ---: | ---: | ---: | ---: | --- |
 ${vanillaTable}
+
+同じ試行の組を5,000回再抽出して中央値差（irisout−Vanilla）の95%区間を求め、0を含む場合は差未確定とする。再抽出は初期値42の線形合同法（1664525、1013904223、32ビット）を使う。複数項目の同時検定に対する補正はせず、この環境での判断材料とする。
 
 全試行値と生成物のSHA-256は[vanilla-comparison.json](./vanilla-comparison.json)を参照。公式測定ではログを抑止していない。
 `

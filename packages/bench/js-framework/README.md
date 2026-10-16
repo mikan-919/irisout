@@ -4,6 +4,8 @@
 
 比較対象は上流のReact Hooks、Vue、Solid、vanillajs。実装と構築設定は変更しない。測定器も上流のPuppeteer方式を使い、クリックから描画までの時間を測る。結果と測定条件は[results.md](./results.md)、公式の全試行値は[results.json](./results.json)を参照。最適化前に中断した測定値は[partial-results.json](./partial-results.json)へ分けて保存した。
 
+2026-10-16の全操作の再測定はCPU各10回、選択20回、メモリ各3回、同期比較各100回で行った。Vanillaとの差と処理回数の調査は[vanilla-audit.md](./vanilla-audit.md)に記録する。
+
 所有する配列のmapを変更行へ接続した後の測定は[map-results.md](./map-results.md)に分けて保存する。修正前後とSolidとの同期比較、および公式測定器による部分更新の再測定であり、既存の全操作の公式比較を置き換えない。
 
 ## 再実行
@@ -26,6 +28,9 @@ Chromiumのパスを省略するとPlaywrightの既定のブラウザーを使�
 # 個別に実行する場合
 PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/path/to/chrome bun packages/bench/js-framework/run.mjs
 bun packages/bench/js-framework/report.mjs
+
+# 今回と同じ試行数
+PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/path/to/chrome JSFB_COUNT=10 JSFB_MEMORY_COUNT=3 bun packages/bench/js-framework/run.mjs
 ```
 
 | 環境変数                              | 既定値                                | 用途                                      |
@@ -67,3 +72,17 @@ PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/path/to/chrome bun packages/bench/js-framew
 3回の事前実行後に15回測り、各試行で修正前後の順序を交互にする。乱数の初期値を固定し、選択は200回、交換は20回の操作時間を1回当たりへ換算する。同期したイベント処理とDOM書き込みの時間を測り、レイアウト・描画は含まない。両ページのconsole.logを抑止して、上流の手書き実装に残る開発用ログの転送費用を除く。公式測定ではログの挙動を変えない。比較するスクリプトのURLとSHA-256をJSONへ記録する。
 
 公式のクリックから描画までの時間とは別の指標である。比較用の生成物は同じJSXから各版で構築し、別のURLへ配置する。[vanilla-comparison.json](./vanilla-comparison.json)は、同じ方法で第1URLに上流の`frameworks/keyed/vanillajs/`、第2URLにirisoutを渡した値である。
+
+## Vanillaとの差の調査
+
+公式サーバーの起動中に次を順に実行する。時間測定中には処理回数の計測や他の検査を並行させない。
+
+```sh
+PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/path/to/chrome JSFB_PROBE_SAMPLES=100 JSFB_PROBE_OUTPUT=packages/bench/js-framework/vanilla-comparison.json bun packages/bench/js-framework/probe.mjs http://localhost:8080/frameworks/keyed/vanillajs/index.html http://localhost:8080/frameworks/keyed/irisout/dist/index.html
+PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/path/to/chrome bun packages/bench/js-framework/work-probe.mjs http://localhost:8080/frameworks/keyed/vanillajs/index.html http://localhost:8080/frameworks/keyed/irisout/dist/index.html
+bun packages/bench/js-framework/report.mjs
+```
+
+`work-probe.mjs`は別のページで組込み関数とDOM操作を計装し、9操作の呼出し回数を[vanilla-work.json](./vanilla-work.json)へ保存する。計装した値を時間の比較には使わない。配列操作は長さ100以上を対象とし、`inputItems`は入力の長さの合計であって、実際の要素評価回数ではない。各操作は初期状態から1回だけ実行し、初回作成には遅延初期化も含む。
+
+`report.mjs`は同期比較のスクリプトのSHA-256を公式測定の生成物と照合し、版が異なる過去の比較を除外する。中央値差の95%区間は同じ試行の組を再抽出する方法で求める。0を含む場合は同等と断定せず「差未確定」と記録する。
