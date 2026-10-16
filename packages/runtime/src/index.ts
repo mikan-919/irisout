@@ -65,6 +65,20 @@ export interface ListItemState {
   readonly bindings: Map<string, unknown>
 }
 
+// 固定プロパティを使う生成行では値保存用のMapを作らず、必要な項目だけで確保する。
+class ItemState implements ListItemState {
+  #bindings?: Map<string, unknown>
+
+  constructor(
+    readonly listId: string,
+    readonly itemId: unknown,
+  ) {}
+
+  get bindings(): Map<string, unknown> {
+    return (this.#bindings ??= new Map())
+  }
+}
+
 export interface ListItemHandle<T = unknown> {
   el: Element
   /** 複雑なネスト構造向けの互換経路。通常のList itemは共有updaterを使う。 */
@@ -154,10 +168,10 @@ export function createListRuntime<T = unknown>(listId: string): ListRuntime<T> {
 // Object.is で値が変わったときだけ true を返すため、生成コードは対象 DOM API
 // だけを呼べる。式の評価自体は従来どおり行い、副作用の回数は変えない。
 export function updateListBinding(item: ListItemState, bindingId: string, value: unknown): boolean {
-  const previous = item.bindings.get(bindingId)
-  if (Object.is(previous, value) && (value !== undefined || item.bindings.has(bindingId)))
-    return false
-  item.bindings.set(bindingId, value)
+  const bindings = item.bindings
+  const previous = bindings.get(bindingId)
+  if (Object.is(previous, value) && (value !== undefined || bindings.has(bindingId))) return false
+  bindings.set(bindingId, value)
   return true
 }
 
@@ -212,6 +226,29 @@ function insertListRecords<T>(
       right--
     }
     if (left > right) return
+    // 一致する両端の間が空なら、新しい区間だけを順方向にまとめて挿入する。
+    if (first === anchor) {
+      const fragment = parent.ownerDocument!.createDocumentFragment()
+      for (let index = left; index <= right; index++) fragment.append(ordered[index]!.handle.el)
+      parent.insertBefore(fragment, anchor)
+      return
+    }
+    // 両端の交換だけなら中間を照合し、配置用Mapと部分列の配列を作らない。
+    const leftEl = ordered[left]!.handle.el
+    const rightEl = ordered[right]!.handle.el
+    if (leftEl === anchor?.previousSibling && rightEl === first) {
+      let node = first.nextSibling
+      let index = left + 1
+      while (index < right && ordered[index]!.handle.el === node) {
+        node = node.nextSibling
+        index++
+      }
+      if (index === right) {
+        parent.insertBefore(leftEl, first)
+        if (rightEl.nextSibling !== anchor) parent.insertBefore(rightEl, anchor)
+        return
+      }
+    }
     const positions = new Map<Node, number>()
     for (let node = first; node && node !== anchor; node = node.nextSibling) {
       positions.set(node, positions.size)
@@ -307,12 +344,8 @@ export function reconcileList<T>(
       if (runtime.items.get(itemId) !== undefined) {
         throw new Error(`reconcileList: duplicate key ${String(itemId)} in list ${runtime.listId}`)
       }
-      const state: ListItemState = {
-        listId: runtime.listId,
-        itemId,
-        bindings: new Map(),
-      }
-      const record = { state, handle: create(value, state) }
+      const state = new ItemState(runtime.listId, itemId)
+      const record: ListRecord<T> = { state, handle: create(value, state), seen: undefined }
       runtime.items.set(itemId, record)
       ordered.push(record)
     }
@@ -335,11 +368,7 @@ export function reconcileList<T>(
             `reconcileList: no updater for item ${String(itemId)} in list ${runtime.listId}`,
           )
       } else {
-        const state: ListItemState = {
-          listId: runtime.listId,
-          itemId,
-          bindings: new Map(),
-        }
+        const state = new ItemState(runtime.listId, itemId)
         const created = { state, handle: create(value, state), seen }
         runtime.items.set(itemId, created)
         ordered.push(created)
@@ -427,11 +456,7 @@ export function reconcileListWithLifecycle<T>(
             'reconcileList: no updater for item ' + String(itemId) + ' in list ' + runtime.listId,
           )
       } else {
-        const state: ListItemState = {
-          listId: runtime.listId,
-          itemId,
-          bindings: new Map(),
-        }
+        const state = new ItemState(runtime.listId, itemId)
         record = { state, handle: create(value, state), seen }
         runtime.items.set(itemId, record)
         created.push(record)

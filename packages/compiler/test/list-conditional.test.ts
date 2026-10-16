@@ -41,7 +41,7 @@ export function App() {
 describe('M5: list rendering (keyed reuse factory)', () => {
   it('stamps items via <template>+cloneNode with no wrapper element, as direct children of <ul>', async () => {
     const { code } = compile(LIST_SOURCE)
-    expect(code).toContain('.content.cloneNode(true)')
+    expect(code).toContain('.content.firstElementChild.cloneNode(true)')
     const mod = await loadGenerated(code)
     const container = createContainer()
     ;(mod.mountComponent as (c: Element) => void)(container)

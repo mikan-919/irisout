@@ -85,12 +85,30 @@ const table = (from, to) =>
   ].join('\n')
 const probeFile = path.join(root, 'optimization.json')
 const probe = fs.existsSync(probeFile) ? JSON.parse(fs.readFileSync(probeFile, 'utf8')) : null
+const vanillaFile = path.join(root, 'vanilla-comparison.json')
+const vanillaProbe = fs.existsSync(vanillaFile)
+  ? JSON.parse(fs.readFileSync(vanillaFile, 'utf8'))
+  : null
 const median = (values) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)]
+const gzipSizes = probe?.artifacts?.map((assets) =>
+  assets.reduce((sum, asset) => sum + asset.gzipBytes, 0),
+)
+const sizeNote = gzipSizes?.every(Number.isFinite)
+  ? `直接読み込む生成スクリプトのgzip合計は${(gzipSizes[0] / 1024).toFixed(2)}→${(gzipSizes[1] / 1024).toFixed(2)}KiB。HTMLと共通CSSはこの値に含まない。`
+  : ''
 const probeTable = probe
   ? Object.values(probe.samples)
       .map((runs, index) => {
         const [before, after] = runs.map(median)
         return `| ${labels[index].replace(/（.*）/, '')} | ${before.toFixed(4)} | ${after.toFixed(4)} | ${(before / after).toFixed(2)} |`
+      })
+      .join('\n')
+  : ''
+const vanillaTable = vanillaProbe
+  ? Object.values(vanillaProbe.samples)
+      .map((runs, index) => {
+        const [vanilla, irisout] = runs.map(median)
+        return `| ${labels[index].replace(/（.*）/, '')} | ${vanilla.toFixed(4)} | ${irisout.toFixed(4)} | ${(irisout / vanilla).toFixed(2)} |`
       })
       .join('\n')
   : ''
@@ -124,13 +142,30 @@ ${
   probe
     ? `## 修正前後の同期処理時間（ms）
 
-同じJSXを修正前（30d856b7c47c21527236ee62f061c802a1d22edd）と修正後で構築し、同じブラウザーで順序を交互にして測定した。3回の事前実行後に15試行。選択は200回、交換は20回の操作から1回当たりを求める。同期したイベント処理とDOM書き込みの時間であり、レイアウト・描画を含まない。上の公式測定とは別の指標。
+同じJSXを修正前（${probe.baselineCommit ?? '第1URL'}）と修正後で構築し、同じブラウザーで順序を交互にして測定した。3回の事前実行後に15試行。選択は200回、交換は20回の操作から1回当たりを求める。同期したイベント処理とDOM書き込みの時間であり、レイアウト・描画を含まない。上の公式測定とは別の指標。
 
 | 操作 | 修正前 | 修正後 | 修正前÷修正後 |
 | --- | ---: | ---: | ---: |
 ${probeTable}
 
+${sizeNote}
+
 全試行値は[optimization.json](./optimization.json)を参照。
+`
+    : ''
+}
+
+${
+  vanillaProbe
+    ? `## 手書きJavaScriptとの同期処理比較（ms）
+
+上流のvanillajs実装と最終版irisoutを、同じ乱数の初期値と順序を交互にする15試行で比較した。両ページのconsole.logを抑止し、手書き実装に残る開発用ログの転送費用を除く。レイアウト・描画は含まない。右列はirisoutの時間をJavaScriptで割った比率で、1未満ならirisoutが短い。
+
+| 操作 | JavaScript | irisout | irisout÷JavaScript |
+| --- | ---: | ---: | ---: |
+${vanillaTable}
+
+全試行値と生成物のSHA-256は[vanilla-comparison.json](./vanilla-comparison.json)を参照。公式測定ではログを抑止していない。
 `
     : ''
 }

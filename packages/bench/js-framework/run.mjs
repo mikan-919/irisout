@@ -98,6 +98,19 @@ try {
         sourceSha256: createHash('sha256')
           .update(fs.readFileSync(path.join(root, 'irisout/main.jsx')))
           .digest('hex'),
+        irisoutAssets: Object.fromEntries(
+          [
+            'index.html',
+            ...fs
+              .readdirSync(path.join(checkout, 'frameworks/keyed/irisout/dist/assets'))
+              .map((file) => `assets/${file}`),
+          ].map((file) => [
+            file,
+            createHash('sha256')
+              .update(fs.readFileSync(path.join(checkout, 'frameworks/keyed/irisout/dist', file)))
+              .digest('hex'),
+          ]),
+        ),
         keyedChecks: keyed.split('\n').filter((line) => line.includes(' is keyed for ')),
         node: execFileSync('node', ['--version'], { encoding: 'utf8' }).trim(),
         bun: process.versions.bun,

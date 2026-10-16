@@ -229,6 +229,9 @@ triage手続きで捌く — コンパイラの受理条件自体を場当たり
   安定した行キーとの属性選択は選択前後の行へ直接接続する。配列変更はキー照合へ戻し、
   配置が変わる区間だけを最長増加部分列で並べる。親を専有する一覧の全削除・全置換は
   アンカーを保持した一括操作を使う。通常のsignal APIは変更しない。
+  単純な行は根要素を直接複製し、要素参照をハンドルの固定プロパティへ置く。
+  テキスト節点を再利用し、bindings用Mapは参照時だけ確保する。共有イベントは
+  要素の非公開Symbolから行を引き、直接配線の意味を保つ。DOM更新取引は一覧側が所有する。
 - **module境界**(ADR-0024/0030/0037/0038): `compileProject()`は相対`.js`/`.jsx`の静的named/default
   importだけをAST bindingへ解決する。componentはinline pathへ入り、通常のfunctionと
   `const`だけが補助宣言としてmodule scopeに残る。直接`const name = signal(initial)`、

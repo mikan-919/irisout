@@ -33,6 +33,7 @@ bun packages/bench/js-framework/report.mjs
 | `JSFB_COUNT`                          | `3`                                   | CPUの試行回数。行選択はこれに10回を加える |
 | `JSFB_MEMORY_COUNT`                   | `1`                                   | メモリの試行回数                          |
 | `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` | Playwrightの既定                      | 比較する全実装で使うブラウザー            |
+| `JSFB_PROBE_OUTPUT`                   | `optimization.json`                   | 同期比較のJSON保存先                      |
 
 ログと元のJSONは無視対象の`results/`、ブラウザーの動作記録は上流の`webdriver-ts/traces/`へ保存する。前回の上流結果は実行時に日時付きディレクトリへ退避する。`report.mjs`は欠けた実装・試行数を検出したら失敗し、部分的な結果を完全な比較として出力しない。
 
@@ -53,10 +54,12 @@ bunx vlmkit verify flow http://localhost:8080/frameworks/keyed/irisout/dist/inde
 
 ## 修正前後の処理時間
 
-[optimization.json](./optimization.json)は、同じJSXを修正前のコンパイラ・実行時コード（コミット`30d856b7c47c21527236ee62f061c802a1d22edd`）と修正後で構築した比較。公式サーバー上の修正前後の画面を`probe.mjs`へ渡すと再実行できる。
+[optimization.json](./optimization.json)は、同じJSXを前回確定版（コミット`fbb8601`）と修正後で構築した比較。公式サーバー上の修正前後の画面を`probe.mjs`へ渡すと再実行できる。2026-10-15の最初の改善値はGitの`fbb8601:packages/bench/js-framework/optimization.json`に保存している。
 
 ```sh
-PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/path/to/chrome bun packages/bench/js-framework/probe.mjs http://localhost:8080/frameworks/keyed/irisout-before/dist/index.html http://localhost:8080/frameworks/keyed/irisout/dist/index.html
+PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/path/to/chrome bun packages/bench/js-framework/probe.mjs http://localhost:8080/frameworks/keyed/irisout-stage1/dist/index.html http://localhost:8080/frameworks/keyed/irisout/dist/index.html
 ```
 
-3回の事前実行後に15回測り、各試行で修正前後の順序を交互にする。乱数の初期値を固定し、選択は200回、交換は20回の操作時間を1回当たりへ換算する。同期したイベント処理とDOM書き込みの時間を測り、レイアウト・描画は含まない。公式のクリックから描画までの時間とは別の指標である。比較用の生成物は同じJSXから各版で構築し、別のURLへ配置する。
+3回の事前実行後に15回測り、各試行で修正前後の順序を交互にする。乱数の初期値を固定し、選択は200回、交換は20回の操作時間を1回当たりへ換算する。同期したイベント処理とDOM書き込みの時間を測り、レイアウト・描画は含まない。両ページのconsole.logを抑止して、上流の手書き実装に残る開発用ログの転送費用を除く。公式測定ではログの挙動を変えない。比較するスクリプトのURLとSHA-256をJSONへ記録する。
+
+公式のクリックから描画までの時間とは別の指標である。比較用の生成物は同じJSXから各版で構築し、別のURLへ配置する。[vanilla-comparison.json](./vanilla-comparison.json)は、同じ方法で第1URLに上流の`frameworks/keyed/vanillajs/`、第2URLにirisoutを渡した値である。

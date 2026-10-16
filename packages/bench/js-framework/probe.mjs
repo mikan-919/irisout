@@ -1,6 +1,8 @@
 // 修正前後の同期処理時間を同じChromiumで測る。描画を含む公式値とは分けて保存する。
 import fs from 'node:fs'
 import os from 'node:os'
+import { createHash } from 'node:crypto'
+import { gzipSync } from 'node:zlib'
 import { chromium } from 'playwright'
 const urls = process.argv.slice(2)
 if (urls.length !== 2) throw new Error('Usage: bun probe.mjs <before-url> <after-url>')
@@ -20,11 +22,14 @@ const scenarios = [
   'clear',
 ]
 const samples = Object.fromEntries(scenarios.map((name) => [name, [[], []]]))
+const artifacts = []
 try {
   const pages = []
   for (const url of urls) {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } })
     await page.addInitScript(() => {
+      // DOM処理の比較へ開発用ログの転送費用を混ぜない。両方の実装へ同じ条件を適用する。
+      console.log = () => {}
       let seed = 42
       Math.random = () => {
         seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
@@ -33,6 +38,22 @@ try {
     })
     await page.goto(url)
     await page.waitForSelector('#run')
+    const scripts = await page
+      .locator('script[src]')
+      .evaluateAll((nodes) => nodes.map((node) => node.src))
+    const assets = []
+    for (const script of scripts) {
+      const response = await fetch(script)
+      if (!response.ok) throw new Error(`Cannot read measured script: ${script}`)
+      const code = new Uint8Array(await response.arrayBuffer())
+      assets.push({
+        url: script,
+        sha256: createHash('sha256').update(code).digest('hex'),
+        bytes: code.byteLength,
+        gzipBytes: gzipSync(code).byteLength,
+      })
+    }
+    artifacts.push(assets)
     pages.push(page)
   }
   for (const scenario of scenarios) {
@@ -92,15 +113,16 @@ try {
     console.log(`${scenario}: ${values[0].toFixed(4)} -> ${values[1].toFixed(4)} ms`)
   }
   fs.writeFileSync(
-    new URL('./optimization.json', import.meta.url),
+    process.env.JSFB_PROBE_OUTPUT ?? new URL('./optimization.json', import.meta.url),
     JSON.stringify(
       {
         timestamp: new Date().toISOString(),
         browser: browser.version(),
         cpu: os.cpus()[0]?.model,
         urls,
+        artifacts,
         method:
-          'synchronous click handler and DOM writes; excludes layout and paint; 3 warmups and 15 samples; select averages 200 clicks, swap averages 20 clicks; alternating implementation order',
+          'synchronous click handler and DOM writes; excludes layout and paint; 3 warmups and 15 samples; select averages 200 clicks, swap averages 20 clicks; alternating implementation order; console.log disabled in both pages',
         samples,
       },
       null,
