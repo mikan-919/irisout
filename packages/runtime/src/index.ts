@@ -155,6 +155,48 @@ interface ListRecord<T> {
   seen?: object
 }
 
+type ListRecordFactory<T> = (
+  listId: string,
+  itemId: unknown,
+  value: T,
+  create: (value: T, state: ListItemState) => ListItemHandle<T>,
+) => ListRecord<T>
+
+// ADR-0068: 平坦な生成関数は状態を読まない。外から状態を参照する互換経路だけで確保する。
+class FlatListRecord<T> implements ListRecord<T> {
+  #state?: ListItemState
+  seen?: object
+
+  constructor(
+    private readonly listId: string,
+    private readonly itemId: unknown,
+    readonly handle: ListItemHandle<T>,
+  ) {}
+
+  get state(): ListItemState {
+    return (this.#state ??= new ItemState(this.listId, this.itemId))
+  }
+}
+
+export function createFlatListRecord<T>(
+  listId: string,
+  itemId: unknown,
+  value: T,
+  create: (value: T, state: ListItemState) => ListItemHandle<T>,
+): ListRecord<T> {
+  return new FlatListRecord(listId, itemId, (create as (value: T) => ListItemHandle<T>)(value))
+}
+
+function createListRecord<T>(
+  listId: string,
+  itemId: unknown,
+  value: T,
+  create: (value: T, state: ListItemState) => ListItemHandle<T>,
+): ListRecord<T> {
+  const state = new ItemState(listId, itemId)
+  return { state, handle: create(value, state), seen: undefined }
+}
+
 export interface ListRuntime<T> {
   readonly listId: string
   readonly items: Map<unknown, ListRecord<T>>
@@ -210,6 +252,7 @@ export function reconcileListMap<T>(
   create: (value: T, state: ListItemState) => ListItemHandle<T>,
   update: ListItemUpdater<T>,
   allowMap: boolean,
+  recordFactory?: ListRecordFactory<T>,
 ): void {
   const previous = listMapBases.get(runtime)
   listMapBases.delete(runtime)
@@ -228,7 +271,7 @@ export function reconcileListMap<T>(
       return
     }
   }
-  reconcileList(runtime, container, values, keyOf, create, update)
+  reconcileList(runtime, container, values, keyOf, create, update, recordFactory)
   listMapBases.set(runtime, values)
 }
 
@@ -396,6 +439,7 @@ export function reconcileList<T>(
   keyOf: (value: T) => unknown,
   create: (value: T, state: ListItemState) => ListItemHandle<T>,
   update?: ListItemUpdater<T>,
+  recordFactory: ListRecordFactory<T> = createListRecord,
 ): void {
   const initiallyEmpty = runtime.items.size === 0
   const ordered: ListRecord<T>[] = []
@@ -412,8 +456,7 @@ export function reconcileList<T>(
       if (runtime.items.get(itemId) !== undefined) {
         throw new Error(`reconcileList: duplicate key ${String(itemId)} in list ${runtime.listId}`)
       }
-      const state = new ItemState(runtime.listId, itemId)
-      const record: ListRecord<T> = { state, handle: create(value, state), seen: undefined }
+      const record = recordFactory(runtime.listId, itemId, value, create)
       runtime.items.set(itemId, record)
       ordered.push(record)
     }
@@ -436,8 +479,8 @@ export function reconcileList<T>(
             `reconcileList: no updater for item ${String(itemId)} in list ${runtime.listId}`,
           )
       } else {
-        const state = new ItemState(runtime.listId, itemId)
-        const created = { state, handle: create(value, state), seen }
+        const created = recordFactory(runtime.listId, itemId, value, create)
+        created.seen = seen
         runtime.items.set(itemId, created)
         ordered.push(created)
         continue

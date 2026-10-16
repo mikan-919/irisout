@@ -41,7 +41,8 @@ export function App() {
 describe('M5: list rendering (keyed reuse factory)', () => {
   it('stamps items via <template>+cloneNode with no wrapper element, as direct children of <ul>', async () => {
     const { code } = compile(LIST_SOURCE)
-    expect(code).toContain('.content.firstElementChild.cloneNode(true)')
+    expect(code).toContain('.__irisout_root__ ??=')
+    expect(code).toContain('.cloneNode(true)')
     const mod = await loadGenerated(code)
     const container = createContainer()
     ;(mod.mountComponent as (c: Element) => void)(container)
@@ -84,7 +85,7 @@ describe('M5: list rendering (keyed reuse factory)', () => {
   it('updates only the changed item binding without reordering stable DOM', async () => {
     const { code } = compile(LIST_SOURCE)
     expect(code).toContain('createListRuntime as __createListRuntime__')
-    expect(code).toContain('!__handle__.initialized || !Object.is(')
+    expect(code).toContain('if (!Object.is(__handle__.text_')
 
     const mod = await loadGenerated(code)
     const container = createContainer()

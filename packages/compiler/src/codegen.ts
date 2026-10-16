@@ -226,7 +226,7 @@ export interface GenerateModuleInput {
 const FIND_HELPER = `function __find__(root, id) { if (root.getAttribute("data-iris-id") === id) return root; const visit = (node) => { for (let child = node.firstElementChild; child; child = child.nextElementSibling) { if (child.getAttribute("data-iris-id") === id) return child; const found = visit(child); if (found) return found; } return null; }; return visit(root); }`
 
 // 単純な行のマーカー位置はテンプレートから一度だけ求め、複製では位置だけを辿る。
-const COLLECT_REFS_HELPER = `function __collectPaths__(template) { if (template.__irisout_paths__) return template.__irisout_paths__; const paths = {}; const visit = (node, path) => { const id = node.getAttribute("data-iris-id"); if (id) { paths[id] = path; node.removeAttribute("data-iris-id"); } let index = 0; for (let child = node.firstElementChild; child; child = child.nextElementSibling) visit(child, [...path, index++]); }; visit(template.content.firstElementChild, []); return template.__irisout_paths__ = paths; } function __followPath__(root, path) { for (let index of path) { root = root.firstElementChild; while (index-- > 0) root = root.nextElementSibling; } return root; }`
+const COLLECT_REFS_HELPER = `function __collectPaths__(template) { if (template.__irisout_paths__) return template.__irisout_paths__; const paths = {}; const visit = (node, path) => { const id = node.getAttribute("data-iris-id"); if (id) { paths[id] = path; node.removeAttribute("data-iris-id"); } let index = 0; for (let child = node.firstElementChild; child; child = child.nextElementSibling) visit(child, [...path, index++]); }; visit(template.__irisout_root__ ??= template.content.firstElementChild, []); return template.__irisout_paths__ = paths; } function __followPath__(root, path) { for (let index of path) { root = root.firstElementChild; while (index-- > 0) root = root.nextElementSibling; } return root; }`
 
 // テキストだけの要素では既存節点を書き換え、外から子が置換された場合も表示を復元する。
 const SET_LIST_TEXT_HELPER = `function __setListText__(el, value) { const text = el.firstChild; if (text?.nodeType === 3 && text === el.lastChild) text.nodeValue = value; else el.textContent = value; }`
@@ -626,26 +626,28 @@ function generateFactoryLegacy(
       const valueVar = `__value_${m.id}__`
       lines.push(
         `  const ${valueVar} = \`${innerTemplateSource(m.contentParts)}\`;`,
-        `  if (!__handle__.initialized || !Object.is(__handle__.text_${m.id}, ${valueVar})) { __handle__.text_${m.id} = ${valueVar}; __setListText__(__${m.id}__, ${valueVar}); }`,
+        `  if (!Object.is(__handle__.text_${m.id}, ${valueVar})) { __handle__.text_${m.id} = ${valueVar}; __setListText__(__${m.id}__, ${valueVar}); }`,
       )
     }
     attrs.forEach((b, i) => {
       const valueVar = `__attr_${i}__`
       lines.push(
         `  const ${valueVar} = ${b.rendered};`,
-        `  if (!__handle__.initialized || !Object.is(__handle__.attr_${i}, ${valueVar})) { __handle__.attr_${i} = ${valueVar}; ${renderAttrSet(`__${b.markerId}__`, { ...b, rendered: valueVar })} }`,
+        `  if (!Object.is(__handle__.attr_${i}, ${valueVar})) { __handle__.attr_${i} = ${valueVar}; ${renderAttrSet(`__${b.markerId}__`, { ...b, rendered: valueVar })} }`,
       )
     })
-    lines.push('  __handle__.initialized = true;', '}')
+    lines.push('}')
     lines.push(`function ${factoryName}(${itemParam}) {`)
     if (refIds.size > 0) lines.push(`  ${pathsName} ??= __collectPaths__(${templateVar});`)
-    lines.push(`  const __el__ = ${templateVar}.content.firstElementChild.cloneNode(true);`)
+    lines.push(
+      `  const __el__ = (${templateVar}.__irisout_root__ ??= ${templateVar}.content.firstElementChild).cloneNode(true);`,
+    )
     for (const id of refIds) {
       lines.push(`  const __${id}__ = __followPath__(__el__, ${pathsName}.${id});`)
     }
     const refs = [...refIds].map((id) => `${id}: __${id}__`).join(', ')
     lines.push(
-      `  const __handle__ = { el: __el__, value: ${itemParam}, ${refs}${refs ? ', ' : ''}initialized: false };`,
+      `  const __handle__ = { el: __el__, value: ${itemParam}${refs ? ', ' + refs : ''} };`,
     )
     for (const h of body.localHandlers) {
       if (h.param === itemParam) {
@@ -665,7 +667,18 @@ function generateFactoryLegacy(
         `  __${h.markerId}__.addEventListener(${JSON.stringify(h.eventName)}, ${handlerName});`,
       )
     }
-    lines.push(`  ${updateName}(__handle__, ${itemParam});`)
+    // ADR-0068: 新規複製の文字列位置は既知。通常更新の外部変更復元とは分ける。
+    for (const m of texts) {
+      lines.push(
+        `  __${m.id}__.firstChild.nodeValue = __handle__.text_${m.id} = \`${innerTemplateSource(m.contentParts)}\`;`,
+      )
+    }
+    attrs.forEach((b, i) => {
+      lines.push(
+        `  __handle__.attr_${i} = ${b.rendered};`,
+        `  ${renderAttrSet(`__${b.markerId}__`, { ...b, rendered: `__handle__.attr_${i}` })}`,
+      )
+    })
     lines.push('  return __handle__;')
     lines.push('}')
     return lines
@@ -1290,7 +1303,8 @@ function generateListUpdate(
     marker.body.localDecls.length === 0 &&
     marker.body.localActions.length === 0 &&
     marker.body.localMounts.length === 0 &&
-    marker.body.localEffects.length === 0
+    marker.body.localEffects.length === 0 &&
+    marker.body.emittedFns.length === 0
   const updaterArg = usesSharedUpdater
     ? `, __create_${marker.id}__update__`
     : hasLifecycle
@@ -1308,8 +1322,8 @@ function generateListUpdate(
     hasLifecycle
       ? `  __reconcileListWithLifecycle__(__list_${marker.id}__, ${elExpr}, ${marker.arrayRendered}, ${keyOf}, __create_${marker.id}__${updaterArg}, ${mountExpr});`
       : mapUpdateExpr !== undefined
-        ? `  __reconcileListMap__(__list_${marker.id}__, ${elExpr}, ${marker.arrayRendered}, ${keyOf}, __create_${marker.id}__${updaterArg}, ${mapUpdateExpr});`
-        : `  __reconcileList__(__list_${marker.id}__, ${elExpr}, ${marker.arrayRendered}, ${keyOf}, __create_${marker.id}__${updaterArg});`,
+        ? `  __reconcileListMap__(__list_${marker.id}__, ${elExpr}, ${marker.arrayRendered}, ${keyOf}, __create_${marker.id}__${updaterArg}, ${mapUpdateExpr}${usesSharedUpdater ? ', __createFlatListRecord__' : ''});`
+        : `  __reconcileList__(__list_${marker.id}__, ${elExpr}, ${marker.arrayRendered}, ${keyOf}, __create_${marker.id}__${updaterArg}${usesSharedUpdater ? ', __createFlatListRecord__' : ''});`,
     ...(marker.keySelector
       ? [`  __selected_key_${marker.id}__ = ${marker.keySelector.outputName};`]
       : []),
@@ -1562,6 +1576,7 @@ export function generateModule({
   if (markersHaveList(markers)) {
     runtimeImports.push(
       'createListRuntime as __createListRuntime__',
+      'createFlatListRecord as __createFlatListRecord__',
       'reconcileList as __reconcileList__',
       'updateListBinding as __updateListBinding__',
     )

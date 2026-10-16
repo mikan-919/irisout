@@ -12,6 +12,17 @@ factory-per-unitクロージャで生成する(M5、change
 任意の深さを受理する(change `recursive-structural-authoring`)。各factory instance
 は自身のDOM範囲、ローカル状態、binding cache、更新処理を所有する。
 ## Requirements
+### Requirement: 平坦な行の初期処理を限定する
+状態を使用しない平坦な行は、未使用の項目状態を確保しない（SHALL NOT）。項目状態が参照された場合は項目専用の状態と値保存領域の同一性を維持する（SHALL）。新規複製の初期テキスト設定と、外部の子構造変更から復元する通常更新を区別してよい（MAY）。
+
+#### Scenario: 状態を使わない行と参照時の状態
+- **WHEN** 平坦な行を作成し、その後同じ行の状態を複数回参照する
+- **THEN** 作成時は項目状態を確保せず、参照後は同じlistId・itemIdを持つ同じ状態と値保存領域を返す
+
+#### Scenario: 初期設定と通常更新
+- **WHEN** 新規複製のテキストを初期化し、その後外部で子構造を変えて値を更新する
+- **THEN** 初期化は既知の節点へ直接書き、通常更新は宣言したテキストへ復元する
+
 ### Requirement: templateスタンプ機構によるインスタンス生成
 コンパイラは、リストアイテム・条件分岐ブランチの中身を`<template>`要素として
 1回だけ生成し、インスタンスごとに`content.cloneNode(true)`で複製しなければ

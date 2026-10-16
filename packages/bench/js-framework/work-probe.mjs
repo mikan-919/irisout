@@ -168,7 +168,7 @@ try {
     await page.close()
   }
   fs.writeFileSync(
-    new URL('./vanilla-work.json', import.meta.url),
+    process.env.JSFB_WORK_PROBE_OUTPUT ?? new URL('./vanilla-work.json', import.meta.url),
     JSON.stringify(
       {
         timestamp: new Date().toISOString(),

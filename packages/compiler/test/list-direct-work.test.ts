@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vite-plus/test'
 import { compile, compileSSR } from '../src/compiler.ts'
 import {
   createListRuntime,
+  createFlatListRecord,
   observeDomUpdates,
   reconcileList,
   updateListBinding,
@@ -11,6 +12,43 @@ import {
 import { createContainer, loadGenerated } from './helpers.ts'
 
 describe('direct list work', () => {
+  it('does not pass unused state to a flat factory and lazily preserves item state identity', () => {
+    const container = createContainer()
+    const calls: number[] = []
+    const runtime = createListRuntime<number>('flat')
+    function create(_value: number) {
+      calls.push(arguments.length)
+      return { el: container.ownerDocument.createElement('li') }
+    }
+    reconcileList(
+      runtime,
+      container,
+      [1, 2],
+      (value) => value,
+      create,
+      undefined,
+      createFlatListRecord,
+    )
+    expect(calls).toEqual([1, 1])
+    const first = runtime.items.get(1)!
+    const second = runtime.items.get(2)!
+    expect(Object.hasOwn(first, 'state')).toBe(false)
+    expect(first.state).toBe(first.state)
+    expect([first.state.listId, first.state.itemId]).toEqual(['flat', 1])
+    expect(first.state.bindings).toBe(first.state.bindings)
+    expect(first.state.bindings).not.toBe(second.state.bindings)
+    reconcileList(
+      runtime,
+      container,
+      [2, 1],
+      (value) => value,
+      create,
+      () => {},
+      createFlatListRecord,
+    )
+    expect(runtime.items.get(1)).toBe(first)
+  })
+
   it('keeps each item binding map independent and caches an initial undefined value', () => {
     const container = createContainer()
     const states: ListItemState[] = []
