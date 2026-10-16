@@ -10,7 +10,7 @@ const browser = await chromium.launch({
   executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
   headless: true,
 })
-const scenarios = [
+const allScenarios = [
   'create',
   'replace',
   'partial',
@@ -21,6 +21,12 @@ const scenarios = [
   'append',
   'clear',
 ]
+const scenarios = process.env.JSFB_PROBE_SCENARIOS?.split(',') ?? allScenarios
+const sampleCount = Number(process.env.JSFB_PROBE_SAMPLES ?? 15)
+if (!Number.isSafeInteger(sampleCount) || sampleCount < 1)
+  throw new Error('Invalid probe sample count')
+if (scenarios.some((name) => !allScenarios.includes(name)))
+  throw new Error('Unknown probe scenario')
 const samples = Object.fromEntries(scenarios.map((name) => [name, [[], []]]))
 const artifacts = []
 try {
@@ -57,7 +63,7 @@ try {
     pages.push(page)
   }
   for (const scenario of scenarios) {
-    for (let repeat = -3; repeat < 15; repeat++) {
+    for (let repeat = -3; repeat < sampleCount; repeat++) {
       for (const index of repeat % 2 ? [1, 0] : [0, 1]) {
         const result = await pages[index].evaluate(async (scenario) => {
           const click = (id) => document.getElementById(id).click()
@@ -108,7 +114,13 @@ try {
         if (repeat >= 0) samples[scenario][index].push(result)
       }
     }
-    const median = (values) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)]
+    const median = (values) => {
+      const ordered = [...values].sort((a, b) => a - b)
+      return (
+        (ordered[Math.floor((ordered.length - 1) / 2)] + ordered[Math.floor(ordered.length / 2)]) /
+        2
+      )
+    }
     const values = samples[scenario].map(median)
     console.log(`${scenario}: ${values[0].toFixed(4)} -> ${values[1].toFixed(4)} ms`)
   }
@@ -121,8 +133,7 @@ try {
         cpu: os.cpus()[0]?.model,
         urls,
         artifacts,
-        method:
-          'synchronous click handler and DOM writes; excludes layout and paint; 3 warmups and 15 samples; select averages 200 clicks, swap averages 20 clicks; alternating implementation order; console.log disabled in both pages',
+        method: `synchronous click handler and DOM writes; excludes layout and paint; 3 warmups and ${sampleCount} samples; select averages 200 clicks, swap averages 20 clicks; alternating implementation order; console.log disabled in both pages`,
         samples,
       },
       null,

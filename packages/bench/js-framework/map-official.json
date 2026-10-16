@@ -1,0 +1,95 @@
+{
+  "browser": "153.0.8010.12",
+  "cpu": "AMD Ryzen 7 7700 8-Core Processor",
+  "upstreamCommit": "bf894b681fb56433ccb6efb4a3c93e35eda2b20d",
+  "baseCommit": "583bff2",
+  "method": "upstream Puppeteer runner; keyed; 03_update10th1k_x16; default 4x CPU slowdown; 5 trials per framework; no changes to benchmark implementation or runner; total includes layout/paint",
+  "command": "node dist/benchmarkRunner.js --headless --chromeBinary /tmp/irisout-benchmark-chrome --framework keyed/irisout keyed/solid --count 5 --benchmark 03_",
+  "irisoutArtifacts": [
+    {
+      "url": "http://localhost:8080/frameworks/keyed/irisout/dist/assets/index-Dbf78uoj.js",
+      "sha256": "d725efed01bce46eca23236d2e41e8287d32a2bbff83682f1d3e16d2b4531f11",
+      "bytes": 11691,
+      "gzipBytes": 4164
+    }
+  ],
+  "solidArtifacts": [
+    {
+      "url": "http://localhost:8080/frameworks/keyed/solid/dist/main.js",
+      "sha256": "9a7954aedff39e0f0107a9223f717bdcee63a1609b5bb2626065283f633314fe",
+      "bytes": 11563,
+      "gzipBytes": 4837
+    }
+  ],
+  "sourceSha256": "0663e6ded4037d1d544f27d2db25c59549b1d783e18c9db7b687c6da1d35722c",
+  "keyedChecks": [
+    "solid-v1.9.3-keyed is keyed for 'run benchmark' and keyed for 'remove row benchmark' and keyed for 'swap rows benchmark' . It'll appear as keyed in the results",
+    "irisout-v0.3.7-dev-keyed is keyed for 'run benchmark' and keyed for 'remove row benchmark' and keyed for 'swap rows benchmark' . It'll appear as keyed in the results"
+  ],
+  "samples": [
+    {
+      "framework": "solid-v1.9.3-keyed",
+      "keyed": true,
+      "benchmark": "03_update10th1k_x16",
+      "type": "cpu",
+      "values": {
+        "total": {
+          "min": 34,
+          "max": 45.2,
+          "median": 39.3,
+          "mean": 38.919999999999995,
+          "stddev": 4.168572897287513,
+          "values": [34, 39.5, 39.3, 36.6, 45.2]
+        },
+        "script": {
+          "min": 1.7,
+          "max": 3.4,
+          "median": 2.4,
+          "mean": 2.48,
+          "stddev": 0.6300793600809346,
+          "values": [2.7, 1.7, 3.4, 2.2, 2.4]
+        },
+        "paint": {
+          "min": 27.9,
+          "max": 38.9,
+          "median": 32.1,
+          "mean": 33.040000000000006,
+          "stddev": 4.413388720699775,
+          "values": [27.9, 36, 32.1, 30.3, 38.9]
+        }
+      }
+    },
+    {
+      "framework": "irisout-v0.3.7-dev-keyed",
+      "keyed": true,
+      "benchmark": "03_update10th1k_x16",
+      "type": "cpu",
+      "values": {
+        "total": {
+          "min": 37.1,
+          "max": 51.4,
+          "median": 39.4,
+          "mean": 43.00000000000001,
+          "stddev": 6.974596762537603,
+          "values": [37.4, 39.4, 37.1, 51.4, 49.7]
+        },
+        "script": {
+          "min": 1.2,
+          "max": 2.1,
+          "median": 1.7,
+          "mean": 1.6800000000000002,
+          "stddev": 0.3492849839314596,
+          "values": [2.1, 1.7, 1.5, 1.9, 1.2]
+        },
+        "paint": {
+          "min": 32.4,
+          "max": 45.6,
+          "median": 35.2,
+          "mean": 38.14,
+          "stddev": 6.6826641393983,
+          "values": [32.4, 35.2, 32.4, 45.1, 45.6]
+        }
+      }
+    }
+  ]
+}

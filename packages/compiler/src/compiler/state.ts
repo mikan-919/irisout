@@ -141,6 +141,7 @@ export interface ListMarker {
   /** 配列式が直接、キー付き`signal()`を読んでいる場合の宣言ID。それ以外はnull。 */
   collectionDeclId: DeclId | null
   keySelector?: { declId: DeclId; outputName: string }
+  mapUpdates?: boolean
   body: StructuralUnitBody
 }
 
@@ -324,6 +325,8 @@ export interface CompilerState {
   // instance/factoryへ通常版と必要な後始末版だけを生成する。
   trackedFns: Map<string, TrackedFn>
   analyzedFunctions: Set<t.Function>
+  ownedRowArrays: Map<t.Node, boolean>
+  listMapDeclIds: Set<DeclId>
   cleanupFunctionNames: Map<t.Function, string>
 
   // same-file-component-composition: 構造ユニットへインライン化された
@@ -371,6 +374,8 @@ export function createCompilerState(
     movementFns: new Map(),
     trackedFns: new Map(),
     analyzedFunctions: new Set(),
+    ownedRowArrays: new Map(),
+    listMapDeclIds: new Set(),
     cleanupFunctionNames: new Map(),
     localDeclIds: new Set(),
     sharedDecls: [],

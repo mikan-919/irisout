@@ -4,6 +4,8 @@
 
 比較対象は上流のReact Hooks、Vue、Solid、vanillajs。実装と構築設定は変更しない。測定器も上流のPuppeteer方式を使い、クリックから描画までの時間を測る。結果と測定条件は[results.md](./results.md)、公式の全試行値は[results.json](./results.json)を参照。最適化前に中断した測定値は[partial-results.json](./partial-results.json)へ分けて保存した。
 
+所有する配列のmapを変更行へ接続した後の測定は[map-results.md](./map-results.md)に分けて保存する。修正前後とSolidとの同期比較、および公式測定器による部分更新の再測定であり、既存の全操作の公式比較を置き換えない。
+
 ## 再実行
 
 リポジトリのルートから実行する。Bun、Node 24以降、Git、起動可能なChromiumが必要。
@@ -34,6 +36,8 @@ bun packages/bench/js-framework/report.mjs
 | `JSFB_MEMORY_COUNT`                   | `1`                                   | メモリの試行回数                          |
 | `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` | Playwrightの既定                      | 比較する全実装で使うブラウザー            |
 | `JSFB_PROBE_OUTPUT`                   | `optimization.json`                   | 同期比較のJSON保存先                      |
+| `JSFB_PROBE_SAMPLES`                  | `15`                                  | 同期比較の試行数                          |
+| `JSFB_PROBE_SCENARIOS`                | 全9操作                               | 同期比較の対象。カンマ区切り              |
 
 ログと元のJSONは無視対象の`results/`、ブラウザーの動作記録は上流の`webdriver-ts/traces/`へ保存する。前回の上流結果は実行時に日時付きディレクトリへ退避する。`report.mjs`は欠けた実装・試行数を検出したら失敗し、部分的な結果を完全な比較として出力しない。
 

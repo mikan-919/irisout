@@ -1484,6 +1484,15 @@ function renderListUnit(
     keyRendered,
     collectionDeclId,
     keySelector: selection,
+    mapUpdates:
+      directFields &&
+      new RegExp(`^${itemParam.replace(/[$]/g, '\\$&')}\\.[A-Za-z_$][\\w$]*$`).test(keyRendered) &&
+      body.localDecls.length === 0 &&
+      body.localFnNames.length === 0 &&
+      body.localActions.length === 0 &&
+      body.localMounts.length === 0 &&
+      body.localEffects.length === 0 &&
+      (body.localAttrBindings.length === 0 || !!selection),
     body,
   })
   ctx.markerDeps.set(markerId, deps)

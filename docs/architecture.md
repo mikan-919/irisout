@@ -148,6 +148,7 @@ triage手続きで捌く — コンパイラの受理条件自体を場当たり
 | `packages/compiler/src/compiler/analyze.ts`           | 式の解析。識別子を declId に解決し、出力用/ビルド時実行用の2種類のソースを生成                                                                                                                      |
 | `packages/compiler/src/compiler/ast-codegen.ts`       | props置換などAST変換を含む式を、元ソースの位置範囲に依存せずASTからコード生成する境界                                                                                                               |
 | `packages/compiler/src/compiler/decl-graph.ts`        | derived を辿ってルート signal 集合へ展開する推移解決                                                                                                                                                |
+| `packages/compiler/src/compiler/list-map.ts`          | 配列と行の所有関係、共通のプリミティブ値のプロパティ、純粋なmapと添字範囲の判定（ADR-0067）                                                                                                         |
 | `packages/compiler/src/codegen.ts`                    | 最終 codegen。文字列組み立てのみ、AST もコンパイラ状態も触らない                                                                                                                                    |
 | `packages/vite-plugin/src/index.ts`                   | `compileProject()`の生成結果をViteの仮想module・初期HTML・依存監視・全体再読み込みへ接続                                                                                                            |
 | `packages/motion/src/vite.ts`                         | `<motion.div>`を標準JSXと`use=`へ変換する任意拡張。Motion固有の属性をコンパイラ本体へ持ち込まない                                                                                                   |
@@ -232,6 +233,10 @@ triage手続きで捌く — コンパイラの受理条件自体を場当たり
   単純な行は根要素を直接複製し、要素参照をハンドルの固定プロパティへ置く。
   テキスト節点を再利用し、bindings用Mapは参照時だけ確保する。共有イベントは
   要素の非公開Symbolから行を引き、直接配線の意味を保つ。DOM更新取引は一覧側が所有する。
+  ADR-0067では、外部へ漏れない配列とプリミティブ値だけを持つ行について、純粋なmapの
+  変更行を記録する。添字だけで決まる等間隔・単一位置の条件は該当位置だけを評価する。
+  最後に反映した配列の基点とキーが一致する場合は、平坦な一覧の変更行だけを反映する。
+  別名、任意の呼出し、一般の表示式、他の依存の同時変更、キー変更では通常照合を保つ。
 - **module境界**(ADR-0024/0030/0037/0038): `compileProject()`は相対`.js`/`.jsx`の静的named/default
   importだけをAST bindingへ解決する。componentはinline pathへ入り、通常のfunctionと
   `const`だけが補助宣言としてmodule scopeに残る。直接`const name = signal(initial)`、

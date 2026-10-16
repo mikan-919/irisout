@@ -86,12 +86,8 @@ function replaceChild(parent: t.Node, child: t.Node, replacement: t.Node): void 
 }
 
 export function createAstRewrite(root: t.Node): AstRewriteSession {
-  const clone = t.cloneNode(root, true) as t.Node
-  const current = new Map<t.Node, t.Node>()
-  mapNodePairs(root, clone, current)
-
   const renames = new Map<t.Identifier, string>()
-  const replacements: Replacement[] = []
+  const replacements = new Map<t.Node, Replacement>()
   const insertions: { target: t.Node; parent: t.Node | null; build: () => t.Node }[] = []
 
   return {
@@ -100,13 +96,17 @@ export function createAstRewrite(root: t.Node): AstRewriteSession {
     },
 
     replace(target, parent, depth, build) {
-      replacements.push({ target, parent, depth, build })
+      replacements.set(target, { target, parent, depth, build })
     },
     insertAfter(target, parent, build) {
       insertions.push({ target, parent, build })
     },
 
     generate() {
+      // 依存確定前後の再生成で、前回置換済みの木や同じ置換を重ねて使わない。
+      const clone = t.cloneNode(root, true) as t.Node
+      const current = new Map<t.Node, t.Node>()
+      mapNodePairs(root, clone, current)
       for (const [original, name] of renames) {
         const cloned = current.get(original)
         if (cloned?.type === 'Identifier') cloned.name = name
@@ -118,7 +118,7 @@ export function createAstRewrite(root: t.Node): AstRewriteSession {
 
       // 内側の読み取りを先に置換する。例えば `count(count())` では、先に
       // 内側のcount()を読み取りへ変換してから外側を代入式へ変換する。
-      for (const replacement of [...replacements].sort((a, b) => b.depth - a.depth)) {
+      for (const replacement of [...replacements.values()].sort((a, b) => b.depth - a.depth)) {
         const target = current.get(replacement.target)
         if (!target) continue
         const next = replacement.build(get)

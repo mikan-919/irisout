@@ -164,6 +164,74 @@ export function createListRuntime<T = unknown>(listId: string): ListRuntime<T> {
   return { listId, items: new Map() }
 }
 
+interface ListMapChange {
+  token: object
+  base?: object
+  changes: [unknown, unknown][]
+}
+
+// ADR-0067: 元の配列を保持すると更新履歴が連鎖して残るため、基点は識別子だけを持つ。
+const listMapChanges = new WeakMap<readonly unknown[], ListMapChange>()
+const listMapBases = new WeakMap<object, readonly unknown[]>()
+
+// コンパイラが所有権とmap本体を検証した場合だけ呼ぶ。公開signalの契約は変えない。
+export function mapListValues<T>(
+  values: readonly T[],
+  map: (value: T, index: number) => T,
+  stride?: number,
+  offset = 0,
+): T[] {
+  let base = listMapChanges.get(values)
+  if (!base) {
+    base = { token: {}, changes: [] }
+    listMapChanges.set(values, base)
+  }
+  const changes: [unknown, unknown][] = []
+  const apply = (value: T, index: number): T => {
+    const result = map(value, index)
+    if (result !== value) changes.push([value, result])
+    return result
+  }
+  const next = stride === undefined ? values.map(apply) : values.slice()
+  if (stride !== undefined) {
+    for (let index = offset; index < values.length; index += stride || values.length) {
+      if (index in values) next[index] = apply(values[index]!, index)
+    }
+  }
+  listMapChanges.set(next, { token: {}, base: base.token, changes })
+  return next
+}
+
+export function reconcileListMap<T>(
+  runtime: ListRuntime<T>,
+  container: Element | DomRange | undefined,
+  values: readonly T[],
+  keyOf: (value: T) => unknown,
+  create: (value: T, state: ListItemState) => ListItemHandle<T>,
+  update: ListItemUpdater<T>,
+  allowMap: boolean,
+): void {
+  const previous = listMapBases.get(runtime)
+  listMapBases.delete(runtime)
+  const change = listMapChanges.get(values)
+  if (allowMap && previous && change?.base && change.base === listMapChanges.get(previous)?.token) {
+    // キー変更は構造変更なので、更新前に全変更行を検査して通常照合へ戻す。
+    if (
+      change.changes.every(
+        ([before, after]) =>
+          Object.is(keyOf(before as T), keyOf(after as T)) && runtime.items.has(keyOf(before as T)),
+      )
+    ) {
+      for (const [, next] of change.changes)
+        update(runtime.items.get(keyOf(next as T))!.handle, next as T)
+      listMapBases.set(runtime, values)
+      return
+    }
+  }
+  reconcileList(runtime, container, values, keyOf, create, update)
+  listMapBases.set(runtime, values)
+}
+
 // bindingId はコンパイラが item factory 内の更新箇所ごとに固定する。初回、または
 // Object.is で値が変わったときだけ true を返すため、生成コードは対象 DOM API
 // だけを呼べる。式の評価自体は従来どおり行い、副作用の回数は変えない。

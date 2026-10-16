@@ -10,6 +10,7 @@ import * as t from '@babel/types'
 import { createAstRewrite } from './ast-codegen.ts'
 import type { AstRewriteSession } from './ast-codegen.ts'
 import { resolveToSignals } from './decl-graph.ts'
+import { isOwnedRowArray, isPureRowMap, rowMapRange } from './list-map.ts'
 import type {
   CompilerState,
   ContextId,
@@ -156,6 +157,18 @@ function parseGeneratedFunctionBody(
   originalFunction: t.Node | null,
 ): t.BlockStatement {
   const trimmed = code.trim()
+  // オブジェクトを返すarrowの中括弧を文のブロックと誤認しない。
+  // 書込みで生成されたtry/finally本体の場合は、従来のブロック解析へ戻す。
+  if (
+    t.isArrowFunctionExpression(originalFunction) &&
+    t.isObjectExpression(originalFunction.body)
+  ) {
+    try {
+      return t.blockStatement([t.returnStatement(parseGeneratedExpression(trimmed))])
+    } catch {
+      // 式ではなく生成済みの更新ブロックである。
+    }
+  }
   const body = stripSourceMapMarkers(trimmed).trim().startsWith('{')
     ? trimmed
     : `{ return (${trimmed}); }`
@@ -699,6 +712,35 @@ function analyzeActionIdentifier(
       throw new Error(`compile: cannot write to derived "${idPath.node.name}"`)
     }
     const arg = parent.node.arguments[0]!
+    const binding = idPath.scope.getBinding(idPath.node.name)!
+    const argumentPath = parent.get('arguments.0') as NodePath<t.Expression>
+    if (!ctx.localDeclIds.has(id) && isPureRowMap(argumentPath, binding)) {
+      let owned = ctx.ownedRowArrays.get(binding.path.node)
+      if (owned === undefined) {
+        owned = isOwnedRowArray(binding)
+        ctx.ownedRowArrays.set(binding.path.node, owned)
+      }
+      if (owned) {
+        ctx.listMapDeclIds.add(id)
+        const map = argumentPath.node
+        const range = rowMapRange(map)
+        const object = (map.callee as t.MemberExpression).object
+        edits.push(
+          { start: object.start!, end: object.start!, text: '__mapListValues__(' },
+          { start: object.end!, end: map.arguments[0]!.start!, text: ', ' },
+        )
+        if (range)
+          edits.push({ start: map.end! - 1, end: map.end! - 1, text: `, ${range.join(', ')}` })
+        if (ast)
+          planAstReplacement(ast, argumentPath, root, (get) =>
+            t.callExpression(t.identifier('__mapListValues__'), [
+              get(object) as t.Expression,
+              get(map.arguments[0]!) as t.Expression,
+              ...(range ? range.map((value) => t.numericLiteral(value)) : []),
+            ]),
+          )
+      }
+    }
     const functional = arg.type === 'ArrowFunctionExpression' || arg.type === 'FunctionExpression'
     edits.push({
       start: parent.node.start!,

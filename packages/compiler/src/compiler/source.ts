@@ -958,6 +958,11 @@ export function compileSource(source: string, options: CompileOptions = {}): Com
     m.kind === 'list'
       ? {
           ...m,
+          mapUpdates:
+            ancestorLocalScopes.length === 0 &&
+            m.mapUpdates &&
+            m.arrayDeps.size === 1 &&
+            ctx.listMapDeclIds.has([...m.arrayDeps][0]!),
           keySelector:
             ancestorLocalScopes.length === 0 &&
             m.keySelector &&
@@ -1211,6 +1216,7 @@ export function compileSource(source: string, options: CompileOptions = {}): Com
       : []
 
   const markedCode = generateModule({
+    usesListMap: ctx.listMapDeclIds.size > 0,
     supportStatements: options.supportStatements ?? [],
     externalImports: options.externalImports ?? [],
     sharedStatements: ctx.sharedDecls

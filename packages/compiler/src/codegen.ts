@@ -103,6 +103,8 @@ export interface ListMarkerOutput {
   collectionOutputName: string | null
   collectionShared: boolean
   keySelector?: { declId: DeclId; outputName: string }
+  mapUpdates?: boolean
+  arrayDeps: Set<DeclId>
   body: StructuralUnitBodyOutput
 }
 
@@ -173,6 +175,7 @@ export interface EffectOutput {
 }
 
 export interface GenerateModuleInput {
+  usesListMap: boolean
   /** compileProject()でリンクされた通常の関数/const。runtimeへは出さず、module scopeへ一度だけ出す。 */
   supportStatements: string[]
   /** 外部moduleとViteの資源import。compilerのAST解析へ入れず、生成moduleの先頭へ残す。 */
@@ -1279,6 +1282,7 @@ function generateListUpdate(
   mountExpr = 'true',
   effectTriggerExpr = 'null',
   effectForceExpr = 'false',
+  mapUpdateExpr?: string,
 ): string[] {
   const hasLifecycle = bodyHasLifecycle(marker.body)
   const usesSharedUpdater =
@@ -1303,7 +1307,9 @@ function generateListUpdate(
   return [
     hasLifecycle
       ? `  __reconcileListWithLifecycle__(__list_${marker.id}__, ${elExpr}, ${marker.arrayRendered}, ${keyOf}, __create_${marker.id}__${updaterArg}, ${mountExpr});`
-      : `  __reconcileList__(__list_${marker.id}__, ${elExpr}, ${marker.arrayRendered}, ${keyOf}, __create_${marker.id}__${updaterArg});`,
+      : mapUpdateExpr !== undefined
+        ? `  __reconcileListMap__(__list_${marker.id}__, ${elExpr}, ${marker.arrayRendered}, ${keyOf}, __create_${marker.id}__${updaterArg}, ${mapUpdateExpr});`
+        : `  __reconcileList__(__list_${marker.id}__, ${elExpr}, ${marker.arrayRendered}, ${keyOf}, __create_${marker.id}__${updaterArg});`,
     ...(marker.keySelector
       ? [`  __selected_key_${marker.id}__ = ${marker.keySelector.outputName};`]
       : []),
@@ -1505,6 +1511,7 @@ function renderLocalEffectRunner(e: LocalEffectOutput, index: number): string[] 
 }
 
 export function generateModule({
+  usesListMap,
   supportStatements,
   externalImports,
   sharedStatements,
@@ -1544,6 +1551,11 @@ export function generateModule({
     ? [`${mountName}WithRanges as __mount__`, 'hydrateWithRanges as __hydrate__']
     : [`${mountName} as __mount__`, 'hydrate as __hydrate__']
   runtimeImports.push('beginDomUpdate as __beginDomUpdate__', 'endDomUpdate as __endDomUpdate__')
+  if (usesListMap)
+    runtimeImports.push(
+      'mapListValues as __mapListValues__',
+      'reconcileListMap as __reconcileListMap__',
+    )
   if (actions.some((a) => a.hasResult) || markersHaveResultActions(markers)) {
     runtimeImports.push('normalizeUseActionResult as __normalizeUseActionResult__')
   }
@@ -2091,6 +2103,10 @@ export function generateModule({
           `__ranges__.get(${JSON.stringify(marker.id)})`,
           'true',
           effectTriggerExpr,
+          'false',
+          usesListMap && marker.mapUpdates && !ssrHydration
+            ? String(changedRoots.length > 0 && affected.every((id) => marker.arrayDeps.has(id)))
+            : undefined,
         ),
       )
     } else if (marker.kind === 'action') {
