@@ -276,6 +276,54 @@ describe('owned list operations', () => {
     }
   })
 
+  it('keeps invalid or equal swap positions on copied arrays', () => {
+    for (const [first, second] of [
+      [0, 4],
+      [-1, 1],
+      [1, 1],
+    ]) {
+      const values = ['a', 'b', 'c']
+      const copy = copyListValues(values, first!, second!, true)
+      expect(copy).not.toBe(values)
+      copy[0] = 'changed'
+      expect(values).toEqual(['a', 'b', 'c'])
+    }
+  })
+
+  it('applies an in-place swap independently to multiple lists', () => {
+    const container = createContainer()
+    const values = [{ id: 1 }, { id: 2 }, { id: 3 }]
+    const lists = ['first', 'second'].map((id) => ({
+      runtime: createListRuntime<(typeof values)[number]>(id),
+      parent: container.appendChild(container.ownerDocument.createElement('ul')),
+    }))
+    const update = vi.fn()
+    const render = () => {
+      for (const { runtime, parent } of lists)
+        reconcileListMap(
+          runtime,
+          parent,
+          values,
+          (row) => row.id,
+          (row) => {
+            const el = container.ownerDocument.createElement('li')
+            el.textContent = String(row.id)
+            return { el }
+          },
+          update,
+          true,
+        )
+    }
+    render()
+    const originals = lists.map(({ parent }) => [...parent.children])
+    const next = copyListValues(values, 0, 2, true)
+    ;[next[0], next[2]] = [next[2]!, next[0]!]
+    render()
+    expect(update).not.toHaveBeenCalled()
+    for (const [index, { parent }] of lists.entries())
+      expect([...parent.children]).toEqual([...originals[index]!].reverse())
+  })
+
   it('creates appended rows without comparing retained values and removes only the requested row', async () => {
     const app = await application(1000, 1, 998)
     expect(app.code).toContain('__appendListValues__(')
