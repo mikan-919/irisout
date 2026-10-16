@@ -138,6 +138,7 @@ export type ListItemUpdater<T> = (handle: ListItemHandle<T>, next: T) => void
 interface ListRecord<T> {
   state: ListItemState
   handle: ListItemHandle<T>
+  seen?: object
 }
 
 export interface ListRuntime<T> {
@@ -153,10 +154,9 @@ export function createListRuntime<T = unknown>(listId: string): ListRuntime<T> {
 // Object.is で値が変わったときだけ true を返すため、生成コードは対象 DOM API
 // だけを呼べる。式の評価自体は従来どおり行い、副作用の回数は変えない。
 export function updateListBinding(item: ListItemState, bindingId: string, value: unknown): boolean {
-  if (item.bindings.has(bindingId)) {
-    const previous = item.bindings.get(bindingId)
-    if (Object.is(previous, value)) return false
-  }
+  const previous = item.bindings.get(bindingId)
+  if (Object.is(previous, value) && (value !== undefined || item.bindings.has(bindingId)))
+    return false
   item.bindings.set(bindingId, value)
   return true
 }
@@ -184,6 +184,7 @@ function insertListRecords<T>(
   boundary: ChildNode | null,
   ordered: readonly ListRecord<T>[],
   batch: boolean,
+  start?: ChildNode,
 ): void {
   if (batch && ordered.length > 0) {
     const ownerDocument = parent.ownerDocument
@@ -195,6 +196,65 @@ function insertListRecords<T>(
     }
   }
 
+  // ADR-0066: 一致する両端は触らず、残った区間だけを最長増加部分列で並べる。
+  // これにより離れた2行の交換でも、中間の行を移動させない。
+  if (start) {
+    let left = 0
+    let right = ordered.length - 1
+    let first = start.nextSibling
+    let anchor = boundary
+    while (left <= right && ordered[left]!.handle.el === first) {
+      first = first.nextSibling
+      left++
+    }
+    while (left <= right && ordered[right]!.handle.el === anchor?.previousSibling) {
+      anchor = ordered[right]!.handle.el
+      right--
+    }
+    if (left > right) return
+    const positions = new Map<Node, number>()
+    for (let node = first; node && node !== anchor; node = node.nextSibling) {
+      positions.set(node, positions.size)
+    }
+    const tails: number[] = []
+    const previous: number[] = []
+    const indices: number[] = []
+    for (let i = left; i <= right; i++) {
+      const position = positions.get(ordered[i]!.handle.el)
+      if (position === undefined) continue
+      let low = 0
+      let high = tails.length
+      while (low < high) {
+        const middle = (low + high) >>> 1
+        if (tails[middle]! < position) low = middle + 1
+        else high = middle
+      }
+      previous[i] = low > 0 ? indices[low - 1]! : -1
+      tails[low] = position
+      indices[low] = i
+    }
+    let stable = indices.at(-1) ?? -1
+    let fragment: DocumentFragment | null = null
+    const flush = () => {
+      if (fragment) parent.insertBefore(fragment, anchor)
+      fragment = null
+    }
+    for (let i = right; i >= left; i--) {
+      const el = ordered[i]!.handle.el
+      if (!positions.has(el)) {
+        fragment ??= parent.ownerDocument!.createDocumentFragment()
+        fragment.insertBefore(el, fragment.firstChild)
+        continue
+      }
+      flush()
+      if (i === stable) stable = previous[i]!
+      else parent.insertBefore(el, anchor)
+      anchor = el
+    }
+    flush()
+    return
+  }
+
   let anchor: ChildNode | null = null
   for (let i = ordered.length - 1; i >= 0; i--) {
     const el = ordered[i]!.handle.el
@@ -203,6 +263,21 @@ function insertListRecords<T>(
     }
     anchor = el
   }
+}
+
+// 範囲が親の全内容を所有する場合だけ、一括置換して隣接する静的要素を守る。
+function replaceListContents<T>(
+  container: Element | DomRange | undefined,
+  ordered: readonly ListRecord<T>[],
+): boolean {
+  if (!container || !isDomRange(container)) return false
+  const parent = container.start.parentNode
+  if (!parent || parent.firstChild !== container.start || parent.lastChild !== container.end)
+    return false
+  const fragment = parent.ownerDocument!.createDocumentFragment()
+  for (const record of ordered) fragment.append(record.handle.el)
+  parent.replaceChildren(container.start, fragment, container.end)
+  return true
 }
 
 // key の照合と DOM 順序の調整だけを共有ランタイムが担当し、item 内の細粒度更新は
@@ -219,6 +294,10 @@ export function reconcileList<T>(
 ): void {
   const initiallyEmpty = runtime.items.size === 0
   const ordered: ListRecord<T>[] = []
+  if (values.length === 0 && !initiallyEmpty && replaceListContents(container, ordered)) {
+    runtime.items.clear()
+    return
+  }
 
   // 初回は既存keyの削除走査と全体Setを省き、Map存在確認だけを残す。
   // 更新経路は下の従来分岐でkeyed reuseと削除を処理する。
@@ -238,15 +317,17 @@ export function reconcileList<T>(
       ordered.push(record)
     }
   } else {
-    const seen = new Set<unknown>()
+    const seen = {}
+    let reused = false
     for (const value of values) {
       const itemId = keyOf(value)
-      if (seen.has(itemId)) {
+      const record = runtime.items.get(itemId)
+      if (record?.seen === seen) {
         throw new Error(`reconcileList: duplicate key ${String(itemId)} in list ${runtime.listId}`)
       }
-      seen.add(itemId)
-      const record = runtime.items.get(itemId)
       if (record) {
+        record.seen = seen
+        reused = true
         if (update) update(record.handle, value)
         else if (record.handle.update) record.handle.update(value)
         else
@@ -259,25 +340,35 @@ export function reconcileList<T>(
           itemId,
           bindings: new Map(),
         }
-        const created = { state, handle: create(value, state) }
+        const created = { state, handle: create(value, state), seen }
         runtime.items.set(itemId, created)
         ordered.push(created)
         continue
       }
       ordered.push(record)
     }
-    for (const [itemId, record] of runtime.items) {
-      if (seen.has(itemId)) continue
-      record.handle.el.remove()
-      runtime.items.delete(itemId)
+    const replaced = !reused && replaceListContents(container, ordered)
+    if (values.length !== runtime.items.size) {
+      for (const [itemId, record] of runtime.items) {
+        if (record.seen === seen) continue
+        if (!replaced) record.handle.el.remove()
+        runtime.items.delete(itemId)
+      }
     }
+    if (replaced) return
   }
 
   if (!container) return
   const parent = isDomRange(container) ? container.start.parentNode : container
   if (!parent) return
   const boundary = isDomRange(container) ? container.end : null
-  insertListRecords(parent, boundary, ordered, initiallyEmpty && ordered.length > 0)
+  insertListRecords(
+    parent,
+    boundary,
+    ordered,
+    initiallyEmpty && ordered.length > 0,
+    isDomRange(container) ? container.start : undefined,
+  )
 }
 
 // actionを持つ構造unit用のreconcile経路。通常のreconcileListへaction管理を
@@ -293,7 +384,7 @@ export function reconcileListWithLifecycle<T>(
   mountItems = true,
 ): void {
   const initiallyEmpty = runtime.items.size === 0
-  const seen = initiallyEmpty ? null : new Set<unknown>()
+  const seen = {}
   const ordered: ListRecord<T>[] = []
   const created: ListRecord<T>[] = []
 
@@ -322,13 +413,13 @@ export function reconcileListWithLifecycle<T>(
     for (const value of values) {
       const itemId = keyOf(value)
       let record = runtime.items.get(itemId)
-      if (seen ? seen.has(itemId) : record !== undefined) {
+      if (initiallyEmpty ? record !== undefined : record?.seen === seen) {
         throw new Error(
           'reconcileList: duplicate key ' + String(itemId) + ' in list ' + runtime.listId,
         )
       }
-      seen?.add(itemId)
       if (record) {
+        record.seen = seen
         if (update) update(record.handle, value)
         else if (record.handle.update) record.handle.update(value)
         else
@@ -341,7 +432,7 @@ export function reconcileListWithLifecycle<T>(
           itemId,
           bindings: new Map(),
         }
-        record = { state, handle: create(value, state) }
+        record = { state, handle: create(value, state), seen }
         runtime.items.set(itemId, record)
         created.push(record)
       }
@@ -352,7 +443,9 @@ export function reconcileListWithLifecycle<T>(
   }
 
   let firstError: unknown
-  const removed = initiallyEmpty ? [] : [...runtime.items].filter(([itemId]) => !seen!.has(itemId))
+  const removed = initiallyEmpty
+    ? []
+    : [...runtime.items].filter(([, record]) => record.seen !== seen)
   for (let i = removed.length - 1; i >= 0; i--) {
     const [itemId, record] = removed[i]!
     try {
@@ -375,7 +468,13 @@ export function reconcileListWithLifecycle<T>(
     if (parent) {
       const boundary = isDomRange(container) ? container.end : null
       try {
-        insertListRecords(parent, boundary, ordered, initiallyEmpty && created.length > 0)
+        insertListRecords(
+          parent,
+          boundary,
+          ordered,
+          initiallyEmpty && created.length > 0,
+          isDomRange(container) ? container.start : undefined,
+        )
       } catch (error) {
         firstError ??= error
         layoutError ??= error

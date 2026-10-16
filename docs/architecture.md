@@ -225,6 +225,10 @@ triage手続きで捌く — コンパイラの受理条件自体を場当たり
 - **List更新アドレス**(ADR-0015): コンパイル時のList marker ID、key式のitem ID、
   item内marker由来のbinding IDを分離して保持する。共有ランタイムはkey照合と
   DOM順序、生成factoryはbinding単位の直接DOM更新を担当する。
+  ADR-0066により、単純な項目の値比較はハンドルの固定プロパティを使い、
+  安定した行キーとの属性選択は選択前後の行へ直接接続する。配列変更はキー照合へ戻し、
+  配置が変わる区間だけを最長増加部分列で並べる。親を専有する一覧の全削除・全置換は
+  アンカーを保持した一括操作を使う。通常のsignal APIは変更しない。
 - **module境界**(ADR-0024/0030/0037/0038): `compileProject()`は相対`.js`/`.jsx`の静的named/default
   importだけをAST bindingへ解決する。componentはinline pathへ入り、通常のfunctionと
   `const`だけが補助宣言としてmodule scopeに残る。直接`const name = signal(initial)`、

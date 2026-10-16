@@ -44,7 +44,8 @@
     "prepare": "node scripts/build-packages.mjs && husky",
     "bench:rshono": "bun run --cwd packages/bench bench:rshono",
     "release:prepare": "bun scripts/release.mjs prepare",
-    "release:check": "bun scripts/release.mjs check"
+    "release:check": "bun scripts/release.mjs check",
+    "bench:js-framework": "bun run --cwd packages/bench bench:js-framework"
   },
   "devDependencies": {
     "@babel/generator": "^8.0.0",
@@ -53,7 +54,7 @@
     "@babel/types": "^8.0.4",
     "@jridgewell/gen-mapping": "0.4.0-beta.0",
     "@jridgewell/trace-mapping": "^0.3.31",
-    "@mizchi/vlmkit": "0.22.0",
+    "@mizchi/vlmkit": "0.23.0",
     "@types/jsdom": "^28.0.3",
     "@types/node": "^24.0.0",
     "hono": "^4.13.8",

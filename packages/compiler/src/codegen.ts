@@ -102,6 +102,7 @@ export interface ListMarkerOutput {
   collectionDeclId: DeclId | null
   collectionOutputName: string | null
   collectionShared: boolean
+  keySelector?: { declId: DeclId; outputName: string }
   body: StructuralUnitBodyOutput
 }
 
@@ -220,6 +221,9 @@ export interface GenerateModuleInput {
 // querySelectorの代わりに要素だけを深さ優先でたどる。root自身を先に見るため、
 // item root markerにも従来どおり対応する。
 const FIND_HELPER = `function __find__(root, id) { if (root.getAttribute("data-iris-id") === id) return root; const visit = (node) => { for (let child = node.firstElementChild; child; child = child.nextElementSibling) { if (child.getAttribute("data-iris-id") === id) return child; const found = visit(child); if (found) return found; } return null; }; return visit(root); }`
+
+// 単純な行のマーカー位置はテンプレートから一度だけ求め、複製では位置だけを辿る。
+const COLLECT_REFS_HELPER = `function __collectPaths__(template) { if (template.__irisout_paths__) return template.__irisout_paths__; const paths = {}; const visit = (node, path) => { const id = node.getAttribute("data-iris-id"); if (id) { paths[id] = path; node.removeAttribute("data-iris-id"); } let index = 0; for (let child = node.firstElementChild; child; child = child.nextElementSibling) visit(child, [...path, index++]); }; visit(template.content.firstElementChild, []); return template.__irisout_paths__ = paths; } function __followPath__(root, path) { for (let index of path) { root = root.firstElementChild; while (index-- > 0) root = root.nextElementSibling; } return root; }`
 
 // Structural units are represented by comment pairs instead of wrapper
 // elements. Emit this lookup only for modules that contain a structural unit;
@@ -605,6 +609,8 @@ function generateFactoryLegacy(
       ...attrs.map((b) => b.markerId),
       ...body.localHandlers.map((h) => h.markerId),
     ])
+    const pathsName = `${factoryName}paths__`
+    if (refIds.size > 0) lines.push(`let ${pathsName};`)
 
     lines.push(`function ${updateName}(__handle__, __next__) {`)
     lines.push('  __beginDomUpdate__(); try {')
@@ -615,27 +621,27 @@ function generateFactoryLegacy(
       const valueVar = `__value_${m.id}__`
       lines.push(
         `  const ${valueVar} = \`${innerTemplateSource(m.contentParts)}\`;`,
-        `  if (__updateListBinding__(__item__, ${JSON.stringify(m.id)}, ${valueVar})) __${m.id}__.textContent = ${valueVar};`,
+        `  if (!__handle__.initialized || !Object.is(__handle__.text_${m.id}, ${valueVar})) { __handle__.text_${m.id} = ${valueVar}; __${m.id}__.textContent = ${valueVar}; }`,
       )
     }
     attrs.forEach((b, i) => {
       const valueVar = `__attr_${i}__`
-      const bindingId = `${b.markerId}:${b.name}`
       lines.push(
         `  const ${valueVar} = ${b.rendered};`,
-        `  if (__updateListBinding__(__item__, ${JSON.stringify(bindingId)}, ${valueVar})) ${renderAttrSet(`__${b.markerId}__`, { ...b, rendered: valueVar })}`,
+        `  if (!__handle__.initialized || !Object.is(__handle__.attr_${i}, ${valueVar})) { __handle__.attr_${i} = ${valueVar}; ${renderAttrSet(`__${b.markerId}__`, { ...b, rendered: valueVar })} }`,
       )
     })
-    lines.push('  } finally { __endDomUpdate__(); }', '}')
+    lines.push('  __handle__.initialized = true;', '  } finally { __endDomUpdate__(); }', '}')
     lines.push(`function ${factoryName}(${itemParam}, __item__) {`)
+    if (refIds.size > 0) lines.push(`  ${pathsName} ??= __collectPaths__(${templateVar});`)
     lines.push(`  const __node__ = ${templateVar}.content.cloneNode(true);`)
     lines.push('  const __el__ = __node__.firstElementChild;')
     for (const id of refIds) {
-      lines.push(`  const __${id}__ = __find__(__el__, ${JSON.stringify(id)});`)
+      lines.push(`  const __${id}__ = __followPath__(__el__, ${pathsName}.${id});`)
     }
     const refs = [...refIds].map((id) => `${id}: __${id}__`).join(', ')
     lines.push(
-      `  const __handle__ = { el: __el__, item: __item__, value: ${itemParam}, refs: { ${refs} } };`,
+      `  const __handle__ = { el: __el__, item: __item__, value: ${itemParam}, refs: { ${refs} }, initialized: false };`,
     )
     for (const h of body.localHandlers) {
       if (h.param === itemParam) {
@@ -1150,16 +1156,16 @@ function generateStructuralUnits(
   markers: MarkerOutput[],
   signalToMarkers: Map<DeclId, Set<MarkerId>>,
 ): StructuralUnitsCode {
-  const structuralMarkerIds = new Set<MarkerId>()
+  const structuralMarkers = new Map<MarkerId, ListMarkerOutput | ConditionalMarkerOutput>()
   for (const m of markers) {
-    if (m.kind === 'list' || m.kind === 'conditional') structuralMarkerIds.add(m.id)
+    if (m.kind === 'list' || m.kind === 'conditional') structuralMarkers.set(m.id, m)
   }
 
   const declLines: string[] = []
   const templateSetupLines: string[] = []
 
-  if (structuralMarkerIds.size > 0) {
-    declLines.push('let __doc__;', FIND_HELPER, FIND_RANGE_HELPER, '')
+  if (structuralMarkers.size > 0) {
+    declLines.push('let __doc__;', FIND_HELPER, COLLECT_REFS_HELPER, FIND_RANGE_HELPER, '')
   }
 
   // M5.5: ネストしたユニットの <template> はcomponent instanceに1つ置いて
@@ -1198,6 +1204,20 @@ function generateStructuralUnits(
         ...generateFactory(factoryName, tplVar, marker.itemParam, marker.body, false),
         '',
       )
+      if (marker.keySelector) {
+        declLines.push(
+          `let __selected_key_${marker.id}__ = ${marker.keySelector.outputName};`,
+          `function __select_${marker.id}__(__key__) {`,
+          `  const __handle__ = __list_${marker.id}__.items.get(__key__)?.handle;`,
+          '  if (!__handle__) return;',
+          `  const ${marker.itemParam} = __handle__.value;`,
+          ...marker.body.localAttrBindings.flatMap((binding, index) => [
+            `  const __value_${index}__ = ${binding.rendered};`,
+            `  if (!Object.is(__handle__.attr_${index}, __value_${index}__)) { __handle__.attr_${index} = __value_${index}__; ${renderAttrSet(`__handle__.refs.${binding.markerId}`, { ...binding, rendered: `__value_${index}__` })} }`,
+          ]),
+          '}',
+        )
+      }
       templateSetupLines.push(
         `  ${tplVar} = __doc__.createElement('template'); ${tplVar}.innerHTML = ${JSON.stringify(initialTemplate(marker.body, true))};`,
       )
@@ -1226,7 +1246,10 @@ function generateStructuralUnits(
   const populatedMarkers = new Set<MarkerId>()
   for (const [signalId, markerIds] of signalToMarkers) {
     for (const mId of markerIds) {
-      if (structuralMarkerIds.has(mId) && !populatedMarkers.has(mId)) {
+      const marker = structuralMarkers.get(mId)
+      // 選択変更用の更新では空の一覧を作れないため、初期化は配列側から行う。
+      if (marker?.kind === 'list' && marker.keySelector?.declId === signalId) continue
+      if (marker && !populatedMarkers.has(mId)) {
         populatedMarkers.add(mId)
         signalsNeedingInitialCall.add(signalId)
       }
@@ -1272,6 +1295,9 @@ function generateListUpdate(
     hasLifecycle
       ? `  __reconcileListWithLifecycle__(__list_${marker.id}__, ${elExpr}, ${marker.arrayRendered}, ${keyOf}, __create_${marker.id}__${updaterArg}, ${mountExpr});`
       : `  __reconcileList__(__list_${marker.id}__, ${elExpr}, ${marker.arrayRendered}, ${keyOf}, __create_${marker.id}__${updaterArg});`,
+    ...(marker.keySelector
+      ? [`  __selected_key_${marker.id}__ = ${marker.keySelector.outputName};`]
+      : []),
   ]
 }
 
@@ -2009,7 +2035,12 @@ export function generateModule({
     }
   }
 
-  const appendMarkerUpdate = (lines: string[], mId: MarkerId, effectTriggerExpr = 'null'): void => {
+  const appendMarkerUpdate = (
+    lines: string[],
+    mId: MarkerId,
+    effectTriggerExpr = 'null',
+    changedRoots: readonly DeclId[] = [],
+  ): void => {
     // 動的属性の再設定(属性のみの marker id は markers に実体を持たない
     // ため、marker 解決より先に処理する)。
     const bindings = attrsByMarker.get(mId)
@@ -2028,6 +2059,17 @@ export function generateModule({
         lines.push(`  if (__use_update_${mId}__) __use_update_${mId}__();`)
       }
     } else if (marker.kind === 'list') {
+      const affected = changedRoots.filter((id) => signalToMarkers.get(id)?.has(mId))
+      if (
+        marker.keySelector &&
+        affected.length === 1 &&
+        affected[0] === marker.keySelector.declId
+      ) {
+        lines.push(
+          `  { const __previous__ = __selected_key_${mId}__; __selected_key_${mId}__ = ${marker.keySelector.outputName}; if (!Object.is(__previous__, __selected_key_${mId}__)) { __select_${mId}__(__previous__); __select_${mId}__(__selected_key_${mId}__); } }`,
+        )
+        return
+      }
       lines.push(
         ...generateListUpdate(
           marker,
@@ -2064,14 +2106,15 @@ export function generateModule({
       instanceLines.push(`  const __previous_effect_trigger__ = __effect_trigger__;`)
       instanceLines.push(`  __effect_trigger__ = new Set([${JSON.stringify(name)}]);`)
       instanceLines.push('  try {')
-      for (const mId of markerIds) appendMarkerUpdate(instanceLines, mId, '__effect_trigger__')
+      for (const mId of markerIds)
+        appendMarkerUpdate(instanceLines, mId, '__effect_trigger__', [signalId])
       instanceLines.push(
         '  } finally {',
         '    __effect_trigger__ = __previous_effect_trigger__;',
         '  }',
       )
     } else {
-      for (const mId of markerIds) appendMarkerUpdate(instanceLines, mId)
+      for (const mId of markerIds) appendMarkerUpdate(instanceLines, mId, 'null', [signalId])
     }
     appendEffectUpdates(instanceLines, [signalId])
     instanceLines.push('  } finally { __endDomUpdate__(); }', '}', '')
@@ -2098,7 +2141,7 @@ export function generateModule({
       )
       instanceLines.push('  try {')
       for (const markerId of batch.markerIds) {
-        appendMarkerUpdate(instanceLines, markerId, '__effect_trigger__')
+        appendMarkerUpdate(instanceLines, markerId, '__effect_trigger__', batch.signalIds)
       }
       instanceLines.push(
         '  } finally {',
@@ -2106,7 +2149,8 @@ export function generateModule({
         '  }',
       )
     } else {
-      for (const markerId of batch.markerIds) appendMarkerUpdate(instanceLines, markerId)
+      for (const markerId of batch.markerIds)
+        appendMarkerUpdate(instanceLines, markerId, 'null', batch.signalIds)
     }
     appendEffectUpdates(instanceLines, batch.signalIds)
     instanceLines.push('  } finally { __endDomUpdate__(); }', '}', '')

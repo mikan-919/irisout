@@ -84,7 +84,7 @@ describe('M5: list rendering (keyed reuse factory)', () => {
   it('updates only the changed item binding without reordering stable DOM', async () => {
     const { code } = compile(LIST_SOURCE)
     expect(code).toContain('createListRuntime as __createListRuntime__')
-    expect(code).toContain('__updateListBinding__(__item__')
+    expect(code).toContain('!__handle__.initialized || !Object.is(')
 
     const mod = await loadGenerated(code)
     const container = createContainer()

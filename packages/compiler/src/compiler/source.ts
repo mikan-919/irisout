@@ -958,6 +958,14 @@ export function compileSource(source: string, options: CompileOptions = {}): Com
     m.kind === 'list'
       ? {
           ...m,
+          keySelector:
+            ancestorLocalScopes.length === 0 &&
+            m.keySelector &&
+            ![...m.arrayDeps].some((id) =>
+              resolveToSignals(ctx, id, new Set()).has(m.keySelector!.declId),
+            )
+              ? m.keySelector
+              : undefined,
           collectionOutputName: m.collectionDeclId
             ? ctx.declOutputName.get(m.collectionDeclId)!
             : null,

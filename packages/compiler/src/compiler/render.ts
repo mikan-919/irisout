@@ -36,6 +36,7 @@ import type {
   ContentPart,
   DeclId,
   ActionDecl,
+  AttrBinding,
   EffectDecl,
   ListMarker,
   LocalDecl,
@@ -661,6 +662,47 @@ interface RenderElementOpts {
   inSvgNamespace?: boolean
 }
 
+// ADR-0066: 呼び出しや型変換を含む条件は通常経路へ残す。
+function keySelector(
+  ctx: CompilerState,
+  path: NodePath<t.Expression>,
+  instanceId: number,
+): AttrBinding['keySelector'] {
+  if (!path.isConditionalExpression()) return undefined
+  const literal = (node: t.Expression) =>
+    ['StringLiteral', 'NumericLiteral', 'BooleanLiteral', 'NullLiteral'].includes(node.type)
+  if (!literal(path.node.consequent) || !literal(path.node.alternate)) return undefined
+  const test = path.get('test')
+  if (!test.isBinaryExpression() || !['===', '!=='].includes(test.node.operator)) return undefined
+  for (const [statePath, keyPath] of [
+    [test.get('left'), test.get('right')],
+    [test.get('right'), test.get('left')],
+  ]) {
+    if (
+      !statePath!.isCallExpression() ||
+      statePath!.node.arguments.length !== 0 ||
+      !keyPath!.isMemberExpression() ||
+      keyPath!.node.computed ||
+      keyPath!.node.object.type !== 'Identifier'
+    )
+      continue
+    const state = analyzeExpr(ctx, statePath as NodePath<t.Expression>, instanceId)
+    if (state.deps.size !== 1) continue
+    const declId = [...state.deps][0]!
+    if (
+      ctx.declKind.get(declId) !== 'signal' ||
+      state.rendered !== ctx.declOutputName.get(declId) ||
+      ctx.localDeclIds.has(declId) ||
+      ctx.sharedDeclIds.has(declId)
+    )
+      continue
+    const key = analyzeExpr(ctx, keyPath as NodePath<t.Expression>, instanceId)
+    if (key.deps.size === 0)
+      return { declId, outputName: state.rendered, keyRendered: key.rendered }
+  }
+  return undefined
+}
+
 function renderElement(
   ctx: CompilerState,
   elementPath: NodePath<t.JSXElement>,
@@ -698,6 +740,7 @@ function renderElement(
   const dynAttrs = dynamicAttrPaths.map((d) => ({
     name: d.name,
     ...analyzeExpr(ctx, d.exprPath, instanceId),
+    keySelector: insideUnit ? keySelector(ctx, d.exprPath, instanceId) : undefined,
   }))
   const dynBake = !insideUnit
     ? dynAttrs
@@ -720,6 +763,7 @@ function renderElement(
         rendered: a.rendered,
         sourceRendered: a.sourceRendered,
         deps: a.deps,
+        keySelector: a.keySelector,
       })
       if (!insideUnit) {
         const set = ctx.markerDeps.get(markerId) ?? new Set<DeclId>()
@@ -1338,6 +1382,7 @@ function renderListUnit(
     sourceRendered: arraySourceRendered,
   } = analyzeExpr(ctx, arrayObjPath, instanceId)
   const directDep = deps.size === 1 ? [...deps][0]! : null
+  const arrayDeps = new Set(deps)
   const isDirectCollectionRead =
     directDep != null &&
     ctx.declKind.get(directDep) === 'collection' &&
@@ -1394,6 +1439,35 @@ function renderListUnit(
     localContextProviders,
     inSvgNamespace,
   )
+  const selector = body.localAttrBindings[0]?.keySelector
+  const directFields = body.localMarkers.every(
+    (marker) =>
+      marker.kind === 'text' &&
+      marker.contentParts.every(
+        (part) =>
+          part.type === 'text' ||
+          new RegExp(`^${itemParam.replace(/[$]/g, '\\$&')}\\.[A-Za-z_$][\\w$]*$`).test(part.code),
+      ),
+  )
+  const selection =
+    selector &&
+    deps.size > 0 &&
+    !deps.has(selector.declId) &&
+    nestedDeps.size === 1 &&
+    nestedDeps.has(selector.declId) &&
+    directFields &&
+    body.localDecls.length === 0 &&
+    body.localFnNames.length === 0 &&
+    body.localActions.length === 0 &&
+    body.localMounts.length === 0 &&
+    body.localEffects.length === 0 &&
+    body.localAttrBindings.every(
+      (binding) =>
+        binding.keySelector?.declId === selector.declId &&
+        binding.keySelector.keyRendered === keyRendered,
+    )
+      ? { declId: selector.declId, outputName: selector.outputName }
+      : undefined
   // M5.5: ネストしたユニットの依存はこのリストマーカーの依存に合流させる。
   // 該当 signal の update_* がリストの keyed diff を再実行し、既存アイテムの
   // handle.update() 経由で内側ユニットまで更新が届く。
@@ -1406,8 +1480,10 @@ function renderListUnit(
     itemParam,
     arrayRendered,
     arraySourceRendered,
+    arrayDeps,
     keyRendered,
     collectionDeclId,
+    keySelector: selection,
     body,
   })
   ctx.markerDeps.set(markerId, deps)

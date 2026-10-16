@@ -77,6 +77,8 @@ export interface AttrBinding {
   /** SSR初期HTML向け。signal/derivedのread callを保持する。 */
   sourceRendered: string
   deps: Set<DeclId>
+  /** 安定した行キーとの厳密比較だけで決まる属性。選択前後の行へ直接通知する。 */
+  keySelector?: { declId: DeclId; outputName: string; keyRendered: string }
 }
 
 // same-file-component-composition: 構造ユニット(list item/conditional
@@ -132,10 +134,13 @@ export interface ListMarker {
   arrayRendered: string
   /** SSR初期HTML向け。配列signalのread callを保持する。 */
   arraySourceRendered: string
+  /** 配列式の依存。項目本文の依存を合流する前に保持する。 */
+  arrayDeps: Set<DeclId>
   /** `key={...}` の出力向けレンダー結果(item 仮引数を参照する式)。 */
   keyRendered: string
   /** 配列式が直接、キー付き`signal()`を読んでいる場合の宣言ID。それ以外はnull。 */
   collectionDeclId: DeclId | null
+  keySelector?: { declId: DeclId; outputName: string }
   body: StructuralUnitBody
 }
 

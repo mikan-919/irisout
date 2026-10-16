@@ -10,7 +10,8 @@
     "bench:todomvc-compiler": "bun todomvc-compiler.playwright.ts",
     "bench:list-runtime": "bun list-runtime.playwright.ts",
     "bench:listener-strategy": "bun listener-strategy.playwright.ts",
-    "bench:rshono": "node rshono/compare.mjs && node rshono/report.mjs && vp fmt rshono/results.json rshono/results.md"
+    "bench:rshono": "node rshono/compare.mjs && node rshono/report.mjs && vp fmt rshono/results.json rshono/results.md",
+    "bench:js-framework": "bun js-framework/run.mjs && bun js-framework/report.mjs && vp fmt js-framework/results.json js-framework/results.md"
   },
   "dependencies": {
     "@irisout/demos": "workspace:*",
