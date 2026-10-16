@@ -26,6 +26,7 @@ const sampleCount = Number(process.env.JSFB_PROBE_SAMPLES ?? 15)
 const cpuRate = Number(process.env.JSFB_PROBE_CPU_RATE ?? 1)
 const clearRows = Number(process.env.JSFB_PROBE_CLEAR_ROWS ?? 1000)
 const disableRowListeners = process.env.JSFB_PROBE_DISABLE_ROW_LISTENERS === '1'
+const reverseOrder = process.env.JSFB_PROBE_REVERSE === '1'
 if (!Number.isSafeInteger(sampleCount) || sampleCount < 1)
   throw new Error('Invalid probe sample count')
 if (!Number.isFinite(cpuRate) || cpuRate < 1) throw new Error('Invalid CPU rate')
@@ -47,7 +48,7 @@ try {
     // 比較用の第2ページだけで直接登録を省く。製品コードと公式測定には適用しない。
     if (disableRowListeners) {
       await page.addInitScript((disable) => {
-        const add = EventTarget.prototype.addEventListener
+        const add = Reflect.get(EventTarget.prototype, 'addEventListener')
         EventTarget.prototype.addEventListener = function (...args) {
           const row = this instanceof Element && this.closest('tr')
           if (disable && row) return
@@ -86,7 +87,8 @@ try {
   }
   for (const scenario of scenarios) {
     for (let repeat = -3; repeat < sampleCount; repeat++) {
-      for (const index of repeat % 2 ? [1, 0] : [0, 1]) {
+      const order = repeat % 2 ? [1, 0] : [0, 1]
+      for (const index of reverseOrder ? order.reverse() : order) {
         const result = await pages[index].evaluate(
           async ({ scenario, clearRows }) => {
             const click = (id) => document.getElementById(id).click()
@@ -163,6 +165,7 @@ try {
         cpuRate,
         clearRows,
         disableRowListenersInSecondPage: disableRowListeners,
+        reverseOrder,
         method: `synchronous click handler and DOM writes; excludes layout and paint; 3 warmups and ${sampleCount} samples; select averages 200 clicks, swap averages 20 clicks; alternating implementation order; console.log disabled in both pages`,
         samples,
       },

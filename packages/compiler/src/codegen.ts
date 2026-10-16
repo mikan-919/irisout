@@ -226,7 +226,40 @@ export interface GenerateModuleInput {
 const FIND_HELPER = `function __find__(root, id) { if (root.getAttribute("data-iris-id") === id) return root; const visit = (node) => { for (let child = node.firstElementChild; child; child = child.nextElementSibling) { if (child.getAttribute("data-iris-id") === id) return child; const found = visit(child); if (found) return found; } return null; }; return visit(root); }`
 
 // 単純な行のマーカー位置はテンプレートから一度だけ求め、複製では位置だけを辿る。
-const COLLECT_REFS_HELPER = `function __collectPaths__(template) { if (template.__irisout_paths__) return template.__irisout_paths__; const paths = {}; const visit = (node, path) => { const id = node.getAttribute("data-iris-id"); if (id) { paths[id] = path; node.removeAttribute("data-iris-id"); } let index = 0; for (let child = node.firstElementChild; child; child = child.nextElementSibling) visit(child, [...path, index++]); }; visit(template.__irisout_root__ ??= template.content.firstElementChild, []); return template.__irisout_paths__ = paths; } function __followPath__(root, path) { for (let index of path) { root = root.firstElementChild; while (index-- > 0) root = root.nextElementSibling; } return root; }`
+const COLLECT_REFS_HELPER = `function __collectPaths__(template, firstId, emptyClasses) {
+  if (template.__irisout_paths__) return template.__irisout_paths__;
+  const paths = {};
+  const visit = (node, path) => {
+    const id = node.getAttribute("data-iris-id");
+    if (id) {
+      paths[id] = path;
+      node.removeAttribute("data-iris-id");
+      if (emptyClasses?.includes(id)) node.setAttribute("class", "");
+    }
+    let index = 0;
+    for (let child = node.firstElementChild; child; child = child.nextElementSibling) visit(child, [...path, index++]);
+  };
+  visit(template.__irisout_root__ ??= template.content.firstElementChild, []);
+  const first = paths[firstId];
+  if (first?.length) for (const path of Object.values(paths)) {
+    const depth = first.length - 1;
+    if (path.length > depth && path[depth] >= first[depth] && first.slice(0, depth).every((index, level) => index === path[level])) {
+      path.fromFirst = path[depth] - first[depth];
+      path.tail = path.slice(depth + 1);
+    }
+  }
+  return template.__irisout_paths__ = paths;
+}
+function __followPath__(root, path, first) {
+  if (first && path.tail) {
+    root = first;
+    let hops = path.fromFirst;
+    while (hops-- > 0) root = root.nextElementSibling;
+    path = path.tail;
+  }
+  for (let index of path) { root = root.firstElementChild; while (index-- > 0) root = root.nextElementSibling; }
+  return root;
+}`
 
 // テキストだけの要素では既存節点を書き換え、外から子が置換された場合も表示を復元する。
 const SET_LIST_TEXT_HELPER = `function __setListText__(el, value) { const text = el.firstChild; if (text?.nodeType === 3 && text === el.lastChild) text.nodeValue = value; else el.textContent = value; }`
@@ -621,6 +654,13 @@ function generateFactoryLegacy(
       ...attrs.map((b) => b.markerId),
       ...body.localHandlers.map((h) => h.markerId),
     ])
+    const firstRef = [...refIds][0]
+    const emptyClasses =
+      /<[\w:]*-[\w:-]*(?:\s|>)/.test(body.template) || /\sis\s*=/.test(body.template)
+        ? []
+        : attrs
+            .filter((binding) => binding.name === 'class' && binding.keySelector)
+            .map((binding) => binding.markerId)
     const pathsName = `${factoryName}paths__`
     if (refIds.size > 0) lines.push(`let ${pathsName};`)
 
@@ -656,12 +696,17 @@ function generateFactoryLegacy(
     })
     lines.push('}')
     lines.push(`function ${factoryName}(${itemParam}) {`)
-    if (refIds.size > 0) lines.push(`  ${pathsName} ??= __collectPaths__(${templateVar});`)
+    if (refIds.size > 0)
+      lines.push(
+        `  ${pathsName} ??= __collectPaths__(${templateVar}, ${JSON.stringify(firstRef)}, ${JSON.stringify(emptyClasses)});`,
+      )
     lines.push(
       `  const __el__ = (${templateVar}.__irisout_root__ ??= ${templateVar}.content.firstElementChild).cloneNode(true);`,
     )
     for (const id of refIds) {
-      lines.push(`  const __${id}__ = __followPath__(__el__, ${pathsName}.${id});`)
+      lines.push(
+        `  const __${id}__ = __followPath__(__el__, ${pathsName}.${id}${id !== firstRef ? `, __${firstRef}__` : ''});`,
+      )
     }
     const refs = [...refIds].map((id) => `${id}: __${id}__`).join(', ')
     lines.push(
@@ -694,7 +739,7 @@ function generateFactoryLegacy(
     attrs.forEach((b, i) => {
       lines.push(
         `  __handle__.attr_${i} = ${b.rendered};`,
-        `  ${renderAttrSet(`__${b.markerId}__`, { ...b, rendered: `__handle__.attr_${i}` })}`,
+        `  ${emptyClasses.includes(b.markerId) && b.name === 'class' ? `if (__handle__.attr_${i} !== "") ` : ''}${renderAttrSet(`__${b.markerId}__`, { ...b, rendered: `__handle__.attr_${i}` })}`,
       )
     })
     lines.push('  return __handle__;')

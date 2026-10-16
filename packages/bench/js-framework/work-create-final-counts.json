@@ -1,0 +1,280 @@
+{
+  "timestamp": "2026-10-16T15:27:42.898Z",
+  "browser": "153.0.8010.12",
+  "method": "one click from a fresh 1000-row state, or empty state for create; instrumented calls only, no timing; console.log disabled; numeric Map keys; array operations counted only for length >= 100",
+  "measurements": [
+    {
+      "url": "http://localhost:8080/frameworks/keyed/irisout-before-work/dist/index.html",
+      "assets": [
+        {
+          "url": "http://localhost:8080/frameworks/keyed/irisout-before-work/dist/assets/index-Dbf78uoj.js",
+          "sha256": "d725efed01bce46eca23236d2e41e8287d32a2bbff83682f1d3e16d2b4531f11"
+        }
+      ],
+      "results": {
+        "create": {
+          "counts": {
+            "numericMap.get": 1000,
+            "get.content": 1001,
+            "get.firstElementChild": 6009,
+            "get.nextElementSibling": 3007,
+            "cloneNode": 1000,
+            "addEventListener": 2000,
+            "get.firstChild": 2000,
+            "get.nodeType": 2000,
+            "get.lastChild": 2000,
+            "nodeValue": 2000,
+            "setAttribute": 1000,
+            "numericMap.set": 1000,
+            "get.parentNode": 1,
+            "insertBefore": 1
+          },
+          "rows": 1000
+        },
+        "replace": {
+          "counts": {
+            "numericMap.get": 1000,
+            "get.content": 1000,
+            "get.firstElementChild": 6000,
+            "cloneNode": 1000,
+            "get.nextElementSibling": 3000,
+            "addEventListener": 2000,
+            "get.firstChild": 2001,
+            "get.nodeType": 2000,
+            "get.lastChild": 2001,
+            "nodeValue": 2000,
+            "setAttribute": 1000,
+            "numericMap.set": 1000,
+            "get.parentNode": 1,
+            "replaceChildren": 1,
+            "numericMap.delete": 1000
+          },
+          "rows": 1000
+        },
+        "partial": {
+          "counts": {
+            "array.slice": 1,
+            "array.slice.inputItems": 1000,
+            "Object.is": 400,
+            "numericMap.has": 100,
+            "numericMap.get": 100,
+            "get.firstChild": 100,
+            "get.nodeType": 100,
+            "get.lastChild": 100,
+            "nodeValue": 100
+          },
+          "rows": 1000
+        },
+        "select": {
+          "counts": {
+            "Object.is": 2,
+            "numericMap.get": 2,
+            "setAttribute": 1
+          },
+          "rows": 1000
+        },
+        "swap": {
+          "counts": {
+            "array.slice": 1,
+            "array.slice.inputItems": 1000,
+            "numericMap.get": 1000,
+            "Object.is": 3000,
+            "get.parentNode": 1,
+            "get.nextSibling": 1000,
+            "insertBefore": 2
+          },
+          "rows": 1000
+        },
+        "remove": {
+          "counts": {
+            "array.filter": 1,
+            "array.filter.inputItems": 1000,
+            "numericMap.get": 999,
+            "Object.is": 2997,
+            "remove": 1,
+            "numericMap.delete": 1,
+            "get.parentNode": 1,
+            "get.nextSibling": 1000
+          },
+          "rows": 999
+        },
+        "create10k": {
+          "counts": {
+            "numericMap.get": 10000,
+            "get.content": 10000,
+            "get.firstElementChild": 60000,
+            "cloneNode": 10000,
+            "get.nextElementSibling": 30000,
+            "addEventListener": 20000,
+            "get.firstChild": 20000,
+            "get.nodeType": 20000,
+            "get.lastChild": 20000,
+            "nodeValue": 20000,
+            "setAttribute": 10000,
+            "numericMap.set": 10000,
+            "get.parentNode": 1,
+            "insertBefore": 1
+          },
+          "rows": 10000
+        },
+        "append": {
+          "counts": {
+            "numericMap.get": 2000,
+            "Object.is": 3000,
+            "get.content": 1000,
+            "get.firstElementChild": 6000,
+            "cloneNode": 1000,
+            "get.nextElementSibling": 3000,
+            "addEventListener": 2000,
+            "get.firstChild": 2000,
+            "get.nodeType": 2000,
+            "get.lastChild": 2000,
+            "nodeValue": 2000,
+            "setAttribute": 1000,
+            "numericMap.set": 1000,
+            "get.parentNode": 1,
+            "get.nextSibling": 1001,
+            "insertBefore": 1
+          },
+          "rows": 2000
+        },
+        "clear": {
+          "counts": {
+            "get.parentNode": 1,
+            "get.firstChild": 1,
+            "get.lastChild": 1,
+            "replaceChildren": 1,
+            "map.clear": 1
+          },
+          "rows": 0
+        }
+      }
+    },
+    {
+      "url": "http://localhost:8080/frameworks/keyed/irisout/dist/index.html",
+      "assets": [
+        {
+          "url": "http://localhost:8080/frameworks/keyed/irisout/dist/assets/index-BfYd_bte.js",
+          "sha256": "4ad91515b6a402ff562586cedc2fe7372a13bbd5a3be4b94d1ecd03a87614ac1"
+        }
+      ],
+      "results": {
+        "create": {
+          "counts": {
+            "numericMap.get": 1000,
+            "get.content": 1,
+            "get.firstElementChild": 3009,
+            "setAttribute": 1,
+            "get.nextElementSibling": 3007,
+            "cloneNode": 1000,
+            "addEventListener": 2000,
+            "get.firstChild": 2000,
+            "nodeValue": 2000,
+            "numericMap.set": 1000,
+            "get.parentNode": 1,
+            "insertBefore": 1
+          },
+          "rows": 1000
+        },
+        "replace": {
+          "counts": {
+            "numericMap.get": 1000,
+            "cloneNode": 1000,
+            "get.firstElementChild": 3000,
+            "get.nextElementSibling": 3000,
+            "addEventListener": 2000,
+            "get.firstChild": 2001,
+            "nodeValue": 2000,
+            "numericMap.set": 1000,
+            "get.parentNode": 1,
+            "get.lastChild": 1,
+            "replaceChildren": 1,
+            "numericMap.delete": 1000
+          },
+          "rows": 1000
+        },
+        "partial": {
+          "counts": {
+            "array.slice": 1,
+            "array.slice.inputItems": 1000,
+            "numericMap.get": 100,
+            "Object.is": 100,
+            "get.firstChild": 100,
+            "get.nodeType": 100,
+            "get.lastChild": 100,
+            "nodeValue": 100
+          },
+          "rows": 1000
+        },
+        "select": {
+          "counts": {
+            "Object.is": 2,
+            "numericMap.get": 2,
+            "setAttribute": 1
+          },
+          "rows": 1000
+        },
+        "swap": {
+          "counts": {
+            "get.parentNode": 3,
+            "numericMap.get": 2,
+            "get.nextSibling": 2,
+            "insertBefore": 2
+          },
+          "rows": 1000
+        },
+        "remove": {
+          "counts": {
+            "array.filter": 1,
+            "array.filter.inputItems": 1000,
+            "get.parentNode": 1,
+            "numericMap.get": 1,
+            "remove": 1,
+            "numericMap.delete": 1
+          },
+          "rows": 999
+        },
+        "create10k": {
+          "counts": {
+            "numericMap.get": 10000,
+            "cloneNode": 10000,
+            "get.firstElementChild": 30000,
+            "get.nextElementSibling": 30000,
+            "addEventListener": 20000,
+            "get.firstChild": 20000,
+            "nodeValue": 20000,
+            "numericMap.set": 10000,
+            "get.parentNode": 1,
+            "insertBefore": 1
+          },
+          "rows": 10000
+        },
+        "append": {
+          "counts": {
+            "get.parentNode": 1,
+            "numericMap.has": 1000,
+            "cloneNode": 1000,
+            "get.firstElementChild": 3000,
+            "get.nextElementSibling": 3000,
+            "addEventListener": 2000,
+            "get.firstChild": 2000,
+            "nodeValue": 2000,
+            "numericMap.set": 1000,
+            "insertBefore": 1
+          },
+          "rows": 2000
+        },
+        "clear": {
+          "counts": {
+            "get.parentNode": 1,
+            "get.firstChild": 1,
+            "get.lastChild": 1,
+            "replaceChildren": 1,
+            "map.clear": 1
+          },
+          "rows": 0
+        }
+      }
+    }
+  ]
+}

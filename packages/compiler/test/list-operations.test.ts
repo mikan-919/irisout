@@ -73,6 +73,37 @@ function work(container: Element, run: () => void) {
 }
 
 describe('owned list operations', () => {
+  it('keeps empty class attributes and resolves references from an earlier sibling', async () => {
+    const app = await application(3, 0, 2, 'selected(2);')
+    expect(app.rows().map((row) => row.getAttribute('class'))).toEqual(['', '', ''])
+    app.click(app.button('other'))
+    expect(app.rows().map((row) => row.getAttribute('class'))).toEqual(['', 'on', ''])
+    app.click(app.button('partial'))
+    expect(app.rows()[0]?.querySelector('span')?.textContent).toBe('a!')
+    app.click(app.rows()[1]!.querySelector('button')!)
+    expect(app.rows()).toHaveLength(2)
+  })
+
+  it('resolves nested siblings and root attributes without changing custom-element initialization', async () => {
+    for (const tag of ['li', 'x-row']) {
+      const { code } = compile(
+        `export function App(){const rows=signal([{id:1,label:'a'},{id:2,label:'b'}]);const selected=signal(2);render(<main>{rows().map(row=><${tag} key={row.id} class={selected()===row.id?'on':''}><div><b>{row.id}</b><i>{row.label}</i></div><button onClick={()=>selected(row.id)}>select</button></${tag}>)}</main>);}`,
+      )
+      if (tag === 'x-row') expect(code).not.toContain('if (__handle__.attr_0 !== "")')
+      const mod = await loadGenerated(code)
+      const container = createContainer()
+      ;(mod.mountComponent as (element: Element) => void)(container)
+      const elements = [...container.querySelectorAll(tag)]
+      expect(elements.map((row) => row.getAttribute('class'))).toEqual(['', 'on'])
+      expect(elements.map((row) => row.querySelector('b')?.textContent)).toEqual(['1', '2'])
+      expect(elements.map((row) => row.querySelector('i')?.textContent)).toEqual(['a', 'b'])
+      elements[0]!
+        .querySelector('button')!
+        .dispatchEvent(new container.ownerDocument.defaultView!.Event('click'))
+      expect(elements.map((row) => row.getAttribute('class'))).toEqual(['on', ''])
+    }
+  })
+
   it('updates only the changed field and retains the array copy', async () => {
     const app = await application(1000, 1, 998)
     const button = app.button('partial')

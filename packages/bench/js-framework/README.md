@@ -6,6 +6,8 @@
 
 2026-10-16の全操作の再測定はCPU各10回、選択20回、メモリ各3回、同期比較各100回で行った。Vanillaとの差と処理回数の調査は[vanilla-audit.md](./vanilla-audit.md)に記録する。
 
+一覧高速化計画の実装、採用しなかった配列複製省略、段階ごとの全試行値は[work-results.md](./work-results.md)を参照する。基準版は`390f84a`である。
+
 所有する配列のmapを変更行へ接続した後の測定は[map-results.md](./map-results.md)に分けて保存する。修正前後とSolidとの同期比較、および公式測定器による部分更新の再測定であり、既存の全操作の公式比較を置き換えない。
 
 ## 再実行
@@ -33,16 +35,21 @@ bun packages/bench/js-framework/report.mjs
 PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/path/to/chrome JSFB_COUNT=10 JSFB_MEMORY_COUNT=3 bun packages/bench/js-framework/run.mjs
 ```
 
-| 環境変数                              | 既定値                                | 用途                                      |
-| ------------------------------------- | ------------------------------------- | ----------------------------------------- |
-| `JSFB_CHECKOUT`                       | `/tmp/irisout-js-framework-benchmark` | 上流の作業ディレクトリ                    |
-| `JSFB_PORT`                           | `8080`                                | 専用の配信ポート                          |
-| `JSFB_COUNT`                          | `3`                                   | CPUの試行回数。行選択はこれに10回を加える |
-| `JSFB_MEMORY_COUNT`                   | `1`                                   | メモリの試行回数                          |
-| `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` | Playwrightの既定                      | 比較する全実装で使うブラウザー            |
-| `JSFB_PROBE_OUTPUT`                   | `optimization.json`                   | 同期比較のJSON保存先                      |
-| `JSFB_PROBE_SAMPLES`                  | `15`                                  | 同期比較の試行数                          |
-| `JSFB_PROBE_SCENARIOS`                | 全9操作                               | 同期比較の対象。カンマ区切り              |
+| 環境変数                              | 既定値                                | 用途                                                                     |
+| ------------------------------------- | ------------------------------------- | ------------------------------------------------------------------------ |
+| `JSFB_CHECKOUT`                       | `/tmp/irisout-js-framework-benchmark` | 上流の作業ディレクトリ                                                   |
+| `JSFB_PORT`                           | `8080`                                | 専用の配信ポート                                                         |
+| `JSFB_COUNT`                          | `3`                                   | CPUの試行回数。行選択はこれに10回を加える                                |
+| `JSFB_MEMORY_COUNT`                   | `1`                                   | メモリの試行回数                                                         |
+| `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` | Playwrightの既定                      | 比較する全実装で使うブラウザー                                           |
+| `JSFB_PROBE_OUTPUT`                   | `optimization.json`                   | 同期比較のJSON保存先                                                     |
+| `JSFB_PROBE_SAMPLES`                  | `15`                                  | 同期比較の試行数                                                         |
+| `JSFB_PROBE_SCENARIOS`                | 全9操作                               | 同期比較の対象。カンマ区切り                                             |
+| `JSFB_PROBE_REVERSE`                  | `0`                                   | `1`で各試行の実装順を反転                                                |
+| `JSFB_PROBE_CPU_RATE`                 | `1`                                   | ChromiumのCPU減速倍率                                                    |
+| `JSFB_PROBE_CLEAR_ROWS`               | `1000`                                | 全削除前の行数。0・1000・10000                                           |
+| `JSFB_PROBE_DISABLE_ROW_LISTENERS`    | `0`                                   | `1`で第2ページの行イベント登録を省く比較実験。選択・個別削除には使用不可 |
+| `JSFB_WORK_PROBE_OUTPUT`              | `vanilla-work.json`                   | 処理回数のJSON保存先                                                     |
 
 ログと元のJSONは無視対象の`results/`、ブラウザーの動作記録は上流の`webdriver-ts/traces/`へ保存する。前回の上流結果は実行時に日時付きディレクトリへ退避する。`report.mjs`は欠けた実装・試行数を検出したら失敗し、部分的な結果を完全な比較として出力しない。
 
