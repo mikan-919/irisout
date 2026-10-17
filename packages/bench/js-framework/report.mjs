@@ -210,8 +210,8 @@ const report = `# js-framework-benchmark 比較結果
 
 ${table(0, 9)}
 
-| 指標 | irisout | React Hooks | Vue | Solid | Vanilla |
-| --- | ---: | ---: | ---: | ---: | ---: |
+| 指標 | ${frameworks.map((name) => ({ 'react-hooks': 'React Hooks', vue: 'Vue', solid: 'Solid', vanillajs: 'Vanilla' })[name] ?? name).join(' | ')} |
+| --- | ${frameworks.map(() => '---:').join(' | ')} |
 | Vanillaを1とした時間比の幾何平均 | ${ratios.map((value) => value.toFixed(2)).join(' | ')} |
 
 9操作の中央値をVanillaで割り、等しい重みで幾何平均（比率を掛け合わせた平均）を求めた。上流の重み付き総合指標とは異なる。

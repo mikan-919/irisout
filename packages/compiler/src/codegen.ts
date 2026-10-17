@@ -106,6 +106,7 @@ export interface ListMarkerOutput {
   keySelector?: { declId: DeclId; outputName: string }
   mapUpdates?: boolean
   exclusiveParent?: boolean
+  directSwaps?: [number, number][]
   arrayDeps: Set<DeclId>
   body: StructuralUnitBodyOutput
 }
@@ -1386,6 +1387,10 @@ function generateStructuralUnits(
           !/<[\w:]*-[\w:-]*(?:\s|>)/.test(marker.body.template) &&
           !/<slot(?:\s|>)/.test(marker.body.template) &&
           !/\sis\s*=/.test(marker.body.template)
+        const lastTarget =
+          plain && !groups.has(rootId ?? '')
+            ? `__root_index__ - Math.min(${routes.map(([id]) => `${factoryName}paths__.${id}.length`).join(', ')})`
+            : '__root_index__'
         declLines.push(
           `let ${parent};`,
           ...(marker.keySelector ? [`let __event_handle_${marker.id}__;`] : []),
@@ -1400,7 +1405,8 @@ function generateStructuralUnits(
           ...(marker.keySelector
             ? [`  __event_handle_${marker.id}__ = __handle__;`, '  try {']
             : []),
-          '  for (let __index__ = 0; __index__ <= __root_index__; __index__++) {',
+          `  const __last_target__ = ${lastTarget};`,
+          '  for (let __index__ = 0; __index__ <= __last_target__; __index__++) {',
           '    const __node__ = __path__[__index__];',
           ...routes.map(([id, handlers], index) => {
             const ref =
@@ -1439,6 +1445,16 @@ function generateStructuralUnits(
           '}',
         )
       }
+      for (const [first, second] of marker.directSwaps ?? [])
+        declLines.push(
+          `function __swap_${marker.id}_${first}_${second}__() {`,
+          '  if (!__mounted__ || __unmounted__) return;',
+          `  const __ordered__ = __list_${marker.id}__.ordered; __list_${marker.id}__.ordered = undefined;`,
+          '  __beginDomUpdate__(); try {',
+          `    if (!__swapOwnedListRecords__(__list_${marker.id}__, __list_${marker.id}__.ordered ?? __ordered__, __markers__.get(${JSON.stringify(marker.id)}), ${marker.arrayRendered}, ${first}, ${second})) update_${marker.arrayRendered}();`,
+          '  } finally { __endDomUpdate__(); }',
+          '}',
+        )
       templateSetupLines.push(
         `  ${tplVar} = __doc__.createElement('template'); ${tplVar}.innerHTML = ${JSON.stringify(initialTemplate(marker.body, true))};`,
       )
@@ -1793,6 +1809,8 @@ export function generateModule({
   } else if (markersHaveReactiveBindings(markers)) {
     runtimeImports.push('updateListBinding as __updateListBinding__')
   }
+  if (markers.some((marker) => marker.kind === 'list' && (marker.directSwaps?.length ?? 0) > 0))
+    runtimeImports.push('swapOwnedListRecords as __swapOwnedListRecords__')
   if (markersHaveLifecycleList(markers)) {
     runtimeImports.push(
       'reconcileListWithLifecycle as __reconcileListWithLifecycle__',

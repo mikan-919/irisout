@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from 'vite-plus/test'
 import { compile, compileSSR } from '../src/compiler.ts'
 import { createContainer, loadGenerated } from './helpers.ts'
-import { filterOwnedListValues } from '../../runtime/src/index.ts'
+import { filterOwnedListValues, observeDomUpdates } from '../../runtime/src/index.ts'
 
 const source = `export function App() {
   const rows = signal([]); const selected = signal(0);
@@ -30,9 +30,108 @@ async function application(input = source) {
 }
 
 describe('exclusive table list container', () => {
+  it('recreates one copy after a native clear fails', async () => {
+    const app = await application()
+    app.click('#run')
+    const parent = app.container.querySelector('tbody')!
+    const errors: unknown[] = []
+    app.container.ownerDocument.defaultView!.addEventListener('error', (event) => {
+      errors.push(event.error)
+      event.preventDefault()
+    })
+    const failure = new Error('native clear')
+    const text = vi.spyOn(parent, 'textContent', 'set').mockImplementationOnce(() => {
+      throw failure
+    })
+    try {
+      app.click('#clear')
+    } finally {
+      text.mockRestore()
+    }
+    expect(errors).toEqual([failure])
+    app.click('#run')
+    expect(parent.children.length).toBe(3)
+    expect([...parent.querySelectorAll('td:first-child')].map((cell) => cell.textContent)).toEqual([
+      '1',
+      '2',
+      '3',
+    ])
+  })
+
+  it('falls back when an observer reenters before a prepared swap is reflected', async () => {
+    const app = await application()
+    app.click('#run')
+    let nested = true
+    const stop = observeDomUpdates({
+      before() {
+        if (nested) {
+          nested = false
+          app.click('#swap')
+        }
+      },
+      after() {},
+    })
+    try {
+      app.click('#swap')
+    } finally {
+      stop()
+    }
+    expect(
+      [...app.container.querySelectorAll('tr td:first-child')].map((cell) => cell.textContent),
+    ).toEqual(['1', '2', '3'])
+    app.click('#swap')
+    expect(
+      [...app.container.querySelectorAll('tr td:first-child')].map((cell) => cell.textContent),
+    ).toEqual(['3', '2', '1'])
+  })
+
+  it('repairs a failed native swap before a later append', async () => {
+    const app = await application()
+    app.click('#run')
+    const parent = app.container.querySelector('tbody')!
+    const failure = new Error('native swap')
+    const errors: unknown[] = []
+    app.container.ownerDocument.defaultView!.addEventListener('error', (event) => {
+      errors.push(event.error)
+      event.preventDefault()
+    })
+    const insert = parent.insertBefore.bind(parent)
+    const spy = vi
+      .spyOn(parent, 'insertBefore')
+      .mockImplementationOnce((node, before) => insert(node, before))
+      .mockImplementationOnce(() => {
+        throw failure
+      })
+    try {
+      app.click('#swap')
+    } finally {
+      spy.mockRestore()
+    }
+    expect(errors).toEqual([failure])
+    app.click('#add')
+    expect([...parent.querySelectorAll('td:first-child')].map((cell) => cell.textContent)).toEqual([
+      '3',
+      '2',
+      '1',
+      'd',
+    ])
+  })
+
+  it('preserves independent swaps for two views of one array', async () => {
+    const table = source.match(/<table>.*<\/table>/)![0]
+    const app = await application(source.replace(table, table + table))
+    app.click('#run')
+    app.click('#swap')
+    for (const parent of app.container.querySelectorAll('tbody'))
+      expect(
+        [...parent.querySelectorAll('td:first-child')].map((cell) => cell.textContent),
+      ).toEqual(['3', '2', '1'])
+  })
+
   it('keeps the section identity, swaps without sibling reads and clears with one native write', async () => {
     const app = await application()
     const parent = app.container.querySelector('tbody')!
+    expect(app.code).toContain('__swapOwnedListRecords__(')
     expect(parent.childNodes.length).toBe(0)
     app.click('#run')
     const rows = [...parent.children]

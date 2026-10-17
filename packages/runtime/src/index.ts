@@ -427,7 +427,7 @@ export function reconcileListMap<T>(
   const ordered = runtime.ordered
   // 作成や更新が例外・再入で中断した記録を、次の添字更新へ持ち越さない。
   runtime.ordered = undefined
-  if (allowMap && previous && change?.base === previous) {
+  if (allowMap && ordered && previous && change?.base === previous) {
     const parent =
       container && change.kind !== 'map'
         ? isDomRange(container)
@@ -554,6 +554,39 @@ export function reconcileListMap<T>(
   }
   reconcileList(runtime, container, values, keyOf, create, update, recordFactory)
   listMapBases.set(runtime, listToken(values))
+}
+
+// 原子的な交換を単独の専有一覧へ反映する。通知中の再入で基点が変われば通常照合へ戻す。
+export function swapOwnedListRecords<T>(
+  runtime: ListRuntime<T>,
+  ordered: ListRecord<T>[] | undefined,
+  parent: Element | undefined,
+  values: readonly T[],
+  first: number,
+  second: number,
+): boolean {
+  if (!ordered || !parent || ordered.length !== values.length) return false
+  const a = ordered[first],
+    b = ordered[second]
+  if (
+    !a ||
+    !b ||
+    (a.handle as FlatListHandle<T>).value !== values[second] ||
+    (b.handle as FlatListHandle<T>).value !== values[first]
+  )
+    return false
+  const afterFirst = ordered[first + 1]?.handle.el ?? null
+  const afterSecond = ordered[second + 1]?.handle.el ?? null
+  if (afterFirst === b.handle.el) parent.insertBefore(b.handle.el, a.handle.el)
+  else if (afterSecond === a.handle.el) parent.insertBefore(a.handle.el, b.handle.el)
+  else {
+    parent.insertBefore(b.handle.el, afterFirst)
+    parent.insertBefore(a.handle.el, afterSecond)
+  }
+  ordered[first] = b
+  ordered[second] = a
+  runtime.ordered = ordered
+  return true
 }
 
 // bindingId はコンパイラが item factory 内の更新箇所ごとに固定する。初回、または
@@ -766,6 +799,13 @@ export function reconcileList<T>(
   runtime.ordered = undefined
   const initiallyEmpty = runtime.items.size === 0
   const ordered: ListRecord<T>[] = []
+  if (values.length === 0 && runtime.exclusive && container && !isDomRange(container)) {
+    // 専有する通常の表では同期のDOM呼出し先がないため、旧行への参照を先に外せる。
+    runtime.items.clear()
+    container.textContent = ''
+    runtime.ordered = ordered
+    return
+  }
   if (
     values.length === 0 &&
     !initiallyEmpty &&
@@ -839,6 +879,7 @@ export function reconcileList<T>(
   const parent = isDomRange(container) ? container.start.parentNode : container
   if (!parent) return
   const boundary = isDomRange(container) ? container.end : null
+  if (initiallyEmpty && runtime.exclusive && !isDomRange(container)) container.textContent = ''
   insertListRecords(
     parent,
     boundary,

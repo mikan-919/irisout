@@ -1402,6 +1402,91 @@ export function compileSource(source: string, options: CompileOptions = {}): Com
       }
   }
 
+  // ADR-0070: 単独の専有一覧の原子的な交換は、汎用の変更記録を作らず更新先へ結ぶ。
+  for (const marker of markerOutputs) {
+    if (marker.kind !== 'list' || !marker.exclusiveParent) continue
+    const id = [...marker.arrayDeps][0]!
+    const name = ctx.declOutputName.get(id)
+    if (
+      !name ||
+      marker.arrayRendered !== name ||
+      signalToMarkers.get(id)?.size !== 1 ||
+      [...ctx.derivedDeps.keys()].some((derived) =>
+        resolveToSignals(ctx, derived, new Set()).has(id),
+      )
+    )
+      continue
+    for (const handler of handlerOutputs) {
+      if (
+        handler.async ||
+        handler.updateBatchName ||
+        handler.updateNames.length !== 1 ||
+        handler.updateNames[0] !== name
+      )
+        continue
+      const tree = parse(handler.rendered, {
+        sourceType: 'module',
+        allowReturnOutsideFunction: true,
+      })
+      const copies: t.CallExpression[] = []
+      const updates: t.CallExpression[] = []
+      let assignments = 0,
+        nested = false
+      traverse(tree, {
+        Function(path) {
+          nested = true
+          path.skip()
+        },
+        AssignmentExpression(path) {
+          if (t.isIdentifier(path.node.left, { name })) assignments++
+        },
+        CallExpression(path) {
+          if (t.isIdentifier(path.node.callee, { name: '__copyListValues__' }))
+            copies.push(path.node)
+          else if (t.isIdentifier(path.node.callee, { name: `update_${name}` }))
+            updates.push(path.node)
+          else nested = true
+        },
+      })
+      if (nested || assignments !== 1 || copies.length !== 1 || updates.length !== 1) continue
+      const copy = copies[0]!,
+        update = updates[0]!
+      const [values, first, second, inPlace] = copy.arguments
+      if (
+        copy.arguments.length !== 4 ||
+        !t.isIdentifier(values, { name }) ||
+        !t.isNumericLiteral(first) ||
+        !t.isNumericLiteral(second) ||
+        !t.isBooleanLiteral(inPlace, { value: true })
+      )
+        continue
+      const indexes: [number, number] = [first.value, second.value]
+      if (
+        indexes.some((index) => !Number.isSafeInteger(index) || index < 0) ||
+        first.value === second.value
+      )
+        continue
+      const edits = [
+        {
+          start: copy.start!,
+          end: copy.end!,
+          text: `(${name}.length > ${Math.max(...indexes)} ? ${name} : ${name}.slice())`,
+        },
+        {
+          start: update.start!,
+          end: update.end!,
+          text: `__swap_${marker.id}_${indexes[0]}_${indexes[1]}__()`,
+        },
+      ]
+      for (const edit of edits.sort((a, b) => b.start - a.start))
+        handler.rendered =
+          handler.rendered.slice(0, edit.start) + edit.text + handler.rendered.slice(edit.end)
+      marker.directSwaps ??= []
+      if (!marker.directSwaps.some((pair) => pair[0] === indexes[0] && pair[1] === indexes[1]))
+        marker.directSwaps.push(indexes)
+    }
+  }
+
   const markedCode = generateModule({
     usesListMap: ctx.listMapDeclIds.size > 0,
     supportStatements: options.supportStatements ?? [],
