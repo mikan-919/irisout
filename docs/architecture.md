@@ -214,6 +214,8 @@ triage手続きで捌く — コンパイラの受理条件自体を場当たり
   導入しない。
 - **DOM更新取引**: 生成された更新関数は、入れ子を最外周へまとめる`beginDomUpdate()`と
   `endDomUpdate()`で同期DOM書込みを囲む。`observeDomUpdates()`は用途を知らない汎用境界であり、
+  ADR-0070の専有一覧だけを更新する場合は、生きた束縛`hasDomUpdateObservers`が偽の間に
+  開始・終了呼出しを省く。通知の登録・解除はmount後にも反映し、開始後の解除でも取引を閉じる。
   Motion拡張は更新前測定と更新後投影に使う。`AnimatePresence`はコンパイル前に要素を増やさず
   取り除き、対象のmotion要素に退場設定を渡す。構造更新中にactionが破棄された場合だけ、削除後の
   microtaskで対象要素を戻し、公式Motionの`animate()`完了後に除去する。通常のirisoutコンパイラはMotionへ依存しない。

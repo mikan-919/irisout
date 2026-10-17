@@ -20,6 +20,8 @@ Vanillaのコード調査を受けた修正後は、構築設定で`listEvents: 
 
 2026-10-17の残差削減は[residual-results.md](./residual-results.md)と[residual-analysis.json](./residual-analysis.json)を参照する。最終版の公式対象はirisoutとVanillaで、実際の実行順を反転した2組を保存した。同期比較と公式比較、修正前後とVanillaとの差、採用しなかった試作を分けている。
 
+通知先がない専有一覧と固定位置交換の追加削減は[notification-results.md](./notification-results.md)を参照する。`bun packages/bench/js-framework/notification-report.mjs`で全試行と生成物を照合して再集計できる。この追加変更は同期時間を測定しており、描画込みの公式結果は再測定していない。
+
 リポジトリのルートから実行する。Bun、Node 24以降、Git、起動可能なChromiumが必要。
 
 ```sh

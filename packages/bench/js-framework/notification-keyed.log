@@ -1,0 +1,27 @@
+args {
+  _: [
+    '/home/nixos/.local/share/vite-plus/js_runtime/node/24.22.0/bin/node',
+    '/tmp/irisout-js-framework-benchmark/webdriver-ts/dist/isKeyed.js'
+  ],
+  headless: true,
+  chromeBinary: '/tmp/irisout-benchmark-chrome',
+  'chrome-binary': '/tmp/irisout-benchmark-chrome',
+  framework: [ 'keyed/irisout', 'keyed/vanillajs' ],
+  '$0': 'dist/isKeyed.js'
+}
+HEADLESS*** true
+args {
+  _: [
+    '/home/nixos/.local/share/vite-plus/js_runtime/node/24.22.0/bin/node',
+    '/tmp/irisout-js-framework-benchmark/webdriver-ts/dist/isKeyed.js'
+  ],
+  headless: true,
+  chromeBinary: '/tmp/irisout-benchmark-chrome',
+  'chrome-binary': '/tmp/irisout-benchmark-chrome',
+  framework: [ 'keyed/irisout', 'keyed/vanillajs' ],
+  '$0': 'dist/isKeyed.js'
+} allArgs []
+Frameworks that will be checked vanillajs-keyed irisout-v0.3.7-dev-keyed
+*** headless true
+vanillajs-keyed is keyed for 'run benchmark' and keyed for 'remove row benchmark' and keyed for 'swap rows benchmark' . It'll appear as keyed in the results
+irisout-v0.3.7-dev-keyed is keyed for 'run benchmark' and keyed for 'remove row benchmark' and keyed for 'swap rows benchmark' . It'll appear as keyed in the results

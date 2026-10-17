@@ -1,0 +1,21 @@
+{
+  "date": "2026-10-17",
+  "baseCommit": "ee18dff",
+  "beforeSha256": "0f8118b9443554699897772f5bc2e18edd05f5d4091851b7cfe46bc27966d2ca",
+  "afterSha256": "f6332285b318896061e66845aa7e504f73a05b271b76508ceb46e111140f56d8",
+  "vanillaSha256": "08a5cb7d5cec199396561ed28b3c2db77577f066480f33c19f22ce6b0b0c980f",
+  "sourceFiles": {
+    "packages/compiler/src/codegen.ts": "d444ef2d444cfbaf41f52f15fb8f208bb56f9e800bf0025013d9de66b5c615a5",
+    "packages/runtime/src/index.ts": "9d19f4513bbdfb925319ff6026eedcf8fef493cdaef00396b6ea3a6003851784",
+    "packages/bench/js-framework/irisout/main.jsx": "0663e6ded4037d1d544f27d2db25c59549b1d783e18c9db7b687c6da1d35722c"
+  },
+  "checks": {
+    "unitTests": 542,
+    "staticChecks": "pass (18 existing warnings)",
+    "packageBuild": "pass",
+    "packSmoke": "pass",
+    "officialKeyed": "irisout and vanillajs: pass (notification-keyed.log)",
+    "flow": "8 steps: pass (notification-flow.json)",
+    "browserTool": "vlmkit/0.23.0"
+  }
+}

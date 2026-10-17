@@ -1,0 +1,179 @@
+{
+  "method": "paired median bootstrap; 5000 resamples; seed 42; tolerance 1e-7 ms",
+  "analysis": [
+    {
+      "title": "変更前→変更後",
+      "file": "notification-optimization.json",
+      "artifacts": [
+        [
+          {
+            "url": "http://localhost:8094/frameworks/keyed/irisout-notification-before/dist/assets/index-BsYNHXS_.js",
+            "sha256": "0f8118b9443554699897772f5bc2e18edd05f5d4091851b7cfe46bc27966d2ca",
+            "bytes": 15830,
+            "gzipBytes": 5460
+          }
+        ],
+        [
+          {
+            "url": "http://localhost:8094/frameworks/keyed/irisout/dist/assets/index-CpWa9Gu0.js",
+            "sha256": "f6332285b318896061e66845aa7e504f73a05b271b76508ceb46e111140f56d8",
+            "bytes": 16214,
+            "gzipBytes": 5572
+          }
+        ]
+      ],
+      "values": {
+        "create": {
+          "before": 2.1649999916553497,
+          "after": 2.1724999845027924,
+          "difference": 0.007499992847442627,
+          "interval": [-0.12250000238418579, 0.14749997854232788],
+          "verdict": "差未確定"
+        },
+        "replace": {
+          "before": 7.887499988079071,
+          "after": 7.572499990463257,
+          "difference": -0.3149999976158142,
+          "interval": [-0.8274999558925629, 0.48000001907348633],
+          "verdict": "差未確定"
+        },
+        "partial": {
+          "before": 0.23249995708465576,
+          "after": 0.24250000715255737,
+          "difference": 0.010000050067901611,
+          "interval": [-0.009999990463256836, 0.029999971389770508],
+          "verdict": "差未確定"
+        },
+        "select": {
+          "before": 0.003999999910593033,
+          "after": 0.0038250000774860383,
+          "difference": -0.00017499983310699475,
+          "interval": [-0.0004125000536441808, 0.00011250004172325134],
+          "verdict": "差未確定"
+        },
+        "swap": {
+          "before": 0.011500000953674316,
+          "after": 0.011250001192092896,
+          "difference": -0.0002499997615814202,
+          "interval": [-0.0009999990463256826, 0.0002500027418136583],
+          "verdict": "差未確定"
+        },
+        "remove": {
+          "before": 0.13999998569488525,
+          "after": 0.12999999523162842,
+          "difference": -0.009999990463256836,
+          "interval": [-0.02250000834465027, 0.002499997615814209],
+          "verdict": "差未確定"
+        },
+        "create10k": {
+          "before": 24.522499978542328,
+          "after": 24.645000010728836,
+          "difference": 0.12250003218650818,
+          "interval": [-0.8525000214576721, 0.8125],
+          "verdict": "差未確定"
+        },
+        "append": {
+          "before": 2.6675000190734863,
+          "after": 2.587499976158142,
+          "difference": -0.08000004291534424,
+          "interval": [-0.32999998331069946, 0.17500001192092896],
+          "verdict": "差未確定"
+        },
+        "clear": {
+          "before": 4.367500007152557,
+          "after": 4.347499966621399,
+          "difference": -0.020000040531158447,
+          "interval": [-0.24749994277954102, 0.16499999165534973],
+          "verdict": "差未確定"
+        }
+      }
+    },
+    {
+      "title": "Vanilla→変更後",
+      "file": "notification-vanilla.json",
+      "artifacts": [
+        [
+          {
+            "url": "http://localhost:8094/frameworks/keyed/vanillajs/src/Main.js",
+            "sha256": "08a5cb7d5cec199396561ed28b3c2db77577f066480f33c19f22ce6b0b0c980f",
+            "bytes": 9486,
+            "gzipBytes": 2541
+          }
+        ],
+        [
+          {
+            "url": "http://localhost:8094/frameworks/keyed/irisout/dist/assets/index-CpWa9Gu0.js",
+            "sha256": "f6332285b318896061e66845aa7e504f73a05b271b76508ceb46e111140f56d8",
+            "bytes": 16214,
+            "gzipBytes": 5572
+          }
+        ]
+      ],
+      "values": {
+        "create": {
+          "before": 2.5475000143051147,
+          "after": 2.1400000154972076,
+          "difference": -0.4074999988079071,
+          "interval": [-0.7174999713897705, -0.17749997973442078],
+          "verdict": "短縮"
+        },
+        "replace": {
+          "before": 8.88500002026558,
+          "after": 7.434999972581863,
+          "difference": -1.4500000476837158,
+          "interval": [-2.3625000417232513, -0.7600000500679016],
+          "verdict": "短縮"
+        },
+        "partial": {
+          "before": 0.26999998092651367,
+          "after": 0.24000000953674316,
+          "difference": -0.029999971389770508,
+          "interval": [-0.04999998211860657, -0.007500052452087402],
+          "verdict": "短縮"
+        },
+        "select": {
+          "before": 0.00375,
+          "after": 0.0035999999940395356,
+          "difference": -0.0001500000059604643,
+          "interval": [-0.0004999999701976784, 0.00022500008344650269],
+          "verdict": "差未確定"
+        },
+        "swap": {
+          "before": 0.00975000262260437,
+          "after": 0.010500001907348632,
+          "difference": 0.0007499992847442623,
+          "interval": [-0.0004999995231628421, 0.0018750011920928965],
+          "verdict": "差未確定"
+        },
+        "remove": {
+          "before": 0.16749998927116394,
+          "after": 0.125,
+          "difference": -0.04249998927116394,
+          "interval": [-0.07249999046325684, -0.01500004529953003],
+          "verdict": "短縮"
+        },
+        "create10k": {
+          "before": 29.44249999523163,
+          "after": 24.5625,
+          "difference": -4.879999995231628,
+          "interval": [-6.332499980926514, -3.1649999916553497],
+          "verdict": "短縮"
+        },
+        "append": {
+          "before": 3.072499990463257,
+          "after": 2.705000013113022,
+          "difference": -0.367499977350235,
+          "interval": [-0.5399999618530273, -0.1799999475479126],
+          "verdict": "短縮"
+        },
+        "clear": {
+          "before": 4.4825000166893005,
+          "after": 4.409999996423721,
+          "difference": -0.07250002026557922,
+          "interval": [-0.2250000238418579, 0.05750003457069397],
+          "verdict": "差未確定"
+        }
+      }
+    }
+  ]
+}

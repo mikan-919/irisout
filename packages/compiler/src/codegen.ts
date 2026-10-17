@@ -1458,16 +1458,37 @@ function generateStructuralUnits(
           '}',
         )
       }
-      for (const [first, second] of marker.directSwaps ?? [])
+      for (const [first, second] of marker.directSwaps ?? []) {
+        const parent =
+          delegated.length > 0
+            ? `__delegate_parent_${marker.id}__`
+            : `__markers__.get(${JSON.stringify(marker.id)})`
+        // ADR-0070: 通知と著者コードへの呼出しがない取引外では、固定位置の移動だけを残す。
         declLines.push(
           `function __swap_${marker.id}_${first}_${second}__() {`,
           '  if (!__mounted__ || __unmounted__) return;',
           `  const __ordered__ = __list_${marker.id}__.ordered; __list_${marker.id}__.ordered = undefined;`,
+          `  if (!__hasDomUpdateObservers__ && !__isDomUpdateInProgress__() && __ordered__ && __ordered__.length > ${Math.max(first, second)}) {`,
+          `    const __a__ = __ordered__[${first}], __b__ = __ordered__[${second}];`,
+          `    const __parent__ = ${parent};`,
+          ...(first + 1 === second
+            ? ['    __parent__.insertBefore(__b__.handle.el, __a__.handle.el);']
+            : second + 1 === first
+              ? ['    __parent__.insertBefore(__a__.handle.el, __b__.handle.el);']
+              : [
+                  `    __parent__.insertBefore(__b__.handle.el, __ordered__[${first + 1}]?.handle.el ?? null);`,
+                  `    __parent__.insertBefore(__a__.handle.el, __ordered__[${second + 1}]?.handle.el ?? null);`,
+                ]),
+          `    __ordered__[${first}] = __b__; __ordered__[${second}] = __a__;`,
+          `    __list_${marker.id}__.ordered = __ordered__;`,
+          '    return;',
+          '  }',
           '  __beginDomUpdate__(); try {',
-          `    if (!__swapOwnedListRecords__(__list_${marker.id}__, __list_${marker.id}__.ordered ?? __ordered__, ${delegated.length > 0 ? `__delegate_parent_${marker.id}__` : `__markers__.get(${JSON.stringify(marker.id)})`}, ${marker.arrayRendered}, ${first}, ${second})) update_${marker.arrayRendered}();`,
+          `    if (!__swapOwnedListRecords__(__list_${marker.id}__, __list_${marker.id}__.ordered ?? __ordered__, ${parent}, ${marker.arrayRendered}, ${first}, ${second})) update_${marker.arrayRendered}();`,
           '  } finally { __endDomUpdate__(); }',
           '}',
         )
+      }
       templateSetupLines.push(
         `  ${tplVar} = __doc__.createElement('template'); ${tplVar}.innerHTML = ${JSON.stringify(initialTemplate(marker.body, true))};`,
       )
@@ -1799,6 +1820,8 @@ export function generateModule({
     ? [`${mountName}WithRanges as __mount__`, 'hydrateWithRanges as __hydrate__']
     : [`${mountName} as __mount__`, 'hydrate as __hydrate__']
   runtimeImports.push('beginDomUpdate as __beginDomUpdate__', 'endDomUpdate as __endDomUpdate__')
+  if (markers.some((marker) => marker.kind === 'list' && marker.exclusiveParent))
+    runtimeImports.push('hasDomUpdateObservers as __hasDomUpdateObservers__')
   if (usesListMap)
     runtimeImports.push(
       'mapListValues as __mapListValues__',
@@ -1823,7 +1846,10 @@ export function generateModule({
     runtimeImports.push('updateListBinding as __updateListBinding__')
   }
   if (markers.some((marker) => marker.kind === 'list' && (marker.directSwaps?.length ?? 0) > 0))
-    runtimeImports.push('swapOwnedListRecords as __swapOwnedListRecords__')
+    runtimeImports.push(
+      'swapOwnedListRecords as __swapOwnedListRecords__',
+      'isDomUpdateInProgress as __isDomUpdateInProgress__',
+    )
   if (markersHaveLifecycleList(markers)) {
     runtimeImports.push(
       'reconcileListWithLifecycle as __reconcileListWithLifecycle__',
@@ -2390,11 +2416,50 @@ export function generateModule({
     }
   }
 
+  // ADR-0070: 専有一覧には同期の外部呼出し先がない。通知がなければ取引を省き、
+  // 通知前・DOM操作中の失敗では添字順を無効にして、次回の直接交換へ持ち越さない。
+  const updateBoundary = (markerIds: Iterable<MarkerId>) => {
+    const affected = [...markerIds].map((id) => markers.find((marker) => marker.id === id))
+    const privateLists = affected.filter(
+      (marker): marker is ListMarkerOutput => marker?.kind === 'list' && !!marker.exclusiveParent,
+    )
+    if (privateLists.length === 0)
+      return {
+        start: ['  __beginDomUpdate__(); try {'],
+        end: ['  } finally { __endDomUpdate__(); }'],
+      }
+    const canSkipNotification = privateLists.length === affected.length
+    return {
+      start: [
+        '  try {',
+        ...(canSkipNotification
+          ? [
+              '  const __notify__ = __hasDomUpdateObservers__;',
+              '  if (__notify__) __beginDomUpdate__();',
+            ]
+          : ['  __beginDomUpdate__();']),
+        '  try {',
+      ],
+      end: [
+        canSkipNotification
+          ? '  } finally { if (__notify__) __endDomUpdate__(); }'
+          : '  } finally { __endDomUpdate__(); }',
+        '  } catch (__error__) {',
+        ...privateLists.map(
+          (marker) => `    if (__list_${marker.id}__) __list_${marker.id}__.ordered = undefined;`,
+        ),
+        '    throw __error__;',
+        '  }',
+      ],
+    }
+  }
+
   for (const [signalId, markerIds] of signalToMarkers) {
     const name = declOutputName.get(signalId)
+    const boundary = updateBoundary(markerIds)
     instanceLines.push(`function update_${name}() {`)
     instanceLines.push('  if (!__mounted__ || __unmounted__) return;')
-    instanceLines.push('  __beginDomUpdate__(); try {')
+    instanceLines.push(...boundary.start)
     for (const derivedId of signalToDerivedRecomputes.get(signalId) ?? []) {
       if (sharedDerivedIds.has(derivedId)) continue
       instanceLines.push(`  ${declOutputName.get(derivedId)} = ${derivedRecompute.get(derivedId)};`)
@@ -2414,7 +2479,7 @@ export function generateModule({
       for (const mId of markerIds) appendMarkerUpdate(instanceLines, mId, 'null', [signalId])
     }
     appendEffectUpdates(instanceLines, [signalId])
-    instanceLines.push('  } finally { __endDomUpdate__(); }', '}', '')
+    instanceLines.push(...boundary.end, '}', '')
   }
 
   // 同じ同期スコープで複数 root signal が書き込まれ、marker 集合が重なる
@@ -2424,9 +2489,10 @@ export function generateModule({
   // とどめる(公開 subscription/scheduler は導入しない)。
   for (const batch of updateBatches) {
     const derivedIds = derivedForRoots(batch.signalIds)
+    const boundary = updateBoundary(batch.markerIds)
     instanceLines.push(`function ${batch.name}() {`)
     instanceLines.push('  if (!__mounted__ || __unmounted__) return;')
-    instanceLines.push('  __beginDomUpdate__(); try {')
+    instanceLines.push(...boundary.start)
     for (const derivedId of derivedIds) {
       if (sharedDerivedIds.has(derivedId)) continue
       instanceLines.push(`  ${declOutputName.get(derivedId)} = ${derivedRecompute.get(derivedId)};`)
@@ -2450,7 +2516,7 @@ export function generateModule({
         appendMarkerUpdate(instanceLines, markerId, 'null', batch.signalIds)
     }
     appendEffectUpdates(instanceLines, batch.signalIds)
-    instanceLines.push('  } finally { __endDomUpdate__(); }', '}', '')
+    instanceLines.push(...boundary.end, '}', '')
   }
 
   const updateNames = [...signalToMarkers.keys()].map((id) => `update_${declOutputName.get(id)}`)

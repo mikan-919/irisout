@@ -2,7 +2,12 @@
 import { describe, expect, it, vi } from 'vite-plus/test'
 import { compile, compileSSR } from '../src/compiler.ts'
 import { createContainer, loadGenerated } from './helpers.ts'
-import { filterOwnedListValues, observeDomUpdates } from '../../runtime/src/index.ts'
+import {
+  filterOwnedListValues,
+  hasDomUpdateObservers,
+  isDomUpdateInProgress,
+  observeDomUpdates,
+} from '../../runtime/src/index.ts'
 
 const source = `export function App() {
   const rows = signal([]); const selected = signal(0);
@@ -17,8 +22,8 @@ const source = `export function App() {
   function swap() { const data=rows().slice(); const row=data[0]; data[0]=data[2]; data[2]=row; rows(data); }
 }`
 
-async function application(input = source) {
-  const result = compile(input, { listEvents: 'delegated' })
+async function application(input = source, listEvents: 'direct' | 'delegated' = 'delegated') {
+  const result = compile(input, { listEvents })
   const mod = await loadGenerated(result.code)
   const container = createContainer()
   ;(mod.mountComponent as (element: Element) => void)(container)
@@ -30,6 +35,158 @@ async function application(input = source) {
 }
 
 describe('exclusive table list container', () => {
+  it('skips transactions without observers and respects registration changes after mount', async () => {
+    const app = await application()
+    app.click('#run')
+    const parent = app.container.querySelector('tbody')!
+    const native = parent.insertBefore.bind(parent)
+    const inProgress: boolean[] = []
+    const insert = vi.spyOn(parent, 'insertBefore').mockImplementation((node, before) => {
+      inProgress.push(isDomUpdateInProgress())
+      return native(node, before)
+    })
+    const calls: string[] = []
+    const observer = { before: () => calls.push('before'), after: () => calls.push('after') }
+    expect(hasDomUpdateObservers).toBe(false)
+    let stop: (() => void) | undefined
+    try {
+      app.click('#swap')
+      stop = observeDomUpdates(observer)
+      const secondStop = observeDomUpdates({ before() {}, after() {} })
+      secondStop()
+      expect(hasDomUpdateObservers).toBe(true)
+      app.click('#swap')
+      expect(calls).toEqual(['before', 'after'])
+      stop()
+      stop = undefined
+      expect(hasDomUpdateObservers).toBe(false)
+      app.click('#swap')
+      // 選択・削除・追加も、通知先がなければ深さを変更しない。
+      app.click('tr a')
+      app.click('tr td:nth-child(2) a')
+      app.click('#add')
+      expect(inProgress).toEqual([false, false, true, true, false, false, false])
+      expect(isDomUpdateInProgress()).toBe(false)
+    } finally {
+      stop?.()
+      insert.mockRestore()
+    }
+  })
+
+  it.each([
+    [0, 1, 'delegated'],
+    [1, 0, 'delegated'],
+    [0, 2, 'delegated'],
+    [2, 0, 'delegated'],
+    [0, 2, 'direct'],
+  ] as const)(
+    'swaps constant positions %i and %i without observers (%s)',
+    async (first, second, events) => {
+      const app = await application(
+        source.replace(
+          'const row=data[0]; data[0]=data[2]; data[2]=row;',
+          `const row=data[${first}]; data[${first}]=data[${second}]; data[${second}]=row;`,
+        ),
+        events,
+      )
+      app.click('#run')
+      const rows = [...app.container.querySelectorAll('tr')]
+      const swapped = [...rows]
+      ;[swapped[first], swapped[second]] = [swapped[second]!, swapped[first]!]
+      app.click('#swap')
+      expect([...app.container.querySelectorAll('tr')]).toEqual(swapped)
+      app.click('#swap')
+      expect([...app.container.querySelectorAll('tr')]).toEqual(rows)
+      app.click('#add')
+      expect(app.container.querySelectorAll('tr')).toHaveLength(4)
+    },
+  )
+
+  it('balances the transaction when the last observer unsubscribes before a swap', async () => {
+    const app = await application()
+    app.click('#run')
+    const stop = observeDomUpdates({ before: () => stop(), after() {} })
+    try {
+      app.click('#swap')
+      expect(hasDomUpdateObservers).toBe(false)
+      expect(isDomUpdateInProgress()).toBe(false)
+      app.click('#swap')
+      expect(
+        [...app.container.querySelectorAll('tr td:first-child')].map((cell) => cell.textContent),
+      ).toEqual(['1', '2', '3'])
+    } finally {
+      stop()
+    }
+  })
+
+  it('validates pending rows when the last observer unsubscribes and reenters', async () => {
+    const app = await application(
+      source.replace(
+        "rows([{id:5,label:'e'}])",
+        "rows([{id:5,label:'e'},{id:6,label:'f'},{id:7,label:'g'}])",
+      ),
+    )
+    app.click('#run')
+    const stop = observeDomUpdates({
+      before() {
+        stop()
+        app.click('#swap')
+      },
+      after() {},
+    })
+    try {
+      app.click('#replace')
+    } finally {
+      stop()
+    }
+    expect(isDomUpdateInProgress()).toBe(false)
+    expect(
+      [...app.container.querySelectorAll('tr td:first-child')].map((cell) => cell.textContent),
+    ).toEqual(['g', 'f', 'e'])
+    app.click('#swap')
+    expect(
+      [...app.container.querySelectorAll('tr td:first-child')].map((cell) => cell.textContent),
+    ).toEqual(['e', 'f', 'g'])
+  })
+
+  it.each([false, true])(
+    'recovers a replacement interrupted before reflection (mixed batch: %s)',
+    async (mixed) => {
+      // 反映済みの配列と同じ長さでも、失敗前の添字順を使ってはならない。
+      const replacement = "rows([{id:5,label:'e'},{id:6,label:'f'},{id:7,label:'g'}])"
+      let input = source.replace("rows([{id:5,label:'e'}])", replacement)
+      if (mixed)
+        input = input
+          .replace('<main>', '<main><output>{selected()}</output>')
+          .replace(`()=>${replacement}`, `()=>{${replacement};selected(0)}`)
+      const app = await application(input)
+      app.click('#run')
+      const failure = new Error('before replacement')
+      const errors: unknown[] = []
+      app.container.ownerDocument.defaultView!.addEventListener('error', (event) => {
+        errors.push(event.error)
+        event.preventDefault()
+      })
+      const stop = observeDomUpdates({
+        before() {
+          throw failure
+        },
+        after() {},
+      })
+      try {
+        app.click('#replace')
+      } finally {
+        stop()
+      }
+      expect(errors).toEqual([failure])
+      expect(isDomUpdateInProgress()).toBe(false)
+      app.click('#swap')
+      expect(
+        [...app.container.querySelectorAll('tr td:first-child')].map((cell) => cell.textContent),
+      ).toEqual(['g', 'f', 'e'])
+    },
+  )
+
   it('routes text targets through local ancestors and ignores events from detached rows', async () => {
     const input = source
       .replace('const rows =', 'const seen=signal(0); const rows =')

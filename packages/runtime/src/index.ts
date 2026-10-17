@@ -19,6 +19,8 @@ export interface DomUpdateObserver {
 }
 
 const domUpdateObservers = new Set<DomUpdateObserver>()
+// 専有DOMの生成コードは、通知先がない間は更新取引への呼出し自体を省く。
+export let hasDomUpdateObservers = false
 let domUpdateDepth = 0
 
 export function isDomUpdateInProgress(): boolean {
@@ -29,7 +31,12 @@ export function isDomUpdateInProgress(): boolean {
 // 通知し、コンパイラ本体へ配置測定などの用途別処理を持ち込まない。
 export function observeDomUpdates(observer: DomUpdateObserver): () => void {
   domUpdateObservers.add(observer)
-  return () => domUpdateObservers.delete(observer)
+  hasDomUpdateObservers = true
+  return () => {
+    const deleted = domUpdateObservers.delete(observer)
+    hasDomUpdateObservers = domUpdateObservers.size > 0
+    return deleted
+  }
 }
 
 export function beginDomUpdate(): void {
