@@ -30,6 +30,28 @@ async function application(input = source) {
 }
 
 describe('exclusive table list container', () => {
+  it('routes text targets through local ancestors and ignores events from detached rows', async () => {
+    const input = source
+      .replace('const rows =', 'const seen=signal(0); const rows =')
+      .replace('<main>', '<main><output>{seen()}</output>')
+      .replace('<tr key=', '<tr onClick={()=>seen(seen()+10)} key=')
+      .replace('onClick={()=>selected(row.id)}', 'onClick={()=>{selected(row.id);seen(seen()+1)}}')
+    const app = await application(input)
+    app.click('#run')
+    const old = app.container.querySelector('tr')!
+    old
+      .querySelector('a')!
+      .firstChild!.dispatchEvent(
+        new app.container.ownerDocument.defaultView!.Event('click', { bubbles: true }),
+      )
+    expect(app.container.querySelector('output')?.textContent).toBe('11')
+    app.click('#clear')
+    old
+      .querySelector('a')!
+      .dispatchEvent(new app.container.ownerDocument.defaultView!.Event('click', { bubbles: true }))
+    expect(app.container.querySelector('output')?.textContent).toBe('11')
+  })
+
   it('recreates one copy after a native clear fails', async () => {
     const app = await application()
     app.click('#run')

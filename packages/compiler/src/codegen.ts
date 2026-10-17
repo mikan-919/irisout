@@ -1395,19 +1395,31 @@ function generateStructuralUnits(
           `let ${parent};`,
           ...(marker.keySelector ? [`let __event_handle_${marker.id}__;`] : []),
           `function ${dispatch}(__event__) {`,
-          '  const __path__ = __event__.composedPath();',
+          ...(!marker.exclusiveParent ? ['  const __path__ = __event__.composedPath();'] : []),
           '  let __root_index__ = 0;',
-          `  while (__root_index__ < __path__.length && !__path__[__root_index__][${handleKey}]) __root_index__++;`,
-          '  const __root__ = __path__[__root_index__];',
+          ...(marker.exclusiveParent
+            ? [
+                '  let __root__ = __event__.target;',
+                `  while (__root__ && !__root__[${handleKey}]) { __root__ = __root__.parentNode; __root_index__++; }`,
+              ]
+            : [
+                `  while (__root_index__ < __path__.length && !__path__[__root_index__][${handleKey}]) __root_index__++;`,
+                '  const __root__ = __path__[__root_index__];',
+              ]),
           '  if (!__root__) return;',
           `  const __handle__ = __root__[${handleKey}];`,
-          `  if (__list_${marker.id}__?.items.get(__handle__.itemId)?.handle !== __handle__) return;`,
+          ...(!marker.exclusiveParent
+            ? [
+                `  if (__list_${marker.id}__?.items.get(__handle__.itemId)?.handle !== __handle__) return;`,
+              ]
+            : []),
           ...(marker.keySelector
             ? [`  __event_handle_${marker.id}__ = __handle__;`, '  try {']
             : []),
           `  const __last_target__ = ${lastTarget};`,
+          ...(marker.exclusiveParent ? ['  let __node__ = __event__.target;'] : []),
           '  for (let __index__ = 0; __index__ <= __last_target__; __index__++) {',
-          '    const __node__ = __path__[__index__];',
+          ...(!marker.exclusiveParent ? ['    const __node__ = __path__[__index__];'] : []),
           ...routes.map(([id, handlers], index) => {
             const ref =
               id === rootId
@@ -1421,7 +1433,8 @@ function generateStructuralUnits(
                 : ''
             return `    ${index ? 'else ' : ''}if (${depth}__node__ === ${ref}) { ${handlers.map((h) => `__item_handler_${h.markerId}__(__event__, __handle__);`).join(' ')} }`
           }),
-          '    if (__node__ === __root__ || __event__.cancelBubble) break;',
+          `    if (${marker.exclusiveParent ? '__index__ === __last_target__ || ' : ''}__node__ === __root__ || __event__.cancelBubble) break;`,
+          ...(marker.exclusiveParent ? ['    __node__ = __node__.parentNode;'] : []),
           '  }',
           ...(marker.keySelector ? [`  } finally { __event_handle_${marker.id}__ = null; }`] : []),
           '}',
@@ -1451,7 +1464,7 @@ function generateStructuralUnits(
           '  if (!__mounted__ || __unmounted__) return;',
           `  const __ordered__ = __list_${marker.id}__.ordered; __list_${marker.id}__.ordered = undefined;`,
           '  __beginDomUpdate__(); try {',
-          `    if (!__swapOwnedListRecords__(__list_${marker.id}__, __list_${marker.id}__.ordered ?? __ordered__, __markers__.get(${JSON.stringify(marker.id)}), ${marker.arrayRendered}, ${first}, ${second})) update_${marker.arrayRendered}();`,
+          `    if (!__swapOwnedListRecords__(__list_${marker.id}__, __list_${marker.id}__.ordered ?? __ordered__, ${delegated.length > 0 ? `__delegate_parent_${marker.id}__` : `__markers__.get(${JSON.stringify(marker.id)})`}, ${marker.arrayRendered}, ${first}, ${second})) update_${marker.arrayRendered}();`,
           '  } finally { __endDomUpdate__(); }',
           '}',
         )
