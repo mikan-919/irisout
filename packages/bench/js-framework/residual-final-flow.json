@@ -1,0 +1,194 @@
+{
+  "gate": "verify.flow",
+  "command": "verify flow",
+  "verdict": "pass",
+  "counts": {
+    "suspect": 0,
+    "warn": 0,
+    "info": 0
+  },
+  "findings": [],
+  "suppressed": [],
+  "retuned": [],
+  "report": {
+    "source": "http://localhost:8082/frameworks/keyed/irisout/dist/index.html",
+    "steps": [
+      {
+        "index": 0,
+        "label": "1,000行作成",
+        "action": "click #run",
+        "assertions": [
+          {
+            "assert": {
+              "assert": "count",
+              "selector": "tbody > tr",
+              "equals": 1000
+            },
+            "passed": true,
+            "actual": "1000"
+          },
+          {
+            "assert": {
+              "assert": "text",
+              "selector": "tbody > tr:nth-child(2) > td:first-child",
+              "contains": "2"
+            },
+            "passed": true,
+            "actual": "2"
+          }
+        ],
+        "passed": true
+      },
+      {
+        "index": 1,
+        "label": "10行ごとの更新",
+        "action": "click #update",
+        "assertions": [
+          {
+            "assert": {
+              "assert": "text",
+              "selector": "tbody > tr:first-child > td:nth-child(2)",
+              "contains": " !!!"
+            },
+            "passed": true,
+            "actual": "small white car !!!"
+          },
+          {
+            "assert": {
+              "assert": "text",
+              "selector": "tbody > tr:nth-child(11) > td:nth-child(2)",
+              "contains": " !!!"
+            },
+            "passed": true,
+            "actual": "mushy green car !!!"
+          }
+        ],
+        "passed": true
+      },
+      {
+        "index": 2,
+        "label": "2行の交換",
+        "action": "click #swaprows",
+        "assertions": [
+          {
+            "assert": {
+              "assert": "text",
+              "selector": "tbody > tr:nth-child(2) > td:first-child",
+              "contains": "999"
+            },
+            "passed": true,
+            "actual": "999"
+          },
+          {
+            "assert": {
+              "assert": "text",
+              "selector": "tbody > tr:nth-child(999) > td:first-child",
+              "contains": "2"
+            },
+            "passed": true,
+            "actual": "2"
+          }
+        ],
+        "passed": true
+      },
+      {
+        "index": 3,
+        "label": "行選択",
+        "action": "click tbody > tr:nth-child(2) > td:nth-child(2) > a",
+        "assertions": [
+          {
+            "assert": {
+              "assert": "attr",
+              "selector": "tbody > tr:nth-child(2)",
+              "name": "class",
+              "equals": "danger"
+            },
+            "passed": true,
+            "actual": "danger"
+          }
+        ],
+        "passed": true
+      },
+      {
+        "index": 4,
+        "label": "行削除",
+        "action": "click tbody > tr:nth-child(2) > td:nth-child(3) > a > span",
+        "assertions": [
+          {
+            "assert": {
+              "assert": "count",
+              "selector": "tbody > tr",
+              "equals": 999
+            },
+            "passed": true,
+            "actual": "999"
+          },
+          {
+            "assert": {
+              "assert": "count",
+              "selector": "tbody > tr.danger",
+              "equals": 0
+            },
+            "passed": true,
+            "actual": "0"
+          }
+        ],
+        "passed": true
+      },
+      {
+        "index": 5,
+        "label": "1,000行追加",
+        "action": "click #add",
+        "assertions": [
+          {
+            "assert": {
+              "assert": "count",
+              "selector": "tbody > tr",
+              "equals": 1999
+            },
+            "passed": true,
+            "actual": "1999"
+          }
+        ],
+        "passed": true
+      },
+      {
+        "index": 6,
+        "label": "全行削除",
+        "action": "click #clear",
+        "assertions": [
+          {
+            "assert": {
+              "assert": "count",
+              "selector": "tbody > tr",
+              "equals": 0
+            },
+            "passed": true,
+            "actual": "0"
+          }
+        ],
+        "passed": true
+      },
+      {
+        "index": 7,
+        "label": "10,000行作成",
+        "action": "click #runlots",
+        "assertions": [
+          {
+            "assert": {
+              "assert": "count",
+              "selector": "tbody > tr",
+              "equals": 10000
+            },
+            "passed": true,
+            "actual": "10000"
+          }
+        ],
+        "passed": true
+      }
+    ],
+    "passed": 8,
+    "total": 8,
+    "done": true
+  }
+}

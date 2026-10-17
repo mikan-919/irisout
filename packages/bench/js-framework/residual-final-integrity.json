@@ -1,0 +1,43 @@
+{
+  "gate": "check.integrity",
+  "command": "check integrity",
+  "verdict": "pass",
+  "counts": {
+    "suspect": 0,
+    "warn": 0,
+    "info": 0
+  },
+  "findings": [],
+  "suppressed": [],
+  "retuned": [],
+  "report": {
+    "source": "http://localhost:8082/frameworks/keyed/irisout/dist/index.html",
+    "verdict": "clean",
+    "findings": [],
+    "exempted": [],
+    "viewports": [
+      {
+        "width": 1280,
+        "height": 800,
+        "components": 1,
+        "inkRatio": 0.1687,
+        "textBlocks": 7
+      },
+      {
+        "width": 768,
+        "height": 900,
+        "components": 1,
+        "inkRatio": 0.2347,
+        "textBlocks": 7
+      },
+      {
+        "width": 375,
+        "height": 700,
+        "components": 1,
+        "inkRatio": 0.4685,
+        "textBlocks": 7
+      }
+    ],
+    "kickback": []
+  }
+}

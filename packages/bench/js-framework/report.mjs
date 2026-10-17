@@ -185,7 +185,8 @@ const vanillaTable = vanillaProbe
       .map((runs, index) => {
         const [vanilla, irisout] = runs.map(median)
         const [low, high] = pairedDifferenceInterval(...runs)
-        const verdict = low > 0 ? 'irisoutが遅い' : high < 0 ? 'irisoutが速い' : '差未確定'
+        // 時刻差の丸め誤差を、測定可能な速度差として扱わない。
+        const verdict = low > 1e-7 ? 'irisoutが遅い' : high < -1e-7 ? 'irisoutが速い' : '差未確定'
         return `| ${labels[index].replace(/（.*）/, '')} | ${vanilla.toFixed(4)} | ${irisout.toFixed(4)} | ${(irisout / vanilla).toFixed(2)} | ${low.toFixed(4)}〜${high.toFixed(4)} | ${verdict} |`
       })
       .join('\n')

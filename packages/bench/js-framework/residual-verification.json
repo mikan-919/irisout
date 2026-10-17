@@ -1,0 +1,101 @@
+{
+  "verifiedAt": "2026-10-17T08:54:54.609Z",
+  "implementationCommit": "2832a8c017b78a3a818acba93e3b22e1de73e2fa",
+  "sourceSha256": "0663e6ded4037d1d544f27d2db25c59549b1d783e18c9db7b687c6da1d35722c",
+  "assets": {
+    "index.html": "ab6adf2c2d0fcc7f156de1fa3eeae64b1c7a9e1288689cf42a1396e545754c33",
+    "assets/index-BsYNHXS_.js": "0f8118b9443554699897772f5bc2e18edd05f5d4091851b7cfe46bc27966d2ca"
+  },
+  "officialRuns": [
+    {
+      "file": "results-residual-final.json",
+      "actualOrder": ["vanillajs-keyed", "irisout-v0.3.7-dev-keyed"],
+      "keyed": [
+        "vanillajs-keyed is keyed for 'run benchmark' and keyed for 'remove row benchmark' and keyed for 'swap rows benchmark' . It'll appear as keyed in the results",
+        "irisout-v0.3.7-dev-keyed is keyed for 'run benchmark' and keyed for 'remove row benchmark' and keyed for 'swap rows benchmark' . It'll appear as keyed in the results"
+      ],
+      "cpu": 10,
+      "select": 20,
+      "memory": 3
+    },
+    {
+      "file": "results-residual-final-reverse.json",
+      "actualOrder": ["irisout-v0.3.7-dev-keyed", "vanillajs-keyed"],
+      "keyed": [
+        "irisout-v0.3.7-dev-keyed is keyed for 'run benchmark' and keyed for 'remove row benchmark' and keyed for 'swap rows benchmark' . It'll appear as keyed in the results",
+        "vanillajs-keyed is keyed for 'run benchmark' and keyed for 'remove row benchmark' and keyed for 'swap rows benchmark' . It'll appear as keyed in the results"
+      ],
+      "cpu": 10,
+      "select": 20,
+      "memory": 1
+    }
+  ],
+  "checks": {
+    "check": {
+      "command": "bun run check",
+      "status": "passed",
+      "testCount": null,
+      "logSha256": "f8e9d19e6f49ccf00103f83aaa8c69fc1ea0a6906a27550c701b8713ed4444fc"
+    },
+    "full-test": {
+      "command": "bun run test",
+      "status": "passed",
+      "testCount": 532,
+      "logSha256": "6e76d71f39e65b9ac9efb78ca97b6cd138cdd6d3fc42c8b27ce91a499560b997"
+    },
+    "pack": {
+      "command": "bun run pack:smoke",
+      "status": "passed",
+      "testCount": null,
+      "logSha256": "7b9ca2ad2b2dc6670650d6794c04412d60d16a81e12dc90cdbc91eb31e1678dc"
+    },
+    "demos": {
+      "command": "bun run build",
+      "status": "passed",
+      "testCount": null,
+      "logSha256": "235b652e3b45532d716c7cebb051039a00612899a0570178c60a894230820471"
+    },
+    "site-check": {
+      "command": "bun run site:check",
+      "status": "passed",
+      "testCount": null,
+      "logSha256": "2283ccde8c2d2514ee8f6785c656454d056239ef7b6c29d2470ed09f3cb952a2"
+    },
+    "site-test": {
+      "command": "bun run site:test",
+      "status": "passed",
+      "testCount": 5,
+      "logSha256": "c2c691b619d492e08cf3123d5e2e0afb01504efe24f5eaa0f36f00593f4efa30"
+    },
+    "server-test": {
+      "command": "bun run test:web:server",
+      "status": "passed",
+      "testCount": 23,
+      "logSha256": "9b938d44c8e09c14701fc5103725326c1c8c29596842e2a780de3a73130b5759"
+    },
+    "save-test": {
+      "command": "bun run test:web:save",
+      "status": "passed",
+      "testCount": 2,
+      "logSha256": "1fd5c26317c3fe2a42422ca10024b37599c0b480530a0c87c68a644a2f9ebfe9"
+    },
+    "motion": {
+      "command": "PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=<chrome> bun run test:motion-layout",
+      "status": "passed",
+      "testCount": null,
+      "logSha256": "1680b2fa27e02fbf72d21d683364d59cfc19143b9105d9fb9500e7cae979f691"
+    },
+    "playground": {
+      "command": "PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=<chrome> bun run test:web:playground",
+      "status": "passed",
+      "testCount": null,
+      "logSha256": "87a513a65473a25558e6fcba771efb390e84fa4aafc2245a526dcc7c9e9692a3"
+    },
+    "browser-gates": {
+      "command": "integrity 1280/768/375 and flow.json",
+      "status": "passed",
+      "testCount": null,
+      "logSha256": "a7825ce0ccd0d35f0f44d817191b63170d8364d087efa8d53931f023d4b0836e"
+    }
+  }
+}

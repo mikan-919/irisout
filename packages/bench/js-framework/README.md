@@ -18,6 +18,8 @@ Vanillaのコード調査を受けた修正後は、構築設定で`listEvents: 
 
 ## 再実行
 
+2026-10-17の残差削減は[residual-results.md](./residual-results.md)と[residual-analysis.json](./residual-analysis.json)を参照する。最終版の公式対象はirisoutとVanillaで、実際の実行順を反転した2組を保存した。同期比較と公式比較、修正前後とVanillaとの差、採用しなかった試作を分けている。
+
 リポジトリのルートから実行する。Bun、Node 24以降、Git、起動可能なChromiumが必要。
 
 ```sh
@@ -41,22 +43,24 @@ bun packages/bench/js-framework/report.mjs
 PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/path/to/chrome JSFB_COUNT=10 JSFB_MEMORY_COUNT=3 bun packages/bench/js-framework/run.mjs
 ```
 
-| 環境変数                              | 既定値                                | 用途                                                                     |
-| ------------------------------------- | ------------------------------------- | ------------------------------------------------------------------------ |
-| `JSFB_CHECKOUT`                       | `/tmp/irisout-js-framework-benchmark` | 上流の作業ディレクトリ                                                   |
-| `JSFB_PORT`                           | `8080`                                | 専用の配信ポート                                                         |
-| `JSFB_RESULT_TAG`                     | 空                                    | 公式結果を`results-<tag>/`と同名のJSON・Markdownへ分けて保存する         |
-| `JSFB_COUNT`                          | `3`                                   | CPUの試行回数。行選択はこれに10回を加える                                |
-| `JSFB_MEMORY_COUNT`                   | `1`                                   | メモリの試行回数                                                         |
-| `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` | Playwrightの既定                      | 比較する全実装で使うブラウザー                                           |
-| `JSFB_PROBE_OUTPUT`                   | `optimization.json`                   | 同期比較のJSON保存先                                                     |
-| `JSFB_PROBE_SAMPLES`                  | `15`                                  | 同期比較の試行数                                                         |
-| `JSFB_PROBE_SCENARIOS`                | 全9操作                               | 同期比較の対象。カンマ区切り                                             |
-| `JSFB_PROBE_REVERSE`                  | `0`                                   | `1`で各試行の実装順を反転                                                |
-| `JSFB_PROBE_CPU_RATE`                 | `1`                                   | ChromiumのCPU減速倍率                                                    |
-| `JSFB_PROBE_CLEAR_ROWS`               | `1000`                                | 全削除前の行数。0・1000・10000                                           |
-| `JSFB_PROBE_DISABLE_ROW_LISTENERS`    | `0`                                   | `1`で第2ページの行イベント登録を省く比較実験。選択・個別削除には使用不可 |
-| `JSFB_WORK_PROBE_OUTPUT`              | `vanilla-work.json`                   | 処理回数のJSON保存先                                                     |
+| 環境変数                              | 既定値                                | 用途                                                                        |
+| ------------------------------------- | ------------------------------------- | --------------------------------------------------------------------------- |
+| `JSFB_CHECKOUT`                       | `/tmp/irisout-js-framework-benchmark` | 上流の作業ディレクトリ                                                      |
+| `JSFB_PORT`                           | `8080`                                | 専用の配信ポート                                                            |
+| `JSFB_RESULT_TAG`                     | 空                                    | 公式結果を`results-<tag>/`と同名のJSON・Markdownへ分けて保存する            |
+| `JSFB_COUNT`                          | `3`                                   | CPUの試行回数。行選択はこれに10回を加える                                   |
+| `JSFB_MEMORY_COUNT`                   | `1`                                   | メモリの試行回数                                                            |
+| `JSFB_FRAMEWORKS`                     | 5実装すべて                           | 対象のカンマ区切り。例: `irisout,vanillajs`                                 |
+| `JSFB_REVERSE_FRAMEWORK_ORDER`        | `0`                                   | `1`で公式サーバーの/lsの返却順を反転。CLIの列挙順だけでは実行順は変わらない |
+| `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` | Playwrightの既定                      | 比較する全実装で使うブラウザー                                              |
+| `JSFB_PROBE_OUTPUT`                   | `optimization.json`                   | 同期比較のJSON保存先                                                        |
+| `JSFB_PROBE_SAMPLES`                  | `15`                                  | 同期比較の試行数                                                            |
+| `JSFB_PROBE_SCENARIOS`                | 全9操作                               | 同期比較の対象。カンマ区切り                                                |
+| `JSFB_PROBE_REVERSE`                  | `0`                                   | `1`で各試行の実装順を反転                                                   |
+| `JSFB_PROBE_CPU_RATE`                 | `1`                                   | ChromiumのCPU減速倍率                                                       |
+| `JSFB_PROBE_CLEAR_ROWS`               | `1000`                                | 全削除前の行数。0・1000・10000                                              |
+| `JSFB_PROBE_DISABLE_ROW_LISTENERS`    | `0`                                   | `1`で第2ページの行イベント登録を省く比較実験。選択・個別削除には使用不可    |
+| `JSFB_WORK_PROBE_OUTPUT`              | `vanilla-work.json`                   | 処理回数のJSON保存先                                                        |
 
 ログと元のJSONは無視対象の`results/`、ブラウザーの動作記録は上流の`webdriver-ts/traces/`へ保存する。前回の上流結果は実行時に日時付きディレクトリへ退避する。`report.mjs`は欠けた実装・試行数を検出したら失敗し、部分的な結果を完全な比較として出力しない。
 
@@ -104,6 +108,8 @@ bun packages/bench/js-framework/report.mjs
 `report.mjs`は同期比較のスクリプトのSHA-256を公式測定の生成物と照合し、版が異なる過去の比較を除外する。中央値差の95%区間は同じ試行の組を再抽出する方法で求める。0を含む場合は同等と断定せず「差未確定」と記録する。
 
 今回の公式値は`JSFB_RESULT_TAG=code`で保存した。対応する同期値は`optimization-code.json`と`vanilla-comparison-code.json`を使う。`JSFB_RESULT_TAG=code bun packages/bench/js-framework/report.mjs`に続けて`bun packages/bench/js-framework/code-report.mjs`を実行すると、保存済みの全試行値を照合し、直接配線・委譲・先行比較・公式値の95%区間と資源量を再集計する。旧結果は上書きしない。
+
+残差削減の最終値は`residual-final`、実行順の反転は`residual-final-reverse`で保存した。`JSFB_RESULT_TAG=residual-final bun packages/bench/js-framework/report.mjs`、`JSFB_RESULT_TAG=residual-final-reverse bun packages/bench/js-framework/report.mjs`、`bun packages/bench/js-framework/residual-report.mjs`で再集計する。最終版の生成物と全試行数を照合する。再測定には`JSFB_FRAMEWORKS=irisout,vanillajs JSFB_RESULT_TAG=<新しい名前> JSFB_COUNT=10 JSFB_MEMORY_COUNT=3`を指定し、順序の反転時は`JSFB_REVERSE_FRAMEWORK_ORDER=1`を加える。`residual`と`residual-specialized`は中間段階の結果として保持する。
 
 ## 一覧高速化計画の最終集計
 

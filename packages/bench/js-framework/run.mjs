@@ -38,11 +38,19 @@ try {
 } catch (error) {
   if (error instanceof Error && error.message.startsWith('Port ')) throw error
 }
-const server = spawn(process.execPath, ['index.ts'], {
-  cwd: path.join(checkout, 'server'),
-  env,
-  stdio: ['ignore', log, log],
-})
+const server = spawn(
+  process.execPath,
+  [
+    process.env.JSFB_REVERSE_FRAMEWORK_ORDER === '1'
+      ? path.join(root, 'reverse-server.mjs')
+      : 'index.ts',
+  ],
+  {
+    cwd: path.join(checkout, 'server'),
+    env,
+    stdio: ['ignore', log, log],
+  },
+)
 function run(args, file) {
   const fd = fs.openSync(path.join(output, file), 'w')
   try {
@@ -126,6 +134,10 @@ try {
         headless: true,
         throttling: 'upstream defaults (03/04/05/09: 4x, 06: 2x)',
         frameworks,
+        serverFrameworkOrder: (await (await fetch(`http://localhost:${env.PORT}/ls`)).json())
+          .filter((entry) => entry.type === 'keyed' && frameworks.includes(entry.directory))
+          .map((entry) => entry.frameworkVersionString),
+        reverseFrameworkOrder: process.env.JSFB_REVERSE_FRAMEWORK_ORDER === '1',
         benchmarks,
       },
       null,
