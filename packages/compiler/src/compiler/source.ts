@@ -23,7 +23,7 @@
 import traverseImport from '@babel/traverse'
 import { parse } from '@babel/parser'
 import type { NodePath } from '@babel/traverse'
-import type * as t from '@babel/types'
+import * as t from '@babel/types'
 import type {
   ActionOutput,
   ConditionalMarkerOutput,
@@ -1217,6 +1217,190 @@ export function compileSource(source: string, options: CompileOptions = {}): Com
           .filter(([id, kind]) => kind === 'signal' && !ctx.localDeclIds.has(id))
           .map(([id]) => ({ id, outputName: ctx.declOutputName.get(id)! }))
       : []
+
+  // 境界を外部へ渡さない表の一覧は、親の全内容を所有する。DOMを読む経路は除く。
+  if (
+    options.target !== 'ssr' &&
+    rootPath.node.params.length === 0 &&
+    actionOutputs.length === 0 &&
+    mountOutputs.length === 0 &&
+    effectOutputs.length === 0 &&
+    (options.externalImports?.length ?? 0) === 0 &&
+    !handlerOutputs.some((handler) => handler.param !== null) &&
+    !/<[\w:]*-[\w:-]*(?:\s|>)/.test(initialHtml) &&
+    !/\son\w+\s*=|javascript\s*:/i.test(initialHtml)
+  ) {
+    const safeGlobals = new Set([
+      'Math',
+      'Number',
+      'String',
+      'Boolean',
+      'BigInt',
+      'undefined',
+      'NaN',
+      'Infinity',
+      'signal',
+      'derived',
+      'render',
+      ...(options.supportNames ?? []),
+    ])
+    const supportTrees = (options.supportStatements ?? []).map((support) =>
+      parse(support, { sourceType: 'module', plugins: ['typescript', 'jsx'] }),
+    )
+    const supportFunctions = new Map<string, t.FunctionDeclaration>()
+    for (const tree of supportTrees)
+      for (const statement of tree.program.body)
+        if (t.isFunctionDeclaration(statement) && statement.id)
+          supportFunctions.set(statement.id.name, statement)
+    let closed = true
+    const inspect = (tree: t.File) =>
+      traverse(tree, {
+        ReferencedIdentifier(path) {
+          if (
+            !path.scope.hasBinding(path.node.name, { noGlobals: true }) &&
+            !safeGlobals.has(path.node.name)
+          )
+            closed = false
+        },
+        ThisExpression() {
+          closed = false
+        },
+        ObjectPattern() {
+          closed = false
+        },
+        OptionalMemberExpression() {
+          closed = false
+        },
+        OptionalCallExpression() {
+          closed = false
+        },
+        ImportExpression() {
+          closed = false
+        },
+        NewExpression() {
+          closed = false
+        },
+        JSXOpeningElement(path) {
+          if (!t.isJSXIdentifier(path.node.name) || /-|^(svg|slot)$/.test(path.node.name.name))
+            closed = false
+          if (
+            path.node.attributes.some(
+              (attribute) =>
+                t.isJSXAttribute(attribute) &&
+                t.isJSXIdentifier(attribute.name) &&
+                ([
+                  'use',
+                  'is',
+                  'href',
+                  'tabindex',
+                  'contenteditable',
+                  'autofocus',
+                  'draggable',
+                ].includes(attribute.name.name.toLowerCase()) ||
+                  (/^on/i.test(attribute.name.name) && t.isStringLiteral(attribute.value))),
+            )
+          )
+            closed = false
+        },
+        JSXAttribute(path) {
+          if (
+            !t.isJSXIdentifier(path.node.name) ||
+            !/^on/i.test(path.node.name.name) ||
+            !t.isJSXExpressionContainer(path.node.value)
+          )
+            return
+          const expression = path.node.value.expression
+          const binding = t.isIdentifier(expression)
+            ? path.scope.getBinding(expression.name)
+            : undefined
+          let fn: t.Node | undefined = t.isIdentifier(expression)
+            ? (binding?.path.node ?? supportFunctions.get(expression.name))
+            : expression
+          if (t.isVariableDeclarator(fn)) fn = fn.init ?? undefined
+          if (t.isFunction(fn) && fn.params.length > 0) closed = false
+        },
+        MemberExpression(path) {
+          // 動的な文字列によるconstructorの取得は、DOMを隠して取得できるため除く。
+          if (path.node.computed && !t.isNumericLiteral(path.node.property)) {
+            const property = path.node.property
+            const binding =
+              t.isCallExpression(property) && t.isIdentifier(property.callee)
+                ? path.scope.getBinding(property.callee.name)
+                : undefined
+            const fn =
+              binding?.path.node ??
+              (t.isCallExpression(property) && t.isIdentifier(property.callee)
+                ? supportFunctions.get(property.callee.name)
+                : undefined)
+            const statement =
+              t.isFunctionDeclaration(fn) && fn.body.body.length === 1 ? fn.body.body[0] : undefined
+            if (
+              !t.isReturnStatement(statement) ||
+              !t.isBinaryExpression(statement.argument) ||
+              !['%', '-', '*', '/', '**', '|', '&', '^', '<<', '>>', '>>>'].includes(
+                statement.argument.operator,
+              )
+            )
+              closed = false
+          }
+          if (
+            (!path.node.computed &&
+              t.isIdentifier(path.node.property) &&
+              ['constructor', '__proto__'].includes(path.node.property.name)) ||
+            (path.node.computed &&
+              t.isStringLiteral(path.node.property) &&
+              ['constructor', '__proto__'].includes(path.node.property.value))
+          )
+            closed = false
+        },
+        CallExpression(path) {
+          if (t.isMemberExpression(path.node.callee) && path.node.callee.computed) closed = false
+        },
+      })
+    inspect(ast)
+    for (const tree of supportTrees) inspect(tree)
+    if (closed)
+      for (const marker of markerOutputs) {
+        if (
+          marker.kind !== 'list' ||
+          !marker.mapUpdates ||
+          marker.body.localHandlers.some((h) => h.param !== null) ||
+          /\s(?:href|tabindex|contenteditable|autofocus|draggable)\s*=/i.test(
+            marker.body.template,
+          ) ||
+          !/^<tr(?:\s|>)/.test(marker.body.template) ||
+          [...marker.body.template.matchAll(/<\/?([\w:-]+)/g)].some(
+            (match) =>
+              ![
+                'tr',
+                'td',
+                'th',
+                'a',
+                'span',
+                'b',
+                'i',
+                'strong',
+                'em',
+                'small',
+                'div',
+                'p',
+                'br',
+              ].includes(match[1]!),
+          )
+        )
+          continue
+        const pattern = new RegExp(
+          `<((?:tbody|thead|tfoot))([^>]*)><!--irisout:start:${marker.id}--><!--irisout:end:${marker.id}--></\\1>`,
+          'g',
+        )
+        initialHtml = initialHtml.replace(pattern, (all, tag: string, attrs: string) => {
+          if (/\s(?:data-iris-id|is|tabindex|contenteditable|autofocus)\s*=/i.test(attrs))
+            return all
+          marker.exclusiveParent = true
+          return `<${tag}${attrs} data-iris-id="${marker.id}"></${tag}>`
+        })
+      }
+  }
 
   const markedCode = generateModule({
     usesListMap: ctx.listMapDeclIds.size > 0,

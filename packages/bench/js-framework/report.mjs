@@ -1,13 +1,14 @@
 // 公式の試行値を保存し、中央値と同一環境での時間比を表にする。
 import fs from 'node:fs'
 import path from 'node:path'
-import { frameworks, root } from './config.mjs'
+import { root } from './config.mjs'
 
 const tag = process.env.JSFB_RESULT_TAG ?? ''
 if (tag && !/^[a-z0-9-]+$/.test(tag)) throw new Error('Invalid JSFB_RESULT_TAG')
 const suffix = tag ? `-${tag}` : ''
 const directory = path.join(root, `results${suffix}`)
 const environment = JSON.parse(fs.readFileSync(path.join(directory, 'environment.json'), 'utf8'))
+const frameworks = environment.frameworks
 const samples = fs
   .readdirSync(directory)
   .filter((file) => file.endsWith('.json') && file !== 'environment.json')
@@ -90,8 +91,8 @@ const ratios = frameworks.map((name) =>
 )
 const table = (from, to) =>
   [
-    '| 操作 | irisout | React Hooks | Vue | Solid | Vanilla |',
-    '| --- | ---: | ---: | ---: | ---: | ---: |',
+    `| 操作 | ${frameworks.map((name) => ({ 'react-hooks': 'React Hooks', vue: 'Vue', solid: 'Solid', vanillajs: 'Vanilla' })[name] ?? name).join(' | ')} |`,
+    `| --- | ${frameworks.map(() => '---:').join(' | ')} |`,
     ...rows.slice(from, to),
   ].join('\n')
 const cpuDetails = ids

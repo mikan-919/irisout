@@ -4,7 +4,14 @@ export const root = import.meta.dirname
 export const workspace = path.resolve(root, '../../..')
 export const checkout = process.env.JSFB_CHECKOUT ?? '/tmp/irisout-js-framework-benchmark'
 export const upstreamCommit = 'bf894b681fb56433ccb6efb4a3c93e35eda2b20d'
-export const frameworks = ['irisout', 'react-hooks', 'vue', 'solid', 'vanillajs']
+const availableFrameworks = ['irisout', 'react-hooks', 'vue', 'solid', 'vanillajs']
+export const frameworks = process.env.JSFB_FRAMEWORKS?.split(',') ?? availableFrameworks
+if (
+  frameworks.length === 0 ||
+  new Set(frameworks).size !== frameworks.length ||
+  frameworks.some((name) => !availableFrameworks.includes(name))
+)
+  throw new Error('Invalid JSFB_FRAMEWORKS')
 export const benchmarks = [
   '01_',
   '02_',

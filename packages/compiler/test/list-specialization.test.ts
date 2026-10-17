@@ -35,6 +35,38 @@ async function application(listEvents: 'direct' | 'delegated' = 'direct') {
 }
 
 describe('list specialization', () => {
+  it('reuses the previous selection and invalidates it on a row update', async () => {
+    const app = await application('delegated')
+    app.click('li:nth-of-type(1) a')
+    const original = Reflect.get(Map.prototype, 'get') as (
+      this: Map<unknown, unknown>,
+      key: unknown,
+    ) => unknown
+    let lookups = 0
+    const get = vi.spyOn(Map.prototype, 'get').mockImplementation(function (
+      this: Map<unknown, unknown>,
+      key: unknown,
+    ) {
+      if (typeof key === 'number') lookups++
+      return original.call(this, key)
+    })
+    try {
+      app.click('li:nth-of-type(2) a')
+      expect(lookups).toBe(1)
+      app.click('#update')
+      lookups = 0
+      app.click('li:nth-of-type(1) a')
+      expect(lookups).toBe(2)
+      expect([...app.container.querySelectorAll('li')].map((row) => row.className)).toEqual([
+        'on',
+        '',
+        '',
+      ])
+    } finally {
+      get.mockRestore()
+    }
+  })
+
   it('routes nested targets from the child to the root without retaining handler-only elements', async () => {
     const { code } = compile(
       `export function App(){const rows=signal([{id:1}]);const seen=signal(0);render(<main><output>{seen()}</output><ul>{rows().map(row=><li key={row.id} onClick={()=>seen(seen()+10)}><button onClick={()=>seen(seen()+1)}><i>click</i></button></li>)}</ul></main>);}`,

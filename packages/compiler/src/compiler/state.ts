@@ -77,6 +77,8 @@ export interface AttrBinding {
   /** SSR初期HTML向け。signal/derivedのread callを保持する。 */
   sourceRendered: string
   deps: Set<DeclId>
+  /** 通常のHTML要素の選択class。SVGとカスタム要素の属性契約は変えない。 */
+  classProperty?: boolean
   /** 安定した行キーとの厳密比較だけで決まる属性。選択前後の行へ直接通知する。 */
   keySelector?: { declId: DeclId; outputName: string; keyRendered: string }
 }

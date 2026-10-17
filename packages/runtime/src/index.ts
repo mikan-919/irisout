@@ -34,6 +34,7 @@ export function observeDomUpdates(observer: DomUpdateObserver): () => void {
 
 export function beginDomUpdate(): void {
   if (domUpdateDepth++ > 0) return
+  if (domUpdateObservers.size === 0) return
   try {
     for (const observer of domUpdateObservers) observer.before()
   } catch (error) {
@@ -45,6 +46,7 @@ export function beginDomUpdate(): void {
 export function endDomUpdate(): void {
   if (domUpdateDepth === 0) throw new Error('endDomUpdate called without beginDomUpdate')
   if (--domUpdateDepth > 0) return
+  if (domUpdateObservers.size === 0) return
   let firstError: unknown
   for (const observer of domUpdateObservers) {
     try {
@@ -246,10 +248,15 @@ export interface ListRuntime<T> {
   readonly items: Map<unknown, ListRecord<T>>
   ordered?: ListRecord<T>[]
   readonly direct?: boolean
+  readonly exclusive?: boolean
 }
 
-export function createListRuntime<T = unknown>(listId: string, direct = false): ListRuntime<T> {
-  return { listId, items: new Map(), direct }
+export function createListRuntime<T = unknown>(
+  listId: string,
+  direct = false,
+  exclusive = false,
+): ListRuntime<T> {
+  return { listId, items: new Map(), direct, exclusive }
 }
 
 interface ListChangeBase {
@@ -326,6 +333,28 @@ export function filterListValues<T>(
     }
     return keep
   })
+  listMapChanges.set(next, { kind: 'filter', token: {}, base: listToken(values), removed, indexes })
+  return next
+}
+
+// コンパイラが通常配列と純粋な述語を証明した経路だけで、二重のcallbackを除く。
+export function filterOwnedListValues<T>(
+  values: readonly T[],
+  predicate: (value: T, index: number) => unknown,
+): T[] {
+  const next: T[] = []
+  const removed: T[] = []
+  const indexes: number[] = []
+  const length = values.length
+  for (let index = 0; index < length; index++) {
+    if (!(index in values)) continue
+    const value = values[index]!
+    if (predicate(value, index)) next.push(value)
+    else {
+      removed.push(value)
+      indexes.push(index)
+    }
+  }
   listMapChanges.set(next, { kind: 'filter', token: {}, base: listToken(values), removed, indexes })
   return next
 }
@@ -422,12 +451,14 @@ export function reconcileListMap<T>(
       }
       if (parent && fragment)
         parent.insertBefore(fragment, container && isDomRange(container) ? container.end : null)
-      else if (parent && direct)
-        for (let index = change.start; index < ordered.length; index++)
-          parent.insertBefore(
-            ordered[index]!.handle.el,
-            container && isDomRange(container) ? container.end : null,
-          )
+      else if (parent && direct) {
+        const boundary = container && isDomRange(container) ? container.end : null
+        for (let index = change.start; index < ordered.length; index++) {
+          const el = ordered[index]!.handle.el
+          if (boundary) parent.insertBefore(el, boundary)
+          else parent.appendChild(el)
+        }
+      }
       listMapBases.set(runtime, change.token)
       runtime.ordered = ordered
       return
@@ -468,11 +499,19 @@ export function reconcileListMap<T>(
       if (
         first &&
         second &&
-        (!parent || (first.parentNode === parent && second.parentNode === parent))
+        (!parent ||
+          (runtime.exclusive && ordered) ||
+          (first.parentNode === parent && second.parentNode === parent))
       ) {
         if (parent) {
-          const afterFirst = first.nextSibling
-          const afterSecond = second.nextSibling
+          const afterFirst =
+            runtime.exclusive && ordered
+              ? (ordered[change.indexes[0] + 1]?.handle.el ?? null)
+              : first.nextSibling
+          const afterSecond =
+            runtime.exclusive && ordered
+              ? (ordered[change.indexes[1] + 1]?.handle.el ?? null)
+              : second.nextSibling
           if (afterFirst === second) parent.insertBefore(second, first)
           else if (afterSecond === first) parent.insertBefore(first, second)
           else {
@@ -546,6 +585,22 @@ export function updateListItem<T>(
     )
 }
 
+// 外部参照とフォーカス対象のない表だけ、空の節を外して追加し、元の位置へ戻す。
+function appendExclusiveListRecords<T>(
+  container: Element,
+  ordered: readonly ListRecord<T>[],
+): void {
+  if (ordered.length === 0) return
+  const parent = container.parentNode
+  const next = container.nextSibling
+  container.remove()
+  try {
+    for (const record of ordered) container.appendChild(record.handle.el)
+  } finally {
+    parent?.insertBefore(container, next)
+  }
+}
+
 function insertListRecords<T>(
   parent: Node,
   boundary: ChildNode | null,
@@ -553,10 +608,18 @@ function insertListRecords<T>(
   batch: boolean,
   start?: ChildNode,
   direct = false,
+  exclusive = false,
 ): void {
   if (batch && ordered.length > 0) {
     if (direct) {
-      for (const record of ordered) parent.insertBefore(record.handle.el, boundary)
+      if (exclusive && !boundary) {
+        appendExclusiveListRecords(parent as Element, ordered)
+        return
+      }
+      for (const record of ordered) {
+        if (boundary) parent.insertBefore(record.handle.el, boundary)
+        else parent.appendChild(record.handle.el)
+      }
       return
     }
     const ownerDocument = parent.ownerDocument
@@ -665,7 +728,13 @@ function replaceListContents<T>(
   container: Element | DomRange | undefined,
   ordered: readonly ListRecord<T>[],
   direct = false,
+  exclusive = false,
 ): boolean {
+  if (container && exclusive && !isDomRange(container)) {
+    container.textContent = ''
+    appendExclusiveListRecords(container, ordered)
+    return true
+  }
   if (!container || !isDomRange(container)) return false
   const parent = container.start.parentNode
   if (!parent || parent.firstChild !== container.start || parent.lastChild !== container.end)
@@ -697,7 +766,11 @@ export function reconcileList<T>(
   runtime.ordered = undefined
   const initiallyEmpty = runtime.items.size === 0
   const ordered: ListRecord<T>[] = []
-  if (values.length === 0 && !initiallyEmpty && replaceListContents(container, ordered)) {
+  if (
+    values.length === 0 &&
+    !initiallyEmpty &&
+    replaceListContents(container, ordered, runtime.direct, runtime.exclusive)
+  ) {
     runtime.items.clear()
     runtime.ordered = ordered
     return
@@ -742,7 +815,8 @@ export function reconcileList<T>(
       }
       ordered.push(record)
     }
-    const replaced = !reused && replaceListContents(container, ordered, runtime.direct)
+    const replaced =
+      !reused && replaceListContents(container, ordered, runtime.direct, runtime.exclusive)
     if (replaced) {
       // ADR-0069: 全置換では新旧のMapを走査せず、新しい順序から登録し直す。
       runtime.items.clear()
@@ -772,6 +846,7 @@ export function reconcileList<T>(
     initiallyEmpty && ordered.length > 0,
     isDomRange(container) ? container.start : undefined,
     runtime.direct,
+    runtime.exclusive && !isDomRange(container),
   )
 }
 

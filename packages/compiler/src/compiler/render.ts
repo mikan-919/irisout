@@ -763,6 +763,13 @@ function renderElement(
         rendered: a.rendered,
         sourceRendered: a.sourceRendered,
         deps: a.deps,
+        classProperty:
+          a.name === 'class' &&
+          insideUnit &&
+          !!a.keySelector &&
+          !svgElement &&
+          !tagName.includes('-') &&
+          !staticAttrs.some((attr) => attr.name === 'is'),
         keySelector: a.keySelector,
       })
       if (!insideUnit) {

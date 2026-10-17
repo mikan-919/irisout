@@ -105,6 +105,7 @@ export interface ListMarkerOutput {
   collectionShared: boolean
   keySelector?: { declId: DeclId; outputName: string }
   mapUpdates?: boolean
+  exclusiveParent?: boolean
   arrayDeps: Set<DeclId>
   body: StructuralUnitBodyOutput
 }
@@ -365,6 +366,7 @@ function renderSharedItemHandlerCall(
 // ADR-0012 決定2: 動的属性1個ぶんの設定文。boolProp/prop はプロパティ代入、
 // それ以外は setAttribute(update_* と factory の両方で使う)。
 function renderAttrSet(elExpr: string, b: AttrBinding): string {
+  if (b.classProperty) return `${elExpr}.className = ${b.rendered};`
   return attrBindingKind(b.name) === 'attr'
     ? `${elExpr}.setAttribute(${JSON.stringify(b.name)}, ${b.rendered});`
     : `${elExpr}.${b.name} = ${b.rendered};`
@@ -1333,7 +1335,7 @@ function generateStructuralUnits(
       const factoryName = `__create_${marker.id}__`
       declLines.push(
         `let ${tplVar};`,
-        `let __list_${marker.id}__ = __createListRuntime__(${JSON.stringify(marker.id)}${!bodyHasLifecycle(marker.body) && bodyUnits(marker.body).length === 0 && !/<[\w:]*-[\w:-]*(?:\s|>)/.test(marker.body.template) && !/\sis\s*=/.test(marker.body.template) ? ', true' : ''});`,
+        `let __list_${marker.id}__ = __createListRuntime__(${JSON.stringify(marker.id)}${!bodyHasLifecycle(marker.body) && bodyUnits(marker.body).length === 0 && !/<[\w:]*-[\w:-]*(?:\s|>)/.test(marker.body.template) && !/\sis\s*=/.test(marker.body.template) ? ', true' : ''}${marker.exclusiveParent ? ', true' : ''});`,
       )
       declLines.push(
         ...generateFactory(
@@ -1354,37 +1356,80 @@ function generateStructuralUnits(
         const parent = `__delegate_parent_${marker.id}__`
         const dispatch = `__delegate_${marker.id}__`
         const handleKey = `${factoryName}handle__`
+        const rootId = marker.body.template.match(/^<[^>]*\bdata-iris-id="([^"]+)"/)?.[1]
+        const stableKey = marker.mapUpdates ? itemField(marker.itemParam, marker.keyRendered) : null
+        const cached = new Set([
+          ...marker.body.localAttrBindings.map((binding) => binding.markerId),
+          ...bodyTexts(marker.body)
+            .filter(
+              (text) =>
+                !stableKey ||
+                !text.contentParts.every(
+                  (part) =>
+                    part.type === 'text' || itemField(marker.itemParam, part.code) === stableKey,
+                ),
+            )
+            .map((text) => text.id),
+        ])
+        const groups = new Map<string, HandlerOutput[]>()
+        for (const handler of delegated) {
+          const group = groups.get(handler.markerId) ?? []
+          group.push(handler)
+          groups.set(handler.markerId, group)
+        }
+        const routes = [...groups].sort(
+          ([a], [b]) =>
+            Number(b === rootId || cached.has(b as MarkerId)) -
+            Number(a === rootId || cached.has(a as MarkerId)),
+        )
+        const plain =
+          !/<[\w:]*-[\w:-]*(?:\s|>)/.test(marker.body.template) &&
+          !/<slot(?:\s|>)/.test(marker.body.template) &&
+          !/\sis\s*=/.test(marker.body.template)
         declLines.push(
           `let ${parent};`,
+          ...(marker.keySelector ? [`let __event_handle_${marker.id}__;`] : []),
           `function ${dispatch}(__event__) {`,
           '  const __path__ = __event__.composedPath();',
-          `  const __root__ = __path__.find(__node__ => __node__[${handleKey}]);`,
+          '  let __root_index__ = 0;',
+          `  while (__root_index__ < __path__.length && !__path__[__root_index__][${handleKey}]) __root_index__++;`,
+          '  const __root__ = __path__[__root_index__];',
           '  if (!__root__) return;',
           `  const __handle__ = __root__[${handleKey}];`,
           `  if (__list_${marker.id}__?.items.get(__handle__.itemId)?.handle !== __handle__) return;`,
-          ...delegated.map(
-            (h) =>
-              `  const __target_${h.markerId}__ = __followPath__(__root__, ${factoryName}paths__.${h.markerId});`,
-          ),
-          '  for (const __node__ of __path__) {',
-          ...delegated.map(
-            (h) =>
-              `    if (__node__ === __target_${h.markerId}__) __item_handler_${h.markerId}__(__event__, __handle__);`,
-          ),
+          ...(marker.keySelector
+            ? [`  __event_handle_${marker.id}__ = __handle__;`, '  try {']
+            : []),
+          '  for (let __index__ = 0; __index__ <= __root_index__; __index__++) {',
+          '    const __node__ = __path__[__index__];',
+          ...routes.map(([id, handlers], index) => {
+            const ref =
+              id === rootId
+                ? '__root__'
+                : cached.has(id as MarkerId)
+                  ? `__handle__.${id}`
+                  : `__followPath__(__root__, ${factoryName}paths__.${id})`
+            const depth =
+              plain && id !== rootId && !cached.has(id as MarkerId)
+                ? `__root_index__ - __index__ === ${factoryName}paths__.${id}.length && `
+                : ''
+            return `    ${index ? 'else ' : ''}if (${depth}__node__ === ${ref}) { ${handlers.map((h) => `__item_handler_${h.markerId}__(__event__, __handle__);`).join(' ')} }`
+          }),
           '    if (__node__ === __root__ || __event__.cancelBubble) break;',
           '  }',
+          ...(marker.keySelector ? [`  } finally { __event_handle_${marker.id}__ = null; }`] : []),
           '}',
         )
         templateSetupLines.push(
-          `  ${parent} = __ranges__.get(${JSON.stringify(marker.id)})?.start.parentNode;`,
+          `  ${parent} = ${marker.exclusiveParent ? `__markers__.get(${JSON.stringify(marker.id)})` : `__ranges__.get(${JSON.stringify(marker.id)})?.start.parentNode`};`,
           `  ${parent}?.addEventListener("click", ${dispatch});`,
         )
       }
       if (marker.keySelector) {
         declLines.push(
           `let __selected_key_${marker.id}__ = ${marker.keySelector.outputName};`,
-          `function __select_${marker.id}__(__key__) {`,
-          `  const __handle__ = __list_${marker.id}__.items.get(__key__)?.handle;`,
+          `let __selected_handle_${marker.id}__;`,
+          `function __select_${marker.id}__(__handle__) {`,
           '  if (!__handle__) return;',
           `  const ${marker.itemParam} = __handle__.value;`,
           ...marker.body.localAttrBindings.flatMap((binding, index) => [
@@ -1470,6 +1515,14 @@ function generateListUpdate(
     ? `(${marker.itemParam}) => { const __key__ = ${marker.keyRendered}; if (!Object.is(${collectionRef}.keyOf(${marker.itemParam}), __key__)) throw new Error("keyed signal List key does not match signal identity"); return __key__; }`
     : `(${marker.itemParam}) => ${marker.keyRendered}`
   return [
+    ...(marker.keySelector
+      ? [
+          `  __selected_handle_${marker.id}__ = undefined;`,
+          ...(delegatedClicks(marker.body).length > 0
+            ? [`  __event_handle_${marker.id}__ = null;`]
+            : []),
+        ]
+      : []),
     hasLifecycle
       ? `  __reconcileListWithLifecycle__(__list_${marker.id}__, ${elExpr}, ${marker.arrayRendered}, ${keyOf}, __create_${marker.id}__${updaterArg}, ${mountExpr});`
       : mapUpdateExpr !== undefined
@@ -1707,12 +1760,13 @@ export function generateModule({
 }: GenerateModuleInput): string {
   const moduleLines: string[] = []
   const instanceLines: string[] = []
-  const hasStructuralUnits = markers.some(
-    (marker) => marker.kind === 'list' || marker.kind === 'conditional',
+  const hasStructuralRanges = markers.some(
+    (marker) =>
+      (marker.kind === 'list' && !marker.exclusiveParent) || marker.kind === 'conditional',
   )
   const hasStructuralEffects = markersHaveStructuralEffects(markers)
   const mountName = isDocument ? 'mountDocument' : 'mount'
-  const runtimeImports = hasStructuralUnits
+  const runtimeImports = hasStructuralRanges
     ? [`${mountName}WithRanges as __mount__`, 'hydrateWithRanges as __hydrate__']
     : [`${mountName} as __mount__`, 'hydrate as __hydrate__']
   runtimeImports.push('beginDomUpdate as __beginDomUpdate__', 'endDomUpdate as __endDomUpdate__')
@@ -1721,7 +1775,7 @@ export function generateModule({
       'mapListValues as __mapListValues__',
       'appendListValues as __appendListValues__',
       'beginListAppend as __beginListAppend__',
-      'filterListValues as __filterListValues__',
+      'filterOwnedListValues as __filterListValues__',
       'copyListValues as __copyListValues__',
       'reconcileListMap as __reconcileListMap__',
     )
@@ -1817,7 +1871,7 @@ export function generateModule({
   const structuralMarkerIds = markers
     .filter(
       (m): m is ListMarkerOutput | ConditionalMarkerOutput =>
-        m.kind === 'list' || m.kind === 'conditional',
+        (m.kind === 'list' && !m.exclusiveParent) || m.kind === 'conditional',
     )
     .map((m) => m.id)
   const markerIds = [
@@ -1825,6 +1879,7 @@ export function generateModule({
       ...markers.filter((m) => m.kind !== 'list' && m.kind !== 'conditional').map((m) => m.id),
       ...handlers.map((h) => h.markerId),
       ...attrBindings.map((b) => b.markerId),
+      ...markers.filter((m) => m.kind === 'list' && m.exclusiveParent).map((m) => m.id),
     ]),
   ]
   instanceLines.push(`const __MARKER_IDS__ = ${JSON.stringify(markerIds)};`, '')
@@ -1906,7 +1961,7 @@ export function generateModule({
         if (marker.kind === 'list') {
           return generateListUpdate(
             marker,
-            `__ranges__.get(${JSON.stringify(marker.id)})`,
+            `${marker.exclusiveParent ? '__markers__' : '__ranges__'}.get(${JSON.stringify(marker.id)})`,
             'true',
             'null',
           )
@@ -2013,6 +2068,10 @@ export function generateModule({
         return [`  __list_${marker.id}__ = null;`]
       }
       return [
+        ...(marker.keySelector ? [`  __selected_handle_${marker.id}__ = undefined;`] : []),
+        ...(marker.keySelector && delegatedClicks(marker.body).length > 0
+          ? [`  __event_handle_${marker.id}__ = null;`]
+          : []),
         `  if (__list_${marker.id}__) __list_${marker.id}__.items.clear();`,
         `  __list_${marker.id}__ = null;`,
       ]
@@ -2269,14 +2328,14 @@ export function generateModule({
         affected[0] === marker.keySelector.declId
       ) {
         lines.push(
-          `  { const __previous__ = __selected_key_${mId}__; __selected_key_${mId}__ = ${marker.keySelector.outputName}; if (!Object.is(__previous__, __selected_key_${mId}__)) { __select_${mId}__(__previous__); __select_${mId}__(__selected_key_${mId}__); } }`,
+          `  { const __previous__ = __selected_key_${mId}__; __selected_key_${mId}__ = ${marker.keySelector.outputName}; if (!Object.is(__previous__, __selected_key_${mId}__)) { const __before__ = __selected_handle_${mId}__ === undefined ? __list_${mId}__.items.get(__previous__)?.handle : __selected_handle_${mId}__; __selected_handle_${mId}__ = undefined; __select_${mId}__(__before__); const __next__ = ${delegatedClicks(marker.body).length > 0 ? `__event_handle_${mId}__?.itemId === __selected_key_${mId}__ ? __event_handle_${mId}__ : ` : ''}__list_${mId}__.items.get(__selected_key_${mId}__)?.handle; __selected_handle_${mId}__ = __next__ ?? null; __select_${mId}__(__next__); } }`,
         )
         return
       }
       lines.push(
         ...generateListUpdate(
           marker,
-          `__ranges__.get(${JSON.stringify(marker.id)})`,
+          `${marker.exclusiveParent ? '__markers__' : '__ranges__'}.get(${JSON.stringify(marker.id)})`,
           'true',
           effectTriggerExpr,
           'false',

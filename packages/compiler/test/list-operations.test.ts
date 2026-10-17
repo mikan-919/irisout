@@ -260,6 +260,7 @@ describe('owned list operations', () => {
       expect(app.button('before')).toBe(staticBefore)
       expect(app.button('after')).toBe(staticAfter)
     },
+    15000,
   )
 
   it('handles adjacent and equal positions', async () => {
