@@ -14,6 +14,8 @@ Vanillaのソースと生成物の比較は[vanilla-code-review.md](./vanilla-co
 
 Vanillaのコード調査を受けた修正後は、構築設定で`listEvents: 'delegated'`を明示する。行の引数なしclickを親で処理し、JSXへDOM操作を追加しない。コンパイラとViteの既定は直接配線である。`JSFB_LIST_EVENTS=direct bun packages/bench/js-framework/irisout/build.mjs`で直接配線の比較用生成物を構築できる。非バブルのclickや外部リスナーとの順序の違いは[ADR-0069](../../../docs/adr/0069-list-storage-and-explicit-click-delegation.md)を参照する。過去の`results.md`は直接配線の測定として保持する。
 
+修正と検証は[code-work-results.md](./code-work-results.md)、公式5実装の比較は[results-code.md](./results-code.md)に記録する。同期比較は各操作100試行で、直接配線の修正前後、直接配線と委譲、Vanillaとの独立2組を分けた。作成・置換・部分更新・追加の短縮と、選択・削除の増加、転送量の増加を併記する。
+
 ## 再実行
 
 リポジトリのルートから実行する。Bun、Node 24以降、Git、起動可能なChromiumが必要。
@@ -43,6 +45,7 @@ PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/path/to/chrome JSFB_COUNT=10 JSFB_MEMORY_CO
 | ------------------------------------- | ------------------------------------- | ------------------------------------------------------------------------ |
 | `JSFB_CHECKOUT`                       | `/tmp/irisout-js-framework-benchmark` | 上流の作業ディレクトリ                                                   |
 | `JSFB_PORT`                           | `8080`                                | 専用の配信ポート                                                         |
+| `JSFB_RESULT_TAG`                     | 空                                    | 公式結果を`results-<tag>/`と同名のJSON・Markdownへ分けて保存する         |
 | `JSFB_COUNT`                          | `3`                                   | CPUの試行回数。行選択はこれに10回を加える                                |
 | `JSFB_MEMORY_COUNT`                   | `1`                                   | メモリの試行回数                                                         |
 | `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` | Playwrightの既定                      | 比較する全実装で使うブラウザー                                           |
@@ -99,6 +102,8 @@ bun packages/bench/js-framework/report.mjs
 現在の計装は`DocumentFragment.append`、`createDocumentFragment`、`Node.childNodes`も含む。これらは既存の`vanilla-work.json`には含まれず、追加後の実測は`vanilla-code-work.json`に保存した。JavaScriptからの呼出し回数であり、ブラウザー内部の処理回数や所要時間は示さない。
 
 `report.mjs`は同期比較のスクリプトのSHA-256を公式測定の生成物と照合し、版が異なる過去の比較を除外する。中央値差の95%区間は同じ試行の組を再抽出する方法で求める。0を含む場合は同等と断定せず「差未確定」と記録する。
+
+今回の公式値は`JSFB_RESULT_TAG=code`で保存した。対応する同期値は`optimization-code.json`と`vanilla-comparison-code.json`を使う。`JSFB_RESULT_TAG=code bun packages/bench/js-framework/report.mjs`に続けて`bun packages/bench/js-framework/code-report.mjs`を実行すると、保存済みの全試行値を照合し、直接配線・委譲・先行比較・公式値の95%区間と資源量を再集計する。旧結果は上書きしない。
 
 ## 一覧高速化計画の最終集計
 

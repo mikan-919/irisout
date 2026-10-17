@@ -280,8 +280,8 @@ fs.writeFileSync(
 fs.writeFileSync(
   path.join(root, `results${suffix}.md`),
   report
-    .replaceAll('./results.json', `./results${suffix}.json`)
-    .replaceAll('./optimization.json', `./optimization${suffix}.json`)
-    .replaceAll('./vanilla-comparison.json', `./vanilla-comparison${suffix}.json`),
+    .replaceAll('results.json', `results${suffix}.json`)
+    .replaceAll('optimization.json', `optimization${suffix}.json`)
+    .replaceAll('vanilla-comparison.json', `vanilla-comparison${suffix}.json`),
 )
 console.log(report)

@@ -6,6 +6,8 @@
 委譲・捕捉・adapter実装はbenchに残すが、compiler/runtimeのproduction配線は
 変更しない。
 
+2026-10-16追記: [ADR-0069](./0069-list-storage-and-explicit-click-delegation.md)で、引数なしの一覧clickに限る明示設定を追加した。既定の直接配線は維持し、親で処理する場合の伝播・順序の違いを別の契約として扱う。
+
 ## コンテキスト
 
 ADR-0005は、keyed reuseしたList itemの操作要素へ直接`addEventListener`を付ける
