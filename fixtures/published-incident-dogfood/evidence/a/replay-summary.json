@@ -1,5 +1,5 @@
 {
-  "completedAt": "2026-10-18T15:15:34.323Z",
+  "completedAt": "2026-10-18T15:28:43.326Z",
   "base": "http://127.0.0.1:4319",
   "bun": "1.4.3",
   "irisout": "0.3.7",
@@ -20,5 +20,6 @@
     "passed": 7,
     "pageerrors": 0
   },
-  "note": "一時パスとURLは保存物を再実行した時点の値である。"
+  "note": "一時パスとURLは保存物を再実行した時点の値である。",
+  "localStorageRecordMatchesOriginal": true
 }

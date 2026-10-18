@@ -1,0 +1,52 @@
+{
+  "completedAt": "2026-10-18T15:28:45.691Z",
+  "base": "http://127.0.0.1:4320",
+  "bun": "1.4.3",
+  "irisout": "0.3.7",
+  "frozenInstall": true,
+  "typecheck": true,
+  "build": true,
+  "existing": {
+    "passed": false,
+    "count": 8,
+    "passedCount": 7,
+    "failures": [
+      {
+        "number": 7,
+        "failure": "詳細の受信数が0から始まりません"
+      }
+    ],
+    "pageerrors": 0
+  },
+  "additional": {
+    "passed": true,
+    "count": 8,
+    "pageerrors": 0
+  },
+  "selfCheck": {
+    "passed": true,
+    "requirements": 8,
+    "pageerrors": 0
+  },
+  "publishedReproductions": {
+    "signalNameCollision": {
+      "reproduced": true,
+      "error": "TypeError: title() is not a function",
+      "generatedExpression": "title()()"
+    },
+    "onError": [
+      {
+        "withOnError": false,
+        "result": "accepted"
+      },
+      {
+        "withOnError": true,
+        "result": "rejected",
+        "message": "compile: irisoutHono found no createFileRouter routes (scope limit)"
+      }
+    ]
+  },
+  "currentSourceChecked": false,
+  "note": "一時パスとURLは保存物を再実行した時点の値である。既存検査の結果は7/8のまま保存する。",
+  "localStorageRecordMatchesOriginal": true
+}

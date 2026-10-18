@@ -1,0 +1,19 @@
+{
+  "name": "incident-board-public-b",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "vp build",
+    "serve": "bun server/start.ts",
+    "selfcheck": "bun selfcheck.mjs"
+  },
+  "dependencies": {
+    "hono": "^4.0.0",
+    "irisout": "0.3.7",
+    "vite-plus": "0.3.0"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.0"
+  }
+}

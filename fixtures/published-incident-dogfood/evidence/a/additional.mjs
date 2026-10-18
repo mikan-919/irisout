@@ -249,7 +249,10 @@ try {
       await page.getByRole('link', { name: '一覧へ戻る' }).click()
       await page.getByLabel('検索', { exact: true }).waitFor()
     }
-    return { values: evidence, stored: await page.evaluate(() => ({ ...localStorage })) }
+    return {
+      values: evidence,
+      stored: await page.evaluate(() => Object.fromEntries(Object.entries(localStorage))),
+    }
   })
   await test(7, '監視の登録0→1→0→1→0・受信数・同一文書', async () => {
     await page.goto(base, { waitUntil: 'networkidle' })

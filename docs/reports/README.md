@@ -1,5 +1,6 @@
 # 検証報告
 
+- [修正文書によるnpm公開版の試用B](./2026-10-18-published-incident-dogfood-v2.md): A・Bとも実装3回。Bは既存7/8と追加8/8を分け、同名props/signalのSSRとonError後の経路検出を公開版の課題として記録した。
 - [npm公開版による障害対応ボードの試用A](./2026-10-18-published-incident-dogfood-v1.md): 公開版0.3.7で実装3回と独立操作16項目を実行し、状態宣言とBun本番配信の文書不足を修正した。
 - [初期化関数の制御フロー](./2026-10-09-lifecycle-control-flow.md): use・onMount・effectの分岐返却、局所変数参照、終了時の状態反映と後始末の所有を検証した。
 - [拒否条件の整理](./2026-10-08-constraint-inventory.md): 拒否箇所を共通原因39群へ分け、通常のJavaScriptへの制限と設計上の境界を区別した。
