@@ -139,3 +139,37 @@ const apiDevelopment = {
 ```
 
 注: この例は本文、認証用の要求ヘッダー、バイナリー応答を転送しない。それらが必要なAPIではHTTPアダプターを使うか、別のAPIサーバーへのViteの`server.proxy`を設定する。メモリ上のデータをloaderとAPIで共有する場合、この例のように同じ`app`を使う。別プロセスへ中継すると、メモリは共有されない。
+
+## 本番生成物をBunで配信する
+
+Hono 4とBunを使う場合は、既存の`server/app.ts`を読み込む起動ファイルを別に作る。次を`server/start.ts`へ保存する。`hono/bun`の`serveStatic`は、導入済みのHonoに含まれる静的ファイル配信処理である。
+
+```ts
+import { Hono } from 'hono'
+import { serveStatic } from 'hono/bun'
+import { app } from './app.ts'
+
+const serverApp = new Hono()
+serverApp.on(['GET', 'HEAD'], '/irisout-client.js', serveStatic({ root: './dist' }))
+serverApp.on(['GET', 'HEAD'], '/assets/*', serveStatic({ root: './dist' }))
+serverApp.route('/', app)
+
+const server = Bun.serve({
+  hostname: '127.0.0.1',
+  port: Number(process.env.PORT ?? 3000),
+  fetch: serverApp.fetch,
+})
+
+console.log(`http://127.0.0.1:${server.port}`)
+```
+
+プロジェクトのルートで構築し、同じ場所から起動する。
+
+```sh
+bun run build
+PORT=3000 bun server/start.ts
+```
+
+`/irisout-client.js`と`/assets/`以下へのGET・HEADを`dist/`から返し、ページとAPIは既存の`app`へ渡す。静的配信を外側のHonoアプリへ先に登録することで、ページルーターの未検出処理に渡る前に生成物を返す。`http://127.0.0.1:3000/users/1`を開くと、既存loaderが利用者を返す場合はHTMLとブラウザー用JavaScriptを同じ配信元から取得できる。
+
+この構築で`dist/`へ出るのはブラウザー用生成物である。起動時にも`server/`、`routes/`、`Layout.tsx`などの参照元ファイルと導入済み依存が必要になる。`server/start.ts`をVite設定から読み込む必要はない。
