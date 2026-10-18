@@ -17,12 +17,12 @@ export interface IrisoutSourceMap {
 }
 
 const START = '/*#__IRISOUT_MAP_START_'
-const END = '/*#__IRISOUT_MAP_END__*/'
-const MARKER = /\/\*#__IRISOUT_MAP_START_(\d+)__\*\/|\/\*#__IRISOUT_MAP_END__\*\//g
+const END = '/*#__IRISOUT_MAP_END'
+const MARKER = /\/\*#__IRISOUT_MAP_START_(\d+)__\*\/|\/\*#__IRISOUT_MAP_END(?:_(\d+))?__\*\//g
 
-export function mappedSource(source: string, sourceStart: number): string {
+export function mappedSource(source: string, sourceStart: number, sourceEnd?: number): string {
   if (!source) return source
-  return `${START}${sourceStart}__*/${source}${END}`
+  return `${START}${sourceStart}__*/${source}${END}${sourceEnd == null ? '' : `_${sourceEnd}`}__*/`
 }
 
 export function stripSourceMapMarkers(source: string): string {
@@ -79,38 +79,70 @@ export function finalizeSourceMap(
   const generated = { line: 0, column: 0 }
   let code = ''
   let cursor = 0
-  let active: ReturnType<typeof resolveOriginal> | null = null
+  const positions: ReturnType<typeof resolveOriginal>[] = []
 
   for (const match of markedCode.matchAll(MARKER)) {
     const index = match.index
     const chunk = markedCode.slice(cursor, index)
     code += chunk
+    const active = positions.at(-1)
+    const lines = chunk.split('\n')
     if (active) {
-      const lines = chunk.split('\n')
       for (let lineIndex = 1; lineIndex < lines.length; lineIndex++) {
-        active.line += 1
         const generatedIndent = lines[lineIndex]!.match(/^\s*/)?.[0].length ?? 0
         const originalIndent =
-          active.source.split('\n')[active.line]?.match(/^\s*/)?.[0].length ?? 0
+          active.source.split('\n')[active.line + lineIndex]?.match(/^\s*/)?.[0].length ?? 0
         addSegment(
           map,
           generated.line + lineIndex,
           generatedIndent,
           active.filePath,
-          active.line,
+          active.line + lineIndex,
           originalIndent,
         )
+      }
+    }
+    // 入れ子の本体を出力している間も、再開する外側の元位置を進める。
+    for (const position of positions) {
+      position.line += lines.length - 1
+      if (lines.length === 1) position.column += chunk.length
+      else {
+        const lastLine = lines.at(-1)!
+        const generatedIndent = lastLine.match(/^\s*/)?.[0].length ?? 0
+        const originalIndent =
+          position.source.split('\n')[position.line]?.match(/^\s*/)?.[0].length ?? 0
+        position.column = originalIndent + lastLine.length - generatedIndent
       }
     }
     advance(generated, chunk)
 
     if (match[1] != null) {
-      active = resolveOriginal(context, Number(match[1]))
-      addSegment(map, generated.line, generated.column, active.filePath, active.line, active.column)
-      setSourceContent(map, active.filePath, active.source)
+      const position = resolveOriginal(context, Number(match[1]))
+      positions.push(position)
+      addSegment(
+        map,
+        generated.line,
+        generated.column,
+        position.filePath,
+        position.line,
+        position.column,
+      )
+      setSourceContent(map, position.filePath, position.source)
     } else {
-      active = null
-      addSegment(map, generated.line, generated.column)
+      positions.pop()
+      const position = positions.at(-1)
+      if (position) {
+        // 関数本体の再生成で改行が消えても、閉じ括弧の元位置から外側を再開する。
+        if (match[2] != null) Object.assign(position, resolveOriginal(context, Number(match[2])))
+        addSegment(
+          map,
+          generated.line,
+          generated.column,
+          position.filePath,
+          position.line,
+          position.column,
+        )
+      } else addSegment(map, generated.line, generated.column)
     }
     cursor = index + match[0].length
   }

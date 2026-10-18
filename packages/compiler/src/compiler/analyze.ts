@@ -1452,7 +1452,7 @@ function analyzeFunctionBodyScope(
       writeDeclIds: inner.writeDeclIds,
       allCollectionWriteDeclIds: inner.allCollectionWriteDeclIds,
       finalize: (resolveUpdateCall) =>
-        `{${mappedSource(inner.finalize(resolveUpdateCall), stmts[0]?.node.start ?? bodyPath.node.start!)}}`,
+        `{${mappedSource(inner.finalize(resolveUpdateCall) + '}', stmts[0]?.node.start ?? bodyPath.node.start!, bodyPath.node.end!)}`,
     }
   }
   const exprScope = analyzeActionExprScope(
@@ -1469,7 +1469,7 @@ function analyzeFunctionBodyScope(
     parent: fnPath.node,
     depth: pathDepth(bodyPath as NodePath<t.Node>),
     finalize: (resolveUpdateCall) =>
-      mappedSource(exprScope.finalize(resolveUpdateCall), bodyPath.node.start!),
+      mappedSource(exprScope.finalize(resolveUpdateCall), bodyPath.node.start!, bodyPath.node.end!),
     readDeclIds: exprScope.readDeclIds,
     directWriteDeclIds: exprScope.directWriteDeclIds,
     directCollectionWriteDeclIds: exprScope.directCollectionWriteDeclIds,

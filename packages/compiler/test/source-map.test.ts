@@ -63,6 +63,35 @@ describe('runtime source maps', () => {
     expect(originalFor(result, "JSON.parse('after')")).toMatchObject({ line: 6, column: 4 })
   })
 
+  it('restores handler positions after nested and sibling callbacks', () => {
+    const source = `export function App() {
+  render(<button onClick={run}>実行</button>)
+  function run() {
+    Promise.resolve().then(() => {
+      Promise.resolve().then(() => console.log('deep')); console.log('middle')
+    })
+    console.log('after first')
+    Promise.resolve().then(() => console.log('sibling')); console.log('after sibling')
+  }
+}`
+    const result = compile(source)
+
+    for (const needle of [
+      "console.log('deep')",
+      "console.log('middle')",
+      "console.log('after first')",
+      "console.log('sibling')",
+      "console.log('after sibling')",
+    ]) {
+      expect(originalFor(result, needle)).toMatchObject({
+        source: '<source>',
+        line: generatedPosition(source, needle).line,
+      })
+    }
+    expect(originalFor(result, 'const __INITIAL_HTML__')).toMatchObject({ source: null })
+    expect(originalFor(result, 'return { mount, hydrate:')).toMatchObject({ source: null })
+  })
+
   it('maps a linked child handler to the child module', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'irisout-source-map-'))
     const entry = path.join(root, 'App.jsx')
@@ -81,6 +110,10 @@ export function App() {
   render(<button onClick={run}>実行</button>)
   function run() {
     JSON.parse('child')
+    Promise.resolve().then(() => {
+      JSON.parse('nested child')
+    })
+    JSON.parse('after nested child')
   }
 }`,
     )
@@ -89,6 +122,16 @@ export function App() {
     expect(originalFor(result, "JSON.parse('child')")).toMatchObject({
       source: child,
       line: 4,
+      column: 4,
+    })
+    expect(originalFor(result, "JSON.parse('nested child')")).toMatchObject({
+      source: child,
+      line: 6,
+      column: 6,
+    })
+    expect(originalFor(result, "JSON.parse('after nested child')")).toMatchObject({
+      source: child,
+      line: 8,
       column: 4,
     })
   })
@@ -163,4 +206,33 @@ export function App() {
     expect(originalFor(result, "console.log('unit effect'")).toMatchObject({ line: 8 })
     expect(originalFor(result, "console.log('unit effect cleanup'")).toMatchObject({ line: 9 })
   })
+
+  it.each(['use', 'onMount', 'effect'])(
+    'restores %s setup positions after nested cleanup bodies',
+    (kind) => {
+      const setup = `() => {
+    try {
+      return () => {
+        console.log('cleanup')
+      }
+    } finally {
+      console.log('finally')
+    }
+  }`
+      const source =
+        kind === 'use'
+          ? `export function App() {
+  render(<div use={observe}>対象</div>)
+  function observe() ${setup.slice('() => '.length)}
+}`
+          : `export function App() {
+  render(<div>対象</div>)
+  ${kind}(${setup})
+}`
+      const result = compile(source)
+
+      expect(originalFor(result, "console.log('cleanup')")).toMatchObject({ line: 6, column: 8 })
+      expect(originalFor(result, "console.log('finally')")).toMatchObject({ line: 9, column: 6 })
+    },
+  )
 })
