@@ -1,0 +1,71 @@
+{
+  "bugs": { "url": "https://github.com/mikan-919/irisout/issues" },
+  "dist": {
+    "shasum": "56832ea4037248ded09cb5dca6fba0172fad35d2",
+    "tarball": "https://registry.npmjs.org/irisout/-/irisout-0.3.7.tgz",
+    "fileCount": 32,
+    "integrity": "sha512-OpzVDUYuJD2cUOToqFltJd9Qcmqp+RA8j39uJ3YQcTmqyzATZDcv74DLt93maiwDjJFkGj+LmBFdc3lp6iuqkw==",
+    "signatures": [
+      {
+        "sig": "MEUCIQDcHPo/CDjN3zkK5CNKc1oa389EUDYvVl67hOa4wazSQAIgQc8DALDdbw+W9Bjzbehpj6YeQGmzoFqoCuQ4Uc4dkvU=",
+        "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U"
+      },
+      {
+        "sig": "MEYCIQD8bVplfG4W10wBUoY1nNefXAqJ3R/i+vZlcdrLID0xqAIhALAwK6VoN3Poj+thuRIXRr/cbsmgvp0M1396+aBEc2us",
+        "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U"
+      }
+    ],
+    "attestations": {
+      "url": "https://registry.npmjs.org/-/npm/v1/attestations/irisout@0.3.7",
+      "provenance": { "predicateType": "https://slsa.dev/provenance/v1" }
+    },
+    "unpackedSize": 2877373
+  },
+  "name": "irisout",
+  "type": "module",
+  "_from": "file:/home/runner/work/_temp/irisout-0.3.7.tgz",
+  "author": { "name": "mikan-919", "email": "mikan919.dev@gmail.com" },
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+    "./jsx": "./dist/jsx.d.ts",
+    "./ssr": { "types": "./dist/ssr.d.ts", "import": "./dist/ssr.js" },
+    "./hono": { "types": "./dist/hono.d.ts", "import": "./dist/hono.js" },
+    "./vite": { "types": "./dist/vite.d.ts", "import": "./dist/vite.js" },
+    "./state": { "types": "./dist/compiler/state.d.ts", "import": "./dist/state.js" },
+    "./motion": { "types": "./dist/motion.d.ts", "import": "./dist/motion.js" },
+    "./routes": { "types": "./dist/routes.d.ts", "import": "./dist/routes.js" },
+    "./browser": { "types": "./dist/browser.d.ts", "import": "./dist/browser.js" },
+    "./runtime": { "types": "./dist/runtime.d.ts", "import": "./dist/runtime.js" },
+    "./hono/vite": { "types": "./dist/hono-vite.d.ts", "import": "./dist/hono-vite.js" },
+    "./diagnostics": { "types": "./dist/diagnostics.d.ts", "import": "./dist/diagnostics.js" },
+    "./motion/vite": { "types": "./dist/motion-vite.d.ts", "import": "./dist/motion-vite.js" }
+  },
+  "license": "MIT",
+  "_npmUser": {
+    "name": "GitHub Actions",
+    "email": "npm-oidc-no-reply@github.com",
+    "trustedPublisher": { "id": "github", "oidcConfigId": "52280460-fad6-4d2f-9a29-f7c27bf65785" }
+  },
+  "homepage": "https://github.com/mikan-919/irisout#readme",
+  "_resolved": "/home/runner/work/_temp/irisout-0.3.7.tgz",
+  "_integrity": "sha512-OpzVDUYuJD2cUOToqFltJd9Qcmqp+RA8j39uJ3YQcTmqyzATZDcv74DLt93maiwDjJFkGj+LmBFdc3lp6iuqkw==",
+  "repository": {
+    "url": "git+https://github.com/mikan-919/irisout.git",
+    "type": "git",
+    "directory": "packages/irisout"
+  },
+  "_npmVersion": "11.19.0",
+  "description": "JSXから静的HTMLと直接DOM更新コードを生成する開発基盤です。",
+  "directories": {},
+  "maintainers": [{ "name": "mikan-919", "email": "mikan919.dev@gmail.com" }],
+  "_nodeVersion": "24.21.0",
+  "_hasShrinkwrap": false,
+  "peerDependencies": { "hono": ">=4.0.0", "motion": "13.4.x", "vite-plus": ">=0.3.0" },
+  "peerDependenciesMeta": { "motion": { "optional": true } },
+  "_npmOperationalInternal": {
+    "tmp": "tmp/irisout_0.3.7_1791443370001_0.38060380828907037",
+    "host": "s3://npm-registry-packages-npm-production"
+  },
+  "_id": "irisout@0.3.7",
+  "version": "0.3.7"
+}

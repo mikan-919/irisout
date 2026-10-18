@@ -1,0 +1,32 @@
+28031 | 		let r = e.startsWith("compile:") ? e : `compile: ${e}`, i = oY(n ?? e, t);
+28032 | 		super(`${r} [${i.filePath}:${i.line}:${i.column}]`, { cause: n }), this.name = "CompileDiagnostic", this.filePath = i.filePath, this.line = i.line, this.column = i.column;
+28033 | 	}
+28034 | };
+28035 | function cY(e, t) {
+28036 | 	return e instanceof sY ? e : new sY(e instanceof Error ? e.message : String(e), t, e);
+                                          ^
+CompileDiagnostic: compile: only top-level `signal()`/`derived()` declarations are supported in this milestone (scope limit) [<source>:3:8]
+ filePath: "<source>",
+     line: 3,
+   column: 8,
+
+      at cY (/tmp/irisout-improvement-2026-10-18/published-app/node_modules/irisout/dist/index.js:28036:35)
+      at AY (/tmp/irisout-improvement-2026-10-18/published-app/node_modules/irisout/dist/index.js:28541:9)
+
+26917 | function eJ(e, t, n) {
+26918 | 	let { kind: r, naturalName: i, declaratorStart: a } = tJ(t);
+26919 | 	$q(e, n, a, i, r);
+26920 | }
+26921 | function tJ(e) {
+26922 | 	let t = /* @__PURE__ */ Error("compile: only top-level `signal()`/`derived()` declarations are supported in this milestone (scope limit)");
+                                 ^
+error: compile: only top-level `signal()`/`derived()` declarations are supported in this milestone (scope limit)
+      at tJ (/tmp/irisout-improvement-2026-10-18/published-app/node_modules/irisout/dist/index.js:26922:26)
+      at eJ (/tmp/irisout-improvement-2026-10-18/published-app/node_modules/irisout/dist/index.js:26918:56)
+      at DJ (/tmp/irisout-improvement-2026-10-18/published-app/node_modules/irisout/dist/index.js:27601:31)
+      at EJ (/tmp/irisout-improvement-2026-10-18/published-app/node_modules/irisout/dist/index.js:27591:10)
+      at kY (/tmp/irisout-improvement-2026-10-18/published-app/node_modules/irisout/dist/index.js:28300:9)
+      at AY (/tmp/irisout-improvement-2026-10-18/published-app/node_modules/irisout/dist/index.js:28539:10)
+      at /tmp/irisout-improvement-2026-10-18/published-app/[eval]:1:36
+
+Bun v1.4.3 (Linux x64)

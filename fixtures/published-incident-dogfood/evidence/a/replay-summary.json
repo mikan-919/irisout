@@ -1,0 +1,24 @@
+{
+  "completedAt": "2026-10-18T15:15:34.323Z",
+  "base": "http://127.0.0.1:4319",
+  "bun": "1.4.3",
+  "irisout": "0.3.7",
+  "frozenInstall": true,
+  "typecheck": true,
+  "build": true,
+  "existing": {
+    "passed": true,
+    "count": 8,
+    "pageerrors": 0
+  },
+  "additional": {
+    "passed": true,
+    "count": 8,
+    "pageerrors": 0
+  },
+  "selfCheck": {
+    "passed": 7,
+    "pageerrors": 0
+  },
+  "note": "一時パスとURLは保存物を再実行した時点の値である。"
+}

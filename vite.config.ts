@@ -20,7 +20,13 @@ export default defineConfig({
     semi: false,
   },
   lint: {
-    ignorePatterns: ['**/dist/**', '**/dist-size-test/**', 'skills/**/assets/**'],
+    ignorePatterns: [
+      '**/dist/**',
+      '**/dist-size-test/**',
+      'skills/**/assets/**',
+      // 公開版の試行記録は固定依存を別ディレクトリーへ導入して検証する。
+      'fixtures/published-incident-dogfood/attempts/**',
+    ],
     options: {
       typeAware: true,
       typeCheck: true,

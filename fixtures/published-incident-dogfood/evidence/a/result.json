@@ -1,0 +1,354 @@
+{
+  "base": "http://127.0.0.1:4317",
+  "passed": true,
+  "existing": {
+    "startedAt": "2026-10-18T15:06:49.742Z",
+    "completedAt": "2026-10-18T15:07:01.744Z",
+    "base": "http://127.0.0.1:4317",
+    "passed": true,
+    "results": [
+      {
+        "number": 1,
+        "name": "JavaScript無効の初期HTMLと詳細件名",
+        "passed": true,
+        "observations": [
+          {
+            "path": "/",
+            "status": 200,
+            "titles": ["決済API停止", "通知遅延", "検索障害"]
+          },
+          {
+            "path": "/incidents/i1",
+            "status": 200,
+            "titles": ["決済API停止"]
+          }
+        ]
+      },
+      {
+        "number": 2,
+        "name": "初期API・検索遅延・未知ID404",
+        "passed": true,
+        "observations": [
+          {
+            "initial": {
+              "status": 200,
+              "body": "[{\"id\":\"i1\",\"title\":\"決済API停止\",\"resolved\":false},{\"id\":\"i2\",\"title\":\"通知遅延\",\"resolved\":false},{\"id\":\"i3\",\"title\":\"検索障害\",\"resolved\":false}]"
+            },
+            "unknown": {
+              "status": 404,
+              "body": "404 Not Found"
+            }
+          },
+          {
+            "timings": [
+              {
+                "q": "決済",
+                "elapsedMs": 601,
+                "status": 200,
+                "body": "[{\"id\":\"i1\",\"title\":\"決済API停止\",\"resolved\":false}]"
+              },
+              {
+                "q": "通知",
+                "elapsedMs": 31,
+                "status": 200,
+                "body": "[{\"id\":\"i2\",\"title\":\"通知遅延\",\"resolved\":false}]"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "number": 3,
+        "name": "検索応答の競合",
+        "passed": true,
+        "observations": [
+          {
+            "body": "障害対応ボード\n検索\n\n通知遅延\n\n未解決\n\n詳細"
+          }
+        ]
+      },
+      {
+        "number": 4,
+        "name": "HTTP503の表示と次の検索による回復",
+        "passed": true,
+        "observations": [
+          {
+            "api": {
+              "status": 503,
+              "body": "{\"error\":\"検索に失敗しました\"}"
+            }
+          },
+          {
+            "failedBody": "障害対応ボード\n検索\n\n検索に失敗しました。もう一度入力してください。\n\n決済API停止\n\n未解決\n\n詳細\n通知遅延\n\n未解決\n\n詳細\n検索障害\n\n未解決\n\n詳細",
+            "recoveredBody": "障害対応ボード\n検索\n\n通知遅延\n\n未解決\n\n詳細"
+          }
+        ]
+      },
+      {
+        "number": 5,
+        "name": "解決APIと一覧・再読み込みへの反映",
+        "passed": true,
+        "observations": [
+          {
+            "detail": "決済API停止\n\n解決済み\n\n解決する\n\n更新しました\n\n作業メモ\n\n監視中\n\n受信数: 0\n\n一覧へ戻る"
+          },
+          {
+            "list": "障害対応ボード\n検索\n\n決済API停止\n\n解決済み\n\n詳細\n通知遅延\n\n未解決\n\n詳細\n検索障害\n\n未解決\n\n詳細",
+            "api": {
+              "status": 200,
+              "body": "[{\"id\":\"i1\",\"title\":\"決済API停止\",\"resolved\":true}]"
+            }
+          }
+        ]
+      },
+      {
+        "number": 6,
+        "name": "ID別メモの分離と遷移・再読み込み保持",
+        "passed": true,
+        "observations": [
+          {
+            "memoA": "検査i1：決済担当への連絡",
+            "memoB": "検査i2：通知の再送",
+            "storedKeys": ["incident-note:i2", "incident-note:i1"]
+          }
+        ]
+      },
+      {
+        "number": 7,
+        "name": "同一文書で監視登録1→0→1と受信表示",
+        "passed": true,
+        "observations": [
+          {
+            "counts": [0, 1, 0, 1, 0, 1],
+            "before": "決済API停止\n\n解決済み\n\n解決する\n\n作業メモ\n\n監視中\n\n受信数: 0\n\n一覧へ戻る",
+            "after": "決済API停止\n\n解決済み\n\n解決する\n\n作業メモ\n\n監視中\n\n受信数: 1\n\n一覧へ戻る",
+            "events": [
+              {
+                "action": "add",
+                "count": 1
+              },
+              {
+                "action": "remove",
+                "count": 0
+              },
+              {
+                "action": "add",
+                "count": 1
+              },
+              {
+                "action": "remove",
+                "count": 0
+              },
+              {
+                "action": "add",
+                "count": 1
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "number": 8,
+        "name": "検索要求中の詳細遷移とキーボード操作",
+        "passed": true,
+        "observations": [
+          {
+            "body": "決済API停止\n\n解決済み\n\n解決する\n\n作業メモ\n\n監視中\n\n受信数: 0\n\n一覧へ戻る",
+            "url": "http://127.0.0.1:4317/incidents/i1",
+            "searchResponses": [200],
+            "pendingBeforeNavigation": true,
+            "pendingAfterNavigation": true,
+            "navigationAfterRequestMs": 47
+          }
+        ]
+      }
+    ],
+    "observations": []
+  },
+  "additional": {
+    "completedAt": "2026-10-18T15:08:40.275Z",
+    "base": "http://127.0.0.1:4317",
+    "passed": true,
+    "results": [
+      {
+        "number": 1,
+        "name": "JavaScriptなしの一覧・全詳細の件名",
+        "passed": true,
+        "evidence": [
+          {
+            "path": "/",
+            "status": 200,
+            "body": "障害対応ボード\n検索\n\n決済API停止\n\n解決済み\n\n詳細\n通知遅延\n\n未解決\n\n詳細\n検索障害\n\n未解決\n\n詳細"
+          },
+          {
+            "path": "/incidents/i1",
+            "status": 200,
+            "body": "決済API停止\n\n解決済み\n\n解決する\n\n作業メモ\n\n監視中\n\n受信数: 0\n\n一覧へ戻る"
+          },
+          {
+            "path": "/incidents/i2",
+            "status": 200,
+            "body": "通知遅延\n\n未解決\n\n解決する\n\n作業メモ\n\n監視中\n\n受信数: 0\n\n一覧へ戻る"
+          },
+          {
+            "path": "/incidents/i3",
+            "status": 200,
+            "body": "検索障害\n\n未解決\n\n解決する\n\n作業メモ\n\n監視中\n\n受信数: 0\n\n一覧へ戻る"
+          }
+        ]
+      },
+      {
+        "number": 2,
+        "name": "APIの初期3件と未知ID404",
+        "passed": true,
+        "evidence": {
+          "initial": {
+            "status": 200,
+            "body": "[{\"id\":\"i1\",\"title\":\"決済API停止\",\"resolved\":true},{\"id\":\"i2\",\"title\":\"通知遅延\",\"resolved\":false},{\"id\":\"i3\",\"title\":\"検索障害\",\"resolved\":false}]",
+            "elapsedMs": 3
+          },
+          "unknown": {
+            "status": 404,
+            "body": "404 Not Found",
+            "elapsedMs": 1
+          }
+        }
+      },
+      {
+        "number": 3,
+        "name": "Tab検索で古い200応答を排除",
+        "passed": true,
+        "evidence": {
+          "tabs": 1,
+          "fastStatus": 200,
+          "slowStatus": 200,
+          "slowAfterFastMs": 562,
+          "body": "障害対応ボード\n検索\n\n通知遅延\n\n未解決\n\n詳細"
+        }
+      },
+      {
+        "number": 4,
+        "name": "503時の失敗表示と完了表示の矛盾なし・回復",
+        "passed": true,
+        "evidence": {
+          "status": 503,
+          "failedStatus": "検索に失敗しました。もう一度入力してください。",
+          "failed": "障害対応ボード\n検索\n\n検索に失敗しました。もう一度入力してください。\n\n通知遅延\n\n未解決\n\n詳細",
+          "recovered": "障害対応ボード\n検索\n\n通知遅延\n\n未解決\n\n詳細"
+        }
+      },
+      {
+        "number": 5,
+        "name": "Enterで詳細へ遷移・Spaceで解決・一覧と再読み込みへ保存",
+        "passed": true,
+        "evidence": {
+          "linkTabs": 1,
+          "buttonTabs": 1,
+          "status": 200,
+          "detail": "通知遅延\n\n解決済み\n\n解決する\n\n更新しました\n\n作業メモ\n\n監視中\n\n受信数: 0\n\n一覧へ戻る",
+          "list": "通知遅延\n\n解決済み\n\n詳細",
+          "reloaded": "通知遅延\n\n解決済み\n\n解決する\n\n作業メモ\n\n監視中\n\n受信数: 0\n\n一覧へ戻る",
+          "api": {
+            "status": 200,
+            "body": "[{\"id\":\"i2\",\"title\":\"通知遅延\",\"resolved\":true}]",
+            "elapsedMs": 31
+          }
+        }
+      },
+      {
+        "number": 6,
+        "name": "ID別保存・別ID往復・再読み込み",
+        "passed": true,
+        "evidence": {
+          "values": [
+            {
+              "id": "i2",
+              "value": "操作確認i2：通知の再送"
+            },
+            {
+              "id": "i3",
+              "value": "操作確認i3：検索の調査"
+            }
+          ],
+          "stored": {
+            "incident-note:i3": "操作確認i3：検索の調査",
+            "incident-note:i2": "操作確認i2：通知の再送"
+          }
+        }
+      },
+      {
+        "number": 7,
+        "name": "監視の登録0→1→0→1→0・受信数・同一文書",
+        "passed": true,
+        "evidence": {
+          "counts": [0, 1, 0, 1, 0],
+          "texts": [
+            {
+              "id": "i1",
+              "before": "決済API停止\n\n解決済み\n\n解決する\n\n作業メモ\n\n監視中\n\n受信数: 0\n\n一覧へ戻る",
+              "after": "決済API停止\n\n解決済み\n\n解決する\n\n作業メモ\n\n監視中\n\n受信数: 1\n\n一覧へ戻る"
+            },
+            {
+              "id": "i2",
+              "before": "通知遅延\n\n解決済み\n\n解決する\n\n作業メモ\n\n監視中\n\n受信数: 0\n\n一覧へ戻る",
+              "after": "通知遅延\n\n解決済み\n\n解決する\n\n作業メモ\n\n監視中\n\n受信数: 1\n\n一覧へ戻る"
+            }
+          ],
+          "changes": [
+            {
+              "action": "add",
+              "count": 1
+            },
+            {
+              "action": "remove",
+              "count": 0
+            },
+            {
+              "action": "add",
+              "count": 1
+            },
+            {
+              "action": "remove",
+              "count": 0
+            }
+          ]
+        }
+      },
+      {
+        "number": 8,
+        "name": "検索未応答中にTabとEnterで詳細へ遷移・応答後も詳細維持",
+        "passed": true,
+        "evidence": {
+          "tabs": 1,
+          "pendingBefore": true,
+          "pendingAfter": true,
+          "navigationAfterRequestMs": 41,
+          "responses": [
+            {
+              "status": 200,
+              "at": 1792336120004
+            }
+          ],
+          "body": "決済API停止\n\n解決済み\n\n解決する\n\n作業メモ\n\n監視中\n\n受信数: 0\n\n一覧へ戻る",
+          "url": "http://127.0.0.1:4317/incidents/i1"
+        }
+      }
+    ],
+    "errors": []
+  },
+  "sourceRead": false,
+  "applicationModified": false,
+  "environmentAttempt": {
+    "failedBeforeChecks": true,
+    "reason": "Chromium setsockopt: Operation not permitted (1)",
+    "resolvedBy": "authorized execution outside sandbox"
+  },
+  "unverified": [
+    "relative imports",
+    "Hono loader implementation",
+    "use attribute source",
+    "dependency versions",
+    "typecheck",
+    "production build"
+  ]
+}
