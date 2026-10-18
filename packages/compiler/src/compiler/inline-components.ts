@@ -250,19 +250,17 @@ function substituteProps(
     )
   }
 
+  // 親の式やchildrenを挿入する前の参照だけを置換する。挿入後に再解析すると、
+  // 親の同名識別子が子のprops束縛へ捕捉され、呼出しが二重になる。
+  clonedFnPath.scope.crawl()
+  const referencesByProp = new Map(
+    propNames.map((name) => [name, clonedFnPath.scope.getOwnBinding(name)?.referencePaths.slice()]),
+  )
   if (hasChildrenProp) substituteChildren(clonedFnPath, componentChildren, tagName)
-
-  // 1つ前のprop置換によるreplaceWithがscope情報を古くする(実装前調査で
-  // 確認した既知のパターン ― 別のバインディングのreferencePathsが古い
-  // ままになり、置換漏れになる)ため、propごとに再クロールしてから
-  // 参照を引く。
   for (const propName of propNames) {
     if (propName === 'children') continue
-    clonedFnPath.scope.crawl()
     const argNode = argExprByProp.get(propName)!
-    const binding = clonedFnPath.scope.getOwnBinding(propName)
-    if (!binding) continue
-    for (const refPath of binding.referencePaths) {
+    for (const refPath of referencesByProp.get(propName) ?? []) {
       refPath.replaceWith(cloneWithPositions(argNode))
     }
   }

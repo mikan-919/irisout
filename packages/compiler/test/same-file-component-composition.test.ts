@@ -37,6 +37,37 @@ async function hydrate(code: string, initialHtml: string): Promise<Element> {
   return container
 }
 
+describe('props置換の束縛', () => {
+  it.each(['title, subtitle, children', 'children, subtitle, title'])(
+    '挿入した親の式を別のpropsとして置換しない: %s',
+    async (params) => {
+      const result = compile(`
+        function Layout({ ${params} }) {
+          render(<main><h1>{title}</h1><h2>{subtitle}</h2>{children}</main>);
+        }
+        export function App() {
+          const title = signal('title');
+          const subtitle = signal('subtitle');
+          render(<Layout title={subtitle()} subtitle={title()}>
+            <button onClick={() => title('changed')}>{title()}</button>
+          </Layout>);
+        }
+      `)
+      for (const container of [
+        await mount(result.code),
+        await hydrate(result.code, result.initialHtml),
+      ]) {
+        expect(container.querySelector('h1')?.textContent).toBe('subtitle')
+        expect(container.querySelector('h2')?.textContent).toBe('title')
+        dispatch(container, container.querySelector('button'), 'click')
+        expect(container.querySelector('h1')?.textContent).toBe('subtitle')
+        expect(container.querySelector('h2')?.textContent).toBe('changed')
+        expect(container.querySelector('button')?.textContent).toBe('changed')
+      }
+    },
+  )
+})
+
 describe('same-file-component-composition: ローカルsignal(リストアイテムのブロック本体)', () => {
   const TODO_SOURCE = `
 export function App() {

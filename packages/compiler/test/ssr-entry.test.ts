@@ -1,10 +1,24 @@
 import { JSDOM } from 'jsdom'
 import { describe, expect, it } from 'vite-plus/test'
-import { compileSSR } from '../src/compiler.ts'
+import path from 'node:path'
+import { compileProject, compileSSR } from '../src/compiler.ts'
 import { serializeSsrState } from '../../vite-plugin/src/ssr.ts'
 import { loadGenerated } from './helpers.ts'
 
 describe('Irisout SSR入口', () => {
+  it('Layoutのpropsと親signalが同名でも子要素の参照を置換しない', async () => {
+    const result = compileProject(
+      path.resolve('fixtures/published-incident-dogfood/attempts/b/repro/page.jsx'),
+      { target: 'ssr' },
+    )
+    const server = await loadGenerated(result.ssrCode!)
+    const rendered = (server.render as (input: unknown) => { html: string })({
+      incident: { title: '決済API停止' },
+    })
+    expect(rendered.html).toContain('>決済API停止</title>')
+    expect(rendered.html).toContain('>決済API停止</h1>')
+  })
+
   it('要求ごとの入力からHTMLとhydrate stateを分けて生成する', async () => {
     const result = compileSSR(`
       export function Page({ title, count }) {
