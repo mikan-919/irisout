@@ -1,0 +1,27 @@
+# render前の通常変数の制限が文書から分からない
+
+観測日: 2026-10-18。公開版0.3.7を使った利用者試験の原文:
+
+> 公開文書は「状態宣言をrender()より前」と書くが、この範囲でsignal以外の通常変数を置けない制限は明記しない。
+
+## 再現
+
+```jsx
+import { render, signal } from 'irisout'
+
+export function App() {
+  const count = signal(0)
+  const requests = { active: true }
+  render(<p>{count()}</p>)
+}
+```
+
+公開版0.3.7と現行ソースはどちらも、`requests`の宣言を`only top-level signal()/derived() declarations ... (scope limit)`で拒否する。値を`signal`へ保持する形と、イベント・初期化関数内で通常の`const`を使う形は両方で受理される。
+
+## 修正済み
+
+`docs/authoring-state.md`へ拒否される宣言、保持する値の書き方、関数内の局所変数との区別を追記し、`docs/getting-started.md`から参照した。制限は公開版の実装と照合した説明であり、通常変数の制限を恒久的な設計方針とする決定ではない。
+
+## 未解決
+
+公開版0.3.7はこの失敗の位置を通常変数の宣言ではなく部品関数の開始位置へ対応付ける。文書修正では診断の生成処理を変えない。診断位置の修正と検証は別の作業で扱う。

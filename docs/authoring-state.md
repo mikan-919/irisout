@@ -58,3 +58,18 @@ export function Price() {
 ## 宣言する位置
 
 ルート部品では状態と派生値を`render()`より前に宣言する。イベント処理など、状態を書き換える関数は`render()`より後に置ける。この配置が解析範囲を示す。
+
+公開版0.3.7では、`render()`より前に通常の数値やオブジェクトを代入する変数宣言は置けない。例えば、次の宣言は未使用でも`compile: ... (scope limit)`で拒否される。
+
+```jsx
+const requests = { active: true }
+```
+
+部品が生きている間に保持する要求番号や生存状態は、表示に直接使わない値も`signal`で宣言する。
+
+```jsx
+const requestId = signal(0)
+const active = signal(true)
+```
+
+イベント処理や`onMount`などの初期化関数の内部では、通常の`const`で一回の実行に使う値を宣言できる。例えば、イベント関数内の`const next = requestId() + 1`は受理される。関数を呼ぶたびに作り直す値と、部品の実行間で保持する値をこの配置で区別する。
