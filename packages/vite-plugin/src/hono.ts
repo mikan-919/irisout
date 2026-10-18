@@ -2,6 +2,7 @@
 // ファイル探索や経路接頭辞の再指定は行わず、Honoの登録済み経路をSSOTとして扱う。
 
 import type { Hono } from 'hono'
+import { findTargetHandler } from 'hono/utils/handler'
 import type { IncomingMessage } from 'node:http'
 import type { Plugin, ViteDevServer } from 'vite-plus'
 import { irisoutExplicitRoutes, type IrisoutExplicitRouteDefinition } from './routes.ts'
@@ -28,9 +29,10 @@ export interface IrisoutHonoOptions {
 
 function readMetadata(handler: unknown): HonoPageMetadata | undefined {
   if (typeof handler !== 'function') return undefined
-  return (handler as unknown as Record<PropertyKey, HonoPageMetadata | undefined>)[
-    irisoutHonoPageMetadata
-  ]
+  // onErrorを持つ子ルーターはHono.routeが包むため、公開APIで元の関数へ戻る。
+  return (
+    findTargetHandler(handler) as unknown as Record<PropertyKey, HonoPageMetadata | undefined>
+  )[irisoutHonoPageMetadata]
 }
 
 function collectRoutes(app: Hono): IrisoutExplicitRouteDefinition[] {

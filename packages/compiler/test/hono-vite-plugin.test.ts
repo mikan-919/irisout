@@ -103,6 +103,27 @@ describe('irisoutHono Vite連携', () => {
     }
   })
 
+  it('onErrorを持つ子ルーターを重ねても元のページ経路を検出する', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'irisout-hono-on-error-'))
+    try {
+      writePage(root, '', 'export function Page() { render(<p>home</p>); }')
+      const pages = createFileRouter(root)
+      pages.onError((error, context) => context.text(error.message, 500))
+      const group = new Hono().route('/pages', pages)
+      group.onError((error, context) => context.text(error.message, 500))
+      const app = new Hono().route('/apps', group)
+      const plugin = irisoutHono(app)
+      const resolveId = plugin.resolveId as unknown as (id: string) => string | null
+      const load = plugin.load as unknown as (id: string) => { code: string } | null
+      expect(load(resolveId('virtual:irisout-routes')!)?.code).toContain('"path":"/apps/pages"')
+      const response = await app.request('/apps/pages')
+      expect(response.status).toBe(200)
+      expect(await response.text()).toContain('home')
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
   it('irisout以外のHono appを拒否する', () => {
     expect(() => irisoutHono(new Hono())).toThrow(
       'compile: irisoutHono found no createFileRouter routes (scope limit)',
