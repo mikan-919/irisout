@@ -218,6 +218,11 @@ export interface GenerateModuleInput {
   ssrHydration: boolean
   /** 文書のmountではhtml属性とhead/bodyも復元する。 */
   isDocument: boolean
+  /**
+   * 静的な初期HTMLを引き継ぐclient専用出力。mountと初期HTML文字列を省き、
+   * hydrate経路だけを残す。SSR HTMLを持たないclient専用buildはfullを使う。
+   */
+  hydrateOnly: boolean
 }
 
 // クローンしたテンプレート内から data-iris-id を持つ要素を探す。ルート
@@ -1296,14 +1301,7 @@ function generateStructuralUnits(
   const templateSetupLines: string[] = []
 
   if (structuralMarkers.size > 0) {
-    declLines.push(
-      'let __doc__;',
-      FIND_HELPER,
-      COLLECT_REFS_HELPER,
-      SET_LIST_TEXT_HELPER,
-      FIND_RANGE_HELPER,
-      '',
-    )
+    declLines.push('let __doc__;')
   }
 
   // M5.5: ネストしたユニットの <template> はcomponent instanceに1つ置いて
@@ -1525,6 +1523,19 @@ function generateStructuralUnits(
         signalsNeedingInitialCall.add(signalId)
       }
     }
+  }
+
+  // helperは実際に生成した呼出しだけを出す。使われない探索・範囲関数を
+  // 生成コードへ残さない。関数宣言はhoistされるのでdeclLinesの末尾でも
+  // 呼出しより前に評価される。
+  if (structuralMarkers.size > 0) {
+    const body = [...declLines, ...templateSetupLines].join('\n')
+    const helpers: string[] = []
+    if (body.includes('__find__(')) helpers.push(FIND_HELPER)
+    if (body.includes('__collectPaths__(')) helpers.push(COLLECT_REFS_HELPER)
+    if (body.includes('__setListText__(')) helpers.push(SET_LIST_TEXT_HELPER)
+    if (body.includes('__findRange__(')) helpers.push(FIND_RANGE_HELPER)
+    if (helpers.length > 0) declLines.push(...helpers, '')
   }
 
   return { declLines, templateSetupLines, signalsNeedingInitialCall }
@@ -1807,6 +1818,7 @@ export function generateModule({
   signalState,
   ssrHydration,
   isDocument,
+  hydrateOnly,
 }: GenerateModuleInput): string {
   const moduleLines: string[] = []
   const instanceLines: string[] = []
@@ -1816,9 +1828,13 @@ export function generateModule({
   )
   const hasStructuralEffects = markersHaveStructuralEffects(markers)
   const mountName = isDocument ? 'mountDocument' : 'mount'
-  const runtimeImports = hasStructuralRanges
-    ? [`${mountName}WithRanges as __mount__`, 'hydrateWithRanges as __hydrate__']
-    : [`${mountName} as __mount__`, 'hydrate as __hydrate__']
+  const runtimeImports = hydrateOnly
+    ? hasStructuralRanges
+      ? ['hydrateWithRanges as __hydrate__']
+      : ['hydrate as __hydrate__']
+    : hasStructuralRanges
+      ? [`${mountName}WithRanges as __mount__`, 'hydrateWithRanges as __hydrate__']
+      : [`${mountName} as __mount__`, 'hydrate as __hydrate__']
   runtimeImports.push('beginDomUpdate as __beginDomUpdate__', 'endDomUpdate as __endDomUpdate__')
   if (markers.some((marker) => marker.kind === 'list' && marker.exclusiveParent))
     runtimeImports.push('hasDomUpdateObservers as __hasDomUpdateObservers__')
@@ -1919,7 +1935,10 @@ export function generateModule({
     instanceLines.push(`${fn.async ? 'async ' : ''}function ${fn.name}(${fn.params}) {${fn.body}}`)
   }
   if (emittedFns.length > 0) instanceLines.push('')
-  instanceLines.push(`const __INITIAL_HTML__ = ${JSON.stringify(initialHtml)};`, '')
+  // hydrate専用出力はサーバーが配る初期HTMLだけを使う。mount用の複製を
+  // バンドルへ含めない(ADR-0072)。
+  if (!hydrateOnly)
+    instanceLines.push(`const __INITIAL_HTML__ = ${JSON.stringify(initialHtml)};`, '')
 
   // 検証用の期待マーカー ID(実要素を指すトップレベルマーカー+ハンドラの
   // マーカー)。構造ユニットは要素ではなくコメント範囲なので、別の
@@ -2203,19 +2222,23 @@ export function generateModule({
     'let __unmounted__ = false;',
     ...(hasStructuralEffects ? ['let __effect_trigger__ = null;'] : []),
     ...(effects.length > 0 ? ['let __initializing__ = false;'] : []),
-    'function mount(container) {',
-    '  if (__mounted__ || __unmounted__) throw new Error("component instance can only be mounted or hydrated once");',
-    structuralMarkerIds.length > 0
-      ? '  ({ markers: __markers__, ranges: __ranges__ } = __mount__(container, __INITIAL_HTML__, __MARKER_IDS__, __RANGE_IDS__));'
-      : '  ({ markers: __markers__ } = __mount__(container, __INITIAL_HTML__, __MARKER_IDS__));',
-    '  __container__ = container;',
-    '  __mounted__ = true;',
-    ...sharedSubscribeLines,
-    ...(effects.length > 0 ? ['  __initializing__ = true;'] : []),
-    ...guardedInitializationLines,
-    ...(effects.length > 0 ? ['  __initializing__ = false;'] : []),
-    '}',
-    '',
+    ...(hydrateOnly
+      ? []
+      : [
+          'function mount(container) {',
+          '  if (__mounted__ || __unmounted__) throw new Error("component instance can only be mounted or hydrated once");',
+          structuralMarkerIds.length > 0
+            ? '  ({ markers: __markers__, ranges: __ranges__ } = __mount__(container, __INITIAL_HTML__, __MARKER_IDS__, __RANGE_IDS__));'
+            : '  ({ markers: __markers__ } = __mount__(container, __INITIAL_HTML__, __MARKER_IDS__));',
+          '  __container__ = container;',
+          '  __mounted__ = true;',
+          ...sharedSubscribeLines,
+          ...(effects.length > 0 ? ['  __initializing__ = true;'] : []),
+          ...guardedInitializationLines,
+          ...(effects.length > 0 ? ['  __initializing__ = false;'] : []),
+          '}',
+          '',
+        ]),
     'function hydrateComponentInstance(container) {',
     '  if (__mounted__ || __unmounted__) throw new Error("component instance can only be mounted or hydrated once");',
     structuralMarkerIds.length > 0
@@ -2520,9 +2543,13 @@ export function generateModule({
   }
 
   const updateNames = [...signalToMarkers.keys()].map((id) => `update_${declOutputName.get(id)}`)
-  instanceLines.push(
-    `return { mount, hydrate: hydrateComponentInstance, unmount${updateNames.map((name) => `, ${name}`).join('')} };`,
-  )
+  const instanceReturn = [
+    ...(hydrateOnly ? [] : ['mount']),
+    'hydrate: hydrateComponentInstance',
+    'unmount',
+    ...updateNames,
+  ].join(', ')
+  instanceLines.push(`return { ${instanceReturn} };`)
 
   moduleLines.push(
     acceptsInputOrState
@@ -2533,21 +2560,25 @@ export function generateModule({
   )
   moduleLines.push(...instanceLines.map((line) => (line ? `  ${line}` : '')))
   moduleLines.push('}', '')
+  if (!hydrateOnly) {
+    moduleLines.push(
+      acceptsInputOrState
+        ? ssrHydration
+          ? 'export function mountComponent(container, state) {'
+          : 'export function mountComponent(container, inputOrState) {'
+        : 'export function mountComponent(container) {',
+      acceptsInputOrState
+        ? ssrHydration
+          ? '  const instance = createComponent(state);'
+          : '  const instance = createComponent(inputOrState);'
+        : '  const instance = createComponent();',
+      '  instance.mount(container);',
+      '  return instance;',
+      '}',
+      '',
+    )
+  }
   moduleLines.push(
-    acceptsInputOrState
-      ? ssrHydration
-        ? 'export function mountComponent(container, state) {'
-        : 'export function mountComponent(container, inputOrState) {'
-      : 'export function mountComponent(container) {',
-    acceptsInputOrState
-      ? ssrHydration
-        ? '  const instance = createComponent(state);'
-        : '  const instance = createComponent(inputOrState);'
-      : '  const instance = createComponent();',
-    '  instance.mount(container);',
-    '  return instance;',
-    '}',
-    '',
     acceptsInputOrState
       ? ssrHydration
         ? 'export function hydrateComponent(container, state) {'

@@ -1,0 +1,834 @@
+{
+  "environment": {
+    "timestamp": "2026-10-19T15:35:58.793Z",
+    "upstreamCommit": "bf894b681fb56433ccb6efb4a3c93e35eda2b20d",
+    "irisoutCommit": "a12492bb836315c3659f9a12541615d3a2b0ef7b",
+    "irisoutWorkingTree": "",
+    "sourceSha256": "0663e6ded4037d1d544f27d2db25c59549b1d783e18c9db7b687c6da1d35722c",
+    "irisoutAssets": {
+      "index.html": "07db6c94b2581811a8f9c75683202d19bb9ff896c76f78fe08da47f23cd7554c",
+      "assets/index-CpWa9Gu0.js": "f6332285b318896061e66845aa7e504f73a05b271b76508ceb46e111140f56d8"
+    },
+    "keyedChecks": [
+      "vanillajs-keyed is keyed for 'run benchmark' and keyed for 'remove row benchmark' and keyed for 'swap rows benchmark' . It'll appear as keyed in the results",
+      "irisout-v0.3.7-dev-keyed is keyed for 'run benchmark' and keyed for 'remove row benchmark' and keyed for 'swap rows benchmark' . It'll appear as keyed in the results"
+    ],
+    "node": "v24.22.0",
+    "bun": "1.3.13",
+    "browser": "Chromium 154.0.8037.57",
+    "platform": "linux 6.18.33.2-microsoft-standard-WSL2 x64",
+    "cpu": "AMD Ryzen 7 7700 8-Core Processor",
+    "logicalCpus": 16,
+    "totalMemoryBytes": 16281915392,
+    "count": 10,
+    "memoryCount": 3,
+    "headless": true,
+    "throttling": "upstream defaults (03/04/05/09: 4x, 06: 2x)",
+    "frameworks": ["irisout", "vanillajs"],
+    "serverFrameworkOrder": ["vanillajs-keyed", "irisout-v0.3.7-dev-keyed"],
+    "reverseFrameworkOrder": false,
+    "benchmarks": [
+      "01_",
+      "02_",
+      "03_",
+      "04_",
+      "05_",
+      "06_",
+      "07_",
+      "08_",
+      "09_",
+      "21_",
+      "22_",
+      "25_",
+      "40_"
+    ]
+  },
+  "samples": [
+    {
+      "framework": "irisout-v0.3.7-dev-keyed",
+      "keyed": true,
+      "benchmark": "21_ready-memory",
+      "type": "memory",
+      "values": {
+        "DEFAULT": {
+          "min": 0.594386100769043,
+          "max": 0.620509147644043,
+          "median": 0.6203603744506836,
+          "mean": 0.6117518742879232,
+          "stddev": 0.015039384987343944,
+          "values": [0.620509147644043, 0.6203603744506836, 0.594386100769043]
+        }
+      }
+    },
+    {
+      "framework": "vanillajs-keyed",
+      "keyed": true,
+      "benchmark": "04_select1k",
+      "type": "cpu",
+      "values": {
+        "total": {
+          "min": 7.3,
+          "max": 11.2,
+          "median": 8,
+          "mean": 8.404999999999998,
+          "stddev": 1.072368259606058,
+          "values": [
+            11.2, 8, 7.4, 8, 8.3, 7.4, 9.5, 9.5, 8.3, 7.9, 9.4, 7.9, 10.2, 7.5, 7.3, 7.5, 8.8, 7.4,
+            8.8, 7.8
+          ]
+        },
+        "script": {
+          "min": 0.2,
+          "max": 1.7,
+          "median": 0.8500000000000001,
+          "mean": 0.8850000000000001,
+          "stddev": 0.48587956055839715,
+          "values": [
+            1.7, 1.2, 0.2, 0.6, 0.6, 1.3, 1.3, 1.5, 1.1, 0.5, 0.8, 1.3, 1.6, 0.3, 0.8, 0.2, 1.1,
+            0.5, 0.2, 0.9
+          ]
+        },
+        "paint": {
+          "min": 4.6,
+          "max": 8.1,
+          "median": 6.25,
+          "mean": 6.250000000000001,
+          "stddev": 0.7904029618525371,
+          "values": [
+            8.1, 6, 6.5, 6.2, 6.3, 4.6, 6.4, 6, 6.4, 6.3, 6.4, 5.5, 7.6, 6.2, 5.3, 6, 6.5, 5.7, 7.4,
+            5.6
+          ]
+        }
+      }
+    },
+    {
+      "framework": "irisout-v0.3.7-dev-keyed",
+      "keyed": true,
+      "benchmark": "06_remove-one-1k",
+      "type": "cpu",
+      "values": {
+        "total": {
+          "min": 30.8,
+          "max": 37.8,
+          "median": 32.65,
+          "mean": 33.42,
+          "stddev": 2.756729140767289,
+          "values": [33.7, 37.6, 33, 30.8, 30.8, 32.3, 37.8, 31.3, 35.9, 31]
+        },
+        "script": {
+          "min": 0.6,
+          "max": 1.5,
+          "median": 0.6499999999999999,
+          "mean": 0.79,
+          "stddev": 0.28848262031225075,
+          "values": [0.6, 1.5, 0.6, 0.6, 0.6, 0.6, 0.9, 1, 0.7, 0.8]
+        },
+        "paint": {
+          "min": 28.1,
+          "max": 35.2,
+          "median": 30.2,
+          "mean": 30.95,
+          "stddev": 2.6056562406511814,
+          "values": [31.7, 34.6, 30.7, 28.6, 28.1, 29.7, 35.2, 28.8, 33.2, 28.9]
+        }
+      }
+    },
+    {
+      "framework": "vanillajs-keyed",
+      "keyed": true,
+      "benchmark": "03_update10th1k_x16",
+      "type": "cpu",
+      "values": {
+        "total": {
+          "min": 34.8,
+          "max": 40.7,
+          "median": 37.8,
+          "mean": 37.87,
+          "stddev": 1.6519685227025371,
+          "values": [38.4, 36.3, 37.8, 37.8, 34.8, 37.5, 38.3, 40.7, 37.3, 39.8]
+        },
+        "script": {
+          "min": 0.6,
+          "max": 1.3,
+          "median": 1.1,
+          "mean": 1.01,
+          "stddev": 0.19692073983655908,
+          "values": [1.1, 0.6, 1.1, 1.1, 0.9, 0.8, 1, 1.1, 1.3, 1.1]
+        },
+        "paint": {
+          "min": 31.5,
+          "max": 36.3,
+          "median": 33.5,
+          "mean": 33.730000000000004,
+          "stddev": 1.4922391824964838,
+          "values": [34.2, 32.7, 32.9, 33, 31.5, 34.3, 34, 36.3, 32.6, 35.8]
+        }
+      }
+    },
+    {
+      "framework": "vanillajs-keyed",
+      "keyed": true,
+      "benchmark": "05_swap1k",
+      "type": "cpu",
+      "values": {
+        "total": {
+          "min": 37.8,
+          "max": 53.6,
+          "median": 48.55,
+          "mean": 48.190000000000005,
+          "stddev": 4.738131371003647,
+          "values": [37.8, 45.2, 51.6, 48.3, 47.2, 48.8, 45.2, 50.8, 53.6, 53.4]
+        },
+        "script": {
+          "min": 0.2,
+          "max": 1.1,
+          "median": 0.8,
+          "mean": 0.6700000000000002,
+          "stddev": 0.3529242915351047,
+          "values": [0.2, 0.2, 0.7, 0.6, 1, 0.9, 0.9, 0.2, 1.1, 0.9]
+        },
+        "paint": {
+          "min": 33.6,
+          "max": 48.1,
+          "median": 43.6,
+          "mean": 43.480000000000004,
+          "stddev": 4.3608867599759265,
+          "values": [33.6, 41.4, 46.7, 42.7, 42.5, 44.5, 41, 46.2, 48.1, 48.1]
+        }
+      }
+    },
+    {
+      "framework": "vanillajs-keyed",
+      "keyed": true,
+      "benchmark": "42_size-compressed",
+      "type": "size",
+      "values": {
+        "DEFAULT": {
+          "min": 2.5,
+          "max": 2.5,
+          "median": 2.5,
+          "mean": 2.5,
+          "stddev": null,
+          "values": [2.5]
+        }
+      }
+    },
+    {
+      "framework": "irisout-v0.3.7-dev-keyed",
+      "keyed": true,
+      "benchmark": "09_clear1k_x8",
+      "type": "cpu",
+      "values": {
+        "total": {
+          "min": 22.3,
+          "max": 29.4,
+          "median": 26.2,
+          "mean": 25.839999999999996,
+          "stddev": 2.5321049653510714,
+          "values": [25.9, 26.5, 26.7, 29.4, 23.2, 23.1, 24.3, 22.3, 28.9, 28.1]
+        },
+        "script": {
+          "min": 18.7,
+          "max": 23.8,
+          "median": 21.55,
+          "mean": 21.360000000000003,
+          "stddev": 1.974954289203789,
+          "values": [21.3, 21.8, 21.8, 23.8, 19.6, 19, 20.1, 18.7, 23.8, 23.7]
+        },
+        "paint": {
+          "min": 2.7,
+          "max": 3.6,
+          "median": 3.3,
+          "mean": 3.2399999999999998,
+          "stddev": 0.29135697844549546,
+          "values": [3.4, 3.4, 3.6, 3.3, 3.3, 3.5, 2.8, 2.7, 3.1, 3.3]
+        }
+      }
+    },
+    {
+      "framework": "irisout-v0.3.7-dev-keyed",
+      "keyed": true,
+      "benchmark": "04_select1k",
+      "type": "cpu",
+      "values": {
+        "total": {
+          "min": 6.1,
+          "max": 9.7,
+          "median": 7.199999999999999,
+          "mean": 7.484999999999999,
+          "stddev": 0.9858338709197567,
+          "values": [
+            6.9, 9, 9.7, 6.8, 8.4, 8.2, 7.7, 7.1, 7.3, 6.3, 6.1, 6.7, 6.7, 9, 6.4, 7.7, 7.1, 8, 7.7,
+            6.9
+          ]
+        },
+        "script": {
+          "min": 0.1,
+          "max": 1.1,
+          "median": 0.45,
+          "mean": 0.45999999999999996,
+          "stddev": 0.363318042491699,
+          "values": [
+            0.6, 0.5, 0.9, 0.4, 0.6, 1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.4, 0.8, 0.5, 0.1, 0.1, 1.1, 0.5,
+            0.1, 1.1
+          ]
+        },
+        "paint": {
+          "min": 4.3,
+          "max": 7,
+          "median": 5.699999999999999,
+          "mean": 5.795,
+          "stddev": 0.8178759396336214,
+          "values": [
+            5.5, 7, 6.3, 5.4, 6.4, 6.1, 6.7, 5.6, 5.8, 4.6, 5.8, 4.3, 4.9, 6.8, 5.6, 7, 5, 5.6, 6.7,
+            4.8
+          ]
+        }
+      }
+    },
+    {
+      "framework": "vanillajs-keyed",
+      "keyed": true,
+      "benchmark": "08_create1k-after1k_x2",
+      "type": "cpu",
+      "values": {
+        "total": {
+          "min": 68.5,
+          "max": 88.2,
+          "median": 72,
+          "mean": 74.62,
+          "stddev": 6.5939029076530655,
+          "values": [84.5, 68.5, 69.9, 76.5, 70.4, 71.5, 71.3, 72.5, 88.2, 72.9]
+        },
+        "script": {
+          "min": 4.5,
+          "max": 5.6,
+          "median": 5.050000000000001,
+          "mean": 5.04,
+          "stddev": 0.41419265512024184,
+          "values": [5.5, 4.6, 4.9, 5.5, 4.6, 5.2, 4.5, 4.8, 5.6, 5.2]
+        },
+        "paint": {
+          "min": 62.5,
+          "max": 80.9,
+          "median": 65.85,
+          "mean": 68.10000000000001,
+          "stddev": 6.118641824602725,
+          "values": [77.1, 62.5, 63.6, 69.6, 64.2, 65, 65.4, 66.4, 80.9, 66.3]
+        }
+      }
+    },
+    {
+      "framework": "vanillajs-keyed",
+      "keyed": true,
+      "benchmark": "01_run1k",
+      "type": "cpu",
+      "values": {
+        "total": {
+          "min": 61.4,
+          "max": 70.1,
+          "median": 63.25,
+          "mean": 63.82000000000001,
+          "stddev": 2.736502228108802,
+          "values": [61.8, 70.1, 61.4, 62.7, 63.8, 64.1, 64.6, 66.4, 61.7, 61.6]
+        },
+        "script": {
+          "min": 4.3,
+          "max": 4.8,
+          "median": 4.45,
+          "mean": 4.52,
+          "stddev": 0.18135294011647246,
+          "values": [4.3, 4.8, 4.8, 4.4, 4.4, 4.4, 4.5, 4.4, 4.5, 4.7]
+        },
+        "paint": {
+          "min": 55.8,
+          "max": 64.2,
+          "median": 57.95,
+          "mean": 58.43000000000001,
+          "stddev": 2.6297655155292214,
+          "values": [56.7, 64.2, 55.8, 57.4, 58.5, 58.9, 59.1, 61.2, 56.5, 56]
+        }
+      }
+    },
+    {
+      "framework": "irisout-v0.3.7-dev-keyed",
+      "keyed": true,
+      "benchmark": "22_run-memory",
+      "type": "memory",
+      "values": {
+        "DEFAULT": {
+          "min": 1.9826087951660156,
+          "max": 2.0287952423095703,
+          "median": 1.9853363037109375,
+          "mean": 1.9989134470621746,
+          "stddev": 0.025914302829154436,
+          "values": [1.9826087951660156, 2.0287952423095703, 1.9853363037109375]
+        }
+      }
+    },
+    {
+      "framework": "vanillajs-keyed",
+      "keyed": true,
+      "benchmark": "09_clear1k_x8",
+      "type": "cpu",
+      "values": {
+        "total": {
+          "min": 25,
+          "max": 29.6,
+          "median": 28.1,
+          "mean": 27.95,
+          "stddev": 1.3729530217745982,
+          "values": [25, 27, 28, 27.6, 28.2, 29.1, 29.1, 29.6, 28.9, 27]
+        },
+        "script": {
+          "min": 20,
+          "max": 25.2,
+          "median": 23.45,
+          "mean": 23.2,
+          "stddev": 1.443760521847181,
+          "values": [20, 22.2, 23.2, 23.5, 23.4, 23.6, 24.3, 25.2, 24.3, 22.3]
+        },
+        "paint": {
+          "min": 3,
+          "max": 3.8,
+          "median": 3.55,
+          "mean": 3.4699999999999998,
+          "stddev": 0.2668749186833079,
+          "values": [3.8, 3.6, 3.5, 3.3, 3.4, 3.7, 3.7, 3, 3.6, 3.1]
+        }
+      }
+    },
+    {
+      "framework": "irisout-v0.3.7-dev-keyed",
+      "keyed": true,
+      "benchmark": "41_size-uncompressed",
+      "type": "size",
+      "values": {
+        "DEFAULT": {
+          "min": 17.4,
+          "max": 17.4,
+          "median": 17.4,
+          "mean": 17.4,
+          "stddev": null,
+          "values": [17.4]
+        }
+      }
+    },
+    {
+      "framework": "vanillajs-keyed",
+      "keyed": true,
+      "benchmark": "22_run-memory",
+      "type": "memory",
+      "values": {
+        "DEFAULT": {
+          "min": 1.7975845336914062,
+          "max": 1.880681037902832,
+          "median": 1.876063346862793,
+          "mean": 1.8514429728190105,
+          "stddev": 0.046699886151699524,
+          "values": [1.7975845336914062, 1.876063346862793, 1.880681037902832]
+        }
+      }
+    },
+    {
+      "framework": "vanillajs-keyed",
+      "keyed": true,
+      "benchmark": "07_create10k",
+      "type": "cpu",
+      "values": {
+        "total": {
+          "min": 677.7,
+          "max": 750.8,
+          "median": 709.35,
+          "mean": 712.6800000000001,
+          "stddev": 25.057391901171375,
+          "values": [739.2, 696.2, 706.7, 701.4, 712, 750.8, 720.8, 681.3, 677.7, 740.7]
+        },
+        "script": {
+          "min": 41.5,
+          "max": 50.7,
+          "median": 44.45,
+          "mean": 44.709999999999994,
+          "stddev": 2.5636129019629923,
+          "values": [43.4, 42.2, 45.8, 44.4, 46, 44.5, 45.2, 41.5, 43.4, 50.7]
+        },
+        "paint": {
+          "min": 625.6,
+          "max": 693.9,
+          "median": 654.55,
+          "mean": 658.9,
+          "stddev": 23.221063235299496,
+          "values": [688, 644.5, 652.4, 648.3, 656.7, 693.9, 667.5, 631.4, 625.6, 680.7]
+        }
+      }
+    },
+    {
+      "framework": "irisout-v0.3.7-dev-keyed",
+      "keyed": true,
+      "benchmark": "05_swap1k",
+      "type": "cpu",
+      "values": {
+        "total": {
+          "min": 34.5,
+          "max": 48.5,
+          "median": 43.3,
+          "mean": 42.290000000000006,
+          "stddev": 4.736254966860537,
+          "values": [42.8, 36.1, 48.5, 46.8, 43.8, 34.5, 39.1, 39.8, 46.5, 45]
+        },
+        "script": {
+          "min": 0.1,
+          "max": 1.3,
+          "median": 0.8,
+          "mean": 0.72,
+          "stddev": 0.3359894178227774,
+          "values": [1, 0.8, 0.1, 1.3, 0.9, 0.5, 0.8, 0.6, 0.4, 0.8]
+        },
+        "paint": {
+          "min": 31.6,
+          "max": 43.2,
+          "median": 38.05,
+          "mean": 37.739999999999995,
+          "stddev": 4.014197027772525,
+          "values": [38.2, 32, 43.2, 41.2, 37.9, 31.6, 35.6, 35.5, 41.4, 40.8]
+        }
+      }
+    },
+    {
+      "framework": "vanillajs-keyed",
+      "keyed": true,
+      "benchmark": "21_ready-memory",
+      "type": "memory",
+      "values": {
+        "DEFAULT": {
+          "min": 0.5310068130493164,
+          "max": 0.5663976669311523,
+          "median": 0.531773567199707,
+          "mean": 0.5430593490600586,
+          "stddev": 0.02021521181612861,
+          "values": [0.531773567199707, 0.5310068130493164, 0.5663976669311523]
+        }
+      }
+    },
+    {
+      "framework": "vanillajs-keyed",
+      "keyed": true,
+      "benchmark": "02_replace1k",
+      "type": "cpu",
+      "values": {
+        "total": {
+          "min": 64.7,
+          "max": 72.3,
+          "median": 67.80000000000001,
+          "mean": 67.76,
+          "stddev": 2.5074112369356363,
+          "values": [67.4, 66.6, 65, 68.2, 69.6, 69.6, 64.9, 72.3, 69.3, 64.7]
+        },
+        "script": {
+          "min": 8.6,
+          "max": 9.4,
+          "median": 8.9,
+          "mean": 8.989999999999998,
+          "stddev": 0.2884826203122511,
+          "values": [9.4, 9.3, 8.7, 8.9, 9.3, 8.9, 8.6, 9.2, 8.9, 8.7]
+        },
+        "paint": {
+          "min": 55.3,
+          "max": 62.1,
+          "median": 57.8,
+          "mean": 57.96,
+          "stddev": 2.305163286575981,
+          "values": [57.1, 56.5, 55.6, 58.5, 59.5, 59.9, 55.5, 62.1, 59.6, 55.3]
+        }
+      }
+    },
+    {
+      "framework": "irisout-v0.3.7-dev-keyed",
+      "keyed": true,
+      "benchmark": "02_replace1k",
+      "type": "cpu",
+      "values": {
+        "total": {
+          "min": 64.9,
+          "max": 71,
+          "median": 67.6,
+          "mean": 67.67999999999999,
+          "stddev": 1.6969253240951852,
+          "values": [67.5, 68.2, 67.7, 66.7, 65.9, 67.3, 69, 68.6, 64.9, 71]
+        },
+        "script": {
+          "min": 8.2,
+          "max": 8.8,
+          "median": 8.6,
+          "mean": 8.52,
+          "stddev": 0.1751190071541827,
+          "values": [8.8, 8.5, 8.6, 8.6, 8.2, 8.4, 8.6, 8.3, 8.6, 8.6]
+        },
+        "paint": {
+          "min": 55.5,
+          "max": 61.4,
+          "median": 58.150000000000006,
+          "mean": 58.31999999999999,
+          "stddev": 1.6287691330845169,
+          "values": [57.9, 58.9, 58.2, 57.3, 56.9, 58.1, 59.6, 59.4, 55.5, 61.4]
+        }
+      }
+    },
+    {
+      "framework": "irisout-v0.3.7-dev-keyed",
+      "keyed": true,
+      "benchmark": "07_create10k",
+      "type": "cpu",
+      "values": {
+        "total": {
+          "min": 685.3,
+          "max": 778.5,
+          "median": 724.3,
+          "mean": 719.75,
+          "stddev": 31.049217202513958,
+          "values": [717.7, 686.5, 692.2, 731.8, 734.3, 691.1, 778.5, 730.9, 749.2, 685.3]
+        },
+        "script": {
+          "min": 42.6,
+          "max": 47.4,
+          "median": 43.95,
+          "mean": 44.45,
+          "stddev": 1.4370107863199908,
+          "values": [45.1, 45.5, 43.1, 43.9, 44, 43.6, 47.4, 43.7, 42.6, 45.6]
+        },
+        "paint": {
+          "min": 631.4,
+          "max": 721.3,
+          "median": 671.2,
+          "mean": 666.17,
+          "stddev": 30.197757459049107,
+          "values": [664.4, 632.4, 639.4, 678, 681.4, 639.3, 721.3, 678.9, 695.2, 631.4]
+        }
+      }
+    },
+    {
+      "framework": "vanillajs-keyed",
+      "keyed": true,
+      "benchmark": "41_size-uncompressed",
+      "type": "size",
+      "values": {
+        "DEFAULT": {
+          "min": 11.3,
+          "max": 11.3,
+          "median": 11.3,
+          "mean": 11.3,
+          "stddev": null,
+          "values": [11.3]
+        }
+      }
+    },
+    {
+      "framework": "vanillajs-keyed",
+      "keyed": true,
+      "benchmark": "43_first-paint",
+      "type": "size",
+      "values": {
+        "DEFAULT": {
+          "min": 86.7,
+          "max": 86.7,
+          "median": 86.7,
+          "mean": 86.7,
+          "stddev": null,
+          "values": [86.7]
+        }
+      }
+    },
+    {
+      "framework": "irisout-v0.3.7-dev-keyed",
+      "keyed": true,
+      "benchmark": "25_run-clear-memory",
+      "type": "memory",
+      "values": {
+        "DEFAULT": {
+          "min": 0.7128934860229492,
+          "max": 0.7684974670410156,
+          "median": 0.76837158203125,
+          "mean": 0.7499208450317383,
+          "stddev": 0.03206669531044999,
+          "values": [0.7684974670410156, 0.7128934860229492, 0.76837158203125]
+        }
+      }
+    },
+    {
+      "framework": "vanillajs-keyed",
+      "keyed": true,
+      "benchmark": "06_remove-one-1k",
+      "type": "cpu",
+      "values": {
+        "total": {
+          "min": 31.2,
+          "max": 44.6,
+          "median": 38.15,
+          "mean": 37.24,
+          "stddev": 4.2843902716722715,
+          "values": [37.9, 31.2, 39.3, 37.9, 40.3, 31.9, 38.9, 38.4, 32, 44.6]
+        },
+        "script": {
+          "min": 0.7,
+          "max": 1.1,
+          "median": 1,
+          "mean": 0.9399999999999998,
+          "stddev": 0.1712697677155351,
+          "values": [1, 0.8, 1.1, 0.8, 1.1, 1.1, 1, 0.7, 0.7, 1.1]
+        },
+        "paint": {
+          "min": 28.7,
+          "max": 41.4,
+          "median": 35.15,
+          "mean": 34.269999999999996,
+          "stddev": 3.9567242343467233,
+          "values": [34.5, 28.7, 35.9, 35, 37.1, 29.3, 35.7, 35.3, 29.8, 41.4]
+        }
+      }
+    },
+    {
+      "framework": "irisout-v0.3.7-dev-keyed",
+      "keyed": true,
+      "benchmark": "42_size-compressed",
+      "type": "size",
+      "values": {
+        "DEFAULT": {
+          "min": 5.2,
+          "max": 5.2,
+          "median": 5.2,
+          "mean": 5.2,
+          "stddev": null,
+          "values": [5.2]
+        }
+      }
+    },
+    {
+      "framework": "irisout-v0.3.7-dev-keyed",
+      "keyed": true,
+      "benchmark": "01_run1k",
+      "type": "cpu",
+      "values": {
+        "total": {
+          "min": 60.2,
+          "max": 69.6,
+          "median": 62.35,
+          "mean": 63.29,
+          "stddev": 3.0577588016207033,
+          "values": [69.6, 62.7, 61.3, 62, 60.8, 63.5, 67.8, 63.2, 60.2, 61.8]
+        },
+        "script": {
+          "min": 4,
+          "max": 4.8,
+          "median": 4.2,
+          "mean": 4.239999999999999,
+          "stddev": 0.23664319132398465,
+          "values": [4.8, 4.4, 4.1, 4.2, 4.3, 4, 4.3, 4.1, 4, 4.2]
+        },
+        "paint": {
+          "min": 55.4,
+          "max": 63.8,
+          "median": 57.25,
+          "mean": 58.19,
+          "stddev": 2.8411460911243385,
+          "values": [63.8, 57.5, 56.5, 57, 55.6, 58.7, 62.6, 58.1, 55.4, 56.7]
+        }
+      }
+    },
+    {
+      "framework": "vanillajs-keyed",
+      "keyed": true,
+      "benchmark": "25_run-clear-memory",
+      "type": "memory",
+      "values": {
+        "DEFAULT": {
+          "min": 0.5632076263427734,
+          "max": 0.6088895797729492,
+          "median": 0.588383674621582,
+          "mean": 0.5868269602457682,
+          "stddev": 0.022880728507525417,
+          "values": [0.5632076263427734, 0.6088895797729492, 0.588383674621582]
+        }
+      }
+    },
+    {
+      "framework": "irisout-v0.3.7-dev-keyed",
+      "keyed": true,
+      "benchmark": "43_first-paint",
+      "type": "size",
+      "values": {
+        "DEFAULT": {
+          "min": 75.2,
+          "max": 75.2,
+          "median": 75.2,
+          "mean": 75.2,
+          "stddev": null,
+          "values": [75.2]
+        }
+      }
+    },
+    {
+      "framework": "irisout-v0.3.7-dev-keyed",
+      "keyed": true,
+      "benchmark": "03_update10th1k_x16",
+      "type": "cpu",
+      "values": {
+        "total": {
+          "min": 33.3,
+          "max": 39.5,
+          "median": 37.05,
+          "mean": 36.99999999999999,
+          "stddev": 1.7556258776351594,
+          "values": [35.4, 38.9, 37.9, 37.7, 36.6, 37.1, 39.5, 37, 33.3, 36.6]
+        },
+        "script": {
+          "min": 0.8,
+          "max": 1.5,
+          "median": 1.15,
+          "mean": 1.16,
+          "stddev": 0.2590581230363393,
+          "values": [1.5, 0.8, 1.1, 1.5, 1.2, 1, 0.9, 0.9, 1.4, 1.3]
+        },
+        "paint": {
+          "min": 29.3,
+          "max": 34.8,
+          "median": 32.95,
+          "mean": 32.690000000000005,
+          "stddev": 1.6549253088214506,
+          "values": [30.5, 33.8, 33.7, 32.9, 32.2, 32.9, 34.8, 33.8, 29.3, 33]
+        }
+      }
+    },
+    {
+      "framework": "irisout-v0.3.7-dev-keyed",
+      "keyed": true,
+      "benchmark": "08_create1k-after1k_x2",
+      "type": "cpu",
+      "values": {
+        "total": {
+          "min": 70.5,
+          "max": 92.8,
+          "median": 75.9,
+          "mean": 76.44000000000001,
+          "stddev": 6.443118637568128,
+          "values": [76.5, 70.5, 70.5, 76, 72.1, 75.8, 92.8, 79.6, 76.6, 74]
+        },
+        "script": {
+          "min": 4.2,
+          "max": 5.2,
+          "median": 4.4,
+          "mean": 4.49,
+          "stddev": 0.2960855732160327,
+          "values": [4.4, 4.6, 4.2, 4.7, 4.4, 4.3, 5.2, 4.4, 4.2, 4.5]
+        },
+        "paint": {
+          "min": 64.6,
+          "max": 85.5,
+          "median": 70.15,
+          "mean": 70.51,
+          "stddev": 5.985250389267122,
+          "values": [70.8, 64.6, 65.2, 70.1, 66.3, 70.2, 85.5, 73.7, 70.7, 68]
+        }
+      }
+    }
+  ]
+}

@@ -5,6 +5,8 @@
 
 ## 現在地（2026-10-19）
 
+公式js-framework-benchmarkの転送量差を受け、初期HTMLを配るclient束から未使用のmount経路を外した。`clientEntry: 'hydrate'`をcompilerとVite pluginへ追加し、生成moduleは`mount`import・`__INITIAL_HTML__`・`mountComponent`exportを出さずhydrate経路だけを残す。既定は`full`のままなので、直接`compile()`を使う利用例と仮想moduleなしのclient専用buildは変わらない。pre-Phase 1のBrotli 4,948バイトに対し、生成側で4,692バイト(-12.8%生)、一覧の未使用探索helperの除去とbenchmark本番buildのmodulepreload polyfill無効化(この構成は動的importがなく測定Chromiumはネイティブ解釈)を加えて4,433バイトとなった。事前目標4,403バイトには30バイト届かない。残りは`reconcileListMap`/`reconcileList`の重複で、安全な共通化はBrotliを悪化させ、通知先がある場合の交換を汎用照合へ落とす削減と診断文の短縮は品質を下げるため採らない。公式測定はBrotli 5.20→4.70KiB、9操作のVanilla比幾何平均は0.98・0.99(実行順交替の2組)で、Phase 1はclient束の未使用経路だけを消すため操作時間の経路は変えていない。全607試験、静的検査、型検査を通過した。設計はADR-0072、前後の集計は`packages/bench/js-framework/results-baseline-2026-10-19.md`・`results-phase1-2026-10-19.md`・`results-phase1b-2026-10-19.md`にある。
+
 保存済みのハンドラー8項目、初期化・破棄8項目、関数境界のmount/hydrate、障害対応ボード8項目を`bun run test:browser`と変更ごとのCIへ接続した。公開物の構築・梱包、別ディレクトリーへの導入、型検査、本番構築、空きポートでの起動と停止、JSON・ログ・失敗画像の保存を1コマンドで行う。原利用例と試用Bが全操作を通過し、受信数の不合格時には終了コード1、サーバーとブラウザーの停止、一時導入先削除を確認した。検査中のSIGTERMでもブラウザーが残らないことを確認した。全606試験、静的検査、実例・公開物・公式サイト構築、梱包物導入、文書検査を通過した。公開版の原記録は保持し、GitHub Actionsの遠隔実行と成果物取得は未確認である。詳細は`docs/reports/2026-10-19-continuous-browser-checks.md`にある。
 
 保存した試用Bを現行ソース版へ差し替える検査で、要素間の静的な文字列式`{' '}`が反応的な本文と判定され、一覧の構築を拒否する制約を確認した。公開版0.3.7のタグでも最小例が同じ診断となり、第3段階による退行とは確認していない。静的な文字列を初期HTMLへ書き出す処理へ分け、mount/hydrateとキー再利用後の更新、特殊文字の保持を回帰試験へ加えた。保存した試用Bのソースと原結果は変更していない。

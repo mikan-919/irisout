@@ -81,6 +81,11 @@ export function useContext<T>(_context: IrisContext<T>): T {
 export interface CompileProjectOptions {
   /** clientは既存入口、ssrは要求単位のrender moduleを追加生成する。 */
   target?: 'client' | 'ssr'
+  /**
+   * client生成物の入口。hydrateは静的初期HTMLを引き継ぐVite build向けに、
+   * mountComponentと初期HTML文字列を省く。既定はfull。
+   */
+  clientEntry?: 'full' | 'hydrate'
   /** 引数なしの一覧clickを親で処理する。非バブルのclickは対象外。 */
   listEvents?: 'direct' | 'delegated'
   /** 外部拡張が各moduleをirisoutの標準記法へ下げる前処理。 */
@@ -105,6 +110,7 @@ export function compileProject(
     const options: CompileOptions = {
       allowModuleSupport: true,
       target: projectOptions.target,
+      clientEntry: projectOptions.clientEntry,
       listEvents: projectOptions.listEvents,
       hasRelativeModule: linked.hasRelativeModule,
       supportStatements: linked.supportStatements,

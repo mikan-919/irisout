@@ -20,5 +20,8 @@ await build({
     outDir: path.join(checkout, 'frameworks/keyed/irisout/dist'),
     emptyOutDir: true,
     minify: true,
+    // 測定するChromiumはmodulepreloadをネイティブに解釈するため、Viteの
+    // 互換polyfill(この構成では動的importが無く実行されない)を出さない。
+    modulePreload: { polyfill: false },
   },
 })

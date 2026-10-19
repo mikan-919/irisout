@@ -356,6 +356,11 @@ function buildSignalToMarkers(
 
 export interface CompileOptions {
   target?: 'client' | 'ssr'
+  /**
+   * client生成物の入口。hydrateは静的初期HTMLを引き継ぐbuild向けに、
+   * mountComponentと初期HTML文字列を出力しない。既定はfull。
+   */
+  clientEntry?: 'full' | 'hydrate'
   /** 引数なしの平坦な一覧のclickを親で受ける明示契約。既定は直接配線。 */
   listEvents?: 'direct' | 'delegated'
   /** 単一sourceのブラウザ境界を検査する。Nodeの入口では使わない。 */
@@ -1562,6 +1567,7 @@ export function compileSource(source: string, options: CompileOptions = {}): Com
     signalState,
     ssrHydration: options.target === 'ssr',
     isDocument,
+    hydrateOnly: options.clientEntry === 'hydrate',
   })
   const { code, map } = finalizeSourceMap(restoreAuthoredNames(markedCode, authoredNames), {
     filePath: options.sourceMapFilePath ?? '<source>',
@@ -1604,7 +1610,7 @@ export function compileSource(source: string, options: CompileOptions = {}): Com
 
 export function compile(
   source: string,
-  options: Pick<CompileOptions, 'listEvents'> = {},
+  options: Pick<CompileOptions, 'listEvents' | 'clientEntry'> = {},
 ): CompileResult {
   try {
     return compileSource(source, options)

@@ -76,7 +76,10 @@ linked source + module-scope補助宣言
 `compileProject()`は生成結果とともに、リンクした入口・相対moduleの絶対pathを返す。
 `irisout/vite`はこの一覧だけを監視対象にし、変更時に同じ入口を再コンパイルする。
 初期HTMLはビルド時に一度生成してindex.htmlのmarkerへ埋め込み、仮想moduleへhydrate処理を
-出力する。これは要求ごとのSSR HTMLではなく、静的HTMLをブラウザで引き継ぐclient buildの
+出力する。このclient束は`compileProject(entryPath, { clientEntry: 'hydrate' })`で生成し、
+`mount`・mount時の初期HTML文字列・`mountComponent`exportを含めない(ADR-0072)。同じ入口を
+直接`compile()`する利用例と仮想moduleなしのclient専用buildは既定の`full`を使う。これは
+要求ごとのSSR HTMLではなく、静的HTMLをブラウザで引き継ぐclient buildの
 契約である。request SSRの入口と要求ごとのstate所有はADR-0038で別契約に分ける。`irisout/vite`の開発時の
 変更反映はページ全体の再読み込みであり、状態保持やDOM差分HMRは対象外である。`irisout/hono/vite`は
 更新されたページmoduleをViteのHMR境界で差し替え、現在のページだけをSSR結果から再hydrateする。

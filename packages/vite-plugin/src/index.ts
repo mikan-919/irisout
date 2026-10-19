@@ -64,6 +64,9 @@ export function irisout(options: IrisoutPluginOptions): Plugin {
     const next = compileProject(entryPath, {
       transformSource: options.transformSource,
       listEvents: options.listEvents,
+      // このpluginは初期HTMLをindex.htmlへ埋め込み、仮想moduleから
+      // hydrateComponentだけを呼ぶ。mount用の複製をclient束へ含めない。
+      clientEntry: 'hydrate',
     })
     result = next
     dependencies = new Set(next.dependencies.map(normalizePath))
