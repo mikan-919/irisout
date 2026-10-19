@@ -5,7 +5,7 @@ The session directory contains a history of your previous actions; if necessary,
 
 ## Gitでの作業と変更の確定
 
-- このプロジェクトのバージョン管理にはGitだけを使う。Jujutsu（`jj`）は使わず、初期化や別名の登録もしない。
+- このプロジェクトのバージョン管理にはGitだけを使う。
 - 作業前、作業中、確定前に`git status --short --branch`で状態を確認する。
 - 確定する変更を`git add`し、差分を確認してから`git commit -m "<英語命令形の要約>"`を使う。
 - Gitのpre-commitフックが`bun run check`と`bun run test`を実行する。失敗した場合は原因を直してから再度確定する。`HUSKY=0`などで検査を飛ばさない。
