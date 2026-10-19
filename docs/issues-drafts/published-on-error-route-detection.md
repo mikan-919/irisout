@@ -23,3 +23,9 @@ bun repro/on-error-routes.mjs
 ## 現行ソースでの修正（2026-10-18）
 
 現行ソースでも登録ありの比較が同じ診断となった。Honoの`route()`は子ルーターに独自の`onError`がある場合、元の処理関数を別の関数で包む。irisoutHonoが外側の関数だけを調べていたため、元の関数に付けた経路情報を読めなかった。Honoの公開関数`findTargetHandler`で元の処理関数を取得して情報を読む修正を行った。二段の子ルーターにそれぞれ`onError`を設定した経路の検出とSSR応答を回帰試験で確認した。公開版0.3.7の観測は変更していない。
+
+## Hono 4.0.0との整合（2026-10-19）
+
+最初の修正で使った`hono/utils/handler`は4.0.0に存在しない。4.0.0は公開された`hono/hono-base`の`COMPOSED_HANDLER` Symbol、4.13.13は`__COMPOSED_HANDLER`文字列で包んだ関数を保持する。実際の導入版の公開Symbolがあればそれを使い、それ以外は確認した文字列キーを辿る。`hono/hono-base`を梱包時の外部依存へ残し、公開peerの`hono >=4.0.0`を維持する。
+
+同じ梱包物を4.0.0と4.13.13へ隔離導入し、二段の`onError`を持つ経路の検出とHTTP 200を確認した。[検証結果](../reports/evidence/2026-10-19-hono-on-error-compatibility.json)と[検査器](../../fixtures/javascript-boundaries/verify-hono.mjs)を保存した。

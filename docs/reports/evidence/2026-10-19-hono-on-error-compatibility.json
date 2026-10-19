@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-19",
+  "archive": "/tmp/irisout-pack-OCKIKS/irisout-0.3.7.tgz",
+  "versions": [
+    {
+      "hono": "4.0.0",
+      "status": 200,
+      "path": "/apps/pages",
+      "externalHonoBase": true,
+      "pass": true
+    },
+    {
+      "hono": "4.13.13",
+      "status": 200,
+      "path": "/apps/pages",
+      "externalHonoBase": true,
+      "pass": true
+    }
+  ]
+}

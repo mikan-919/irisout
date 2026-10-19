@@ -173,3 +173,11 @@ PORT=3000 bun server/start.ts
 `/irisout-client.js`と`/assets/`以下へのGET・HEADを`dist/`から返し、ページとAPIは既存の`app`へ渡す。静的配信を外側のHonoアプリへ先に登録することで、ページルーターの未検出処理に渡る前に生成物を返す。`http://127.0.0.1:3000/users/1`を開くと、既存loaderが利用者を返す場合はHTMLとブラウザー用JavaScriptを同じ配信元から取得できる。
 
 この構築で`dist/`へ出るのはブラウザー用生成物である。起動時にも`server/`、`routes/`、`Layout.tsx`などの参照元ファイルと導入済み依存が必要になる。`server/start.ts`をVite設定から読み込む必要はない。
+
+## SSRの失敗を調べる
+
+ページが500を返した場合は、該当する入力を使って`compileProject(pagePath, { target: 'ssr' })`の`ssrCode`を実行し、`render(input)`が投げる例外を確認する。`createFileRouter`はSSRの例外を500応答へ変換するため、子ルーターの`onError`へその例外が必ず届くわけではない。ブラウザー用の構築成功だけでは、要求時の入力による描画成功を確認できない。
+
+公開版0.3.7では、Layoutのprops名と親signal名の衝突による二重呼出しと、子ルーターへ`onError`を追加した後の経路検出失敗を観測した。未公開ソースでは両方を修正済み。公開版を使う間の再現・回避は`docs/issues-drafts/published-layout-signal-name-collision.md`と`docs/issues-drafts/published-on-error-route-detection.md`を参照する。
+
+ソース版の`onError`付き経路は、梱包物をHono 4.0.0と4.13.13へ導入して検証した。導入版の`hono/hono-base`から公開Symbolを読むため、この入口を構築時に外部依存として残す。公開peerの`hono >=4.0.0`を維持する。

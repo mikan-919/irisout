@@ -2,12 +2,15 @@
 // ファイル探索や経路接頭辞の再指定は行わず、Honoの登録済み経路をSSOTとして扱う。
 
 import type { Hono } from 'hono'
-import { findTargetHandler } from 'hono/utils/handler'
+import * as HonoBase from 'hono/hono-base'
 import type { IncomingMessage } from 'node:http'
 import type { Plugin, ViteDevServer } from 'vite-plus'
 import { irisoutExplicitRoutes, type IrisoutExplicitRouteDefinition } from './routes.ts'
 
 const irisoutHonoPageMetadata = Symbol.for('irisout.hono.page-metadata')
+// Hono 4.0.0の公開Symbolと、4.13.13で使う文字列キーを実際の導入版から読む。
+const composedHandlerKey =
+  (Reflect.get(HonoBase, 'COMPOSED_HANDLER') as symbol | undefined) ?? '__COMPOSED_HANDLER'
 
 interface HonoPageMetadata {
   readonly route: {
@@ -29,10 +32,11 @@ export interface IrisoutHonoOptions {
 
 function readMetadata(handler: unknown): HonoPageMetadata | undefined {
   if (typeof handler !== 'function') return undefined
-  // onErrorを持つ子ルーターはHono.routeが包むため、公開APIで元の関数へ戻る。
+  const properties = handler as unknown as Record<PropertyKey, unknown>
   return (
-    findTargetHandler(handler) as unknown as Record<PropertyKey, HonoPageMetadata | undefined>
-  )[irisoutHonoPageMetadata]
+    (properties[irisoutHonoPageMetadata] as HonoPageMetadata | undefined) ??
+    readMetadata(properties[composedHandlerKey])
+  )
 }
 
 function collectRoutes(app: Hono): IrisoutExplicitRouteDefinition[] {

@@ -102,6 +102,7 @@ const publicEntries = [
     source: 'packages/vite-plugin/src/hono.ts',
     external: (id) =>
       id === 'hono' ||
+      id.startsWith('hono/') ||
       id === 'vite-plus' ||
       id.startsWith('node:') ||
       id.includes('compiler/src/compiler'),
