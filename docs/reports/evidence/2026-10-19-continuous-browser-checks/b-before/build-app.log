@@ -1,0 +1,30 @@
+$ vp build
+failed to load config from /tmp/irisout-browser-checks-Rkh0V8/app/vite.config.ts
+error during build:
+CompileDiagnostic: compile: mixing elements into a reactive text unit is not supported yet (scope limit) [/tmp/irisout-browser-checks-Rkh0V8/app/Layout.jsx:3:5]
+    at P9 (file:///tmp/irisout-browser-checks-Rkh0V8/app/node_modules/irisout/dist/index.js:47691:31)
+    at Ohe (file:///tmp/irisout-browser-checks-Rkh0V8/app/node_modules/irisout/dist/index.js:48891:9)
+    at P (file:///tmp/irisout-browser-checks-Rkh0V8/app/node_modules/irisout/dist/hono.js:266:10)
+    at K (file:///tmp/irisout-browser-checks-Rkh0V8/app/node_modules/irisout/dist/hono.js:348:38)
+    at file:///tmp/irisout-browser-checks-Rkh0V8/app/node_modules/.vite-temp/vite.config.ts.timestamp-1792387070160-2b47ab8b0351e.mjs:37:15
+    at ModuleJob.run (node:internal/modules/esm/module_job:561:25)
+    at async node:internal/modules/esm/loader:647:26
+    at async loadConfigFromBundledFile (file:///tmp/irisout-browser-checks-Rkh0V8/app/node_modules/@voidzero-dev/vite-plus-core/dist/vite/node/chunks/node.js:42370:12)
+    at async bundleAndLoadConfigFile (file:///tmp/irisout-browser-checks-Rkh0V8/app/node_modules/@voidzero-dev/vite-plus-core/dist/vite/node/chunks/node.js:42220:21)
+    at async loadConfigFromFile (file:///tmp/irisout-browser-checks-Rkh0V8/app/node_modules/@voidzero-dev/vite-plus-core/dist/vite/node/chunks/node.js:42180:42) {
+  filePath: '/tmp/irisout-browser-checks-Rkh0V8/app/Layout.jsx',
+  line: 3,
+  column: 5,
+  [cause]: Error: compile: mixing elements into a reactive text unit is not supported yet (scope limit)
+      at u9 (file:///tmp/irisout-browser-checks-Rkh0V8/app/node_modules/irisout/dist/index.js:46928:15)
+      at m9 (file:///tmp/irisout-browser-checks-Rkh0V8/app/node_modules/irisout/dist/index.js:47030:8)
+      at vme (file:///tmp/irisout-browser-checks-Rkh0V8/app/node_modules/irisout/dist/index.js:47105:37)
+      at u9 (file:///tmp/irisout-browser-checks-Rkh0V8/app/node_modules/irisout/dist/index.js:46857:27)
+      at u9 (file:///tmp/irisout-browser-checks-Rkh0V8/app/node_modules/irisout/dist/index.js:46875:35)
+      at u9 (file:///tmp/irisout-browser-checks-Rkh0V8/app/node_modules/irisout/dist/index.js:46875:35)
+      at u9 (file:///tmp/irisout-browser-checks-Rkh0V8/app/node_modules/irisout/dist/index.js:46875:35)
+      at xme (file:///tmp/irisout-browser-checks-Rkh0V8/app/node_modules/irisout/dist/index.js:47290:10)
+      at bme (file:///tmp/irisout-browser-checks-Rkh0V8/app/node_modules/irisout/dist/index.js:47245:10)
+      at V9 (file:///tmp/irisout-browser-checks-Rkh0V8/app/node_modules/irisout/dist/index.js:47965:9)
+}
+error: script "build" exited with code 1

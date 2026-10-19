@@ -1,0 +1,168 @@
+{
+  "startedAt": "2026-10-19T05:21:02.954Z",
+  "completedAt": "2026-10-19T05:21:15.997Z",
+  "base": "http://127.0.0.1:35019",
+  "passed": true,
+  "results": [
+    {
+      "number": 1,
+      "name": "JavaScript無効の初期HTMLと詳細件名",
+      "passed": true,
+      "observations": [
+        {
+          "path": "/",
+          "status": 200,
+          "titles": ["決済API停止", "通知遅延", "検索障害"]
+        },
+        {
+          "path": "/incidents/i1",
+          "status": 200,
+          "titles": ["決済API停止"]
+        }
+      ]
+    },
+    {
+      "number": 2,
+      "name": "初期API・検索遅延・未知ID404",
+      "passed": true,
+      "observations": [
+        {
+          "initial": {
+            "status": 200,
+            "body": "[{\"id\":\"i1\",\"title\":\"決済API停止\",\"resolved\":false},{\"id\":\"i2\",\"title\":\"通知遅延\",\"resolved\":false},{\"id\":\"i3\",\"title\":\"検索障害\",\"resolved\":false}]"
+          },
+          "unknown": {
+            "status": 404,
+            "body": "404 Not Found"
+          }
+        },
+        {
+          "timings": [
+            {
+              "q": "決済",
+              "elapsedMs": 601,
+              "status": 200,
+              "body": "[{\"id\":\"i1\",\"title\":\"決済API停止\",\"resolved\":false}]"
+            },
+            {
+              "q": "通知",
+              "elapsedMs": 33,
+              "status": 200,
+              "body": "[{\"id\":\"i2\",\"title\":\"通知遅延\",\"resolved\":false}]"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "number": 3,
+      "name": "検索応答の競合",
+      "passed": true,
+      "observations": [
+        {
+          "body": "障害対応ボード\n障害一覧\n検索\n\n通知遅延 対応中 詳細"
+        }
+      ]
+    },
+    {
+      "number": 4,
+      "name": "HTTP503の表示と次の検索による回復",
+      "passed": true,
+      "observations": [
+        {
+          "api": {
+            "status": 503,
+            "body": "{\"error\":\"検索失敗\"}"
+          }
+        },
+        {
+          "failedBody": "障害対応ボード\n障害一覧\n検索\n\n検索失敗 (503)。検索語を変更してください。\n\n決済API停止 対応中 詳細\n通知遅延 対応中 詳細\n検索障害 対応中 詳細",
+          "recoveredBody": "障害対応ボード\n障害一覧\n検索\n\n通知遅延 対応中 詳細"
+        }
+      ]
+    },
+    {
+      "number": 5,
+      "name": "解決APIと一覧・再読み込みへの反映",
+      "passed": true,
+      "observations": [
+        {
+          "detail": "障害対応ボード\n決済API停止\n\n解決済み\n\n解決する\n\n作業メモ\n\n監視中 0\n\n一覧へ戻る"
+        },
+        {
+          "list": "障害対応ボード\n障害一覧\n検索\n\n決済API停止 解決済み 詳細\n通知遅延 対応中 詳細\n検索障害 対応中 詳細",
+          "api": {
+            "status": 200,
+            "body": "[{\"id\":\"i1\",\"title\":\"決済API停止\",\"resolved\":true}]"
+          }
+        }
+      ]
+    },
+    {
+      "number": 6,
+      "name": "ID別メモの分離と遷移・再読み込み保持",
+      "passed": true,
+      "observations": [
+        {
+          "memoA": "検査i1：決済担当への連絡",
+          "memoB": "検査i2：通知の再送",
+          "storedKeys": ["incident-memo:i1", "incident-memo:i2"]
+        }
+      ]
+    },
+    {
+      "number": 7,
+      "name": "同一文書で監視登録1→0→1と受信表示",
+      "passed": true,
+      "observations": [
+        {
+          "counts": [0, 1, 0, 1, 0, 1, 0],
+          "before": "0",
+          "after": "1",
+          "events": [
+            {
+              "action": "add",
+              "count": 1
+            },
+            {
+              "action": "remove",
+              "count": 0
+            },
+            {
+              "action": "add",
+              "count": 1
+            },
+            {
+              "action": "remove",
+              "count": 0
+            },
+            {
+              "action": "add",
+              "count": 1
+            },
+            {
+              "action": "remove",
+              "count": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "number": 8,
+      "name": "検索要求中の詳細遷移とキーボード操作",
+      "passed": true,
+      "observations": [
+        {
+          "body": "障害対応ボード\n決済API停止\n\n解決済み\n\n解決する\n\n作業メモ\n\n監視中 0\n\n一覧へ戻る",
+          "url": "http://127.0.0.1:35019/incidents/i1",
+          "searchResponses": [200],
+          "pendingBeforeNavigation": true,
+          "pendingAfterNavigation": true,
+          "navigationAfterRequestMs": 51
+        }
+      ]
+    }
+  ],
+  "observations": []
+}

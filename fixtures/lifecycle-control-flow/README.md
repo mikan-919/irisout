@@ -13,3 +13,5 @@ Playwrightは`packages/bench`から解決する。ブラウザーの実行ファ
 結果は`/tmp/irisout-lifecycle-control-flow.json`、生成したソース・JavaScript・初期HTML・画像は`/tmp/irisout-lifecycle-control-flow/`へ保存する。`IRISOUT_LIFECYCLE_RESULT`と`IRISOUT_LIFECYCLE_ARTIFACTS`で保存先を変更できる。検査が一件でも失敗すれば終了コードは1になる。
 
 受入テストは`packages/compiler/test/lifecycle-control-flow.test.ts`。こちらは返却形の違反とeffectからの書込み拒否も検証する。
+
+`PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`は従来の`IRISOUT_CHROMIUM_PATH`より優先する。ほかの保存済み検査と合わせた`bun run test:browser`を変更ごとのCIで実行する。[再実行手順](../incident-dogfood/README.md)を参照する。

@@ -82,6 +82,14 @@ bun run build:packages
 bun run pack:smoke
 ```
 
+保存済みのハンドラー、初期化・破棄、関数境界、障害対応ボードの操作検査は次で実行します。Chromiumの実行ファイルを指定してください。
+
+```sh
+PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/path/to/chromium bun run test:browser
+```
+
+公開物を構築・梱包し、一時ディレクトリへ障害対応ボードを導入して型検査と本番構築を行います。起動と停止もコマンドが行い、不合格は終了コード1になります。結果のJSON、ログ、画面画像は`.artifacts/browser-checks/run-*/`へ保存します。保存先は`IRISOUT_BROWSER_ARTIFACTS`で変更できます。同じ検査を変更ごとのCIで実行し、失敗時に証拠を成果物へ保存します。詳しくは[再実行手順](./fixtures/incident-dogfood/README.md)を参照してください。
+
 コマンドの一覧は[package.json](./package.json)、開発時に読む文書は[開発者向け文書一覧](./docs/README.md#irisout本体を開発する)を参照してください。
 
 ## 設計と仕様

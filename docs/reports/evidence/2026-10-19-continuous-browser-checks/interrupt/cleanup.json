@@ -1,0 +1,77 @@
+{
+  "signal": "SIGTERM",
+  "signaled": true,
+  "testExitCode": 1,
+  "summary": {
+    "startedAt": "2026-10-19T05:23:16.052Z",
+    "bun": "1.3.13",
+    "source": "/home/nixos/ghq/github.com/mikan-919/irisout/skills/irisout/assets/incident-dogfood",
+    "artifacts": "/tmp/irisout-browser-interrupt-run/run-vS6o8g",
+    "steps": [
+      {
+        "name": "handlers",
+        "args": ["fixtures/handler-control-flow/verify.mjs"],
+        "cwd": "/home/nixos/ghq/github.com/mikan-919/irisout",
+        "log": "/tmp/irisout-browser-interrupt-run/run-vS6o8g/handlers.log",
+        "pid": 2175023,
+        "code": 1,
+        "signal": null
+      }
+    ],
+    "passed": false,
+    "error": "Error: handlers failed; see /tmp/irisout-browser-interrupt-run/run-vS6o8g/handlers.log",
+    "finishedAt": "2026-10-19T05:23:16.869Z"
+  },
+  "observedBrowsers": [
+    {
+      "pid": 2175049,
+      "ppid": 2175023,
+      "pgid": 2175049,
+      "state": "Rsl",
+      "args": "/home/nixos/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-edgeupdater --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,BlockOriginHeaderModificationOnRedirect,Translate,AutoDeElevate,OptimizationHints,msForceBrowserSignIn,msEdgeUpdateLaunchServicesPreferredVersion --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --disable-updater-scheduler --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --headless --hide-scrollbars --mute-audio --blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4 --no-sandbox --no-sandbox --disable-dev-shm-usage --user-data-dir=/tmp/playwright_chromiumdev_profile-dVTIxj --remote-debugging-pipe --no-startup-window --noerrdialogs --ozone-platform=headless --ozone-override-screen-size=800,600 --use-angle=swiftshader-webgl"
+    },
+    {
+      "pid": 2175051,
+      "ppid": 452,
+      "pgid": 2175050,
+      "state": "Sl",
+      "args": "/home/nixos/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome_crashpad_handler --monitor-self --monitor-self-annotation=ptype=crashpad-handler --database=/home/nixos/.config/google-chrome-for-testing/Crash Reports --annotation=lsb-release=NixOS 26.11 (Zokor) --annotation=plat=Linux --annotation=prod=Chrome_Linux --annotation=ver=153.0.8010.12 --initial-client-fd=7 --shared-client-connection"
+    },
+    {
+      "pid": 2175053,
+      "ppid": 452,
+      "pgid": 2175052,
+      "state": "S",
+      "args": "/home/nixos/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome_crashpad_handler --no-periodic-tasks --monitor-self-annotation=ptype=crashpad-handler --database=/home/nixos/.config/google-chrome-for-testing/Crash Reports --annotation=lsb-release=NixOS 26.11 (Zokor) --annotation=plat=Linux --annotation=prod=Chrome_Linux --annotation=ver=153.0.8010.12 --initial-client-fd=4 --shared-client-connection"
+    },
+    {
+      "pid": 2175056,
+      "ppid": 2175049,
+      "pgid": 2175049,
+      "state": "S",
+      "args": "/home/nixos/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome --type=zygote --no-zygote-sandbox --no-sandbox --headless --crashpad-handler-pid=2175051 --enable-crash-reporter=, --noerrdialogs --user-data-dir=/tmp/playwright_chromiumdev_profile-dVTIxj --change-stack-guard-on-fork=enable --no-first-run --ozone-platform=headless --ozone-override-screen-size=800,600 --use-angle=swiftshader-webgl"
+    },
+    {
+      "pid": 2175057,
+      "ppid": 2175049,
+      "pgid": 2175049,
+      "state": "S",
+      "args": "/home/nixos/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome --type=zygote --no-sandbox --headless --crashpad-handler-pid=2175051 --enable-crash-reporter=, --noerrdialogs --user-data-dir=/tmp/playwright_chromiumdev_profile-dVTIxj --change-stack-guard-on-fork=enable --no-first-run --ozone-platform=headless --ozone-override-screen-size=800,600 --use-angle=swiftshader-webgl"
+    },
+    {
+      "pid": 2175081,
+      "ppid": 2175049,
+      "pgid": 2175049,
+      "state": "Sl",
+      "args": "/home/nixos/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome --type=utility --utility-sub-type=network.mojom.NetworkService --lang=en-US --service-sandbox-type=none --no-sandbox --disable-dev-shm-usage --use-angle=swiftshader-webgl --mute-audio --crashpad-handler-pid=2175051 --enable-crash-reporter=, --noerrdialogs --user-data-dir=/tmp/playwright_chromiumdev_profile-dVTIxj --change-stack-guard-on-fork=enable --shared-files=v8_context_snapshot_data:100 --field-trial-handle=3,i,10269502157451043698,12669972660323623824,262144 --enable-features=CDPScreenshotNewSurface --disable-features=AutoDeElevate,AvoidUnnecessaryBeforeUnloadCheckSync,BlockOriginHeaderModificationOnRedirect,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,OptimizationHints,PaintHolding,ThirdPartyStoragePartitioning,Translate,msEdgeUpdateLaunchServicesPreferredVersion,msForceBrowserSignIn --variations-seed-version --pseudonymization-salt-handle=7,i,16636714962973946540,3623279497420826076,4 --trace-process-track-uuid=3190708989122997041"
+    },
+    {
+      "pid": 2175095,
+      "ppid": 2175057,
+      "pgid": 2175049,
+      "state": "Sl",
+      "args": "/home/nixos/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome --type=utility --utility-sub-type=storage.mojom.StorageService --lang=en-US --service-sandbox-type=utility --no-sandbox --disable-dev-shm-usage --use-angle=swiftshader-webgl --mute-audio --crashpad-handler-pid=2175051 --enable-crash-reporter=, --noerrdialogs --user-data-dir=/tmp/playwright_chromiumdev_profile-dVTIxj --change-stack-guard-on-fork=enable --shared-files=v8_context_snapshot_data:100 --field-trial-handle=3,i,10269502157451043698,12669972660323623824,262144 --enable-features=CDPScreenshotNewSurface --disable-features=AutoDeElevate,AvoidUnnecessaryBeforeUnloadCheckSync,BlockOriginHeaderModificationOnRedirect,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,OptimizationHints,PaintHolding,ThirdPartyStoragePartitioning,Translate,msEdgeUpdateLaunchServicesPreferredVersion,msForceBrowserSignIn --variations-seed-version --pseudonymization-salt-handle=7,i,16636714962973946540,3623279497420826076,4 --trace-process-track-uuid=3190708990060038890"
+    }
+  ],
+  "remainingBrowsers": []
+}

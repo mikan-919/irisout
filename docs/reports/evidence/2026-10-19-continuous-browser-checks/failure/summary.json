@@ -1,0 +1,102 @@
+{
+  "startedAt": "2026-10-19T05:21:40.881Z",
+  "bun": "1.3.13",
+  "source": "/tmp/irisout-browser-failure-source",
+  "artifacts": "/tmp/irisout-browser-failure-run/run-9LmKNY",
+  "steps": [
+    {
+      "name": "handlers",
+      "args": ["fixtures/handler-control-flow/verify.mjs"],
+      "cwd": "/home/nixos/ghq/github.com/mikan-919/irisout",
+      "log": "/tmp/irisout-browser-failure-run/run-9LmKNY/handlers.log",
+      "pid": 2172243,
+      "code": 0,
+      "signal": null
+    },
+    {
+      "name": "lifecycle",
+      "args": ["fixtures/lifecycle-control-flow/verify.mjs"],
+      "cwd": "/home/nixos/ghq/github.com/mikan-919/irisout",
+      "log": "/tmp/irisout-browser-failure-run/run-9LmKNY/lifecycle.log",
+      "pid": 2172452,
+      "code": 0,
+      "signal": null
+    },
+    {
+      "name": "boundaries",
+      "args": ["fixtures/javascript-boundaries/verify.mjs"],
+      "cwd": "/home/nixos/ghq/github.com/mikan-919/irisout",
+      "log": "/tmp/irisout-browser-failure-run/run-9LmKNY/boundaries.log",
+      "pid": 2172619,
+      "code": 0,
+      "signal": null
+    },
+    {
+      "name": "build-packages",
+      "args": ["scripts/build-packages.mjs"],
+      "cwd": "/home/nixos/ghq/github.com/mikan-919/irisout",
+      "log": "/tmp/irisout-browser-failure-run/run-9LmKNY/build-packages.log",
+      "pid": 2172781,
+      "code": 0,
+      "signal": null
+    },
+    {
+      "name": "pack",
+      "args": ["pm", "pack", "--destination", "/tmp/irisout-browser-checks-4oVUvQ/pack", "--quiet"],
+      "cwd": "/home/nixos/ghq/github.com/mikan-919/irisout/packages/irisout",
+      "log": "/tmp/irisout-browser-failure-run/run-9LmKNY/pack.log",
+      "pid": 2172951,
+      "code": 0,
+      "signal": null
+    },
+    {
+      "name": "install",
+      "args": ["install", "--no-progress"],
+      "cwd": "/tmp/irisout-browser-checks-4oVUvQ/app",
+      "log": "/tmp/irisout-browser-failure-run/run-9LmKNY/install.log",
+      "pid": 2172955,
+      "code": 0,
+      "signal": null
+    },
+    {
+      "name": "typecheck",
+      "args": ["run", "typecheck"],
+      "cwd": "/tmp/irisout-browser-checks-4oVUvQ/app",
+      "log": "/tmp/irisout-browser-failure-run/run-9LmKNY/typecheck.log",
+      "pid": 2172966,
+      "code": 0,
+      "signal": null
+    },
+    {
+      "name": "build-app",
+      "args": ["run", "build"],
+      "cwd": "/tmp/irisout-browser-checks-4oVUvQ/app",
+      "log": "/tmp/irisout-browser-failure-run/run-9LmKNY/build-app.log",
+      "pid": 2172982,
+      "code": 0,
+      "signal": null
+    },
+    {
+      "name": "server",
+      "args": ["server/start.ts"],
+      "cwd": "/tmp/irisout-browser-checks-4oVUvQ/app",
+      "log": "/tmp/irisout-browser-failure-run/run-9LmKNY/server.log",
+      "pid": 2173120,
+      "code": null,
+      "signal": "SIGTERM"
+    },
+    {
+      "name": "incident",
+      "args": ["fixtures/incident-dogfood/verify.mjs"],
+      "cwd": "/home/nixos/ghq/github.com/mikan-919/irisout",
+      "log": "/tmp/irisout-browser-failure-run/run-9LmKNY/incident.log",
+      "pid": 2173144,
+      "code": 1,
+      "signal": null
+    }
+  ],
+  "base": "http://127.0.0.1:40249/",
+  "passed": false,
+  "error": "Error: incident failed; see /tmp/irisout-browser-failure-run/run-9LmKNY/incident.log",
+  "finishedAt": "2026-10-19T05:22:09.740Z"
+}

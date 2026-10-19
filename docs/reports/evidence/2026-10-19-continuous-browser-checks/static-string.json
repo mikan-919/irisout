@@ -1,0 +1,6 @@
+{
+  "source": "export function App(){render(<main><span>before</span>{\" \"}<span>after</span></main>)}",
+  "baseline": "v0.3.7",
+  "before": "CompileDiagnostic: compile: mixing elements into a reactive text unit is not supported yet (scope limit) [<source>:1:30]",
+  "after": "<main><span>before</span> <span>after</span></main>"
+}

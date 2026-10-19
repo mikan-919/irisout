@@ -14,6 +14,7 @@ const artifacts =
 const resultPath =
   process.env.IRISOUT_BOUNDARY_BROWSER_RESULT ?? '/tmp/irisout-javascript-boundaries-browser.json'
 const executablePath =
+  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ??
   process.env.IRISOUT_CHROMIUM_PATH ??
   '/nix/store/g0yvxs8p2ijrvmxpd5mim1ni0fyk9bnh-chromium-154.0.8037.57/bin/chromium'
 const source = `

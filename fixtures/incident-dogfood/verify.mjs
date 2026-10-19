@@ -95,6 +95,11 @@ async function home(page) {
   await navigate(page, link, '/')
   await page.getByLabel('検索', { exact: true }).waitFor()
 }
+async function received(page) {
+  const output = page.getByLabel('受信数', { exact: true })
+  if ((await output.count()) === 1) return (await output.textContent()).trim()
+  return (await page.locator('body').innerText()).match(/受信数\s*[:：]\s*(\d+)\b/)?.[1]
+}
 async function verify(number, name, action) {
   const entry = { number, name, passed: false, observations: [] }
   results.push(entry)
@@ -287,12 +292,12 @@ try {
       (await page.locator('body').innerText()).includes('監視中'),
       '詳細に「監視中」の段落がありません',
     )
-    const before = await page.locator('body').innerText()
+    const before = await received(page)
     await page.evaluate(() => window.dispatchEvent(new Event('incident-ping')))
     await page.waitForTimeout(100)
-    const after = await page.locator('body').innerText()
-    check(/受信数\s*[:：]\s*0\b/.test(before), '詳細の受信数が0から始まりません')
-    check(/受信数\s*[:：]\s*1\b/.test(after), 'incident-ping1回の受信数が1になりません')
+    const after = await received(page)
+    check(before === '0', '詳細の受信数が0から始まりません')
+    check(after === '1', 'incident-ping1回の受信数が1になりません')
     await home(page)
     counts.push(await active())
     check(counts.at(-1) === 0, `一覧に戻っても監視が${counts.at(-1)}件残っています`)
@@ -304,6 +309,9 @@ try {
     await detail(page, 'i1')
     counts.push(await active())
     check(counts.at(-2) === 0 && counts.at(-1) === 1, '詳細と一覧の反復で監視が蓄積しています')
+    await home(page)
+    counts.push(await active())
+    check(counts.at(-1) === 0, '最後に一覧へ戻っても監視が残っています')
     notes.push({
       counts,
       before,
@@ -372,6 +380,7 @@ try {
     )
   })
 } finally {
+  await browser.close()
   const completedAt = new Date().toISOString()
   const report = {
     startedAt,
@@ -401,7 +410,6 @@ try {
         : '8項目の操作検査で不合格はありませんでした。\n') +
       `\nブラウザー例外: ${JSON.stringify(observations)}\n`,
   )
-  await browser.close()
   process.exitCode = report.passed ? 0 : 1
   console.log(
     JSON.stringify({

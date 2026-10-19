@@ -1,0 +1,58 @@
+{
+  "date": "2026-10-19",
+  "checks": [
+    {
+      "mode": "mount",
+      "pass": true,
+      "before": [
+        "effect:0",
+        "__container__:0",
+        "effect-cleanup:0",
+        "effect:1",
+        "effect-cleanup:1",
+        "effect:2",
+        "child-cleanup"
+      ],
+      "after": [
+        "effect:0",
+        "__container__:0",
+        "effect-cleanup:0",
+        "effect:1",
+        "effect-cleanup:1",
+        "effect:2",
+        "child-cleanup",
+        "action-destroy",
+        "mount-cleanup",
+        "effect-cleanup:2"
+      ]
+    },
+    {
+      "mode": "hydrate",
+      "pass": true,
+      "before": [
+        "effect:0",
+        "__container__:0",
+        "effect-cleanup:0",
+        "effect:1",
+        "effect-cleanup:1",
+        "effect:2",
+        "child-cleanup"
+      ],
+      "after": [
+        "effect:0",
+        "__container__:0",
+        "effect-cleanup:0",
+        "effect:1",
+        "effect-cleanup:1",
+        "effect:2",
+        "child-cleanup",
+        "action-destroy",
+        "mount-cleanup",
+        "effect-cleanup:2"
+      ]
+    }
+  ],
+  "pageErrors": [],
+  "pass": true,
+  "version": "153.0.8010.12"
+}

@@ -1,0 +1,101 @@
+{
+  "startedAt": "2026-10-19T05:22:21.048Z",
+  "bun": "1.3.13",
+  "source": "/home/nixos/ghq/github.com/mikan-919/irisout/skills/irisout/assets/incident-dogfood",
+  "artifacts": "/home/nixos/ghq/github.com/mikan-919/irisout/.artifacts/browser-checks/run-yytwwZ",
+  "steps": [
+    {
+      "name": "handlers",
+      "args": ["fixtures/handler-control-flow/verify.mjs"],
+      "cwd": "/home/nixos/ghq/github.com/mikan-919/irisout",
+      "log": "/home/nixos/ghq/github.com/mikan-919/irisout/.artifacts/browser-checks/run-yytwwZ/handlers.log",
+      "pid": 2173743,
+      "code": 0,
+      "signal": null
+    },
+    {
+      "name": "lifecycle",
+      "args": ["fixtures/lifecycle-control-flow/verify.mjs"],
+      "cwd": "/home/nixos/ghq/github.com/mikan-919/irisout",
+      "log": "/home/nixos/ghq/github.com/mikan-919/irisout/.artifacts/browser-checks/run-yytwwZ/lifecycle.log",
+      "pid": 2173932,
+      "code": 0,
+      "signal": null
+    },
+    {
+      "name": "boundaries",
+      "args": ["fixtures/javascript-boundaries/verify.mjs"],
+      "cwd": "/home/nixos/ghq/github.com/mikan-919/irisout",
+      "log": "/home/nixos/ghq/github.com/mikan-919/irisout/.artifacts/browser-checks/run-yytwwZ/boundaries.log",
+      "pid": 2174121,
+      "code": 0,
+      "signal": null
+    },
+    {
+      "name": "build-packages",
+      "args": ["scripts/build-packages.mjs"],
+      "cwd": "/home/nixos/ghq/github.com/mikan-919/irisout",
+      "log": "/home/nixos/ghq/github.com/mikan-919/irisout/.artifacts/browser-checks/run-yytwwZ/build-packages.log",
+      "pid": 2174274,
+      "code": 0,
+      "signal": null
+    },
+    {
+      "name": "pack",
+      "args": ["pm", "pack", "--destination", "/tmp/irisout-browser-checks-sYFROr/pack", "--quiet"],
+      "cwd": "/home/nixos/ghq/github.com/mikan-919/irisout/packages/irisout",
+      "log": "/home/nixos/ghq/github.com/mikan-919/irisout/.artifacts/browser-checks/run-yytwwZ/pack.log",
+      "pid": 2174355,
+      "code": 0,
+      "signal": null
+    },
+    {
+      "name": "install",
+      "args": ["install", "--no-progress"],
+      "cwd": "/tmp/irisout-browser-checks-sYFROr/app",
+      "log": "/home/nixos/ghq/github.com/mikan-919/irisout/.artifacts/browser-checks/run-yytwwZ/install.log",
+      "pid": 2174357,
+      "code": 0,
+      "signal": null
+    },
+    {
+      "name": "typecheck",
+      "args": ["run", "typecheck"],
+      "cwd": "/tmp/irisout-browser-checks-sYFROr/app",
+      "log": "/home/nixos/ghq/github.com/mikan-919/irisout/.artifacts/browser-checks/run-yytwwZ/typecheck.log",
+      "pid": 2174373,
+      "code": 0,
+      "signal": null
+    },
+    {
+      "name": "build-app",
+      "args": ["run", "build"],
+      "cwd": "/tmp/irisout-browser-checks-sYFROr/app",
+      "log": "/home/nixos/ghq/github.com/mikan-919/irisout/.artifacts/browser-checks/run-yytwwZ/build-app.log",
+      "pid": 2174382,
+      "code": 0,
+      "signal": null
+    },
+    {
+      "name": "server",
+      "args": ["server/start.ts"],
+      "cwd": "/tmp/irisout-browser-checks-sYFROr/app",
+      "log": "/home/nixos/ghq/github.com/mikan-919/irisout/.artifacts/browser-checks/run-yytwwZ/server.log",
+      "pid": 2174471,
+      "code": null,
+      "signal": "SIGTERM"
+    },
+    {
+      "name": "incident",
+      "args": ["fixtures/incident-dogfood/verify.mjs"],
+      "cwd": "/home/nixos/ghq/github.com/mikan-919/irisout",
+      "log": "/home/nixos/ghq/github.com/mikan-919/irisout/.artifacts/browser-checks/run-yytwwZ/incident.log",
+      "pid": 2174491,
+      "code": 0,
+      "signal": null
+    }
+  ],
+  "base": "http://127.0.0.1:41903/",
+  "passed": true,
+  "finishedAt": "2026-10-19T05:22:51.066Z"
+}

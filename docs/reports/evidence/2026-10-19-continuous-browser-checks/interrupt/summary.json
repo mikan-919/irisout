@@ -1,0 +1,20 @@
+{
+  "startedAt": "2026-10-19T05:23:16.052Z",
+  "bun": "1.3.13",
+  "source": "/home/nixos/ghq/github.com/mikan-919/irisout/skills/irisout/assets/incident-dogfood",
+  "artifacts": "/tmp/irisout-browser-interrupt-run/run-vS6o8g",
+  "steps": [
+    {
+      "name": "handlers",
+      "args": ["fixtures/handler-control-flow/verify.mjs"],
+      "cwd": "/home/nixos/ghq/github.com/mikan-919/irisout",
+      "log": "/tmp/irisout-browser-interrupt-run/run-vS6o8g/handlers.log",
+      "pid": 2175023,
+      "code": 1,
+      "signal": null
+    }
+  ],
+  "passed": false,
+  "error": "Error: handlers failed; see /tmp/irisout-browser-interrupt-run/run-vS6o8g/handlers.log",
+  "finishedAt": "2026-10-19T05:23:16.869Z"
+}

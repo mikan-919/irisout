@@ -6,4 +6,6 @@
 
 拒否境界、宣言前参照、再代入、返却と例外の検証は`packages/compiler/test/javascript-boundaries.test.ts`にある。検査対象と残る制限は`docs/reports/2026-10-19-javascript-boundaries.md`を参照する。
 
+`PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`は従来の`IRISOUT_CHROMIUM_PATH`より優先する。ほかの保存済み検査と合わせた`bun run test:browser`を変更ごとのCIで実行する。[再実行手順](../incident-dogfood/README.md)を参照する。
+
 `verify-hono.mjs`は梱包物とHonoを導入した別ディレクトリーへコピーし、そこで`bun verify-hono.mjs`を実行する。Hono 4.0.0と4.13.13で二段の`onError`、接頭辞付きの経路、SSRの200応答、`hono/hono-base`の外部importを確認する。2026-10-19の操作検査は、指定のChromium 154が消えていたためChrome for Testing 153.0.8010.12を使った。ブラウザーの実行ファイルは前述の環境変数で指定できる。

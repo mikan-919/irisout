@@ -47,7 +47,16 @@ DOGFOOD_BASE_URL=http://127.0.0.1:4317 \
   bun "fixtures/published-incident-dogfood/evidence/$published_attempt/additional.mjs"
 ```
 
-起動したアプリがBなら、この端末でも`published_attempt=b`を選ぶ。Bの既存検査は項目7で`詳細の受信数が0から始まりません`となり、終了コード1を返すのが観測した結果である。結果を書き換えず、続けてB用の追加検査を実行する。追加検査は`output[aria-label="受信数"]`の0→1と、登録数0→1→0→1→0を確認する。
+起動したアプリがBなら、この端末でも`published_attempt=b`を選ぶ。保存時の既存検査は項目7で`詳細の受信数が0から始まりません`となり、終了コード1を返した。2026-10-19に検査器を修正し、ラベル付き出力と本文表記の両方で0→1を確認するようにした。原結果7/8は変更しない。追加検査は`output[aria-label="受信数"]`の0→1と、登録数0→1→0→1→0を確認する。
+
+現行ソース版の梱包物でBを補助確認する場合は、ルートで次を実行する。
+
+```sh
+PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/path/to/chromium \
+  bun run test:browser --incident-app fixtures/published-incident-dogfood/attempts/b
+```
+
+これは公開版の再現とは別の検査である。一時コピーの`irisout`依存を梱包物へ差し替え、そのコピーのlockだけを除いて再解決する。形式2の原lockをBun 1.3.13の`--frozen-lockfile`へ渡さず、保存したソースと原記録は変更しない。修正後の8/8は[別の検証結果](../../docs/reports/2026-10-19-continuous-browser-checks.md)へ保存した。
 
 付属Chromiumを使えない環境では、両コマンドへ`PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`を渡す。既存検査はi1、追加検査はi2を解決済みにする。上の順で一組として実行し、次の一組の前にサーバーを再起動してメモリを初期化する。検査ごとにブラウザーの保存領域を作り直す。不合格またはブラウザー例外があれば終了コード1になる。
 
