@@ -4,6 +4,8 @@
 
 比較対象は上流のReact Hooks、Vue、Solid、vanillajs。実装と構築設定は変更しない。測定器も上流のPuppeteer方式を使い、クリックから描画までの時間を測る。結果と測定条件は[results.md](./results.md)、公式の全試行値は[results.json](./results.json)を参照。最適化前に中断した測定値は[partial-results.json](./partial-results.json)へ分けて保存した。
 
+性能変更の採否は[開発方針の採用基準](../../../docs/project-direction.md#性能最適化の採用基準)に従う。実装前の指標・必要な改善量・許容する悪化と、独立した再測定を含む判断を記録する。[2026-10-19の評価と次の測定](../../../docs/reports/2026-10-19-performance-adoption.md)は保存済み結果の再集計であり、現行版の時間測定ではない。
+
 2026-10-16の全操作の再測定はCPU各10回、選択20回、メモリ各3回、同期比較各100回で行った。Vanillaとの差と処理回数の調査は[vanilla-audit.md](./vanilla-audit.md)に記録する。
 
 一覧高速化計画の実装、採用しなかった配列複製省略、段階ごとの全試行値は[work-results.md](./work-results.md)を参照する。基準版は`390f84a`である。
