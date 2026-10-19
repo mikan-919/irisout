@@ -895,6 +895,7 @@ function renderElement(
     if (!c.isJSXExpressionContainer() || c.get('expression').isJSXEmptyExpression()) return false
     const expression = c.get('expression') as NodePath<t.Expression>
     return (
+      !expression.isStringLiteral() &&
       !resolveOnMountExpression(expression) &&
       !resolveEffectExpression(expression) &&
       !resolveContextProviderExpression(ctx, expression)
@@ -916,6 +917,17 @@ function renderElement(
       else if (child.isJSXExpressionContainer() && child.get('expression').isJSXEmptyExpression())
         continue
       else if (child.isJSXExpressionContainer()) {
+        // JSXの静的な文字列は要素間の空白にも使われ、反応的な本文の単位を作らない。
+        const expression = child.get('expression')
+        if (expression.isStringLiteral()) {
+          inner += escapeTemplateText(
+            expression.node.value
+              .replace(/&/g, '&amp;')
+              .replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;'),
+          )
+          continue
+        }
         const contextProvider = resolveContextProviderExpression(
           ctx,
           child.get('expression') as NodePath<t.Expression>,

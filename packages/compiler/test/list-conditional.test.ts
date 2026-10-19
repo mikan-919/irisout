@@ -39,6 +39,38 @@ export function App() {
 `
 
 describe('M5: list rendering (keyed reuse factory)', () => {
+  it.each(['mount', 'hydrate'] as const)(
+    '要素間の静的な文字列を%sと一覧更新で保持する',
+    async (mode) => {
+      const { code, initialHtml } = compile(`
+        export function App() {
+          const items = signal([{id: 1, text: 'a'}]);
+          render(<main><ul>{items().map(item =>
+            <li key={item.id}><span>{item.text}</span>{' <strong>&</strong> '}<a href="/">詳細</a></li>
+          )}</ul><button onClick={() => items([{id: 1, text: 'b'}])}>更新</button></main>);
+        }
+      `)
+      const module = await loadGenerated(code)
+      const instance = (
+        module.createComponent as () => {
+          mount(container: Element): void
+          hydrate(container: Element): void
+          unmount(): void
+        }
+      )()
+      const container = createContainer()
+      if (mode === 'hydrate') container.innerHTML = initialHtml
+      instance[mode](container)
+      const row = container.querySelector('li')!
+      expect(row.textContent).toBe('a <strong>&</strong> 詳細')
+      expect(row.children.length).toBe(2)
+      dispatchClick(container, container.querySelector('button'))
+      expect(container.querySelector('li')).toBe(row)
+      expect(row.textContent).toBe('b <strong>&</strong> 詳細')
+      instance.unmount()
+    },
+  )
+
   it('stamps items via <template>+cloneNode with no wrapper element, as direct children of <ul>', async () => {
     const { code } = compile(LIST_SOURCE)
     expect(code).toContain('.__irisout_root__ ??=')
