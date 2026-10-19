@@ -1,0 +1,138 @@
+$ vp check && bun run typecheck:tsc
+[1m[94mpass:[39m[0m All 547 files are correctly formatted [2m(1603ms, 16 threads)[0m
+[1m[33mwarn:[39m[0m Lint or type warnings found
+! typescript(no-useless-default-assignment): This rule requires the `strictNullChecks` compiler option to be turned on to function correctly.
+   ,-[apps/web/routes/page.tsx:1:1]
+ 1 | import { render, signal } from 'irisout'
+   : ^
+ 2 | import { SiteHeader } from '../src/SiteHeader.jsx'
+   `----
+
+  ! typescript(no-useless-default-assignment): This rule requires the `strictNullChecks` compiler option to be turned on to function correctly.
+   ,-[apps/web/routes/docs/page.tsx:1:1]
+ 1 | // ドキュメントの分類とページ一覧をHonoのファイル経路からSSRする。
+   : ^
+ 2 | import { render } from 'irisout'
+   `----
+
+  ! typescript(no-useless-default-assignment): This rule requires the `strictNullChecks` compiler option to be turned on to function correctly.
+   ,-[apps/web/routes/docs/api/page.tsx:1:1]
+ 1 | // 公開パッケージの型定義と一致するAPIリファレンス。
+   : ^
+ 2 | import { render } from 'irisout'
+   `----
+
+  ! typescript(no-useless-default-assignment): This rule requires the `strictNullChecks` compiler option to be turned on to function correctly.
+   ,-[apps/web/routes/docs/components-and-modules/page.tsx:1:1]
+ 1 | // 部品合成と相対module分割を説明する。
+   : ^
+ 2 | import { render } from 'irisout'
+   `----
+
+  ! typescript(no-useless-default-assignment): This rule requires the `strictNullChecks` compiler option to be turned on to function correctly.
+   ,-[apps/web/routes/docs/conditionals-and-lists/page.tsx:1:1]
+ 1 | // 条件分岐とキー付き一覧の記述規則を説明する。
+   : ^
+ 2 | import { render } from 'irisout'
+   `----
+
+  ! typescript(no-useless-default-assignment): This rule requires the `strictNullChecks` compiler option to be turned on to function correctly.
+   ,-[apps/web/routes/docs/events-and-actions/page.tsx:1:1]
+ 1 | // DOMイベントとuseアクションを説明する。
+   : ^
+ 2 | import { render } from 'irisout'
+   `----
+
+  ! typescript(no-useless-default-assignment): This rule requires the `strictNullChecks` compiler option to be turned on to function correctly.
+   ,-[apps/web/routes/docs/diagnostics/page.tsx:1:1]
+ 1 | // コンパイル診断と対応範囲を説明する。
+   : ^
+ 2 | import { render } from 'irisout'
+   `----
+
+  ! typescript(no-useless-default-assignment): This rule requires the `strictNullChecks` compiler option to be turned on to function correctly.
+   ,-[apps/web/routes/docs/lifecycle-and-context/page.tsx:1:1]
+ 1 | // ライフサイクルとコンテキストを説明する。
+   : ^
+ 2 | import { render } from 'irisout'
+   `----
+
+  ! typescript(no-useless-default-assignment): This rule requires the `strictNullChecks` compiler option to be turned on to function correctly.
+   ,-[apps/web/routes/docs/hono-routing/page.tsx:1:1]
+ 1 | // irisout/honoのファイル経路を説明する。
+   : ^
+ 2 | import { render } from 'irisout'
+   `----
+
+  ! typescript(no-useless-default-assignment): This rule requires the `strictNullChecks` compiler option to be turned on to function correctly.
+   ,-[apps/web/routes/docs/state/page.tsx:1:1]
+ 1 | // signalとderivedによる状態更新を説明する。
+   : ^
+ 2 | import { render } from 'irisout'
+   `----
+
+  ! typescript(no-useless-default-assignment): This rule requires the `strictNullChecks` compiler option to be turned on to function correctly.
+   ,-[apps/web/routes/docs/getting-started/page.tsx:1:1]
+ 1 | // npm公開版を導入して最初の画面を構築する手順。
+   : ^
+ 2 | import { render } from 'irisout'
+   `----
+
+  ! typescript(no-useless-default-assignment): This rule requires the `strictNullChecks` compiler option to be turned on to function correctly.
+   ,-[apps/web/routes/examples/page.tsx:1:1]
+ 1 | // 公式実例の索引をJSXで宣言し、個別のIrisout画面へ案内する。
+   : ^
+ 2 | import { render } from 'irisout'
+   `----
+
+  ! typescript(no-useless-default-assignment): This rule requires the `strictNullChecks` compiler option to be turned on to function correctly.
+   ,-[apps/web/routes/examples/bcf-copy-button/page.tsx:1:1]
+ 1 | // BCFによるラベルの交差フェードを、irisoutの状態更新とWeb Animations APIで示す。
+   : ^
+ 2 | // クリップボード操作は含めず、ボタン表示の切り替えだけを扱う。
+   `----
+
+  ! typescript(no-useless-default-assignment): This rule requires the `strictNullChecks` compiler option to be turned on to function correctly.
+   ,-[apps/web/routes/examples/morph-bcf/page.tsx:1:1]
+ 1 | // 共有レイアウトの形状変形と、内容のぼかし交差フェードを組み合わせる。
+   : ^
+ 2 | // Motion拡張の対応範囲に合わせ、退場BCFだけWeb Animations APIで補う。
+   `----
+
+  ! typescript(no-useless-default-assignment): This rule requires the `strictNullChecks` compiler option to be turned on to function correctly.
+   ,-[apps/web/routes/examples/task-board/page.tsx:1:1]
+ 1 | // signal、derived、key付き一覧を一画面で試せるタスク管理例。
+   : ^
+ 2 | // 永続化は持たず、入力・絞り込み・更新・削除・並べ替えに範囲を限定する。
+   `----
+
+  ! typescript(no-useless-default-assignment): This rule requires the `strictNullChecks` compiler option to be turned on to function correctly.
+   ,-[apps/web/routes/playground/page.tsx:1:1]
+ 1 | // Playgroundの画面構造・状態・操作をirisout JSXへ集約する。
+   : ^
+ 2 | // Monaco、保存通信、実行iframeのプロトコルだけをブラウザー境界のJSへ委ねる。
+   `----
+
+  ! typescript(no-base-to-string): 'form.get('name') ?? ''' may use Object's default stringification format ('[object Object]') when stringified.
+    ,-[packages/bench/rshono/irisout/routes/interactive/page.jsx:80:22]
+ 79 |       body: JSON.stringify({
+ 80 |         name: String(form.get('name') ?? ''),
+    :                      ^^^^^^^^^^^^^^^^^^^^^^
+ 81 |         email: String(form.get('email') ?? ''),
+    `----
+  help: Consider picking a property (e.g. `user.name`), using a formatter (or `JSON.stringify`), or implementing a custom `toString()`/`toLocaleString()` on the type.
+
+  ! typescript(no-base-to-string): 'form.get('email') ?? ''' may use Object's default stringification format ('[object Object]') when stringified.
+    ,-[packages/bench/rshono/irisout/routes/interactive/page.jsx:81:23]
+ 80 |         name: String(form.get('name') ?? ''),
+ 81 |         email: String(form.get('email') ?? ''),
+    :                       ^^^^^^^^^^^^^^^^^^^^^^^
+ 82 |       }),
+    `----
+  help: Consider picking a property (e.g. `user.name`), using a formatter (or `JSON.stringify`), or implementing a custom `toString()`/`toLocaleString()` on the type.
+
+Found 0 errors and 18 warnings in 224 files (5.7s, 16 threads)
+$ tsc --noEmit && bun run typecheck:jsx && bun run typecheck:consumer && bun run typecheck:web
+$ tsc --noEmit -p apps/demos/tsconfig.json
+$ tsc --noEmit -p fixtures/consumer-app/tsconfig.json
+$ tsc --noEmit -p apps/web/tsconfig.json

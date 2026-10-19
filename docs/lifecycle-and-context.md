@@ -44,6 +44,8 @@ export function Preference() {
 }
 ```
 
+ソース版の`onMount`・`effect`では、`const cleanup = () => ...; return cleanup;`のように保存した後始末も返せる。局所変数を参照する閉包と宣言の実行位置を保持する。effectの依存には初期化中に実行する補助関数の読取りを含め、後始末だけの読取りは含めない。const別名と引数を経由する条件、公開版0.3.7との違い、残る制限は[イベントとアクション](./events-and-actions.md)を参照する。
+
 ## コンテキスト
 
 `createContext`でキーと既定値を作り、`provideContext`で子孫へ値を渡し、`useContext`で最も近い値を読む。これらはコンパイル時に接続され、汎用の実行時登録表は追加されない。

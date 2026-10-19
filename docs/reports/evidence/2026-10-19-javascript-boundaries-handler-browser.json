@@ -1,0 +1,83 @@
+{
+  "startedAt": "2026-10-19T04:59:46.890Z",
+  "browser": "/tmp/irisout-benchmark-chrome",
+  "repoRoot": "/home/nixos/ghq/github.com/mikan-919/irisout",
+  "command": "bun /tmp/irisout-handler-browser.mjs",
+  "checks": [
+    {
+      "name": "sync_helper_return",
+      "pass": true,
+      "evidence": {
+        "value": "2",
+        "returned": 3
+      }
+    },
+    {
+      "name": "return_after_write",
+      "pass": true,
+      "evidence": {
+        "value": "3"
+      }
+    },
+    {
+      "name": "guard_return_does_not_rerun_effect",
+      "pass": true,
+      "evidence": {
+        "before": [0],
+        "after": [0]
+      }
+    },
+    {
+      "name": "throw_updates_dom_and_preserves_error",
+      "pass": true,
+      "evidence": {
+        "value": "4",
+        "errors": [
+          {
+            "message": "authored failure",
+            "original": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "local_function_action_listener",
+      "pass": true,
+      "evidence": {
+        "value": "1",
+        "calls": 1
+      }
+    },
+    {
+      "name": "async_helper_completion",
+      "pass": true,
+      "evidence": {
+        "before": "4",
+        "pendingValue": "4",
+        "value": "5",
+        "returned": 6
+      }
+    },
+    {
+      "name": "helper_promise_callback_return_and_update",
+      "pass": true,
+      "evidence": {
+        "value": "6",
+        "returned": 6
+      }
+    },
+    {
+      "name": "unmount_removes_action_listener",
+      "pass": true,
+      "evidence": {
+        "before": 1,
+        "after": 1,
+        "destroyed": ["owned-listener"]
+      }
+    }
+  ],
+  "pageErrors": [],
+  "pass": true,
+  "version": "153.0.8010.12",
+  "finishedAt": "2026-10-19T04:59:47.989Z"
+}

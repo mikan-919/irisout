@@ -1,0 +1,12 @@
+{
+  "startedAt": "2026-10-19T04:58:55.326Z",
+  "browser": "/nix/store/g0yvxs8p2ijrvmxpd5mim1ni0fyk9bnh-chromium-154.0.8037.57/bin/chromium",
+  "repoRoot": "/home/nixos/ghq/github.com/mikan-919/irisout",
+  "command": "bun /tmp/irisout-handler-browser.mjs",
+  "checks": [],
+  "pageErrors": [],
+  "pass": false,
+  "fatalError": "Error: launch: Failed to launch chromium because executable doesn't exist at /nix/store/g0yvxs8p2ijrvmxpd5mim1ni0fyk9bnh-chromium-154.0.8037.57/bin/chromium",
+  "stack": "launch: Failed to launch chromium because executable doesn't exist at /nix/store/g0yvxs8p2ijrvmxpd5mim1ni0fyk9bnh-chromium-154.0.8037.57/bin/chromium\n    at /home/nixos/ghq/github.com/mikan-919/irisout/fixtures/handler-control-flow/verify.mjs:164:28\n    at processTicksAndRejections (native:7:39)",
+  "finishedAt": "2026-10-19T04:58:55.459Z"
+}

@@ -1,0 +1,34 @@
+{
+  "date": "2026-10-19",
+  "baseline": null,
+  "cases": [
+    {
+      "name": "constAlias",
+      "accepted": true,
+      "text": "1",
+      "cleanup": [],
+      "pass": true
+    },
+    {
+      "name": "parameter",
+      "accepted": true,
+      "text": "1",
+      "cleanup": [],
+      "pass": true
+    },
+    {
+      "name": "storedCleanup",
+      "accepted": true,
+      "text": "1",
+      "cleanup": ["cleanup"],
+      "pass": true
+    },
+    {
+      "name": "reservedName",
+      "accepted": true,
+      "text": "1",
+      "cleanup": [],
+      "pass": true
+    }
+  ]
+}

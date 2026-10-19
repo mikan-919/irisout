@@ -86,3 +86,11 @@ inline childはroot instanceへ、list/conditional scopeのinline childは現在
 
 - **WHEN** componentと構造unitが`onMount`を含まない
 - **THEN** 生成codeにonMount専用の識別子・配線が含まれない
+
+### Requirement: 保存した後始末関数の返却
+
+再代入しない局所関数またはそのconst別名を後始末として返す形を受理しなければならない(SHALL)。返却位置、宣言前参照、閉包、finallyを保持し、通常実行用の本体を後始末用へ上書きしてはならない(SHALL NOT)。
+
+#### Scenario: 保存した後始末と通常実行の共用
+- **WHEN** 初期化が局所関数を呼んだ後、その関数のconst別名を後始末として返す
+- **THEN** 初期化中の書込みは反映し、後始末へ挿入する専用の表示更新は抑止する

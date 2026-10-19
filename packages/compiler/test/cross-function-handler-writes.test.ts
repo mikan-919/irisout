@@ -180,7 +180,7 @@ export function App() {
     expect(() => compile(source)).toThrow(/generator.*scope limit/)
   })
 
-  it('生成側予約名(update_ 接頭辞)と衝突する authored 名は拒否', () => {
+  it('update_ 接頭辞の作者名を保持して実行する', async () => {
     const source = `
 export function App() {
   const count = signal(0);
@@ -188,10 +188,12 @@ export function App() {
   function update_thing() { count(1); }
 }
 `
-    expect(() => compile(source)).toThrow(/scope limit/)
+    const container = await mount(compile(source).code)
+    dispatchClick(container, container.querySelector('button'))
+    expect(container.querySelector('span')?.textContent).toBe('1')
   })
 
-  it('生成側予約名(__ 接頭辞)と衝突する authored 名は拒否', () => {
+  it('__ 接頭辞の作者名を保持して実行する', async () => {
     const source = `
 export function App() {
   const count = signal(0);
@@ -199,7 +201,9 @@ export function App() {
   function __helper() { count(1); }
 }
 `
-    expect(() => compile(source)).toThrow(/scope limit/)
+    const container = await mount(compile(source).code)
+    dispatchClick(container, container.querySelector('button'))
+    expect(container.querySelector('span')?.textContent).toBe('1')
   })
 })
 

@@ -331,6 +331,8 @@ export interface CompilerState {
   mutableRowArrays: Map<t.Node, boolean>
   listMapDeclIds: Set<DeclId>
   cleanupFunctionNames: Map<t.Function, string>
+  /** ADR-0071: 返却する識別子ごとの契約。trueは更新、falseは後始末。 */
+  lifecycleResultReferences: Map<t.Identifier, boolean>
 
   // same-file-component-composition: 構造ユニットへインライン化された
   // ローカルsignal/derived の declId 集合(CONTEXT.md「ローカルsignal」)。
@@ -381,6 +383,7 @@ export function createCompilerState(
     mutableRowArrays: new Map(),
     listMapDeclIds: new Set(),
     cleanupFunctionNames: new Map(),
+    lifecycleResultReferences: new Map(),
     localDeclIds: new Set(),
     sharedDecls: [],
     sharedDeclIdByBindingKey: new Map(),

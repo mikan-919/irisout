@@ -11,6 +11,11 @@ import { createAstRewrite } from './ast-codegen.ts'
 import type { AstRewriteSession } from './ast-codegen.ts'
 import { resolveToSignals } from './decl-graph.ts'
 import {
+  resolveFunction,
+  isResolvedFunctionArgument,
+  isFunctionParameter,
+} from './function-binding.ts'
+import {
   isOwnedRowArray,
   canMutateRowArray,
   isPureRowMap,
@@ -232,21 +237,30 @@ function tryHandleTrackedCallee(
   ) {
     return
   }
-  const localFunction = binding.path.isFunctionDeclaration()
-    ? binding.path.node
-    : binding.path.isVariableDeclarator()
-      ? binding.path.node.init
-      : null
-  if (localFunction && t.isFunction(localFunction) && ctx.analyzedFunctions.has(localFunction))
+  const localFunction = resolveFunction(idPath)
+  const movementName =
+    localFunction && [...ctx.movementFns].find(([, fn]) => fn.node === localFunction.node)?.[0]
+  const supportName = localFunction?.isFunctionDeclaration()
+    ? localFunction.node.id?.name
+    : localFunction?.parentPath.isVariableDeclarator() &&
+        t.isIdentifier(localFunction.parentPath.node.id)
+      ? localFunction.parentPath.node.id.name
+      : undefined
+  if (
+    !movementName &&
+    localFunction &&
+    (ctx.analyzedFunctions.has(localFunction.node) ||
+      (supportName && ctx.supportNames.has(supportName)))
+  )
     return
-  const fn = ctx.movementFns.get(name)
-  if (!fn || binding.path.node !== fn.node) {
-    throw new Error(
-      `compile: calling locally-bound "${name}" from a handler/action body is not supported, only movement-zone functions are tracked (scope limit)`,
+  if (!movementName) {
+    throw compileErrorAtNode(
+      `compile: calling locally-bound "${name}" from a handler/action body is not supported, only statically resolved functions are tracked (scope limit)`,
+      idPath,
     )
   }
-  ensureTrackedFn(ctx, name, instanceId)
-  calleeNames.add(name)
+  ensureTrackedFn(ctx, movementName, instanceId)
+  calleeNames.add(movementName)
   onWrite(parent.node.start!)
   // same-file-component-composition: インライン化パスが名前衝突時に
   // callee識別子をリネームする(ADR-0014決定5)と、ノードの`.name`は
@@ -265,18 +279,12 @@ function tryHandleTrackedCallee(
 // 循環(自己/相互再帰)はエントリを本体解析の前に登録することで打ち切る。
 function ensureTrackedFn(ctx: CompilerState, name: string, instanceId: number): void {
   if (ctx.trackedFns.has(name)) return
-  // design D4/task 3.2: 生成側予約名と衝突する authored 名は黙ってリネームせず拒否。
-  if (name.startsWith('__') || name.startsWith('update_')) {
-    throw new Error(
-      `compile: tracked function "${name}" collides with a generated reserved name (\`update_*\`/\`__\` prefix) (scope limit)`,
-    )
-  }
   const fnPath = ctx.movementFns.get(name)!
   validateFunctionBoundary(ctx, fnPath, instanceId)
   const params = fnPath.get('params') as NodePath<t.Node>[]
   const paramSource =
     params.length > 0
-      ? ctx.source.slice(params[0]!.node.start!, params[params.length - 1]!.node.end!)
+      ? params.map((param) => createAstRewrite(param.node).generate()).join(', ')
       : ''
   // 循環時の再入防止のため、本体解析より前にエントリを登録する。
   const entry: TrackedFn = {
@@ -327,14 +335,8 @@ function collectCalledReads(
       return
     }
     if (!call) return
-    const binding = idPath.scope.getBinding(idPath.node.name)
-    const fn = binding?.path.isFunctionDeclaration()
-      ? binding.path
-      : binding?.path.isVariableDeclarator()
-        ? binding.path.get('init')
-        : null
-    if (fn && !Array.isArray(fn) && fn.isFunction())
-      collectCalledReads(ctx, fn, instanceId, out, visited)
+    const fn = resolveFunction(idPath)
+    if (fn) collectCalledReads(ctx, fn, instanceId, out, visited)
   }
   if (body.isIdentifier()) visit(body)
   if (!body.isFunction())
@@ -636,23 +638,17 @@ function analyzeActionIdentifier(
     )
     const parent = idPath.parentPath
     if (parent?.isCallExpression() && parent.node.callee === idPath.node) {
-      const binding = idPath.scope.getBinding(idPath.node.name)
-      const local = binding?.path.isFunctionDeclaration()
-        ? binding.path
-        : binding?.path.isVariableDeclarator()
-          ? binding.path.get('init')
-          : null
-      if (local && !Array.isArray(local) && local.isFunction()) {
-        collectCalledReads(ctx, local, instanceId, readDeclIds)
-      }
+      const local = resolveFunction(idPath)
+      if (local) collectCalledReads(ctx, local, instanceId, readDeclIds)
     }
-    const fn = ctx.trackedFns.get(idPath.node.name)
+    const resolved = resolveFunction(idPath)
+    const movementName =
+      resolved && [...ctx.movementFns].find(([, fn]) => fn.node === resolved.node)?.[0]
+    const fn = movementName ? ctx.trackedFns.get(movementName) : undefined
     if (
       dirtyName &&
       fn &&
       !fn.async &&
-      idPath.scope.getBinding(idPath.node.name)?.path.node ===
-        ctx.movementFns.get(idPath.node.name)?.node &&
       parent?.isCallExpression() &&
       parent.node.callee === idPath.node
     ) {
@@ -913,16 +909,12 @@ function recordFunctionReference(
   instanceId: number,
   out: FunctionReference[],
 ): void {
-  const binding = path.scope.getBinding(path.node.name)
-  const fn = binding?.path.isFunctionDeclaration()
-    ? binding.path
-    : binding?.path.isVariableDeclarator()
-      ? binding.path.get('init')
-      : null
-  if (!fn || Array.isArray(fn) || !fn.isFunction()) return
-  const movement = ctx.movementFns.get(path.node.name)?.node === fn.node
+  const fn = resolveFunction(path)
+  if (!fn) return
+  const movementName = [...ctx.movementFns].find(([, target]) => target.node === fn.node)?.[0]
+  const movement = movementName != null
   if (!movement && !ctx.analyzedFunctions.has(fn.node)) return
-  if (movement) ensureTrackedFn(ctx, path.node.name, instanceId)
+  if (movementName) ensureTrackedFn(ctx, movementName, instanceId)
   out.push({
     path,
     functionPath: fn,
@@ -938,8 +930,9 @@ function finalizeFunctionReferences(
   edits: Edit[],
   ast: AstRewriteSession | null,
 ): void {
-  const cleanup = resolve === NO_ACTION_UPDATE || resolve === NO_HELPER_UPDATE
   for (const ref of refs) {
+    const result = ctx.lifecycleResultReferences.get(ref.path.node)
+    const cleanup = result === false || resolve === NO_ACTION_UPDATE || resolve === NO_HELPER_UPDATE
     if (!ref.call) {
       const parent = ref.path.parentPath
       const callee = parent?.isCallExpression() ? parent.node.callee : null
@@ -955,19 +948,50 @@ function finalizeFunctionReferences(
         (parent?.isMemberExpression() &&
           parent.node.object === ref.path.node &&
           !(parent.parentPath?.isCallExpression() && parent.parentPath.node.callee === parent.node))
-      if (!pureRead && ((cleanup && !preservesIdentity) || (!cleanup && ref.movement)))
+      const alias =
+        parent?.isVariableDeclarator() &&
+        parent.node.init === ref.path.node &&
+        parent.parentPath.isVariableDeclaration({ kind: 'const' })
+      const argumentCallee = parent?.isCallExpression()
+        ? resolveFunction(parent.get('callee'))
+        : null
+      const compiledCallee =
+        argumentCallee &&
+        (ctx.analyzedFunctions.has(argumentCallee.node) ||
+          [...ctx.movementFns.values()].some((fn) => fn.node === argumentCallee.node))
+      const argument = compiledCallee && isResolvedFunctionArgument(ref.path)
+      if (
+        result === undefined &&
+        !pureRead &&
+        !alias &&
+        !argument &&
+        ((cleanup && !preservesIdentity) || (!cleanup && ref.movement))
+      )
         throw compileErrorAtNode(
           'compile: passing tracked function values for deferred execution is not supported yet (scope limit)',
           ref.path,
         )
-      continue
+      if (cleanup && (pureRead || preservesIdentity) && isFunctionParameter(ref.path))
+        throw compileErrorAtNode(
+          'compile: observing function parameter identity from cleanup is not supported yet (scope limit)',
+          ref.path,
+        )
+      if (pureRead || preservesIdentity || alias || !cleanup) continue
     }
     if (!cleanup) {
       if (ast) ast.rename(ref.path.node, ref.path.node.name)
       continue
     }
+    if (isFunctionParameter(ref.path)) continue
     const binding = ref.path.scope.getBinding(ref.path.node.name)
-    if (binding && !binding.constant)
+    const targetBinding =
+      ref.functionPath.isFunctionDeclaration() && ref.functionPath.node.id
+        ? ref.functionPath.parentPath.scope.getBinding(ref.functionPath.node.id.name)
+        : ref.functionPath.parentPath.isVariableDeclarator() &&
+            t.isIdentifier(ref.functionPath.parentPath.node.id)
+          ? ref.functionPath.parentPath.scope.getBinding(ref.functionPath.parentPath.node.id.name)
+          : undefined
+    if ((binding && !binding.constant) || (targetBinding && !targetBinding.constant))
       throw compileErrorAtNode(
         'compile: calling reassigned functions from cleanup is not supported yet (scope limit)',
         ref.path,
@@ -981,8 +1005,25 @@ function finalizeFunctionReferences(
     const end = ref.path.node.end!
     for (let i = edits.length - 1; i >= 0; i--)
       if (edits[i]!.start === start && edits[i]!.end === end) edits.splice(i, 1)
-    edits.push({ start, end, text: name })
-    if (ast) ast.rename(ref.path.node, name)
+    // 別名の評価を残して宣言前参照の例外を保持する。関数本体だけを後始末用へ替える。
+    const alias = binding?.path.isVariableDeclarator() && binding.path.get('init').isIdentifier()
+    const replacement = alias ? `(${ref.path.node.name}, ${name})` : name
+    const property = ref.path.parentPath
+    const shorthand =
+      property?.isObjectProperty() &&
+      property.node.shorthand &&
+      property.node.value === ref.path.node
+    const text = shorthand
+      ? `${(property.node.key as t.Identifier).name}: ${replacement}`
+      : replacement
+    edits.push({ start, end, text })
+    if (ast) {
+      if (alias)
+        ast.replace(ref.path.node, ref.path.parentPath?.node ?? null, pathDepth(ref.path), () =>
+          t.sequenceExpression([t.identifier(ref.path.node.name), t.identifier(name)]),
+        )
+      else ast.rename(ref.path.node, name)
+    }
   }
 }
 
@@ -1004,7 +1045,7 @@ function cleanupLocalDeclarations(
       const fn = scope.parent
       if (t.isFunctionDeclaration(fn)) {
         const params = fn.params.length
-          ? ctx.source.slice(fn.params[0]!.start!, fn.params.at(-1)!.end!)
+          ? fn.params.map((param) => createAstRewrite(param).generate()).join(', ')
           : ''
         const code = `${fn.async ? 'async ' : ''}function ${name}(${params}) ${body}`
         edits.push({ start: fn.end!, end: fn.end!, text: `; ${code}` })
@@ -1020,9 +1061,11 @@ function cleanupLocalDeclarations(
             )
           })
       } else {
-        const code = `${ctx.source.slice(fn.start!, scope.start)}${body}${ctx.source.slice(scope.end, fn.end!)}`
         const declarator = scope.functionPath.parentPath
         if (!declarator?.isVariableDeclarator()) continue
+        const cloned = t.cloneNode(fn, true)
+        cloned.body = parseGeneratedFunctionBody(body, fn)
+        const code = createAstRewrite(cloned).generate()
         edits.push({
           start: declarator.node.end!,
           end: declarator.node.end!,
@@ -1352,13 +1395,22 @@ function validateOutsideBodyState(
   path: NodePath<t.Node>,
   instanceId: number,
   inspectNestedFunctions = false,
+  visited = new Set<t.Function>(),
 ): void {
   const visit = (idPath: NodePath<t.Identifier>) => {
-    if (idPath.isReferencedIdentifier() && resolveDeclId(ctx, idPath, instanceId)) {
+    if (!idPath.isReferencedIdentifier()) return
+    if (resolveDeclId(ctx, idPath, instanceId)) {
       throw compileErrorAtNode(
         'compile: signal references outside function bodies (parameter initializers, class fields, computed method names) are not supported yet (scope limit)',
         idPath,
       )
+    }
+    const call = idPath.parentPath
+    if (!call?.isCallExpression() || call.node.callee !== idPath.node) return
+    const fn = resolveFunction(idPath)
+    if (fn && !visited.has(fn.node)) {
+      visited.add(fn.node)
+      validateOutsideBodyState(ctx, fn, instanceId, true, visited)
     }
   }
   if (path.isIdentifier()) visit(path)
@@ -1566,12 +1618,29 @@ function analyzeLifecycleBody(
     })
     hasResult = true
   }
+  const addStoredResultFunction = (path: NodePath<t.Identifier>, update: boolean) => {
+    const fn = resolveFunction(path)
+    if (
+      !fn ||
+      fn.node.params.length !== 0 ||
+      (update && [...ctx.movementFns.values()].some((movement) => movement.node === fn.node))
+    )
+      throw invalidResult(path)
+    const scope = analyzeFunctionBodyScope(ctx, fn, instanceId)
+    if (update) for (const id of scope.readDeclIds) resultDeps.add(id)
+    ctx.lifecycleResultReferences.set(path.node, update)
+    hasResult = true
+  }
   const validateResult = (path: NodePath<t.Expression>): void => {
     if (path.isIdentifier({ name: 'undefined' }) && !path.scope.getBinding('undefined')) return
     if (path.isUnaryExpression({ operator: 'void' })) return
     if (path.isConditionalExpression()) {
       validateResult(path.get('consequent'))
       validateResult(path.get('alternate'))
+      return
+    }
+    if (path.isIdentifier()) {
+      addStoredResultFunction(path, kind === 'action')
       return
     }
     if (path.isFunctionExpression() || path.isArrowFunctionExpression()) {
@@ -1596,6 +1665,11 @@ function analyzeLifecycleBody(
           property,
         )
       seen.add(name)
+      const value = property.isObjectProperty() ? property.get('value') : null
+      if (value?.isIdentifier()) {
+        addStoredResultFunction(value, name === 'update')
+        continue
+      }
       const fn = actionResultFunctionPath(property)
       if (!fn || fn.node.params.length !== 0) {
         throw compileErrorAtNode(
@@ -1641,6 +1715,7 @@ function analyzeLifecycleBody(
     }
   }
   const isResultExpression = (path: NodePath<t.Expression>): boolean =>
+    (path.isIdentifier() && resolveFunction(path) != null) ||
     path.isFunctionExpression() ||
     path.isArrowFunctionExpression() ||
     path.isObjectExpression() ||

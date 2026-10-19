@@ -329,7 +329,7 @@ describe('後始末専用の補助関数', () => {
         return () => helper();
       });
     }`),
-    ).toThrow(/calling reassigned functions from cleanup.*\[<source>:6:/)
+    ).toThrow(/calling locally-bound "helper".*\[<source>:6:/)
   })
 
   it('インライン化した子のAST生成でもconst補助関数の未初期化を保つ', async () => {

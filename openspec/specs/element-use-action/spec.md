@@ -227,3 +227,11 @@ irisoutが提供するJSX型定義は、各intrinsic要素の`use`属性を、�
 - **WHEN** `(el: HTMLDivElement) => void`型の関数を`<canvas use={...}>`
   に渡す
 - **THEN** エディタのTypeScript検査が代入可能性エラーを報告する
+
+### Requirement: 保存した更新・後始末関数
+
+初期化が再代入しない局所関数またはそのconst別名を返す場合、および`update`・`destroy`の値に使う場合を受理しなければならない(SHALL)。更新関数の読取りは更新依存へ含め、後始末だけの読取りは含めてはならない(SHALL NOT)。動きゾーンの同期補助関数そのものを更新関数として返す形は、呼出側の反映境界がないためscope limit診断で拒否する。
+
+#### Scenario: 保存した関数を省略形で返す
+- **WHEN** actionが`const update = () => ...; const destroy = () => ...; return { update, destroy };`を持つ
+- **THEN** 元のキーと閉包を保持し、更新と一度だけの破棄を対応する所有者へ接続する

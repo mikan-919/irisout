@@ -1,0 +1,26 @@
+{
+  "date": "2026-10-19",
+  "baseline": "/tmp/irisout-boundaries-before/packages/compiler/src/compiler.ts",
+  "cases": [
+    {
+      "name": "constAlias",
+      "accepted": false,
+      "error": "compile: calling locally-bound \"alias\" from a handler/action body is not supported, only movement-zone functions are tracked (scope limit) [<source>:1:57]"
+    },
+    {
+      "name": "parameter",
+      "accepted": false,
+      "error": "compile: calling locally-bound \"fn\" from a handler/action body is not supported, only movement-zone functions are tracked (scope limit) [<source>:1:57]"
+    },
+    {
+      "name": "storedCleanup",
+      "accepted": false,
+      "error": "compile: onMount() may only return a zero-argument cleanup function (scope limit) [<source>:1:223]"
+    },
+    {
+      "name": "reservedName",
+      "accepted": false,
+      "error": "compile: tracked function \"__container__\" collides with a generated reserved name (`update_*`/`__` prefix) (scope limit) [<source>:1:57]"
+    }
+  ]
+}

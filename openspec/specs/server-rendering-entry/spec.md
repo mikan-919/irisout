@@ -106,3 +106,13 @@ loaderは未検出と転送を返せなければならず(SHALL)。直接要求�
 
 - **WHEN** loaderが内部接続情報を含む例外を投げる
 - **THEN** 500応答を返し、正常page stateと例外文を含めない
+
+### Requirement: 入力名と内部名の分離
+
+SSRルートの識別子入力または省略形の入力プロパティが`__`から始まる内部名または`html`と同じでも、入力キーと値を保持しなければならない(SHALL)。
+
+#### Scenario: 内部名と同名の入力
+- **WHEN** `__input__`・`__rawInput__`・`__state__`・`__signal_state__`・`html`を入力名にする
+- **THEN** 要求ごとの描画と対応するstateでのhydrateを行い、入力キーを変更しない
+
+状態APIの`signal`・`derived`と同名の入力は、APIの束縛識別を一般化するまでscope limit診断を維持する。

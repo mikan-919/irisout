@@ -38,6 +38,8 @@ import type {
 } from '../codegen.ts'
 import { generateModule } from '../codegen.ts'
 import { analyzeExpr } from './analyze.ts'
+import { createAstRewrite } from './ast-codegen.ts'
+import { separateAuthoredNames, restoreAuthoredNames } from './generated-names.ts'
 import { assertAcyclicDerivedGraph, resolveToSignals } from './decl-graph.ts'
 import { collectTopLevelComponents, inlineComponents } from './inline-components.ts'
 import { compileComponent, splitComponentZones } from './render.ts'
@@ -127,6 +129,19 @@ function assertTopLevelShape(program: t.Program, allowModuleSupport = false): vo
   }
 }
 
+// 一時名を含む初期値だけASTから出力し、変換していない式の書式は維持する。
+function declarationValueSource(
+  node: t.Node,
+  source: string,
+  ctx: ReturnType<typeof createCompilerState>,
+): string {
+  let transformed = false
+  t.traverseFast(node, (child) => {
+    if (ctx.transformedNodes.has(child)) transformed = true
+  })
+  return transformed ? createAstRewrite(node).generate() : source.slice(node.start!, node.end!)
+}
+
 function collectContextDeclarations(
   ast: ReturnType<typeof parse>,
   source: string,
@@ -152,7 +167,7 @@ function collectContextDeclarations(
       const arg = declarator.init.arguments[0]
       if (start == null || !arg || arg.start == null || arg.end == null) continue
       const id = toContextId(`context_${start}_${declarator.id.name}`)
-      const defaultSourceRendered = source.slice(arg.start, arg.end)
+      const defaultSourceRendered = declarationValueSource(arg, source, ctx)
       ctx.contexts.set(id, {
         id,
         async: declarator.init.callee.name === 'createAsyncContext',
@@ -231,7 +246,7 @@ function collectSharedDeclarations(
       const start = argPath.node.start
       const end = argPath.node.end
       if (start == null || end == null) continue
-      const sourceRendered = source.slice(start, end)
+      const sourceRendered = declarationValueSource(argPath.node, source, ctx)
       ctx.sharedDecls.push({
         id: declaration.id,
         kind: declaration.kind,
@@ -475,7 +490,7 @@ function rootInputPattern(
     if (pattern.includes(':')) {
       throw new Error('compile: SSR root input only supports shorthand destructuring (scope limit)')
     }
-    return pattern
+    return createAstRewrite(parameter).generate()
   }
   throw new Error('compile: SSR root input must be an identifier or object pattern (scope limit)')
 }
@@ -649,6 +664,30 @@ export function compileSource(source: string, options: CompileOptions = {}): Com
   // パイプラインはコンポーネント合成という概念を一切知らないまま動く。
   const transformedNodes = new Set<t.Node>()
   inlineComponents(ast, transformedNodes)
+  // 部品展開が同名の状態を分離してから一時名を割り当てる。順序を逆にすると、
+  // 展開時に衝突を見逃し、作者名を戻したときに重複宣言になる。
+  const authoredNames = separateAuthoredNames(ast, transformedNodes)
+  // 連結済みの補助宣言にも同じ一時名を使う。元の文字列を残すと、生成後の
+  // 復元が補助関数内の作者名を内部名と誤認する。
+  const supportStatements =
+    authoredNames.size && options.supportNames
+      ? ast.program.body.flatMap((statement) => {
+          if (
+            t.isFunctionDeclaration(statement) &&
+            statement.id &&
+            options.supportNames!.has(statement.id.name)
+          )
+            return [createAstRewrite(statement).generate()]
+          if (!t.isVariableDeclaration(statement)) return []
+          const declarations = statement.declarations.filter(
+            (declaration) =>
+              t.isIdentifier(declaration.id) && options.supportNames!.has(declaration.id.name),
+          )
+          return declarations.length
+            ? [createAstRewrite(t.variableDeclaration(statement.kind, declarations)).generate()]
+            : []
+        })
+      : (options.supportStatements ?? [])
   const ctx = createCompilerState(source, transformedNodes, options.supportNames)
   collectContextDeclarations(ast, source, ctx)
   for (const supportName of options.supportNames ?? []) ctx.usedOutputNames.add(supportName)
@@ -1143,7 +1182,7 @@ export function compileSource(source: string, options: CompileOptions = {}): Com
     const inputPrelude = inputPattern ? `const ${inputPattern} = __input__;` : ''
     const instrumentedBody = [
       inputPrelude,
-      ...(options.supportStatements ?? []),
+      ...supportStatements,
       ...ctx.sharedDecls.map((decl) => {
         if (decl.kind === 'signal') {
           return `const ${decl.outputName} = signal(${decl.sourceRendered}, ${JSON.stringify(decl.id)});`
@@ -1161,13 +1200,11 @@ export function compileSource(source: string, options: CompileOptions = {}): Com
     // __escAttr__: 動的属性の初期値焼き込み用の属性文脈エスケープ(ADR-0012
     // 決定3 — 二重引用符で囲むため `&` と `"`)。
     const runComponent = new Function(
-      'signal',
-      'derived',
-      '__esc__',
-      '__escAttr__',
-      '__input__',
-      instrumentedBody,
-    ) as (
+      `return ${restoreAuthoredNames(
+        `(function(signal, derived, __esc__, __escAttr__, __input__) {${instrumentedBody}\n})`,
+        authoredNames,
+      )}`,
+    )() as (
       signalFn: typeof signal,
       derivedFn: typeof derived,
       escFn: (v: unknown) => string,
@@ -1489,7 +1526,7 @@ export function compileSource(source: string, options: CompileOptions = {}): Com
 
   const markedCode = generateModule({
     usesListMap: ctx.listMapDeclIds.size > 0,
-    supportStatements: options.supportStatements ?? [],
+    supportStatements,
     externalImports: options.externalImports ?? [],
     sharedStatements: ctx.sharedDecls
       .filter((decl) => decl.kind === 'signal' && ctx.usedSharedDeclIds.has(decl.id))
@@ -1526,7 +1563,7 @@ export function compileSource(source: string, options: CompileOptions = {}): Com
     ssrHydration: options.target === 'ssr',
     isDocument,
   })
-  const { code, map } = finalizeSourceMap(markedCode, {
+  const { code, map } = finalizeSourceMap(restoreAuthoredNames(markedCode, authoredNames), {
     filePath: options.sourceMapFilePath ?? '<source>',
     source,
     origins: options.sourceMapOrigins,
@@ -1537,15 +1574,18 @@ export function compileSource(source: string, options: CompileOptions = {}): Com
       ? (() => {
           assertSsrExternalImportsUnused(
             options.externalImports ?? [],
-            options.supportStatements ?? [],
+            supportStatements,
             [...out.instrumentedDeclStatements, ssrHtmlSource].join('\n'),
           )
-          return generateSsrModule({
-            supportStatements: options.supportStatements ?? [],
-            inputPattern,
-            instrumentedDeclStatements: out.instrumentedDeclStatements,
-            rootHtmlSource: ssrHtmlSource,
-          })
+          return restoreAuthoredNames(
+            generateSsrModule({
+              supportStatements,
+              inputPattern,
+              instrumentedDeclStatements: out.instrumentedDeclStatements,
+              rootHtmlSource: ssrHtmlSource,
+            }),
+            authoredNames,
+          )
         })()
       : undefined
 

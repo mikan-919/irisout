@@ -1,0 +1,9 @@
+$ vp test --run packages/compiler/test/javascript-boundaries.test.ts packages/compiler/test/source-map.test.ts packages/compiler/test/lifecycle-helper-boundaries.test.ts packages/compiler/test/lifecycle-control-flow.test.ts packages/compiler/test/ssr-entry.test.ts packages/compiler/test/cross-function-handler-writes.test.ts packages/compiler/test/multi-file-module-composition.test.ts packages/compiler/test/hono-vite-plugin.test.ts packages/compiler/test/hono-router.test.ts
+
+ RUN  v4.1.11 /home/nixos/ghq/github.com/mikan-919/irisout
+
+
+ Test Files  9 passed (9)
+      Tests  202 passed (202)
+   Start at  04:55:41
+   Duration  2.50s (transform 2.98s, setup 0ms, import 8.36s, tests 5.85s, environment 1ms)

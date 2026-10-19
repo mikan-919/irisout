@@ -1,0 +1,9 @@
+$ vp test --run
+
+ RUN  v4.1.11 /home/nixos/ghq/github.com/mikan-919/irisout
+
+
+ Test Files  56 passed (56)
+      Tests  604 passed (604)
+   Start at  04:56:57
+   Duration  11.81s (transform 24.72s, setup 0ms, import 76.63s, tests 77.45s, environment 6ms)

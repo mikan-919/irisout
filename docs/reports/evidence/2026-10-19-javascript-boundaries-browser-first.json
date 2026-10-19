@@ -1,0 +1,9 @@
+{
+  "date": "2026-10-19",
+  "checks": [],
+  "pageErrors": [],
+  "pass": false,
+  "version": "153.0.8010.12",
+  "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n    'action-destroy',\n+   'mount-cleanup',\n    'effect-cleanup:2',\n-   'mount-cleanup'\n  ]\n",
+  "stack": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n    'action-destroy',\n+   'mount-cleanup',\n    'effect-cleanup:2',\n-   'mount-cleanup'\n  ]\n\n    at /home/nixos/ghq/github.com/mikan-919/irisout/fixtures/javascript-boundaries/verify.mjs:156:12\n    at asyncModuleEvaluation (native:2)\n    at processTicksAndRejections (native:7:39)"
+}

@@ -1,0 +1,9 @@
+$ vp -C apps/demos build
+transforming...
+✓ 7 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html  0.88 kB │ gzip: 0.44 kB
+dist/app.js      2.26 kB │ gzip: 1.10 kB
+
+✓ built in 89ms

@@ -32,6 +32,48 @@ function writeProject(files: Record<string, string>, entry = 'main.jsx'): string
 }
 
 describe('compileProject: static multi-file module composition', () => {
+  it('相対モジュールの補助関数もconst別名から呼べる', async () => {
+    const entry = writeProject({
+      'main.jsx': `import { format } from './format.js'; export function App() {
+        const count = signal('ready'); render(<button onClick={run}>{count()}</button>);
+        function run() { const alias = format; count(alias()); }
+      }`,
+      'format.js': `export function format() { return 'changed'; }`,
+    })
+    const module = await loadGenerated(compileProject(entry).code)
+    const container = createContainer()
+    ;(module.mountComponent as (element: Element) => void)(container)
+    ;(container.querySelector('button') as HTMLElement).click()
+    expect(container.textContent).toBe('changed')
+  })
+
+  it('本体を変換しない相対モジュールへ同期の動きゾーン関数を渡さない', () => {
+    const entry = writeProject({
+      'main.jsx': `import { invoke } from './invoke.js'; export function App() {
+        const count = signal(0); render(<button onClick={() => invoke(write)}>{count()}</button>);
+        function write() { count(1); }
+      }`,
+      'invoke.js': `export function invoke(fn) { fn(); }`,
+    })
+    expect(() => compileProject(entry)).toThrow(/passing tracked function values.*scope limit/)
+  })
+
+  it('補助宣言内の予約接頭辞も作者の関数名と省略形を保持する', async () => {
+    const entry = writeProject({
+      'main.jsx': `import { format } from './format.js'; export function App() {
+        const __container__ = signal('ready');
+        render(<button onClick={() => __container__(format())}>{__container__()}</button>);
+      }`,
+      'format.js': `export function format() { function __container__(value) { return value; } const object = {__container__}; return __container__.name + ':' + __container__.length + ':' + Object.keys(object)[0]; }`,
+    })
+    const result = compileProject(entry)
+    const module = await loadGenerated(result.code)
+    const container = createContainer()
+    ;(module.mountComponent as (element: Element) => void)(container)
+    ;(container.querySelector('button') as HTMLElement).click()
+    expect(container.textContent).toBe('__container__:1:__container__')
+  })
+
   it('compiles a split fixture into static HTML and runtime-free component code', async () => {
     const { code, initialHtml, dependencies } = compileProject(FIXTURE)
 

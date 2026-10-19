@@ -1,0 +1,119 @@
+{
+  "startedAt": "2026-10-19T05:00:09.589Z",
+  "command": "bun fixtures/lifecycle-control-flow/verify.mjs",
+  "repoRoot": "/home/nixos/ghq/github.com/mikan-919/irisout",
+  "browser": "/tmp/irisout-benchmark-chrome",
+  "checks": [
+    {
+      "name": "action_capture_and_guard_mount",
+      "pass": true,
+      "evidence": {
+        "initial": {
+          "value": "2",
+          "chosen": "a:after:2",
+          "log": ["watch-0", "watch-1", "watch-2"]
+        },
+        "log": [
+          "watch-0",
+          "watch-1",
+          "watch-2",
+          "watch-3",
+          "destroy-a:after",
+          "destroy-watch",
+          "second-after",
+          "first-a"
+        ]
+      }
+    },
+    {
+      "name": "action_capture_and_guard_hydrate",
+      "pass": true,
+      "evidence": {
+        "initial": {
+          "value": "2",
+          "chosen": "a:after:2",
+          "log": ["watch-0", "watch-1", "watch-2"]
+        },
+        "log": [
+          "watch-0",
+          "watch-1",
+          "watch-2",
+          "watch-3",
+          "destroy-a:after",
+          "destroy-watch",
+          "second-after",
+          "first-a"
+        ]
+      }
+    },
+    {
+      "name": "alternate_action_return_branch",
+      "pass": true,
+      "evidence": {
+        "log": ["watch-0", "watch-1", "watch-2", "destroy-watch", "second-after", "first-b"]
+      }
+    },
+    {
+      "name": "mount_throw_finally_recovery",
+      "pass": true,
+      "evidence": {
+        "mounted": {
+          "mounted": false,
+          "message": "lifecycle failure",
+          "original": true
+        },
+        "log": ["watch-0", "watch-2", "destroy-watch", "cleanup-second", "cleanup-first"]
+      }
+    },
+    {
+      "name": "use_throw_finally_recovery",
+      "pass": true,
+      "evidence": {
+        "mounted": {
+          "mounted": false,
+          "message": "lifecycle failure",
+          "original": true
+        },
+        "log": ["watch-0", "watch-2", "destroy-watch"]
+      }
+    },
+    {
+      "name": "keyed_unit_cleanup_ownership",
+      "pass": true,
+      "evidence": {
+        "removed": ["action-1", "mount-1"],
+        "destroyed": ["action-1", "mount-1", "other-2"]
+      }
+    },
+    {
+      "name": "effect_branch_cleanup_and_read_dependencies",
+      "pass": true,
+      "evidence": {
+        "initial": ["update-0", "effect-0"],
+        "log": [
+          "update-0",
+          "effect-0",
+          "update-1",
+          "cleanup-zero-1",
+          "effect-1",
+          "update-2",
+          "effect-2",
+          "destroy-1",
+          "cleanup-2"
+        ]
+      }
+    },
+    {
+      "name": "cleanup_helper_does_not_flush_root_dom",
+      "pass": true,
+      "evidence": {
+        "value": "0",
+        "log": ["cleanup-write"]
+      }
+    }
+  ],
+  "pageErrors": [],
+  "pass": true,
+  "version": "153.0.8010.12",
+  "finishedAt": "2026-10-19T05:00:10.719Z"
+}

@@ -1,5 +1,7 @@
 # irisout 拒否条件の整理
 
+2026-10-19にG03のconst別名・識別子引数、返却関数の変数参照、G04の局所名・SSR入力名の衝突へ対応した。以下の残る制限と表は当時の記録として保持する。現行ソースの対応範囲と残る条件は[関数値の境界](./2026-10-19-javascript-boundaries.md)を参照する。
+
 初期化本体の途中返却の制限は、後続の[初期化関数の制御フロー](./2026-10-09-lifecycle-control-flow.md)で解消した。この文書の表と試験件数は前段の記録を保持する。
 
 調査対象は `packages/compiler/src`、`packages/vite-plugin/src`、`packages/hono/src`、`packages/runtime/src` と `openspec/specs`。以下の表は2026-10-08の作業開始時点（`da83fa8`）の調査を保存したもの。表の行番号と拒否条件は変更前を指す。この調査後の変更を次に記載する。

@@ -56,13 +56,30 @@ describe('Irisout SSR入口', () => {
     expect(rendered.html).toContain('>READY</h1>')
   })
 
-  it('ルート入力bindingの生成内部名との衝突を拒否する', () => {
-    for (const name of ['__input__', '__rawInput__', '__state__', '__signal_state__']) {
-      expect(() => compileSSR(`export function Page(${name}) { render(<p>ready</p>); }`)).toThrow(
-        new RegExp(`SSR root input binding "${name}" conflicts`),
-      )
-    }
-  })
+  it.each(['__input__', '__rawInput__', '__state__', '__signal_state__', 'html'])(
+    '生成内部名と同名のSSR入力を要求とhydrateで保持する: %s',
+    async (name) => {
+      for (const pattern of [name, '{' + name + '}']) {
+        const result = compileSSR(
+          `export function Page(${pattern}) { render(<p>{${name}.title}</p>); }`,
+        )
+        const server = await loadGenerated(result.ssrCode!)
+        const input = pattern === name ? { title: 'ready' } : { [name]: { title: 'ready' } }
+        const rendered = (server.render as (input: unknown) => { html: string; state: unknown })(
+          input,
+        )
+        expect(rendered.html).toContain('>ready</p>')
+        const client = await loadGenerated(result.code)
+        const dom = new JSDOM('<!doctype html><div id="app">' + rendered.html + '</div>')
+        const container = dom.window.document.querySelector('#app')!
+        ;(client.hydrateComponent as (container: Element, state: unknown) => unknown)(
+          container,
+          rendered.state,
+        )
+        expect(container.textContent).toBe('ready')
+      }
+    },
+  )
 
   it('構造unit内のsignal()を初期SSRで拒否する', () => {
     expect(() =>
