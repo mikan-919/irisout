@@ -1,15 +1,15 @@
 <h1 align="center">irisout</h1>
 
 <p align="center">
-  JSXを静的HTMLと、状態更新用のJavaScriptへ変換するコンパイラ
+  状態変更を、対応するDOMへ直接反映するJSXコンパイラ
 </p>
 
 <p align="center">
   <a href="https://www.npmjs.com/package/irisout"><img src="https://img.shields.io/npm/v/irisout?color=6549d8" alt="npm version" /></a>
-  <a href="./LICENSE"><img src="https://img.shields.io/github/license/mikan-919/irisout?color=20b5c7" alt="MIT License" /></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/github/license/mikan-919/irisout?color=0f766e" alt="MIT License" /></a>
 </p>
 
-静的に決まるDOMをHTMLとして出力し、テキストや属性の更新先をコンパイル時に決めます。仮想DOMは使いません。条件分岐や一覧など、実行時に決まる構造には、その機能が使う処理を生成します。
+静的に決まるDOMは初期HTMLとして出力し、テキストや属性の更新先はコンパイル時に決めます。仮想DOMは使いません。条件分岐や一覧など、実行時に構造が決まる部分には必要な処理を生成します。
 
 React互換の実行環境ではありません。対応するJSXとJavaScriptの範囲をコンパイル時に検査し、扱えない構文は位置を示して診断します。
 
