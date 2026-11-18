@@ -8,6 +8,16 @@ compile error で拒否する。動的(式コンテナ)属性値は ADR-0012 以
 `dynamic-attribute-bindings` capability が扱う。
 
 ## Requirements
+
+### Requirement: HTMLの空要素の出力
+
+HTML名前空間の`area`、`base`、`br`、`col`、`embed`、`hr`、`img`、`input`、`link`、`meta`、`source`、`track`、`wbr`は開始タグだけで出力しなければならない(SHALL)。描画される子を持つ空要素はコンパイル時に診断しなければならない(SHALL)。
+
+#### Scenario: 文書のheadに空要素を置く
+
+- **WHEN** 文書ページのheadに`<meta charset="utf-8" />`を置く
+- **THEN** サーバー描画のHTMLに`<meta charset="utf-8">`が入り、ViteのHTML変換を通る
+
 ### Requirement: 静的文字列属性のテンプレート反映
 コンパイラは、host 要素の JSX 属性値が文字列リテラル(`StringLiteral`)である
 場合、その属性をマーカーやハンドラ配線を発行せず、生成される初期 HTML

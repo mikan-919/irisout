@@ -307,7 +307,12 @@ function createRoutesPlugin(
       }
     },
     resolveId(id: string) {
-      if (id === virtualModuleId) return resolvedVirtualModuleId
+      if (
+        id === virtualModuleId ||
+        (!build && emitEntry && id.split('?', 1)[0] === '/irisout-client.js')
+      ) {
+        return resolvedVirtualModuleId
+      }
       if (id.startsWith(`${virtualModuleId}${PAGE_MODULE_MARKER}`)) {
         return pageResolvedId(id)
       }

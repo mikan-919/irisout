@@ -94,16 +94,15 @@ function developmentPages(app: Hono, routes: readonly IrisoutExplicitRouteDefini
   return {
     name: 'irisout-hono-development-pages',
     configureServer(server) {
-      server.middlewares.use((request, _response, next) => {
-        if (new URL(request.url ?? '/', 'http://irisout.local').pathname === '/irisout-client.js') {
-          request.url = '/@id/virtual:irisout-routes'
-        }
-        next()
-      })
       server.middlewares.use(async (request, response, next) => {
         if (request.method !== 'GET') return next()
         const pathname = new URL(request.url ?? '/', 'http://irisout.local').pathname
-        if (!patterns.some((pattern) => pattern.test(pathname))) return next()
+        if (
+          pathname === '/irisout-client.js' ||
+          !patterns.some((pattern) => pattern.test(pathname))
+        ) {
+          return next()
+        }
 
         const result = await app.fetch(createRequest(request, server))
         response.statusCode = result.status

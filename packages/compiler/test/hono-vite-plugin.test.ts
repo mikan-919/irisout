@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { Hono } from 'hono'
-import { build } from 'vite-plus'
+import { build, createServer } from 'vite-plus'
 import { describe, expect, it } from 'vite-plus/test'
 import { createFileRouter } from '../../hono/src/index.ts'
 import { irisoutHono } from '../../vite-plugin/src/hono.ts'
@@ -15,6 +15,45 @@ function writePage(root: string, relative: string, source: string): string {
 }
 
 describe('irisoutHono Vite連携', () => {
+  it('開発時のHTMLと起動スクリプトの変換で指定した仮想入口を解決する', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'irisout-hono-vite-dev-'))
+    const virtualModuleId = 'virtual:custom-routes'
+    writePage(
+      root,
+      '[id]',
+      'export function Page() { return <html><head><meta charset="utf-8" /></head><body><p>page</p></body></html> }',
+    )
+    const app = new Hono().route('/', createFileRouter(root))
+    const server = await createServer({
+      configFile: false,
+      root,
+      logLevel: 'silent',
+      plugins: [irisoutHono(app, { virtualModuleId })],
+      resolve: {
+        alias: {
+          'irisout/routes': path.resolve(import.meta.dirname, '../../routes/src/index.ts'),
+          'irisout/runtime': path.resolve(import.meta.dirname, '../../runtime/src/index.ts'),
+        },
+      },
+      server: { middlewareMode: true, ws: false },
+    })
+    try {
+      const document = await app.request('/item')
+      expect(document.status).toBe(200)
+      const html = await server.transformIndexHtml('/item', await document.text(), '/item')
+      expect(html).toContain('src="/irisout-client.js"')
+
+      // HTMLの事前変換はHTTPミドルウェアを経由しない。
+      const transformed = await server.transformRequest('/irisout-client.js')
+      expect(transformed?.code).toContain(virtualModuleId)
+      const entry = await server.transformRequest('/irisout-client.js?v=test')
+      expect(entry?.code).toContain('routeNavigator.start()')
+    } finally {
+      await server.close()
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
   it('ブラウザー入口のないSSRページは編集時に文書を再読み込みする', async () => {
     const root = mkdtempSync(path.join(tmpdir(), 'irisout-hono-ssr-hmr-'))
     try {
@@ -134,13 +173,37 @@ describe('irisoutHono Vite連携', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'irisout-hono-vite-build-'))
     try {
       writePage(root, '', 'export function Page() { render(<p>home</p>); }')
-      writePage(root, 'about', 'export function Page() { render(<p>about</p>); }')
+      writePage(
+        root,
+        'about',
+        `import { onMount, signal } from 'irisout'
+import { loadBrowserLibrary } from 'browser-loader'
+export function Page() {
+  const message = signal('loading')
+  onMount(() => {
+    void loadBrowserLibrary().then((library) => message(library.label))
+  })
+  return <html><head><title>About</title></head><body><p>{message()}</p></body></html>
+}`,
+      )
+      const loader = path.join(root, 'browser-loader.mjs')
+      writeFileSync(
+        loader,
+        "export const loadBrowserLibrary = () => import('./browser-library.mjs')",
+      )
+      writeFileSync(
+        path.join(root, 'browser-library.mjs'),
+        "export const label = window.location.href + ' browser-library-marker'",
+      )
       writeFileSync(
         path.join(root, 'index.html'),
         '<!doctype html><div id="app"></div><script type="module" src="/main.js"></script>',
       )
       writeFileSync(path.join(root, 'main.js'), "console.log('application entry')\n")
       const app = new Hono().route('/', createFileRouter(root))
+      const response = await app.request('/about')
+      expect(response.status).toBe(200)
+      expect(await response.text()).toContain('loading')
 
       await build({
         configFile: false,
@@ -151,6 +214,7 @@ describe('irisoutHono Vite連携', () => {
           alias: {
             'irisout/routes': path.resolve(import.meta.dirname, '../../routes/src/index.ts'),
             'irisout/runtime': path.resolve(import.meta.dirname, '../../runtime/src/index.ts'),
+            'browser-loader': loader,
           },
         },
         build: { outDir: 'dist' },
@@ -160,6 +224,7 @@ describe('irisoutHono Vite連携', () => {
         file.endsWith('.js'),
       )
       expect(scripts.length).toBeGreaterThanOrEqual(3)
+      expect(scripts).toContainEqual(expect.stringMatching(/^browser-library-.*\.js$/))
     } finally {
       rmSync(root, { recursive: true, force: true })
     }

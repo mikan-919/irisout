@@ -9,6 +9,7 @@ import { parse } from '@babel/parser'
 import type { NodePath } from '@babel/traverse'
 import traverseImport from '@babel/traverse'
 import * as t from '@babel/types'
+import { originalPositionFor, TraceMap } from '@jridgewell/trace-mapping'
 import { withCompileDiagnostic, type DiagnosticOrigin } from '../diagnostics.ts'
 import { stripAuthoringImports } from './authoring-import.ts'
 import { stripTypeScript } from './strip-typescript.ts'
@@ -665,17 +666,23 @@ export function linkProject(entryPath: string, transformSource?: SourceTransform
   const dependencies = new Set<string>()
 
   for (const record of order) {
-    // 元ASTの行を保つことで、連結後のcompile errorを元モジュールの行へ
-    // 戻せる。生成module向けのsupport statementとは異なり、ここは診断位置
-    // のための中間ソースである。
-    const generated = generate(record.ast, { comments: false, retainLines: true }).code
+    // 束縛の改名などで桁がずれるため、診断時は中間ソースから元の位置を引く。
+    const generated = generate(
+      record.ast,
+      { comments: false, retainLines: true, sourceMaps: true, sourceFileName: record.filePath },
+      record.source,
+    )
     const generatedStart = sourceParts.length === 0 ? 0 : sourceParts.join('\n').length + 1
-    sourceParts.push(generated)
+    sourceParts.push(generated.code)
     origins.push({
       generatedStart,
-      generatedEnd: generatedStart + generated.length,
+      generatedEnd: generatedStart + generated.code.length,
       filePath: record.filePath,
       source: record.source,
+      originalPosition(line, column) {
+        if (!generated.map) return
+        return originalPositionFor(new TraceMap(generated.map), { line, column })
+      },
     })
     externalImports.push(...record.externalStatements)
     dependencies.add(record.filePath)

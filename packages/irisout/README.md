@@ -164,4 +164,61 @@ createFileRouter('./routes', {
 
 コンパイラは`irisout`、診断型は`irisout/diagnostics`から参照できます。
 
+### ブラウザー専用モジュールの遅延読み込み
+
+irisoutがコンパイルするJSXに動的`import()`を書くと、`onMount`内でも診断が出ます。Viteで読み込む補助モジュールに`import()`を置きます。
+
+```js
+// browser-loader.mjs
+export const loadBrowserLibrary = () => import('./browser-library.mjs')
+```
+
+```js
+// browser-library.mjs
+export const label = '読み込み完了'
+```
+
+Vite設定に次の`resolve.alias`を追加します。`browser-loader`はViteが解決する別名です。
+
+```ts
+// vite.config.ts
+import { fileURLToPath } from 'node:url'
+import { irisoutHono } from 'irisout/hono/vite'
+import { app } from './server/app.ts'
+
+export default {
+  plugins: [irisoutHono(app)],
+  resolve: {
+    alias: {
+      'browser-loader': fileURLToPath(new URL('./browser-loader.mjs', import.meta.url)),
+    },
+  },
+}
+```
+
+```jsx
+// routes/page.jsx
+import { onMount, signal } from 'irisout'
+import { loadBrowserLibrary } from 'browser-loader'
+
+export function Page() {
+  const message = signal('読み込み中')
+  onMount(() => {
+    void loadBrowserLibrary().then((library) => message(library.label))
+  })
+  return (
+    <html lang="ja">
+      <head>
+        <title>遅延読み込み</title>
+      </head>
+      <body>
+        <p>{message()}</p>
+      </body>
+    </html>
+  )
+}
+```
+
+補助モジュールは相対パスではなく別名で取り込みます。`onMount`だけで使う取り込みはサーバー描画用の生成物から除かれ、ブラウザーで初期化した時点でライブラリーの読み込みが始まります。
+
 版ごとの差分は[`CHANGELOG.md`](./CHANGELOG.md)を参照してください。

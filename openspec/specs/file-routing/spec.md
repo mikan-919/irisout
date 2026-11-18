@@ -107,6 +107,10 @@ Honoのファイル経路は、各pageをSSRする前に任意のファイル単
 - **WHEN** Vite設定のプラグイン配列へ`irisoutHono(app)`を登録する
 - **THEN** `irisout-client.js`が構築され、利用側のJavaScriptに`virtual:*`のimportを書かない
 
+#### Scenario: 開発時のブラウザー入口を解決する
+
+- **WHEN** ViteがHonoの応答のHTML変換またはブラウザー要求で`/irisout-client.js`を解決する
+- **THEN** 既定または設定された経路の仮想モジュールへ解決する
 
 ### Requirement: JSXによる文書Layout
 

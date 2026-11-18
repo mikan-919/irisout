@@ -124,6 +124,31 @@ export function Counter() {
     expect(diagnostic.message).toContain('scope limit')
   })
 
+  it('points a missing list key inside Layout children to the original item', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'irisout-list-key-diagnostics-'))
+    const entry = path.join(root, 'page.tsx')
+    writeFileSync(
+      path.join(root, 'Layout.tsx'),
+      `export function Layout({ children }) {
+  return <html><head><title>Page</title></head><body>{children}</body></html>
+}`,
+    )
+    const itemLine = '  return <Layout><ul>{items().map((item) => <li>{item}</li>)}</ul></Layout>'
+    writeFileSync(
+      entry,
+      `import { Layout } from './Layout.tsx'
+import { signal } from 'irisout'
+export function Page() {
+  const items = signal(['first'])
+${itemLine}
+}`,
+    )
+
+    expect(() => compileProject(entry, { target: 'ssr' })).toThrow(
+      `list items require a \`key\` attribute (scope limit) [${entry}:5:${itemLine.indexOf('<li>') + 1}]`,
+    )
+  })
+
   it.each([
     ['generator', '    function* stream() { count(1); yield count(); }'],
     ['outside function bodies', '    function stream(value = count()) { return value; }'],

@@ -11,6 +11,11 @@ export interface DiagnosticOrigin {
   generatedEnd: number
   filePath: string
   source: string
+  /** 中間ソースの位置を元の行(1始まり)・列(0始まり)へ戻す。 */
+  originalPosition?: (
+    line: number,
+    column: number,
+  ) => { line: number | null; column: number | null } | undefined
 }
 
 export interface DiagnosticPosition {
@@ -65,13 +70,15 @@ function mapOrigin(
   if (!origin) return null
   const generatedBefore = source.slice(origin.generatedStart, generatedOffset)
   const relativeLine = generatedBefore.split('\n').length
+  const relativeColumn = generatedBefore.length - generatedBefore.lastIndexOf('\n') - 1
+  const original = origin.originalPosition?.(relativeLine, relativeColumn)
+  if (original?.line != null && original.column != null) {
+    return { filePath: origin.filePath, line: original.line, column: original.column + 1 }
+  }
   const originalLines = origin.source.split('\n')
   const originalLine = Math.min(Math.max(1, relativeLine), Math.max(1, originalLines.length))
   const originalLineText = originalLines[originalLine - 1] ?? ''
-  const originalColumn = Math.min(
-    Math.max(1, generatedBefore.length - generatedBefore.lastIndexOf('\n')),
-    Math.max(1, originalLineText.length + 1),
-  )
+  const originalColumn = Math.min(relativeColumn + 1, Math.max(1, originalLineText.length + 1))
   return { filePath: origin.filePath, line: originalLine, column: originalColumn }
 }
 

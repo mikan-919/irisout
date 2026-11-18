@@ -1081,7 +1081,7 @@ export function compileSource(source: string, options: CompileOptions = {}): Com
     decls.map((decl) =>
       decl.kind === 'signal'
         ? `const ${decl.outputName} = signal(${decl.sourceRendered}, ${JSON.stringify(decl.id)});`
-        : `const ${decl.outputName} = derived(() => ${decl.sourceRendered}, ${JSON.stringify(decl.id)});`,
+        : `const ${decl.outputName} = derived(() => (${decl.sourceRendered}), ${JSON.stringify(decl.id)});`,
     )
 
   const renderSsrBody = (body: StructuralUnitBodyOutput): string => {

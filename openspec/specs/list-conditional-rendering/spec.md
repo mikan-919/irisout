@@ -12,6 +12,16 @@ factory-per-unitクロージャで生成する(M5、change
 任意の深さを受理する(change `recursive-structural-authoring`)。各factory instance
 は自身のDOM範囲、ローカル状態、binding cache、更新処理を所有する。
 ## Requirements
+
+### Requirement: 一覧のキー欠落の診断位置
+
+一覧項目の`key`が欠ける場合、コンパイラは元のファイル名と項目の開始位置を診断に含めなければならない(SHALL)。
+
+#### Scenario: 一覧が別ファイルの部品の子に渡された場合
+
+- **WHEN** ページが`key`のない一覧を別ファイルのLayoutに子として渡す
+- **THEN** 診断は一覧項目が記述されたページの行と列を示す
+
 ### Requirement: 要素間の静的な文字列
 JSXの子要素に混在する文字列リテラル式は、空白と特殊文字を保った本文として初期HTMLへ
 出力しなければならない(SHALL)。静的な文字列だけのために反応的な本文単位を要求しない(SHALL NOT)。

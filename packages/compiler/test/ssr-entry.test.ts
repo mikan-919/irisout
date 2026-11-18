@@ -1,9 +1,9 @@
 import { JSDOM } from 'jsdom'
 import { describe, expect, it } from 'vite-plus/test'
 import path from 'node:path'
-import { compileProject, compileSSR } from '../src/compiler.ts'
+import { compile, compileProject, compileSSR } from '../src/compiler.ts'
 import { serializeSsrState } from '../../vite-plugin/src/ssr.ts'
-import { loadGenerated } from './helpers.ts'
+import { createContainer, loadGenerated } from './helpers.ts'
 
 describe('Irisout SSR入口', () => {
   it('Layoutのpropsと親signalが同名でも子要素の参照を置換しない', async () => {
@@ -17,6 +17,27 @@ describe('Irisout SSR入口', () => {
     })
     expect(rendered.html).toContain('>決済API停止</title>')
     expect(rendered.html).toContain('>決済API停止</h1>')
+  })
+
+  it('オブジェクトを返すderivedを初期描画と状態更新で評価する', async () => {
+    const source = `export function Page() {
+      const count = signal(1)
+      const labels = derived(() => ({ text: 'count ' + count(), suffix: '!' }))
+      return <button onClick={() => count(count() + 1)}>{labels().text + labels().suffix}</button>
+    }`
+    const { initialHtml } = compile(source)
+    const compiled = compileSSR(source)
+    const server = await loadGenerated(compiled.ssrCode!)
+    const { html, state } = (server.render as () => { html: string; state: unknown })()
+    expect(html).toBe(initialHtml)
+    const container = createContainer()
+    container.innerHTML = html
+    const client = await loadGenerated(compiled.code)
+    ;(client.hydrateComponent as (container: Element, state: unknown) => void)(container, state)
+    const button = container.querySelector('button')!
+    expect(button.textContent).toBe('count 1!')
+    button.click()
+    expect(button.textContent).toBe('count 2!')
   })
 
   it('要求ごとの入力からHTMLとhydrate stateを分けて生成する', async () => {

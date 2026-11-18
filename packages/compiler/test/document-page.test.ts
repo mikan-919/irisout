@@ -80,6 +80,7 @@ describe('JSX文書ページ', () => {
       expect(response.status).toBe(200)
       const html = await response.text()
       expect(html.startsWith('<!doctype html><html')).toBe(true)
+      expect(html).not.toContain('</meta>')
       const dom = new JSDOM(html)
       expect(dom.window.document.title).toBe(title)
       expect(

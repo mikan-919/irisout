@@ -29,7 +29,17 @@ describe('milestone 4: static host attributes', () => {
 
   it('reflects a valueless boolean attribute without ="..."', () => {
     const { initialHtml } = compile(wrap(`<input disabled/>`))
-    expect(initialHtml).toBe('<input disabled></input>')
+    expect(initialHtml).toBe('<input disabled>')
+  })
+
+  it('omits HTML void end tags without omitting SVG end tags', () => {
+    const htmlVoidTags = 'area base br col embed hr img input link meta source track wbr'.split(' ')
+    const children = htmlVoidTags.map((tag) => `<${tag} />`).join('')
+    const { initialHtml } = compile(wrap(`<div>${children}<svg><image /></svg></div>`))
+    expect(initialHtml).toBe(
+      `<div>${htmlVoidTags.map((tag) => `<${tag}>`).join('')}<svg><image></image></svg></div>`,
+    )
+    expect(() => compile(wrap('<input>text</input>'))).toThrow('cannot have children')
   })
 
   it('accepts an expression-container value as a dynamic binding (ADR-0012)', () => {

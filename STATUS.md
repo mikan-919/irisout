@@ -3,7 +3,9 @@
 実装の現在地、完了した段階、既知の制約を記録する。設計判断は`docs/adr/`、受入条件は
 `openspec/specs/`、今後の作業は`ROADMAP.md`を正本とする。
 
-## 現在地（2026-10-19）
+## 現在地（2026-11-18）
+
+HTMLの空要素に終了タグを付けず、Hono連携の開発サーバーで`/irisout-client.js`をViteが解決するようにした。Layout経由の一覧で`key`が欠けると元ファイルの項目位置を報告し、オブジェクトを返す`derived`は初期描画と状態更新で評価できる。コンパイル対象内の動的`import()`には制限があり、Viteの別名を使う補助モジュールでの遅延読み込みをパッケージREADMEに記載した。
 
 公式js-framework-benchmarkの転送量差を受け、初期HTMLを配るclient束から未使用のmount経路を外した。`clientEntry: 'hydrate'`をcompilerとVite pluginへ追加し、生成moduleは`mount`import・`__INITIAL_HTML__`・`mountComponent`exportを出さずhydrate経路だけを残す。既定は`full`のままなので、直接`compile()`を使う利用例と仮想moduleなしのclient専用buildは変わらない。pre-Phase 1のBrotli 4,948バイトに対し、生成側で4,692バイト(-12.8%生)、一覧の未使用探索helperの除去とbenchmark本番buildのmodulepreload polyfill無効化(この構成は動的importがなく測定Chromiumはネイティブ解釈)を加えて4,433バイトとなった。事前目標4,403バイトには30バイト届かない。残りは`reconcileListMap`/`reconcileList`の重複で、安全な共通化はBrotliを悪化させ、通知先がある場合の交換を汎用照合へ落とす削減と診断文の短縮は品質を下げるため採らない。公式測定はBrotli 5.20→4.70KiB、9操作のVanilla比幾何平均は0.98・0.99(実行順交替の2組)で、Phase 1はclient束の未使用経路だけを消すため操作時間の経路は変えていない。全607試験、静的検査、型検査を通過した。設計はADR-0072、前後の集計は`packages/bench/js-framework/results-baseline-2026-10-19.md`・`results-phase1-2026-10-19.md`・`results-phase1b-2026-10-19.md`にある。
 

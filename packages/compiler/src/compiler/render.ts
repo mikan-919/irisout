@@ -60,6 +60,22 @@ type JSXChild =
   | t.JSXFragment
   | t.JSXSpreadChild
 
+const htmlVoidElements = new Set([
+  'area',
+  'base',
+  'br',
+  'col',
+  'embed',
+  'hr',
+  'img',
+  'input',
+  'link',
+  'meta',
+  'source',
+  'track',
+  'wbr',
+])
+
 function resolveContextId(ctx: CompilerState, keyPath: NodePath<t.Expression>): ContextId | null {
   if (!keyPath.isIdentifier()) return null
   const binding = keyPath.scope.getBinding(keyPath.node.name)
@@ -181,7 +197,7 @@ function emitDerived(
   // 出力: 初回値をその場で計算するプレーン変数。
   out.declStatements.push(`let ${outputName} = ${rendered};`)
   out.instrumentedDeclStatements.push(
-    `const ${outputName} = derived(() => ${sourceRendered}, ${JSON.stringify(id)});`,
+    `const ${outputName} = derived(() => (${sourceRendered}), ${JSON.stringify(id)});`,
   )
   return id
 }
@@ -717,6 +733,8 @@ function renderElement(
   const tagName = openingName.name
   const svgElement = opts.inSvgNamespace === true || tagName === 'svg'
   const childInSvgNamespace = svgElement && tagName !== 'foreignObject'
+  const isVoid = !svgElement && htmlVoidElements.has(tagName)
+  const closingTag = isVoid ? '' : `</${tagName}>`
 
   if (/^[A-Z]/.test(tagName)) {
     throw new Error(
@@ -781,6 +799,19 @@ function renderElement(
   }
 
   const children = elementPath.get('children') as NodePath<JSXChild>[]
+  if (
+    isVoid &&
+    children.some((child) =>
+      child.isJSXText()
+        ? cleanJSXText(child.node.value) !== ''
+        : !child.isJSXExpressionContainer() || !child.get('expression').isJSXEmptyExpression(),
+    )
+  ) {
+    throw Object.assign(
+      new Error(`compile: HTML void element <${tagName}> cannot have children (scope limit)`),
+      { loc: elementPath.node.loc },
+    )
+  }
 
   // M5: リスト(`.map()`)・条件分岐(三項/`&&`)の構造ユニット検出。
   // 構造ユニットは親要素そのものを更新対象にせず、親の子ノード列に開始・
@@ -877,7 +908,7 @@ function renderElement(
     }
 
     if (handlerAttrs.length === 0 && !actionAttr && dynAttrs.length === 0) {
-      return `<${tagName}${attrs}${dynBake}>${inner}</${tagName}>`
+      return `<${tagName}${attrs}${dynBake}>${inner}${closingTag}`
     }
     // 構造ユニットと同じ親要素にハンドラ/action/動的属性がある場合は、
     // 構造ユニットとは別にホスト要素自身のマーカーを発行する。これで
@@ -888,7 +919,7 @@ function renderElement(
     }
     if (actionAttr) registerAction(ctx, markerId, actionAttr, instanceId, insideUnit)
     attachAttrBindings(markerId)
-    return `<${tagName}${attrs}${dynBake} data-iris-id="${markerId}">${inner}</${tagName}>`
+    return `<${tagName}${attrs}${dynBake} data-iris-id="${markerId}">${inner}${closingTag}`
   }
 
   const hasDirectExpr = children.some((c) => {
@@ -968,7 +999,7 @@ function renderElement(
       } else throw new Error('compile: unsupported JSX child (scope limit)')
     }
     if (handlerAttrs.length === 0 && !actionAttr && dynAttrs.length === 0) {
-      return `<${tagName}${attrs}>${inner}</${tagName}>`
+      return `<${tagName}${attrs}>${inner}${closingTag}`
     }
     // reactive text を持たない要素にハンドラ/action/動的属性だけが付く場合、
     // mount() が拾えるようこの要素専用のマーカーを新規に発行する。
@@ -978,7 +1009,7 @@ function renderElement(
     }
     if (actionAttr) registerAction(ctx, markerId, actionAttr, instanceId, insideUnit)
     attachAttrBindings(markerId)
-    return `<${tagName}${attrs}${dynBake} data-iris-id="${markerId}">${inner}</${tagName}>`
+    return `<${tagName}${attrs}${dynBake} data-iris-id="${markerId}">${inner}${closingTag}`
   }
 
   const runPaths: NodePath<t.JSXText | t.JSXExpressionContainer>[] = []
@@ -1020,7 +1051,7 @@ function renderElement(
   }
   if (actionAttr) registerAction(ctx, markerId, actionAttr, instanceId, insideUnit)
   attachAttrBindings(markerId)
-  return `<${tagName}${attrs}${dynBake} data-iris-id="${markerId}">${sourceInner}</${tagName}>`
+  return `<${tagName}${attrs}${dynBake} data-iris-id="${markerId}">${sourceInner}${closingTag}`
 }
 
 // same-file-component-composition: list item の arrow 本体が bare JSX
@@ -1430,7 +1461,9 @@ function renderListUnit(
         a.isJSXAttribute() && a.node.name.type === 'JSXIdentifier' && a.node.name.name === 'key',
     ) as NodePath<t.JSXAttribute> | undefined
   if (!keyAttrPath) {
-    throw new Error('compile: list items require a `key` attribute (scope limit)')
+    throw Object.assign(new Error('compile: list items require a `key` attribute (scope limit)'), {
+      loc: itemPath.node.loc,
+    })
   }
   const keyValueNode = keyAttrPath.node.value
   if (keyValueNode?.type !== 'JSXExpressionContainer') {
