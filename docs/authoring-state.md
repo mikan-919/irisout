@@ -59,7 +59,7 @@ export function Price() {
 
 ルート部品では状態と派生値を`render()`より前に宣言する。イベント処理など、状態を書き換える関数は`render()`より後に置ける。この配置が解析範囲を示す。
 
-公開版0.3.7では、`render()`より前に通常の数値やオブジェクトを代入する変数宣言は置けない。例えば、次の宣言は未使用でも`compile: ... (scope limit)`で拒否される。
+`render()`より前に通常の数値やオブジェクトを代入する変数宣言は置けない。例えば、次の宣言は未使用でも`compile: ... (scope limit)`で拒否される。
 
 ```jsx
 const requests = { active: true }

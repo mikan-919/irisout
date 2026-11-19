@@ -61,13 +61,13 @@ function update_count() {
 
 ## 動作を試す
 
-公開版0.3.7、Vite+ 0.3.0、TypeScript 5.9を使う例です。Node.jsとnpmを用意し、アプリのディレクトリでパッケージを導入します。
+公開版0.3.8、Vite+ 0.3.0、TypeScript 5.9を使う例です。Node.jsとnpmを用意し、アプリのディレクトリでパッケージを導入します。
 
 ```sh
 mkdir irisout-app
 cd irisout-app
 npm init -y
-npm install irisout@0.3.7 vite-plus@0.3.0
+npm install irisout@0.3.8 vite-plus@0.3.0
 npm install --save-dev typescript@5.9
 ```
 
@@ -222,7 +222,7 @@ irisoutは任意のReactコードやJavaScriptを実行時に解釈する仕組�
 - ブラウザー内コンパイラは一つのソース文字列だけを扱い、モジュール解決を行いません。
 - Motion拡張の未対応属性は通常のDOM属性として残さず、コンパイル時に診断します。
 
-制約は公開版と未公開のソース変更で異なる場合があります。公開版0.3.7の制約、回避方法、診断例は[診断と対応範囲](./docs/diagnostics-and-limits.md)と[導入手順](./docs/getting-started.md)を確認してください。実装状況は[STATUS.md](./STATUS.md)に記録しています。
+制約は公開版と未公開のソース変更で異なる場合があります。公開版0.3.8の制約、回避方法、診断例は[診断と対応範囲](./docs/diagnostics-and-limits.md)と[導入手順](./docs/getting-started.md)を確認してください。実装状況は[STATUS.md](./STATUS.md)に記録しています。
 
 ## ワークスペースを使う
 

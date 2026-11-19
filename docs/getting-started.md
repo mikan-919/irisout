@@ -1,6 +1,6 @@
 ---
 title: npm公開版から始める
-description: irisout 0.3.7を空のディレクトリへ導入し、JSXの型検査と本番ビルドを確認する手順
+description: irisout 0.3.8を空のディレクトリへ導入し、JSXの型検査と本番ビルドを確認する手順
 slug: getting-started
 section: 導入
 order: 1
@@ -8,7 +8,7 @@ order: 1
 
 # npm公開版から始める
 
-この手順は、空のディレクトリへ`irisout` 0.3.7を導入し、JSXの型検査、開発サーバー、
+この手順は、空のディレクトリへ`irisout` 0.3.8を導入し、JSXの型検査、開発サーバー、
 本番ビルドを確認するまでを扱う。irisoutのソースリポジトリやworkspaceは使用しない。
 
 必要なものはNode.js、npm、Gitである。Bunを使う場合は、以下の`npm`を`bun`、
@@ -20,7 +20,7 @@ order: 1
 mkdir irisout-app
 cd irisout-app
 npm init -y
-npm install irisout@0.3.7 vite-plus@0.3.0
+npm install irisout@0.3.8 vite-plus@0.3.0
 npm install --save-dev typescript@5.9
 ```
 
@@ -160,7 +160,7 @@ npm run dev
 
 - `signal`、`derived`、`render`は`irisout`から名前付きで取り込む。コンパイラが認識して取り除くため、生成物には残らない。
 - ルート部品は一つにし、状態宣言を`render()`より前、イベント処理を後へ置く。
-- 公開版0.3.7では、`render()`より前に`const requests = { active: true }`のような通常の変数宣言は置けない。部品内で保持する値には`signal`を使い、処理一回の局所変数はイベント関数や初期化関数の内部へ置く。[宣言する位置](authoring-state.md#宣言する位置)を参照する。
+- `render()`より前に`const requests = { active: true }`のような通常の変数宣言は置けない。部品内で保持する値には`signal`を使い、処理一回の局所変数はイベント関数や初期化関数の内部へ置く。[宣言する位置](authoring-state.md#宣言する位置)を参照する。
 - 繰り返しは直接の`.map()`、条件分岐は三項演算子または`&&`で記述する。
 - `try`、`for`、`switch`など、更新位置を静的に決められない制御構文は拒否される場合がある。
 - 未対応構文は`compile: ... (scope limit)`として、ファイル、行、列とともに表示される。
